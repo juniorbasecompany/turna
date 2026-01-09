@@ -231,20 +231,15 @@ def is_available(p, start: int, end: int) -> bool:
 def greedy_allocate(demands, pros):
     # Alocação gulosa por profissional:
     # - percorre profissionais na ordem de pros
-    # - para cada profissional, tenta alocar demandas remanescentes ordenadas por:
-    #   1) pediátrica primeiro (quando aplicável)
-    #   2) início mais cedo (start asc)
-    #   3) término mais tarde (end desc)
+    # - para cada profissional, aloca em loop alternando:
+    #   1) demanda com início mais cedo
+    #   2) demanda com término mais tarde
+    #   até não conseguir alocar mais nada para ele
     # - respeita: pediatria, folga e não sobreposição
     remaining = set(range(len(demands)))
     assigned_by_demand = {di: None for di in range(len(demands))}
     assigned_demands_by_pro = {p["id"]: [] for p in pros}
     processed_pros = 0
-
-    def demand_sort_key(di: int):
-        d = demands[di]
-        # pediátrica primeiro
-        return (not d["is_pediatric"], d["start"], -d["end"], di)
 
     for p in pros:
         if not remaining:
@@ -252,41 +247,74 @@ def greedy_allocate(demands, pros):
         pid = p["id"]
         scheduled = []
         processed_pros += 1
-        for di in sorted(remaining, key=demand_sort_key):
+
+        def is_feasible(di: int) -> bool:
             d = demands[di]
-
             if d["is_pediatric"] and not p["can_peds"]:
-                continue
+                return False
             if not is_available(p, d["start"], d["end"]):
-                continue
+                return False
             if any(overlap(d["start"], d["end"], sd["start"], sd["end"]) for sd in scheduled):
-                continue
+                return False
 
-            # Heurística importante: se este profissional faz pediatria e ainda existe
-            # alguma demanda pediátrica remanescente que ele conseguiria atender sem
-            # conflitar com o que já está agendado, então evitamos consumi-lo com
-            # uma demanda não-pediátrica primeiro.
+            # Regra de "reservar pediatras":
+            # se este profissional faz pediatria e existe alguma demanda pediátrica
+            # ainda remanescente e factível, então evitamos consumi-lo com demanda
+            # não-pediátrica.
             if p["can_peds"] and (not d["is_pediatric"]):
                 has_feasible_ped_remaining = any(
-                    (
-                        demands[odi]["is_pediatric"]
-                        and is_available(p, demands[odi]["start"], demands[odi]["end"])
-                        and not any(
-                            overlap(
-                                demands[odi]["start"], demands[odi]["end"], sd["start"], sd["end"]
-                            )
-                            for sd in scheduled
-                        )
-                    )
+                    demands[odi]["is_pediatric"] and is_feasible_ped(odi)
                     for odi in remaining
                 )
                 if has_feasible_ped_remaining:
-                    continue
+                    return False
 
-            assigned_by_demand[di] = pid
+            return True
+
+        def is_feasible_ped(di: int) -> bool:
+            d = demands[di]
+            if not d["is_pediatric"]:
+                return False
+            if not is_available(p, d["start"], d["end"]):
+                return False
+            if any(overlap(d["start"], d["end"], sd["start"], sd["end"]) for sd in scheduled):
+                return False
+            return True
+
+        def pick_earliest_start() -> int | None:
+            candidates = [di for di in remaining if is_feasible(di)]
+            if not candidates:
+                return None
+            return min(
+                candidates,
+                key=lambda di: (demands[di]["start"], -demands[di]["end"], di),
+            )
+
+        def pick_latest_end() -> int | None:
+            candidates = [di for di in remaining if is_feasible(di)]
+            if not candidates:
+                return None
+            return max(
+                candidates,
+                key=lambda di: (demands[di]["end"], -demands[di]["start"], -di),
+            )
+
+        pick_earliest = True
+        while True:
+            chosen = pick_earliest_start() if pick_earliest else pick_latest_end()
+            if chosen is None:
+                # tenta uma vez com o outro critério; se falhar também, acabou para este profissional
+                chosen = pick_latest_end() if pick_earliest else pick_earliest_start()
+                if chosen is None:
+                    break
+                pick_earliest = not pick_earliest
+
+            d = demands[chosen]
+            assigned_by_demand[chosen] = pid
             assigned_demands_by_pro[pid].append(d)
             scheduled.append(d)
-            remaining.remove(di)
+            remaining.remove(chosen)
+            pick_earliest = not pick_earliest
 
     return assigned_by_demand, assigned_demands_by_pro, processed_pros
 
