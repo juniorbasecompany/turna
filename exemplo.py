@@ -6,7 +6,179 @@ from ortools.sat.python import cp_model
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-DAYS = 10
+# -------------------------
+# DADOS (editáveis)
+# -------------------------
+# A ideia aqui é manter o "mini mundo" como constantes no topo do arquivo,
+# para que seja fácil de editar/entender sem depender de geração aleatória.
+DEMANDS_BY_DAY = {
+    1: [
+        {"id": "A", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 12, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 11, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": False},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": True},
+        {"id": "A", "start": 15, "end": 18, "is_pediatric": False},
+        {"id": "B", "start": 18, "end": 22, "is_pediatric": False},
+    ],
+    2: [
+        {"id": "A", "start": 6, "end": 8, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 9, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 12, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 11, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 13, "is_pediatric": True},
+        {"id": "G", "start": 12, "end": 15, "is_pediatric": False},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 15, "end": 18, "is_pediatric": False},
+        {"id": "B", "start": 18, "end": 22, "is_pediatric": False},
+    ],
+    3: [
+        {"id": "A", "start": 6, "end": 11, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 10, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 12, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 11, "end": 15, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": True},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    4: [
+        {"id": "A", "start": 6, "end": 8, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 12, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 11, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 15, "is_pediatric": False},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": True},
+        {"id": "A", "start": 16, "end": 18, "is_pediatric": False},
+        {"id": "B", "start": 18, "end": 22, "is_pediatric": False},
+    ],
+    5: [
+        {"id": "A", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": True},
+        {"id": "C", "start": 7, "end": 11, "is_pediatric": False},
+        {"id": "D", "start": 8, "end": 12, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": True},
+        {"id": "H", "start": 14, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    6: [
+        {"id": "A", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 12, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 11, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": True},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    7: [
+        {"id": "A", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 12, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 11, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 15, "is_pediatric": False},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": True},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    8: [
+        {"id": "A", "start": 6, "end": 8, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 9, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 12, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": True},
+        {"id": "H", "start": 14, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    9: [
+        {"id": "A", "start": 6, "end": 11, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 10, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 12, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 11, "end": 15, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 16, "is_pediatric": True},
+        {"id": "H", "start": 14, "end": 17, "is_pediatric": False},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+    10: [
+        {"id": "A", "start": 6, "end": 9, "is_pediatric": False},
+        {"id": "B", "start": 6, "end": 10, "is_pediatric": False},
+        {"id": "C", "start": 7, "end": 12, "is_pediatric": True},
+        {"id": "D", "start": 8, "end": 11, "is_pediatric": False},
+        {"id": "E", "start": 9, "end": 13, "is_pediatric": False},
+        {"id": "F", "start": 10, "end": 14, "is_pediatric": False},
+        {"id": "G", "start": 12, "end": 15, "is_pediatric": False},
+        {"id": "H", "start": 13, "end": 17, "is_pediatric": True},
+        {"id": "A", "start": 16, "end": 19, "is_pediatric": False},
+        {"id": "B", "start": 19, "end": 22, "is_pediatric": False},
+    ],
+}
+
+DEMANDS = [
+    {"day": day, **d}
+    for day, day_demands in DEMANDS_BY_DAY.items()
+    for d in day_demands
+]
+
+PROS = [
+    {"id": "Joaquim", "sequence": 1, "can_peds": False, "vacation": [(13, 17)]},
+    {"id": "Nicolas", "sequence": 2, "can_peds": False, "vacation": [(7, 12)]},
+    {"id": "Carlota", "sequence": 3, "can_peds": False, "vacation": []},
+    {"id": "Mariana", "sequence": 4, "can_peds": True, "vacation": []},
+    {"id": "Fabiano", "sequence": 5, "can_peds": False, "vacation": []},
+    {"id": "Julieta", "sequence": 6, "can_peds": True, "vacation": []},
+    {"id": "Gustavo", "sequence": 7, "can_peds": False, "vacation": []},
+    {"id": "Ricardo", "sequence": 8, "can_peds": False, "vacation": [(0, 24)]},
+    {"id": "Augusto", "sequence": 9, "can_peds": False, "vacation": []},
+    {"id": "Camilla", "sequence": 10, "can_peds": False, "vacation": []},
+    {"id": "Silvana", "sequence": 11, "can_peds": False, "vacation": []},
+    {"id": "Leandro", "sequence": 12, "can_peds": False, "vacation": []},
+    {"id": "Roberta", "sequence": 13, "can_peds": True, "vacation": []},
+    {"id": "Clarice", "sequence": 14, "can_peds": True, "vacation": []},
+    {"id": "Edmundo", "sequence": 15, "can_peds": False, "vacation": []},
+]
+
+DAYS = max(DEMANDS_BY_DAY.keys(), default=0)
+
+# -------------------------
+# OUTPUT (cores)
+# -------------------------
+# Em terminais que suportam ANSI, isso deixa o ID da demanda em amarelo quando for pediátrica.
+# Se o seu terminal não suportar, basta colocar False.
+USE_ANSI_COLORS = True
+ANSI_YELLOW = "\x1b[33m"
+ANSI_RESET = "\x1b[0m"
+
+
+def yellow(txt: str) -> str:
+    if not USE_ANSI_COLORS:
+        return txt
+    return f"{ANSI_YELLOW}{txt}{ANSI_RESET}"
+
+
+def fmt_time_range(start: int, end: int, is_pediatric: bool) -> str:
+    txt = f"{start:02d} às {end:02d}"
+    return yellow(txt) if is_pediatric else txt
 
 
 def overlap(a_start, a_end, b_start, b_end) -> bool:
@@ -22,20 +194,26 @@ def greedy_allocate(demands, pros):
     # Alocação gulosa por profissional:
     # - percorre profissionais na ordem de pros
     # - para cada profissional, tenta alocar demandas remanescentes ordenadas por:
-    #   1) início mais cedo (start asc)
-    #   2) término mais tarde (end desc)
+    #   1) pediátrica primeiro (quando aplicável)
+    #   2) início mais cedo (start asc)
+    #   3) término mais tarde (end desc)
     # - respeita: pediatria, folga e não sobreposição
     remaining = set(range(len(demands)))
     assigned_by_demand = {di: None for di in range(len(demands))}
     assigned_demands_by_pro = {p["id"]: [] for p in pros}
+    processed_pros = 0
 
     def demand_sort_key(di: int):
         d = demands[di]
-        return (d["start"], -d["end"], di)
+        # pediátrica primeiro
+        return (not d["is_pediatric"], d["start"], -d["end"], di)
 
     for p in pros:
+        if not remaining:
+            break
         pid = p["id"]
         scheduled = []
+        processed_pros += 1
         for di in sorted(remaining, key=demand_sort_key):
             d = demands[di]
 
@@ -46,12 +224,33 @@ def greedy_allocate(demands, pros):
             if any(overlap(d["start"], d["end"], sd["start"], sd["end"]) for sd in scheduled):
                 continue
 
+            # Heurística importante: se este profissional faz pediatria e ainda existe
+            # alguma demanda pediátrica remanescente que ele conseguiria atender sem
+            # conflitar com o que já está agendado, então evitamos consumi-lo com
+            # uma demanda não-pediátrica primeiro.
+            if p["can_peds"] and (not d["is_pediatric"]):
+                has_feasible_ped_remaining = any(
+                    (
+                        demands[odi]["is_pediatric"]
+                        and is_available(p, demands[odi]["start"], demands[odi]["end"])
+                        and not any(
+                            overlap(
+                                demands[odi]["start"], demands[odi]["end"], sd["start"], sd["end"]
+                            )
+                            for sd in scheduled
+                        )
+                    )
+                    for odi in remaining
+                )
+                if has_feasible_ped_remaining:
+                    continue
+
             assigned_by_demand[di] = pid
             assigned_demands_by_pro[pid].append(d)
             scheduled.append(d)
             remaining.remove(di)
 
-    return assigned_by_demand, assigned_demands_by_pro
+    return assigned_by_demand, assigned_demands_by_pro, processed_pros
 
 
 def diagnose_infeasibility(demands, pros) -> None:
@@ -129,29 +328,8 @@ def diagnose_infeasibility(demands, pros) -> None:
 
 
 def main():
-    # -------------------------
-    # 1) DADOS (mini mundo)
-    # -------------------------
-    # Demandas (cirurgias) com intervalo, e um atributo simples "is_pediatric"
-    demands = [
-        {"id": "A", "start":  8, "end": 10, "is_pediatric": False},
-        {"id": "A", "start": 12, "end": 18, "is_pediatric": False},
-        {"id": "B", "start":  8, "end": 11, "is_pediatric": False},
-        {"id": "C", "start": 11, "end": 13, "is_pediatric": False},
-        {"id": "D", "start":  6, "end":  9, "is_pediatric": False},
-        {"id": "E", "start": 13, "end": 16, "is_pediatric": False},
-        {"id": "F", "start":  8, "end": 10, "is_pediatric": False},
-        {"id": "F", "start": 17, "end": 18, "is_pediatric": True },
-        {"id": "G", "start":  5, "end":  9, "is_pediatric": False},
-    ]
-
-    # Anestesistas com skills e preferências simples
-    pros = [
-        {"id": "Joaquim", "sequence": 1, "can_peds": False, "vacation": []},
-        {"id": "Nicolas", "sequence": 2, "can_peds": False, "vacation": []},
-        {"id": "Carlota", "sequence": 3, "can_peds": False, "vacation": [(0, 24)]},
-        {"id": "Mariana", "sequence": 4, "can_peds": True , "vacation": [(11, 15)]},
-    ]
+    demands = list(DEMANDS)
+    pros = list(PROS)
 
     # -------------------------
     # 2) ALOCAÇÃO (1 dia)
@@ -160,7 +338,14 @@ def main():
 
     # Se True, permite demandas sem profissional (entra como "Descobertas")
     ALLOW_UNASSIGNED = True
+    # Penalidade por demanda sem atendimento:
+    # - pediátrica é ainda mais penalizada, para priorizar "não deixar pediátrica descoberta"
     UNASSIGNED_PENALTY = 1000
+    PED_UNASSIGNED_EXTRA_PENALTY = 1000  # total ped = 2000
+
+    # Penalidade (suave) para evitar usar pediatra em demanda não-pediátrica,
+    # quando existir alternativa. Ajuda o CP-SAT a "reservar" pediatras.
+    PED_PRO_ON_NON_PED_PENALTY = 1
 
     pros_by_sequence = sorted(pros, key=lambda p: p["sequence"])
 
@@ -168,60 +353,84 @@ def main():
         total_cost_all_days = 0
 
         print("Demandas")
-        for d in demands:
-            ped_tag = " 👶" if d["is_pediatric"] else ""
-            print(f"{d['id']} - {d['start']:02d} às {d['end']:02d}{ped_tag}")
+        for day in range(1, DAYS + 1):
+            print(f"Dia {day}")
+            for d in demands:
+                if d["day"] != day:
+                    continue
+                did_txt = yellow(d["id"]) if d["is_pediatric"] else d["id"]
+                time_txt = fmt_time_range(d["start"], d["end"], d["is_pediatric"])
+                ped_tag = " 👶" if d["is_pediatric"] else ""
+                print(f"{did_txt} - {time_txt}{ped_tag}")
 
         print()
         print("Profissionais")
         for p in pros_by_sequence:
             tags = []
-            if p["can_peds"]:
-                tags.append("👶")
             for (vs, ve) in p["vacation"]:
                 tags.append(f"folga {vs}-{ve}")
             tags_str = (" ".join(tags)) if tags else "-"
-            print(f"{p['id']} {tags_str}")
+            pid_txt = (
+                f"{ANSI_YELLOW}{p['id']}{ANSI_RESET}"
+                if p["can_peds"] and USE_ANSI_COLORS
+                else p["id"]
+            )
+            print(f"{p['sequence']:02d} {pid_txt} {tags_str}")
+
+        n_pros = len(pros_by_sequence)
+        cycle_shift = 0
+        cursor = 0
 
         for day in range(DAYS):
-            offset = day % len(pros_by_sequence)
-            pros_for_day = pros_by_sequence[offset:] + pros_by_sequence[:offset]
+            day_num = day + 1
+            demands_day = [d for d in demands if d["day"] == day_num]
 
-            assigned_by_demand, assigned_demands_by_pro = greedy_allocate(demands, pros_for_day)
+            order = pros_by_sequence[cycle_shift:] + pros_by_sequence[:cycle_shift]
+            pros_for_day = order[cursor:] + order[:cursor]
+
+            assigned_by_demand, assigned_demands_by_pro, used_count = greedy_allocate(demands_day, pros_for_day)
             solution_label = "GULOSA"
 
-            unassigned_count = sum(1 for di in range(len(demands)) if assigned_by_demand.get(di) is None)
-            ped_assigned_count = sum(
+            unassigned_count = sum(1 for di in range(len(demands_day)) if assigned_by_demand.get(di) is None)
+            ped_unassigned_count = sum(
                 1
-                for di, d in enumerate(demands)
-                if d["is_pediatric"] and assigned_by_demand.get(di) is not None
+                for di, d in enumerate(demands_day)
+                if d["is_pediatric"] and assigned_by_demand.get(di) is None
             )
-            total_cost = UNASSIGNED_PENALTY * unassigned_count + ped_assigned_count
+            total_cost = (
+                UNASSIGNED_PENALTY * unassigned_count
+                + PED_UNASSIGNED_EXTRA_PENALTY * ped_unassigned_count
+            )
             total_cost_all_days += total_cost
+
+            cursor += used_count
+            if cursor >= n_pros:
+                cursor = 0
+                cycle_shift = (cycle_shift + 1) % n_pros
 
             print()
             print("=" * 40)
-            print(f"Dia {day + 1}/{DAYS} (início seq {pros_for_day[0]['sequence']} - {pros_for_day[0]['id']})")
+            print(f"Dia {day + 1}")
 
             # -------------------------
             # 6) EXIBIR RESULTADO
             # -------------------------
-            print("Solução:", solution_label)
-            print("Custo total:", total_cost)
             print()
 
-            for di, d in enumerate(demands):
+            for di, d in enumerate(demands_day):
                 assigned = assigned_by_demand.get(di)
                 assigned_txt = assigned if assigned else "_______"
-                ped_tag = " 👶" if d["is_pediatric"] else ""
-                print(f"{d['id']} {d['start']:02d} às {d['end']:02d} {assigned_txt}{ped_tag}")
+                did_txt = yellow(d["id"]) if d["is_pediatric"] else d["id"]
+                assigned_out = yellow(assigned_txt) if (d["is_pediatric"] and assigned) else assigned_txt
+                time_txt = fmt_time_range(d["start"], d["end"], d["is_pediatric"])
+                print(f"{did_txt} {time_txt} {assigned_out}")
 
             first_hour = 0
             last_hour_exclusive = 24
 
             print()
             print("Alocados entre 0 a 23 horas")
-            print("HORÁRIO: 012345678901234567890123")
+            print("HORÁRIO...: 012345678901234567890123")
             for p in pros_for_day:
                 pid = p["id"]
                 chars = []
@@ -236,8 +445,11 @@ def main():
                             (d for d in assigned_demands_by_pro[pid] if overlap(d["start"], d["end"], hs, he)),
                             None,
                         )
-                        chars.append(dem["id"] if dem else "_")
-                print(f"{pid}: {''.join(chars)}")
+                        if dem and dem["is_pediatric"] and USE_ANSI_COLORS:
+                            chars.append(f"{ANSI_YELLOW}{dem['id']}{ANSI_RESET}")
+                        else:
+                            chars.append(dem["id"] if dem else "_")
+                print(f"{p['sequence']:02d} {pid}: {''.join(chars)}")
 
         print()
         print("=" * 40)
@@ -305,10 +517,17 @@ def main():
         for p in pros:
             pid = p["id"]
             for di, d in enumerate(demands):
-                base = 0
-                if d["is_pediatric"]:
-                    base += 1
-                costs.append(base * x[(pid, di)])
+                # Reservar pediatras: usar pediatra em demanda não-pediátrica tem custo suave.
+                if p["can_peds"] and (not d["is_pediatric"]):
+                    costs.append(PED_PRO_ON_NON_PED_PENALTY * x[(pid, di)])
+
+        if ALLOW_UNASSIGNED:
+            # Demanda pediátrica sem atendimento custa mais caro.
+            costs.extend(
+                PED_UNASSIGNED_EXTRA_PENALTY * u[di]
+                for di, d in enumerate(demands)
+                if d["is_pediatric"]
+            )
 
         model.Minimize(sum(costs))
 
@@ -350,15 +569,15 @@ def main():
     # -------------------------
     # 6) EXIBIR RESULTADO
     # -------------------------
-    print("Solução:", solution_label)
-    print("Custo total:", total_cost)
     print()
 
     for di, d in enumerate(demands):
         assigned = assigned_by_demand.get(di)
         assigned_txt = assigned if assigned else "_______"
-        ped_tag = " 👶" if d["is_pediatric"] else ""
-        print(f"{d['id']} {d['start']:02d} às {d['end']:02d} {assigned_txt}{ped_tag}")
+        did_txt = yellow(d["id"]) if d["is_pediatric"] else d["id"]
+        assigned_out = yellow(assigned_txt) if (d["is_pediatric"] and assigned) else assigned_txt
+        time_txt = fmt_time_range(d["start"], d["end"], d["is_pediatric"])
+        print(f"{did_txt} {time_txt} {assigned_out}")
 
     first_hour = 0
     last_hour_exclusive = 24
@@ -366,19 +585,24 @@ def main():
     print()
     print("Demandas")
     for d in demands:
+        did_txt = yellow(d["id"]) if d["is_pediatric"] else d["id"]
+        time_txt = fmt_time_range(d["start"], d["end"], d["is_pediatric"])
         ped_tag = " 👶" if d["is_pediatric"] else ""
-        print(f"{d['id']} - {d['start']:02d} às {d['end']:02d}{ped_tag}")
+        print(f"{did_txt} - {time_txt}{ped_tag}")
 
     print()
     print("Profissionais")
     for p in pros_by_sequence:
         tags = []
-        if p["can_peds"]:
-            tags.append("👶")
         for (vs, ve) in p["vacation"]:
             tags.append(f"folga {vs}-{ve}")
         tags_str = (" ".join(tags)) if tags else "-"
-        print(f"{p['id']} {tags_str}")
+        pid_txt = (
+            f"{ANSI_YELLOW}{p['id']}{ANSI_RESET}"
+            if p["can_peds"] and USE_ANSI_COLORS
+            else p["id"]
+        )
+        print(f"{pid_txt} {tags_str}")
 
     print()
     print("Alocados entre 0 a 23 horas")
@@ -397,7 +621,10 @@ def main():
                     (d for d in assigned_demands_by_pro[pid] if overlap(d["start"], d["end"], hs, he)),
                     None,
                 )
-                chars.append(dem["id"] if dem else "_")
+                if dem and dem["is_pediatric"] and USE_ANSI_COLORS:
+                    chars.append(f"{ANSI_YELLOW}{dem['id']}{ANSI_RESET}")
+                else:
+                    chars.append(dem["id"] if dem else "_")
         print(f"{pid}: {''.join(chars)}")
 
     uncovered_demands = [d for di, d in enumerate(demands) if assigned_by_demand.get(di) is None]
