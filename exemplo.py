@@ -6,6 +6,8 @@ from ortools.sat.python import cp_model
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+DAYS = 10
+
 
 def overlap(a_start, a_end, b_start, b_end) -> bool:
     # [start, end) overlaps if start < other_end and other_start < end
@@ -145,35 +147,102 @@ def main():
 
     # Anestesistas com skills e preferências simples
     pros = [
-        {"id": "Joaquim", "can_peds": False, "vacation": []},
-        {"id": "Nicolas", "can_peds": False, "vacation": []},
-        {"id": "Carlota", "can_peds": False, "vacation": [(0, 24)]},
-        {"id": "Mariana", "can_peds": True , "vacation": [(11, 15)]},
+        {"id": "Joaquim", "sequence": 1, "can_peds": False, "vacation": []},
+        {"id": "Nicolas", "sequence": 2, "can_peds": False, "vacation": []},
+        {"id": "Carlota", "sequence": 3, "can_peds": False, "vacation": [(0, 24)]},
+        {"id": "Mariana", "sequence": 4, "can_peds": True , "vacation": [(11, 15)]},
     ]
 
     # -------------------------
-    # 2) ALOCAÇÃO
+    # 2) ALOCAÇÃO (1 dia)
     # -------------------------
-    # Modo pedido: alocar por profissional, usando a ordem das demandas:
-    # - início mais cedo
-    # - depois término mais tarde
     ALLOCATION_MODE = "greedy"  # "greedy" | "cp-sat"
 
-    # Se True, permite demandas sem profissional (entra como "Descoberto")
+    # Se True, permite demandas sem profissional (entra como "Descobertas")
     ALLOW_UNASSIGNED = True
     UNASSIGNED_PENALTY = 1000
 
-    if ALLOCATION_MODE == "greedy":
-        assigned_by_demand, assigned_demands_by_pro = greedy_allocate(demands, pros)
-        solution_label = "GULOSA"
+    pros_by_sequence = sorted(pros, key=lambda p: p["sequence"])
 
-        unassigned_count = sum(1 for di in range(len(demands)) if assigned_by_demand.get(di) is None)
-        ped_assigned_count = sum(
-            1
-            for di, d in enumerate(demands)
-            if d["is_pediatric"] and assigned_by_demand.get(di) is not None
-        )
-        total_cost = UNASSIGNED_PENALTY * unassigned_count + ped_assigned_count
+    if ALLOCATION_MODE == "greedy":
+        total_cost_all_days = 0
+
+        print("Demandas")
+        for d in demands:
+            ped_tag = " 👶" if d["is_pediatric"] else ""
+            print(f"{d['id']} - {d['start']:02d} às {d['end']:02d}{ped_tag}")
+
+        print()
+        print("Profissionais")
+        for p in pros_by_sequence:
+            tags = []
+            if p["can_peds"]:
+                tags.append("👶")
+            for (vs, ve) in p["vacation"]:
+                tags.append(f"folga {vs}-{ve}")
+            tags_str = (" ".join(tags)) if tags else "-"
+            print(f"{p['id']} {tags_str}")
+
+        for day in range(DAYS):
+            offset = day % len(pros_by_sequence)
+            pros_for_day = pros_by_sequence[offset:] + pros_by_sequence[:offset]
+
+            assigned_by_demand, assigned_demands_by_pro = greedy_allocate(demands, pros_for_day)
+            solution_label = "GULOSA"
+
+            unassigned_count = sum(1 for di in range(len(demands)) if assigned_by_demand.get(di) is None)
+            ped_assigned_count = sum(
+                1
+                for di, d in enumerate(demands)
+                if d["is_pediatric"] and assigned_by_demand.get(di) is not None
+            )
+            total_cost = UNASSIGNED_PENALTY * unassigned_count + ped_assigned_count
+            total_cost_all_days += total_cost
+
+            print()
+            print("=" * 40)
+            print(f"Dia {day + 1}/{DAYS} (início seq {pros_for_day[0]['sequence']} - {pros_for_day[0]['id']})")
+
+            # -------------------------
+            # 6) EXIBIR RESULTADO
+            # -------------------------
+            print("Solução:", solution_label)
+            print("Custo total:", total_cost)
+            print()
+
+            for di, d in enumerate(demands):
+                assigned = assigned_by_demand.get(di)
+                assigned_txt = assigned if assigned else "_______"
+                ped_tag = " 👶" if d["is_pediatric"] else ""
+                print(f"{d['id']} {d['start']:02d} às {d['end']:02d} {assigned_txt}{ped_tag}")
+
+            first_hour = 0
+            last_hour_exclusive = 24
+
+            print()
+            print("Alocados entre 0 a 23 horas")
+            print("HORÁRIO: 012345678901234567890123")
+            for p in pros_for_day:
+                pid = p["id"]
+                chars = []
+                for hour in range(first_hour, last_hour_exclusive):
+                    hs = hour
+                    he = hour + 1
+                    on_vacation = any(overlap(vs, ve, hs, he) for (vs, ve) in p["vacation"])
+                    if on_vacation:
+                        chars.append("z")
+                    else:
+                        dem = next(
+                            (d for d in assigned_demands_by_pro[pid] if overlap(d["start"], d["end"], hs, he)),
+                            None,
+                        )
+                        chars.append(dem["id"] if dem else "_")
+                print(f"{pid}: {''.join(chars)}")
+
+        print()
+        print("=" * 40)
+        print(f"Custo total (todos os {DAYS} dias): {total_cost_all_days}")
+        return
     else:
         # -------------------------
         # 2) MODELO CP-SAT (opcional)
@@ -275,6 +344,9 @@ def main():
                     break
             assigned_by_demand[di] = assigned
 
+        solution_label = "ÓTIMA" if status == cp_model.OPTIMAL else "FACTÍVEL"
+        total_cost = solver.ObjectiveValue()
+
     # -------------------------
     # 6) EXIBIR RESULTADO
     # -------------------------
@@ -282,11 +354,11 @@ def main():
     print("Custo total:", total_cost)
     print()
 
-    # Para cada demanda, mostra quem foi alocado (na ordem da lista demands)
     for di, d in enumerate(demands):
         assigned = assigned_by_demand.get(di)
-        print(f"{d['id']} {d['start']:02d} às {d['end']:02d} "
-              f"peds={d['is_pediatric']} -> {(assigned if assigned else 'SEM')}")
+        assigned_txt = assigned if assigned else "_______"
+        ped_tag = " 👶" if d["is_pediatric"] else ""
+        print(f"{d['id']} {d['start']:02d} às {d['end']:02d} {assigned_txt}{ped_tag}")
 
     first_hour = 0
     last_hour_exclusive = 24
@@ -296,19 +368,22 @@ def main():
     for d in demands:
         ped_tag = " 👶" if d["is_pediatric"] else ""
         print(f"{d['id']} - {d['start']:02d} às {d['end']:02d}{ped_tag}")
+
     print()
     print("Profissionais")
-    for p in pros:
+    for p in pros_by_sequence:
         tags = []
         if p["can_peds"]:
             tags.append("👶")
         for (vs, ve) in p["vacation"]:
             tags.append(f"folga {vs}-{ve}")
-        print(f"{p['id']} " + (" ".join(tags)))
+        tags_str = (" ".join(tags)) if tags else "-"
+        print(f"{p['id']} {tags_str}")
+
     print()
     print("Alocados entre 0 a 23 horas")
     print("HORÁRIO: 012345678901234567890123")
-    for p in pros:
+    for p in pros_by_sequence:
         pid = p["id"]
         chars = []
         for hour in range(first_hour, last_hour_exclusive):
@@ -326,12 +401,7 @@ def main():
         print(f"{pid}: {''.join(chars)}")
 
     uncovered_demands = [d for di, d in enumerate(demands) if assigned_by_demand.get(di) is None]
-    if uncovered_demands:
-        print()
-        print("Descobertas")
-        for d in uncovered_demands:
-            ped_tag = " 👶" if d["is_pediatric"] else ""
-            print(f"{d['id']} - {d['start']:02d} às {d['end']:02d}{ped_tag}")
+    _ = uncovered_demands
 
 
 if __name__ == "__main__":
