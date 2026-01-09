@@ -444,15 +444,17 @@ def main():
             print(f"{p['sequence']:02d} {pid_txt} {tags_str}")
 
         n_pros = len(pros_by_sequence)
-        cycle_shift = 0
-        cursor = 0
+
+        # Rodízio fixo por dia (independente de quantos profissionais foram "usados").
+        # Dia 1 começa no primeiro da lista (sequence 1), como era antes.
+        base_shift = 0
 
         for day in range(DAYS):
             day_num = day + 1
             demands_day = [d for d in demands if d["day"] == day_num]
 
-            order = pros_by_sequence[cycle_shift:] + pros_by_sequence[:cycle_shift]
-            pros_for_day = order[cursor:] + order[:cursor]
+            start_idx = (base_shift + day) % n_pros
+            pros_for_day = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
 
             assigned_by_demand, assigned_demands_by_pro, used_count = greedy_allocate(demands_day, pros_for_day)
             solution_label = "GULOSA"
@@ -468,11 +470,6 @@ def main():
                 + PED_UNASSIGNED_EXTRA_PENALTY * ped_unassigned_count
             )
             total_cost_all_days += total_cost
-
-            cursor += used_count
-            if cursor >= n_pros:
-                cursor = 0
-                cycle_shift = (cycle_shift + 1) % n_pros
 
             print()
             print("=" * 40)
