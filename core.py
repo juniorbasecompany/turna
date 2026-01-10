@@ -4,7 +4,8 @@ Regras core: overlap/disponibilidade e alocação ambiciosa.
 
 
 def overlap(a_start, a_end, b_start, b_end) -> bool:
-    # [start, end) overlaps if start < other_end and other_start < end
+    # Intervalos meio-abertos [start, end) sobrepõem se:
+    #   a_start < b_end and b_start < a_end
     return a_start < b_end and b_start < a_end
 
 

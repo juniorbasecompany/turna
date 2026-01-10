@@ -4,7 +4,7 @@ Dados de entrada (mini mundo).
 Este arquivo deve ser fácil de editar e entender: apenas constantes.
 """
 
-# Demandas por dia (0-24 continua existindo no modelo, mas usamos faixa 06–22 nas demandas).
+# Demandas por dia (modelo [start, end) com end exclusivo).
 DEMANDS_BY_DAY = {
     1: [
         {"id": "A", "start": 6, "end": 9, "is_pediatric": False},

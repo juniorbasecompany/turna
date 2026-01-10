@@ -67,6 +67,7 @@ def print_day_result(
         pid = p["id"]
         chars = []
         for hour in range(first_hour, last_hour_exclusive):
+            # Cada coluna representa uma hora [h, h+1) no modelo [start, end).
             hs = hour
             he = hour + 1
             on_vacation = any(overlap_fn(vs, ve, hs, he) for (vs, ve) in p["vacation"])
