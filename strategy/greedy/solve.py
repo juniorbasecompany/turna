@@ -1,8 +1,8 @@
 """
-Estratégia gulosa.
+Estratégia ambiciosa: função de resolução usada pelo app (orquestrador).
 """
 
-from core import greedy_allocate
+from .allocate import greedy_allocate
 
 
 def solve_greedy(

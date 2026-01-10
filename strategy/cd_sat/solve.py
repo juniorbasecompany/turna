@@ -1,5 +1,5 @@
 """
-Estratégia CP-SAT (OR-Tools).
+Estratégia CP-SAT (OR-Tools): função de resolução usada pelo app (orquestrador).
 """
 
 from ortools.sat.python import cp_model
@@ -68,8 +68,6 @@ def solve_cp_sat(
         pid = p["id"]
         for (vs, ve) in p["vacation"]:
             for di, d in enumerate(demands):
-                if d["day"] is None:
-                    continue
                 if overlap(vs, ve, d["start"], d["end"]):
                     model.Add(x[(pid, di)] == 0)
 
@@ -120,7 +118,6 @@ def solve_cp_sat(
                 break
         assigned_by_demand[di] = assigned
 
-    # Preparar impressão no mesmo layout (por dia)
     n_pros = len(pros_by_sequence)
     per_day: list[dict] = []
     for day in range(days):

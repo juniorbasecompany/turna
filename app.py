@@ -15,7 +15,7 @@ from output import (
     print_professionals_overview,
     print_total_cost,
 )
-from strategy.cp_sat import solve_cp_sat
+from strategy.cd_sat import solve_cp_sat
 from strategy.greedy import solve_greedy
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -56,7 +56,7 @@ def main(allocation_mode: str = "greedy") -> None:
     print_professionals_overview(pros_by_sequence)
 
     if ALLOCATION_MODE == "greedy":
-        per_day, total_cost_all_days = solve_greedy(
+        per_day, total_cost = solve_greedy(
             demands=demands,
             pros_by_sequence=pros_by_sequence,
             days=days,
@@ -64,31 +64,18 @@ def main(allocation_mode: str = "greedy") -> None:
             ped_unassigned_extra_penalty=PED_UNASSIGNED_EXTRA_PENALTY,
             base_shift=0,
         )
-
-        for item in per_day:
-            print_day_result(
-                day_number=item["day_number"],
-                pros_for_day=item["pros_for_day"],
-                assigned_demands_by_pro=item["assigned_demands_by_pro"],
-                demands_day=item["demands_day"],
-                assigned_pids=item["assigned_pids"],
-                overlap_fn=overlap,
-            )
-
-        print_total_cost(days, total_cost_all_days)
-        return
-
-    per_day, total_cost = solve_cp_sat(
-        demands=demands,
-        pros=pros,
-        pros_by_sequence=pros_by_sequence,
-        days=days,
-        allow_unassigned=ALLOW_UNASSIGNED,
-        unassigned_penalty=UNASSIGNED_PENALTY,
-        ped_unassigned_extra_penalty=PED_UNASSIGNED_EXTRA_PENALTY,
-        ped_pro_on_non_ped_penalty=PED_PRO_ON_NON_PED_PENALTY,
-        base_shift=0,
-    )
+    else:
+        per_day, total_cost = solve_cp_sat(
+            demands=demands,
+            pros=pros,
+            pros_by_sequence=pros_by_sequence,
+            days=days,
+            allow_unassigned=ALLOW_UNASSIGNED,
+            unassigned_penalty=UNASSIGNED_PENALTY,
+            ped_unassigned_extra_penalty=PED_UNASSIGNED_EXTRA_PENALTY,
+            ped_pro_on_non_ped_penalty=PED_PRO_ON_NON_PED_PENALTY,
+            base_shift=0,
+        )
 
     for item in per_day:
         print_day_result(
