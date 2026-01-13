@@ -27,6 +27,52 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Permite execução direta do script (importações relativas ou absolutas)
+try:
+    from . import config, prompt
+    from .schema import (
+        DEFAULT_TZ_OFFSET,
+        HM_RE,
+        ID_RE,
+        ISO_DT_TZ_RE,
+        as_list,
+        canon_priority,
+        canon_skill_token,
+        coerce_time_to_iso,
+        extract_id,
+        extract_priority,
+        normalize_str,
+        parse_dmhm,
+        parse_skills,
+        parse_time_hhmm,
+        period_start_ymd,
+        to_iso_datetime,
+        validate_and_normalize_result,
+    )
+except ImportError:
+    # Fallback para execução direta do script
+    import config
+    import prompt
+    from schema import (
+        DEFAULT_TZ_OFFSET,
+        HM_RE,
+        ID_RE,
+        ISO_DT_TZ_RE,
+        as_list,
+        canon_priority,
+        canon_skill_token,
+        coerce_time_to_iso,
+        extract_id,
+        extract_priority,
+        normalize_str,
+        parse_dmhm,
+        parse_skills,
+        parse_time_hhmm,
+        period_start_ymd,
+        to_iso_datetime,
+        validate_and_normalize_result,
+    )
+
 # -----------------------------
 # Progresso (stderr, não altera JSON em stdout)
 # -----------------------------
@@ -79,7 +125,9 @@ def _openai_client():
 # -----------------------------
 # PDF -> imagens (para IA)
 # -----------------------------
-def _render_pdf_to_png_b64(pdf_path: Path, dpi: int = 200, max_pages: Optional[int] = None) -> List[str]:
+def _render_pdf_to_png_b64(pdf_path: Path, dpi: int = None, max_pages: Optional[int] = None) -> List[str]:
+    if dpi is None:
+        dpi = config.DEFAULT_DPI
     try:
         import pypdfium2 as pdfium
         from PIL import Image
@@ -135,7 +183,9 @@ def _extract_pdf_text(pdf_path: Path, max_pages: Optional[int] = None) -> List[T
             out.append((i + 1, text))
     return out
 
-def _should_use_text_only(pages_text: List[Tuple[int, str]], min_chars: int = 40) -> bool:
+def _should_use_text_only(pages_text: List[Tuple[int, str]], min_chars: int = None) -> bool:
+    if min_chars is None:
+        min_chars = config.MIN_CHARS_FOR_TEXT_ONLY
     """
     Decide se vale mandar só texto para a IA.
     Critério simples: existe pelo menos 1 página com >= min_chars.
@@ -146,294 +196,14 @@ def _should_use_text_only(pages_text: List[Tuple[int, str]], min_chars: int = 40
     return False
 
 # -----------------------------
-# Schema fixo + validação simples
+# Schema e validação (importados de schema.py)
 # -----------------------------
-ISO_DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
-HM_RE = re.compile(r"^\d{2}:\d{2}$")
-DMHM_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")  # ex: 11/03 09:00
-ID_RE = re.compile(r"\b[A-Z]{2,5}-\d{3,6}\b")
-ISO_DT_TZ_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
-
-DEFAULT_TZ_OFFSET = "-03:00"
-
-def _period_start_ymd(meta: dict) -> Optional[Tuple[int, int, int]]:
-    """
-    Extrai a primeira data do período em meta.period (ex: "12/01/2026 a 18/01/2026").
-    Retorna (yyyy, mm, dd).
-    """
-    if not isinstance(meta, dict):
-        return None
-    period = meta.get("period")
-    if not isinstance(period, str):
-        return None
-    m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", period)
-    if not m:
-        return None
-    dd, mm, yyyy = m.group(1).split("/")
-    try:
-        return int(yyyy), int(mm), int(dd)
-    except Exception:
-        return None
-
-def _to_iso_datetime(yyyy: int, mm: int, dd: int, hh: int, mi: int, tz_offset: str = DEFAULT_TZ_OFFSET) -> str:
-    return f"{yyyy:04d}-{mm:02d}-{dd:02d}T{hh:02d}:{mi:02d}:00{tz_offset}"
-
-def _coerce_time_to_iso(raw: Optional[str], meta: dict) -> Optional[str]:
-    """
-    Converte:
-    - "DD/MM HH:MM" -> "YYYY-MM-DDTHH:MM:00-03:00" (usa o ano de meta.period)
-    - "HH:MM"       -> usa a data inicial de meta.period
-    - ISO já pronto -> mantém
-    """
-    if not raw:
-        return None
-    s = str(raw).strip()
-    if not s:
-        return None
-    if ISO_DT_TZ_RE.match(s):
-        return s
-
-    ymd0 = _period_start_ymd(meta)
-    if not ymd0:
-        return None
-    yyyy0, mm0, dd0 = ymd0
-
-    dmhm = _parse_dmhm(s)
-    if dmhm:
-        dd, mm, hh, mi = dmhm
-        return _to_iso_datetime(yyyy0, mm, dd, hh, mi)
-
-    hm = _parse_time_hhmm(s)
-    if hm:
-        hh, mi = hm
-        return _to_iso_datetime(yyyy0, mm0, dd0, hh, mi)
-
-    return None
-
-def _canon_priority(x: Optional[str]) -> Optional[str]:
-    if not x:
-        return None
-    s = str(x).strip()
-    if not s:
-        return None
-    low = s.lower()
-    if "urg" in low:
-        return "Urgente"
-    if "emerg" in low:
-        return "Emergência"
-    return None
-
-def _extract_priority(notes: Optional[str]) -> Optional[str]:
-    if not notes:
-        return None
-    m = re.search(r"(?i)\bprioridade\s*:\s*(urgente|emerg[êe]ncia)\b", notes)
-    if not m:
-        return None
-    return _canon_priority(m.group(1))
-
-def _canon_skill_token(tok: str) -> str:
-    t = tok.strip()
-    if not t:
-        return ""
-    # normalizações comuns (sem inventar skills novas)
-    if t.lower() == "obstetrica":
-        return "Obstétrica"
-    if t.lower() == "cardiaca":
-        return "Cardíaca"
-    return t
-
-def _parse_skills(x: Any) -> List[str]:
-    """
-    skills: lista de strings. Aceita entrada como lista ou string separada por vírgula.
-    """
-    if x is None:
-        return []
-    if isinstance(x, list):
-        out: List[str] = []
-        for it in x:
-            s = _canon_skill_token(str(it))
-            if s:
-                out.append(s)
-        return out
-    if isinstance(x, str):
-        # corta tudo após "Prioridade:" se veio junto
-        s = re.split(r"(?i)\bprioridade\s*:", x, maxsplit=1)[0]
-        parts = re.split(r"[;,|]", s)
-        out = []
-        for p in parts:
-            t = _canon_skill_token(p)
-            if t:
-                out.append(t)
-        return out
-    return []
-
-def _extract_id(d: dict) -> Optional[str]:
-    # Preferir campos explícitos
-    for k in ("id", "ID", "case_id", "caseId"):
-        v = d.get(k)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-    # Tentar do source/raw
-    src = d.get("source") if isinstance(d.get("source"), dict) else {}
-    raw = src.get("raw")
-    if isinstance(raw, str):
-        m = ID_RE.search(raw)
-        if m:
-            return m.group(0)
-    return None
-
-def _parse_time_hhmm(s: str) -> Optional[Tuple[int, int]]:
-    if not s or not HM_RE.match(s):
-        return None
-    hh, mm = s.split(":")
-    try:
-        return int(hh), int(mm)
-    except Exception:
-        return None
-
-def _parse_dmhm(s: str) -> Optional[Tuple[int, int, int, int]]:
-    if not s or not DMHM_RE.match(s):
-        return None
-    dm, hm = s.split()
-    dd, mm = dm.split("/")
-    hh, mi = hm.split(":")
-    try:
-        return int(dd), int(mm), int(hh), int(mi)
-    except Exception:
-        return None
-
-def _normalize_str(x: Any) -> Optional[str]:
-    if x is None:
-        return None
-    s = str(x).strip()
-    return s if s else None
-
-def _as_list(x: Any) -> List[Any]:
-    return x if isinstance(x, list) else []
-
-def _validate_and_normalize_result(obj: dict) -> dict:
-    """
-    Garante que o JSON final tenha sempre as chaves e tipos esperados.
-    Não tenta "adivinhar" campos complexos; só normaliza e protege.
-    """
-    out: Dict[str, Any] = {}
-
-    # meta
-    meta = obj.get("meta") if isinstance(obj.get("meta"), dict) else {}
-    # Remove timezone (não necessário no output)
-    if "timezone" in meta:
-        del meta["timezone"]
-    out["meta"] = meta
-
-    # demands
-    demands = []
-    for d in _as_list(obj.get("demands")):
-        if not isinstance(d, dict):
-            continue
-
-        notes = _normalize_str(d.get("notes"))
-        priority = _extract_priority(notes)
-
-        # skills: preferir campo explícito; fallback heurístico para casos onde IA colocou em "complexity"
-        skills = _parse_skills(d.get("skills"))
-        if not skills:
-            skills = _parse_skills(d.get("habilidades"))
-        if not skills:
-            # heuristic: se "complexity" veio como lista de habilidades (ex: "Geral, Obstétrica")
-            cx = _normalize_str(d.get("complexity"))
-            if cx and ("," in cx or "|" in cx or ";" in cx):
-                skills = _parse_skills(cx)
-
-        extracted_id = _extract_id(d)
-        room = _normalize_str(d.get("room"))
-        if extracted_id and room:
-            room = f"{extracted_id} {room}"
-        elif extracted_id and not room:
-            room = extracted_id
-
-        dd = {
-            "room": room,
-            "start_time": _normalize_str(d.get("start_time")),
-            "end_time": _normalize_str(d.get("end_time")),
-            "procedure": _normalize_str(d.get("procedure")),
-            "anesthesia_type": _normalize_str(d.get("anesthesia_type")),
-            "complexity": _normalize_str(d.get("complexity")),
-            "skills": skills,
-            "priority": priority,
-            "professionals": _as_list(d.get("professionals")),
-            "notes": notes,
-            "source": d.get("source") if isinstance(d.get("source"), dict) else {},
-        }
-
-        # Regras mínimas: precisa ter procedure + start/end (ou início/fim "dd/mm hh:mm")
-        if not dd["procedure"]:
-            continue
-
-        # Normaliza start_time/end_time para ISO datetime com timezone
-        iso_start = _coerce_time_to_iso(dd["start_time"], out.get("meta", {}))
-        iso_end = _coerce_time_to_iso(dd["end_time"], out.get("meta", {}))
-        if not (iso_start and iso_end):
-            # sem data suficiente para ISO (ex: meta.period ausente) -> não aceita como demanda pronta
-            continue
-        dd["start_time"] = iso_start
-        dd["end_time"] = iso_end
-
-        demands.append(dd)
-
-    out["demands"] = demands
-
-    # Normaliza date_reference: prioriza cabeçalho (meta.period), fallback para primeira demanda
-    date_ref: Optional[str] = None
-
-    # 1) Tenta extrair do cabeçalho (meta.period)
-    ymd = _period_start_ymd(out.get("meta", {}))
-    if ymd:
-        yyyy, mm, dd = ymd
-        date_ref = f"{yyyy:04d}-{mm:02d}-{dd:02d}"
-
-    # 2) Fallback: primeira demanda válida
-    if not date_ref and demands:
-        for d in demands:
-            st = d.get("start_time")
-            if isinstance(st, str) and ISO_DT_TZ_RE.match(st):
-                date_ref = st[:10]  # YYYY-MM-DD
-                break
-
-    if date_ref:
-        out["meta"]["date_reference"] = date_ref
-    elif "date_reference" in out["meta"]:
-        # Se veio da IA mas não conseguimos normalizar, remove
-        del out["meta"]["date_reference"]
-
-    return out
+# Funções de schema importadas no início do arquivo - usar diretamente
 
 # -----------------------------
-# IA extraction
+# IA extraction (prompts importados de prompt.py)
 # -----------------------------
-PROMPT_VERSION = "v2.0"
-SYSTEM_PROMPT = """Você é um extrator de dados de agenda cirúrgica.
-Extraia as demandas (linhas de tabela) do PDF.
-Você DEVE responder APENAS com JSON válido (sem markdown, sem explicações).
-"""
-
-USER_PROMPT = """Extraia as demandas cirúrgicas do documento.
-Regras:
-- Responda APENAS JSON.
-- O JSON DEVE conter as chaves: meta, demands.
-- demands é uma lista de objetos com:
-  - room (string ou null)
-  - start_time (ISO datetime com timezone, ex: "2026-01-12T09:30:00-03:00")
-  - end_time (ISO datetime com timezone, ex: "2026-01-12T12:00:00-03:00")
-  - procedure (string)
-  - anesthesia_type (string ou null)
-  - skills (lista; se não houver, [])
-  - priority ("Urgente" | "Emergência" | null)  # extrair de notes quando houver "Prioridade: ..."
-  - complexity (string ou null)  # se existir como complexidade do caso (Baixa/Média/Alta)
-  - professionals (lista; se não houver, [])
-  - notes (string ou null)
-  - source (objeto livre; inclua page e qualquer raw útil)
-- Não invente dados que não estejam no documento.
-"""
+# Importa prompts de prompt.py
 
 def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tuple[int, str]]) -> dict:
     client = _openai_client()
@@ -451,7 +221,7 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
         raise RuntimeError("PDF sem text layer útil para modo text-only")
 
     content = [
-        {"type": "input_text", "text": USER_PROMPT},
+        {"type": "input_text", "text": prompt.USER_PROMPT},
         {"type": "input_text", "text": "Conteúdo extraído (text layer) por página:\n" + joined},
     ]
 
@@ -459,10 +229,10 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
     resp = client.responses.create(
         model=model,
         input=[
-            {"role": "system", "content": [{"type": "input_text", "text": SYSTEM_PROMPT}]},
+            {"role": "system", "content": [{"type": "input_text", "text": prompt.SYSTEM_PROMPT}]},
             {"role": "user", "content": content},
         ],
-        temperature=0,
+        temperature=config.DEFAULT_TEMPERATURE,
     )
     _progress("OpenAI respondeu; parseando JSON...")
 
@@ -480,11 +250,11 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
     obj["meta"]["pdf_path"] = str(pdf_path)
     obj["meta"].setdefault("extraction", {})
     obj["meta"]["extraction"].update(
-        {"model": model, "strategy": "ai_text", "prompt_version": PROMPT_VERSION}
+        {"model": model, "strategy": "ai_text", "prompt_version": prompt.PROMPT_VERSION}
     )
     obj.setdefault("demands", [])
 
-    return _validate_and_normalize_result(obj)
+    return validate_and_normalize_result(obj)
 
 def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Optional[int]) -> dict:
     client = _openai_client()
@@ -496,7 +266,7 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
 
     # Monta input multimodal
     # OBS: API Responses (openai python) aceita input_text + input_image
-    content = [{"type": "input_text", "text": USER_PROMPT}]
+    content = [{"type": "input_text", "text": prompt.USER_PROMPT}]
     for b64 in images_b64:
         content.append({"type": "input_image", "image_url": f"data:image/png;base64,{b64}"})
 
@@ -504,10 +274,10 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     resp = client.responses.create(
         model=model,
         input=[
-            {"role": "system", "content": [{"type": "input_text", "text": SYSTEM_PROMPT}]},
+            {"role": "system", "content": [{"type": "input_text", "text": prompt.SYSTEM_PROMPT}]},
             {"role": "user", "content": content},
         ],
-        temperature=0,
+        temperature=config.DEFAULT_TEMPERATURE,
     )
     _progress("OpenAI respondeu; parseando JSON...")
 
@@ -528,11 +298,11 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     obj["meta"]["pdf_path"] = str(pdf_path)
     obj["meta"].setdefault("extraction", {})
     obj["meta"]["extraction"].update(
-        {"model": model, "dpi": dpi, "max_pages": max_pages, "strategy": "ai", "prompt_version": PROMPT_VERSION}
+        {"model": model, "dpi": dpi, "max_pages": max_pages, "strategy": "ai", "prompt_version": prompt.PROMPT_VERSION}
     )
     obj.setdefault("demands", [])
 
-    return _validate_and_normalize_result(obj)
+    return validate_and_normalize_result(obj)
 
 def _parse_json_strict(txt: str) -> dict:
     """
@@ -564,8 +334,12 @@ def _parse_json_strict(txt: str) -> dict:
 # -----------------------------
 # Orquestração híbrida (cache removido)
 # -----------------------------
-def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, max_pages: Optional[int] = None,
+def extract_demands(pdf_path: str, model: str = None, dpi: int = None, max_pages: Optional[int] = None,
                     ) -> dict:
+    if model is None:
+        model = config.DEFAULT_MODEL
+    if dpi is None:
+        dpi = config.DEFAULT_DPI
     pdf = Path(pdf_path).resolve()
     if not pdf.exists():
         raise FileNotFoundError(str(pdf))
@@ -576,7 +350,7 @@ def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, 
     try:
         _progress("checando text layer (pdfplumber)...")
         pages_text = _extract_pdf_text(pdf, max_pages=max_pages)
-        use_text_only = _should_use_text_only(pages_text, min_chars=40)
+        use_text_only = _should_use_text_only(pages_text)
     except Exception as e:
         # Se pdfplumber não estiver disponível, seguimos com visão.
         _progress(f"text layer indisponível ({e}); usando visão...")
@@ -598,8 +372,8 @@ def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("pdf_path", help="Caminho do PDF")
-    parser.add_argument("--model", default="gpt-4.1-mini", help="Modelo OpenAI")
-    parser.add_argument("--dpi", type=int, default=200, help="DPI para render do PDF")
+    parser.add_argument("--model", default=config.DEFAULT_MODEL, help="Modelo OpenAI")
+    parser.add_argument("--dpi", type=int, default=config.DEFAULT_DPI, help="DPI para render do PDF")
     parser.add_argument("--max-pages", type=int, default=None, help="Limitar páginas (debug/custo)")
     parser.add_argument("--out", default=None, help="Caminho do JSON de saída (opcional)")
 
@@ -620,7 +394,7 @@ def main():
         # padrão: test/demanda.json na raiz do projeto
         here = Path(__file__).resolve().parent
         project_root = here.parent
-        out_path = project_root / "test" / "demanda.json"
+        out_path = project_root / config.DEFAULT_OUTPUT_PATH
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(txt, encoding="utf-8")
