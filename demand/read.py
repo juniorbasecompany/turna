@@ -152,9 +152,64 @@ ISO_DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 HM_RE = re.compile(r"^\d{2}:\d{2}$")
 DMHM_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")  # ex: 11/03 09:00
 ID_RE = re.compile(r"\b[A-Z]{2,5}-\d{3,6}\b")
+ISO_DT_TZ_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
 
 ALLOWED_DOC_TYPES = {"demands", "agenda", "unknown"}
 DEFAULT_TZ_OFFSET = "-03:00"
+
+def _period_start_ymd(meta: dict) -> Optional[Tuple[int, int, int]]:
+    """
+    Extrai a primeira data do período em meta.period (ex: "12/01/2026 a 18/01/2026").
+    Retorna (yyyy, mm, dd).
+    """
+    if not isinstance(meta, dict):
+        return None
+    period = meta.get("period")
+    if not isinstance(period, str):
+        return None
+    m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", period)
+    if not m:
+        return None
+    dd, mm, yyyy = m.group(1).split("/")
+    try:
+        return int(yyyy), int(mm), int(dd)
+    except Exception:
+        return None
+
+def _to_iso_datetime(yyyy: int, mm: int, dd: int, hh: int, mi: int, tz_offset: str = DEFAULT_TZ_OFFSET) -> str:
+    return f"{yyyy:04d}-{mm:02d}-{dd:02d}T{hh:02d}:{mi:02d}:00{tz_offset}"
+
+def _coerce_time_to_iso(raw: Optional[str], meta: dict) -> Optional[str]:
+    """
+    Converte:
+    - "DD/MM HH:MM" -> "YYYY-MM-DDTHH:MM:00-03:00" (usa o ano de meta.period)
+    - "HH:MM"       -> usa a data inicial de meta.period
+    - ISO já pronto -> mantém
+    """
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if ISO_DT_TZ_RE.match(s):
+        return s
+
+    ymd0 = _period_start_ymd(meta)
+    if not ymd0:
+        return None
+    yyyy0, mm0, dd0 = ymd0
+
+    dmhm = _parse_dmhm(s)
+    if dmhm:
+        dd, mm, hh, mi = dmhm
+        return _to_iso_datetime(yyyy0, mm, dd, hh, mi)
+
+    hm = _parse_time_hhmm(s)
+    if hm:
+        hh, mi = hm
+        return _to_iso_datetime(yyyy0, mm0, dd0, hh, mi)
+
+    return None
 
 def _canon_priority(x: Optional[str]) -> Optional[str]:
     if not x:
@@ -228,15 +283,6 @@ def _extract_id(d: dict) -> Optional[str]:
             return m.group(0)
     return None
 
-def _parse_iso_date(date_ddmmyyyy: str) -> Optional[Tuple[int, int, int]]:
-    if not date_ddmmyyyy or not ISO_DATE_RE.match(date_ddmmyyyy):
-        return None
-    dd, mm, yyyy = date_ddmmyyyy.split("/")
-    try:
-        return int(yyyy), int(mm), int(dd)
-    except Exception:
-        return None
-
 def _parse_time_hhmm(s: str) -> Optional[Tuple[int, int]]:
     if not s or not HM_RE.match(s):
         return None
@@ -256,48 +302,6 @@ def _parse_dmhm(s: str) -> Optional[Tuple[int, int, int, int]]:
         return int(dd), int(mm), int(hh), int(mi)
     except Exception:
         return None
-
-def _to_iso_local(yyyy: int, mm: int, dd: int, hh: int, mi: int, tz_offset: str = DEFAULT_TZ_OFFSET) -> str:
-    return f"{yyyy:04d}-{mm:02d}-{dd:02d}T{hh:02d}:{mi:02d}:00{tz_offset}"
-
-def _derive_start_end_iso(date_ddmmyyyy: Optional[str], start_time: Optional[str], end_time: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
-    """
-    start_at/end_at em ISO com offset fixo (padrão -03:00).
-    Só calcula se houver ano disponível (via date DD/MM/AAAA).
-    """
-    if not date_ddmmyyyy:
-        return None, None
-    base = _parse_iso_date(date_ddmmyyyy)
-    if not base:
-        return None, None
-    yyyy, base_mm, base_dd = base
-
-    s_at: Optional[str] = None
-    e_at: Optional[str] = None
-
-    if start_time:
-        dmhm = _parse_dmhm(start_time.strip())
-        if dmhm:
-            dd, mm, hh, mi = dmhm
-            s_at = _to_iso_local(yyyy, mm, dd, hh, mi)
-        else:
-            hm = _parse_time_hhmm(start_time.strip())
-            if hm:
-                hh, mi = hm
-                s_at = _to_iso_local(yyyy, base_mm, base_dd, hh, mi)
-
-    if end_time:
-        dmhm = _parse_dmhm(end_time.strip())
-        if dmhm:
-            dd, mm, hh, mi = dmhm
-            e_at = _to_iso_local(yyyy, mm, dd, hh, mi)
-        else:
-            hm = _parse_time_hhmm(end_time.strip())
-            if hm:
-                hh, mi = hm
-                e_at = _to_iso_local(yyyy, base_mm, base_dd, hh, mi)
-
-    return s_at, e_at
 
 def _normalize_str(x: Any) -> Optional[str]:
     if x is None:
@@ -352,12 +356,9 @@ def _validate_and_normalize_result(obj: dict) -> dict:
 
         dd = {
             "id": _extract_id(d),
-            "date": _normalize_str(d.get("date")),
             "room": _normalize_str(d.get("room")),
             "start_time": _normalize_str(d.get("start_time")),
             "end_time": _normalize_str(d.get("end_time")),
-            "start_at": None,
-            "end_at": None,
             "procedure": _normalize_str(d.get("procedure")),
             "anesthesia_type": _normalize_str(d.get("anesthesia_type")),
             "complexity": _normalize_str(d.get("complexity")),
@@ -372,22 +373,14 @@ def _validate_and_normalize_result(obj: dict) -> dict:
         if not dd["procedure"]:
             continue
 
-        # aceita HH:MM ou "dd/mm HH:MM"
-        def ok_time(t: Optional[str]) -> bool:
-            if not t:
-                return False
-            return bool(HM_RE.match(t) or DMHM_RE.match(t))
-
-        if not (ok_time(dd["start_time"]) and ok_time(dd["end_time"])):
-            # ainda pode ser válido se vier tudo dentro de "source/raw" e você quiser tratar depois,
-            # mas por padrão não vamos aceitar como demanda pronta.
+        # Normaliza start_time/end_time para ISO datetime com timezone
+        iso_start = _coerce_time_to_iso(dd["start_time"], out.get("meta", {}))
+        iso_end = _coerce_time_to_iso(dd["end_time"], out.get("meta", {}))
+        if not (iso_start and iso_end):
+            # sem data suficiente para ISO (ex: meta.period ausente) -> não aceita como demanda pronta
             continue
-
-        # date pode ser None se o layout não fornecer ano.
-        if dd["date"] and not ISO_DATE_RE.match(dd["date"]):
-            dd["date"] = None
-
-        dd["start_at"], dd["end_at"] = _derive_start_end_iso(dd["date"], dd["start_time"], dd["end_time"])
+        dd["start_time"] = iso_start
+        dd["end_time"] = iso_end
 
         demands.append(dd)
 
@@ -409,10 +402,9 @@ Regras:
 - O JSON DEVE conter as chaves: doc_type_guess, entities, tables, sections, meta, demands.
 - demands é uma lista de objetos com:
   - id (ex: "DC-1001" ou null)
-  - date (DD/MM/AAAA ou null)
   - room (string ou null)
-  - start_time (HH:MM ou "DD/MM HH:MM")
-  - end_time (HH:MM ou "DD/MM HH:MM")
+  - start_time (ISO datetime com timezone, ex: "2026-01-12T09:30:00-03:00")
+  - end_time (ISO datetime com timezone, ex: "2026-01-12T12:00:00-03:00")
   - procedure (string)
   - anesthesia_type (string ou null)
   - skills (lista; se não houver, [])
