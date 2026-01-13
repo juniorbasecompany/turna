@@ -354,9 +354,15 @@ def _validate_and_normalize_result(obj: dict) -> dict:
             if cx and ("," in cx or "|" in cx or ";" in cx):
                 skills = _parse_skills(cx)
 
+        extracted_id = _extract_id(d)
+        room = _normalize_str(d.get("room"))
+        if extracted_id and room:
+            room = f"{extracted_id} {room}"
+        elif extracted_id and not room:
+            room = extracted_id
+
         dd = {
-            "id": _extract_id(d),
-            "room": _normalize_str(d.get("room")),
+            "room": room,
             "start_time": _normalize_str(d.get("start_time")),
             "end_time": _normalize_str(d.get("end_time")),
             "procedure": _normalize_str(d.get("procedure")),
@@ -401,7 +407,6 @@ Regras:
 - Responda APENAS JSON.
 - O JSON DEVE conter as chaves: doc_type_guess, entities, tables, sections, meta, demands.
 - demands é uma lista de objetos com:
-  - id (ex: "DC-1001" ou null)
   - room (string ou null)
   - start_time (ISO datetime com timezone, ex: "2026-01-12T09:30:00-03:00")
   - end_time (ISO datetime com timezone, ex: "2026-01-12T12:00:00-03:00")
