@@ -6,11 +6,11 @@ read_demands_ai.py
 Extractor híbrido para demandas cirúrgicas a partir de PDFs:
 1) tenta extração offline (rápida) via read_demands.py / regex
 2) se falhar (demands vazio), usa IA (OpenAI) com JSON estrito
-3) cache por hash do PDF + parâmetros (evita custo repetido)
+3) (cache removido)
 
 Uso:
   python read_demands_ai.py "arquivo.pdf"
-  python read_demands_ai.py "arquivo.pdf" --no-cache
+  python read_demands_ai.py "arquivo.pdf"
   python read_demands_ai.py "arquivo.pdf" --model gpt-4.1-mini
 
 Requisitos:
@@ -114,7 +114,7 @@ def _render_pdf_to_png_b64(pdf_path: Path, dpi: int = 200, max_pages: Optional[i
     return out
 
 # -----------------------------
-# Cache
+# Hash (para diagnóstico/identificação; cache removido)
 # -----------------------------
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -122,29 +122,6 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
-
-def _cache_key(pdf_hash: str, model: str, dpi: int, max_pages: Optional[int], prompt_version: str) -> str:
-    raw = f"{pdf_hash}|model={model}|dpi={dpi}|max_pages={max_pages}|pv={prompt_version}"
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-def _cache_dir() -> Path:
-    here = Path(__file__).resolve().parent
-    out = here / "output" / "cache"
-    out.mkdir(parents=True, exist_ok=True)
-    return out
-
-def _cache_read(key: str) -> Optional[dict]:
-    p = _cache_dir() / f"{key}.json"
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-def _cache_write(key: str, payload: dict) -> None:
-    p = _cache_dir() / f"{key}.json"
-    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 # -----------------------------
 # Schema fixo + validação simples
@@ -380,36 +357,22 @@ def _parse_json_strict(txt: str) -> dict:
     raise RuntimeError("A IA não retornou JSON válido. Veja a saída bruta para diagnóstico.")
 
 # -----------------------------
-# Orquestração híbrida + cache
+# Orquestração híbrida (cache removido)
 # -----------------------------
 def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, max_pages: Optional[int] = None,
-                    use_cache: bool = True) -> dict:
+                    ) -> dict:
     pdf = Path(pdf_path).resolve()
     if not pdf.exists():
         raise FileNotFoundError(str(pdf))
 
     _progress(f"calculando hash: {pdf.name} ...")
-    pdf_hash = _sha256_file(pdf)
-    key = _cache_key(pdf_hash, model=model, dpi=dpi, max_pages=max_pages, prompt_version=PROMPT_VERSION)
-
-    if use_cache:
-        _progress("verificando cache...")
-        cached = _cache_read(key)
-        if cached:
-            _progress("cache HIT")
-            cached.setdefault("meta", {})
-            cached["meta"].setdefault("hybrid", {})
-            cached["meta"]["hybrid"]["used"] = "cache"
-            return cached
-        _progress("cache MISS")
+    _ = _sha256_file(pdf)  # mantido apenas para diagnóstico
 
     # 1) offline
     _progress("tentando extração offline...")
     offline = _try_offline(pdf)
     if offline is not None:
         _progress("offline OK")
-        if use_cache:
-            _cache_write(key, offline)
         return offline
     _progress("offline vazio/indisponível; usando IA...")
 
@@ -419,9 +382,6 @@ def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, 
     ai["meta"].setdefault("hybrid", {})
     ai["meta"]["hybrid"]["used"] = "ai"
     ai["meta"]["hybrid"]["offline_failed"] = True
-
-    if use_cache:
-        _cache_write(key, ai)
     return ai
 
 # -----------------------------
@@ -433,7 +393,6 @@ def main():
     parser.add_argument("--model", default="gpt-4.1-mini", help="Modelo OpenAI")
     parser.add_argument("--dpi", type=int, default=200, help="DPI para render do PDF")
     parser.add_argument("--max-pages", type=int, default=None, help="Limitar páginas (debug/custo)")
-    parser.add_argument("--no-cache", action="store_true", help="Desabilita cache")
     parser.add_argument("--out", default=None, help="Caminho do JSON de saída (opcional)")
 
     args = parser.parse_args()
@@ -443,11 +402,9 @@ def main():
         model=args.model,
         dpi=args.dpi,
         max_pages=args.max_pages,
-        use_cache=(not args.no_cache),
     )
 
     txt = json.dumps(result, ensure_ascii=False, indent=2)
-    print(txt)
 
     if args.out:
         out_path = Path(args.out).resolve()
