@@ -1,5 +1,5 @@
 """
-Funções de output/format.
+Funções de output/format para console.
 """
 
 USE_ANSI_COLORS = True

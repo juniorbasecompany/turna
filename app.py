@@ -6,16 +6,16 @@ apenas separando em arquivos menores.
 """
 
 import sys
+from pathlib import Path
 
 from core import overlap
 from data import DEMANDS_BY_DAY, PROS
-from output import (
+from output.console import (
     print_day_result,
     print_demands_overview,
     print_professionals_overview,
     print_total_cost,
 )
-from strategy.cd_sat import solve_cp_sat
 from strategy.greedy import solve_greedy
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -27,6 +27,124 @@ def build_demands_from_by_day(demands_by_day: dict[int, list[dict]]) -> list[dic
         for day, day_demands in demands_by_day.items()
         for d in day_demands
     ]
+
+
+def _try_generate_day1_pdf(per_day: list[dict]) -> None:
+    if not per_day:
+        return
+
+    item = next((it for it in per_day if it.get("day_number") == 1), None)
+    if not item:
+        return
+
+    try:
+        from output.day import (
+            DaySchedule,
+            Event,
+            Interval,
+            Row,
+            Vacation,
+            _pick_color_from_text,
+            render_pdf,
+        )
+    except Exception as e:
+        print(f"[pdf] Não consegui importar output.day: {e}", file=sys.stderr)
+        return
+
+    day_number = int(item["day_number"])
+    pros_for_day: list[dict] = item["pros_for_day"]
+    assigned_demands_by_pro: dict[str, list[dict]] = item["assigned_demands_by_pro"]
+    demands_day: list[dict] = item["demands_day"]
+    assigned_pids: list[str | None] = item["assigned_pids"]
+
+    def to_minutes(h: int | float) -> int:
+        return int(round(float(h) * 60))
+
+    # Janela do dia (mantém um padrão parecido com 06–22 quando possível)
+    min_h = min((d["start"] for d in demands_day), default=6)
+    max_h = max((d["end"] for d in demands_day), default=22)
+    for p in pros_for_day:
+        for vs, ve in p.get("vacation", []):
+            min_h = min(min_h, vs)
+            max_h = max(max_h, ve)
+
+    day_start_h = max(0, min(6, int(min_h)))
+    day_end_h = min(24, max(22, int(max_h)))
+
+    rows: list[Row] = []
+    for p in pros_for_day:
+        pid = p["id"]
+
+        vacs: list[Vacation] = []
+        for vs, ve in p.get("vacation", []):
+            vacs.append(Vacation(interval=Interval(to_minutes(vs), to_minutes(ve)), label="FÉRIAS"))
+
+        evs: list[Event] = []
+        for d in assigned_demands_by_pro.get(pid, []):
+            # CP-SAT guarda demandas de todos os dias; filtramos.
+            if int(d.get("day", day_number)) != day_number:
+                continue
+            title = d["id"] + (" (PED)" if d.get("is_pediatric") else "")
+            evs.append(
+                Event(
+                    interval=Interval(to_minutes(d["start"]), to_minutes(d["end"])),
+                    title=title,
+                    subtitle=None,
+                    color_rgb=_pick_color_from_text(title),
+                )
+            )
+        evs.sort(key=lambda e: (e.interval.start_min, e.interval.end_min, e.title))
+
+        rows.append(Row(name=pid, events=evs, vacations=vacs))
+
+    # Linha extra para demandas descobertas (quando ALLOW_UNASSIGNED=True).
+    uncovered: list[Event] = []
+    for d, ap in zip(demands_day, assigned_pids, strict=True):
+        if ap is not None:
+            continue
+        title = d["id"] + (" (PED)" if d.get("is_pediatric") else "")
+        uncovered.append(
+            Event(
+                interval=Interval(to_minutes(d["start"]), to_minutes(d["end"])),
+                title=title,
+                subtitle="DESC",
+                color_rgb=(0.55, 0.14, 0.10),
+            )
+        )
+    uncovered.sort(key=lambda e: (e.interval.start_min, e.interval.end_min, e.title))
+    if uncovered:
+        # Pode haver colisão de horários nas descobertas: quebramos em múltiplas linhas.
+        lanes: list[list[Event]] = []
+        for ev in uncovered:
+            placed = False
+            for lane in lanes:
+                last = lane[-1]
+                if last.interval.end_min <= ev.interval.start_min:
+                    lane.append(ev)
+                    placed = True
+                    break
+            if not placed:
+                lanes.append([ev])
+
+        for i, lane in enumerate(lanes):
+            name = "Descobertas" if i == 0 else f"Descobertas {i + 1}"
+            rows.append(Row(name=name, events=lane, vacations=[]))
+
+    schedule = DaySchedule(
+        title=f"Escala - Dia {day_number}",
+        day_start_min=to_minutes(day_start_h),
+        day_end_min=to_minutes(day_end_h),
+        rows=rows,
+    )
+
+    out_path = Path("escala_dia1.pdf")
+    try:
+        render_pdf(schedule, out_path)
+        print(f"[pdf] PDF gerado em: {out_path}", file=sys.stderr)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"[pdf] Falha ao gerar PDF: {e}", file=sys.stderr)
 
 
 def main(allocation_mode: str = "greedy") -> None:
@@ -65,6 +183,9 @@ def main(allocation_mode: str = "greedy") -> None:
             base_shift=0,
         )
     else:
+        # Import lazy: CP-SAT depende de ortools (opcional em modo greedy).
+        from strategy.cd_sat import solve_cp_sat
+
         per_day, total_cost = solve_cp_sat(
             demands=demands,
             pros=pros,
@@ -88,4 +209,6 @@ def main(allocation_mode: str = "greedy") -> None:
         )
 
     print_total_cost(days, total_cost)
+    sys.stdout.flush()
+    _try_generate_day1_pdf(per_day)
 

@@ -1,0 +1,808 @@
+{
+  "doc_type_guess": "unknown",
+  "entities": {},
+  "sections": [
+    {
+      "kind": "title",
+      "text": "Hospital Santa Helena",
+      "page": 1,
+      "confidence": 1.0
+    },
+    {
+      "kind": "title",
+      "text": "Agenda Operatória",
+      "page": 1,
+      "confidence": 1.0
+    },
+    {
+      "kind": "note",
+      "text": "Documento operacional – dados simulados",
+      "page": 1,
+      "confidence": 1.0
+    },
+    {
+      "kind": "title",
+      "text": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+      "page": 1,
+      "confidence": 1.0
+    },
+    {
+      "kind": "footer",
+      "text": "Horários sujeitos a alteração conforme fluxo do centro cirúrgico.",
+      "page": 1,
+      "confidence": 1.0
+    }
+  ],
+  "tables": [
+    {
+      "name": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+      "page": 1,
+      "columns": [
+        "Data",
+        "Sala",
+        "Cirurgião",
+        "Procedimento",
+        "Horário",
+        "Tipo anestesia",
+        "Complexidade",
+        "Notas"
+      ],
+      "rows": [
+        {
+          "Data": "03/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "14:00 – 17:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "-"
+        },
+        {
+          "Data": "03/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "15:00 – 18:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "-"
+        },
+        {
+          "Data": "03/02/2026",
+          "Sala": "Sala 1",
+          "Cirurgião": "Dr(a). Renata",
+          "Procedimento": "Prostatectomia",
+          "Horário": "11:00 – 12:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "03/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Histeroscopia",
+          "Horário": "07:00 – 10:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Antibiótico profilático"
+        },
+        {
+          "Data": "03/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "04/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Colecistectomia",
+          "Horário": "07:00 – 10:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        },
+        {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "10:00 – 11:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        },
+        {
+          "Data": "04/02/2026",
+          "Sala": "Sala 1",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "08:00 – 11:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        },
+        {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "08:00 – 10:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        },
+        {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Paulo",
+          "Procedimento": "Prostatectomia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "-"
+        },
+        {
+          "Data": "05/02/2026",
+          "Sala": "Sala 4",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Colecistectomia",
+          "Horário": "11:00 – 14:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "05/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Colecistectomia",
+          "Horário": "10:00 – 11:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "05/02/2026",
+          "Sala": "Sala 4",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "13:00 – 16:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "05/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "11:00 – 13:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Material consignado"
+        },
+        {
+          "Data": "05/02/2026",
+          "Sala": "Sala 3",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Artroscopia de joelho",
+          "Horário": "13:00 – 14:00",
+          "Tipo anestesia": "Regional",
+          "Complexidade": "Baixa",
+          "Notas": "Paciente ASA II"
+        },
+        {
+          "Data": "06/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Prostatectomia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "Antibiótico profilático"
+        },
+        {
+          "Data": "06/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "15:00 – 16:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Antibiótico profilático"
+        },
+        {
+          "Data": "06/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Histeroscopia",
+          "Horário": "09:00 – 12:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Antibiótico profilático"
+        }
+      ],
+      "confidence": 1.0
+    }
+  ],
+  "meta": {
+    "pdf_path": "C:\\git\\turna\\test\\turna - hospital_demandas_layout_B_exemplo.pdf",
+    "page_count": 1,
+    "extraction": {
+      "has_text": true,
+      "used_images": true,
+      "model": "gpt-4.1",
+      "strategy": "llm"
+    },
+    "hybrid": {
+      "used": "offline"
+    }
+  },
+  "demands": [
+    {
+      "date": "03/02/2026",
+      "room": "Sala 5",
+      "start_time": "14:00",
+      "end_time": "17:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Felipe"
+        }
+      ],
+      "notes": null,
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 0,
+        "raw": {
+          "Data": "03/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "14:00 – 17:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "-"
+        }
+      }
+    },
+    {
+      "date": "03/02/2026",
+      "room": "Sala 2",
+      "start_time": "15:00",
+      "end_time": "18:00",
+      "procedure": "Histeroscopia",
+      "anesthesia_type": "Sedação",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Mariana"
+        }
+      ],
+      "notes": null,
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 1,
+        "raw": {
+          "Data": "03/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "15:00 – 18:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "-"
+        }
+      }
+    },
+    {
+      "date": "03/02/2026",
+      "room": "Sala 1",
+      "start_time": "11:00",
+      "end_time": "12:00",
+      "procedure": "Prostatectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Alta",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Renata"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 2,
+        "raw": {
+          "Data": "03/02/2026",
+          "Sala": "Sala 1",
+          "Cirurgião": "Dr(a). Renata",
+          "Procedimento": "Prostatectomia",
+          "Horário": "11:00 – 12:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "03/02/2026",
+      "room": "Sala 6",
+      "start_time": "07:00",
+      "end_time": "10:00",
+      "procedure": "Histeroscopia",
+      "anesthesia_type": "Sedação",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Carla"
+        }
+      ],
+      "notes": "Antibiótico profilático",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 3,
+        "raw": {
+          "Data": "03/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Histeroscopia",
+          "Horário": "07:00 – 10:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Antibiótico profilático"
+        }
+      }
+    },
+    {
+      "date": "03/02/2026",
+      "room": "Sala 6",
+      "start_time": "07:00",
+      "end_time": "08:00",
+      "procedure": "Histeroscopia",
+      "anesthesia_type": "Sedação",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Mariana"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 4,
+        "raw": {
+          "Data": "03/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "04/02/2026",
+      "room": "Sala 2",
+      "start_time": "07:00",
+      "end_time": "10:00",
+      "procedure": "Colecistectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Mariana"
+        }
+      ],
+      "notes": "Jejum prolongado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 5,
+        "raw": {
+          "Data": "04/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Colecistectomia",
+          "Horário": "07:00 – 10:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        }
+      }
+    },
+    {
+      "date": "04/02/2026",
+      "room": "Sala 5",
+      "start_time": "10:00",
+      "end_time": "11:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Felipe"
+        }
+      ],
+      "notes": "Jejum prolongado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 6,
+        "raw": {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "10:00 – 11:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        }
+      }
+    },
+    {
+      "date": "04/02/2026",
+      "room": "Sala 1",
+      "start_time": "08:00",
+      "end_time": "11:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Carla"
+        }
+      ],
+      "notes": "Jejum prolongado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 7,
+        "raw": {
+          "Data": "04/02/2026",
+          "Sala": "Sala 1",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "08:00 – 11:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        }
+      }
+    },
+    {
+      "date": "04/02/2026",
+      "room": "Sala 5",
+      "start_time": "08:00",
+      "end_time": "10:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Felipe"
+        }
+      ],
+      "notes": "Jejum prolongado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 8,
+        "raw": {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Felipe",
+          "Procedimento": "Cesárea",
+          "Horário": "08:00 – 10:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Jejum prolongado"
+        }
+      }
+    },
+    {
+      "date": "04/02/2026",
+      "room": "Sala 5",
+      "start_time": "07:00",
+      "end_time": "08:00",
+      "procedure": "Prostatectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Alta",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Paulo"
+        }
+      ],
+      "notes": null,
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 9,
+        "raw": {
+          "Data": "04/02/2026",
+          "Sala": "Sala 5",
+          "Cirurgião": "Dr(a). Paulo",
+          "Procedimento": "Prostatectomia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "-"
+        }
+      }
+    },
+    {
+      "date": "05/02/2026",
+      "room": "Sala 4",
+      "start_time": "11:00",
+      "end_time": "14:00",
+      "procedure": "Colecistectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Luiz"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 10,
+        "raw": {
+          "Data": "05/02/2026",
+          "Sala": "Sala 4",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Colecistectomia",
+          "Horário": "11:00 – 14:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "05/02/2026",
+      "room": "Sala 6",
+      "start_time": "10:00",
+      "end_time": "11:00",
+      "procedure": "Colecistectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Luiz"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 11,
+        "raw": {
+          "Data": "05/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Colecistectomia",
+          "Horário": "10:00 – 11:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "05/02/2026",
+      "room": "Sala 4",
+      "start_time": "13:00",
+      "end_time": "16:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Carla"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 12,
+        "raw": {
+          "Data": "05/02/2026",
+          "Sala": "Sala 4",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "13:00 – 16:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "05/02/2026",
+      "room": "Sala 6",
+      "start_time": "11:00",
+      "end_time": "13:00",
+      "procedure": "Histeroscopia",
+      "anesthesia_type": "Sedação",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Mariana"
+        }
+      ],
+      "notes": "Material consignado",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 13,
+        "raw": {
+          "Data": "05/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Mariana",
+          "Procedimento": "Histeroscopia",
+          "Horário": "11:00 – 13:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Material consignado"
+        }
+      }
+    },
+    {
+      "date": "05/02/2026",
+      "room": "Sala 3",
+      "start_time": "13:00",
+      "end_time": "14:00",
+      "procedure": "Artroscopia de joelho",
+      "anesthesia_type": "Regional",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Luiz"
+        }
+      ],
+      "notes": "Paciente ASA II",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 14,
+        "raw": {
+          "Data": "05/02/2026",
+          "Sala": "Sala 3",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Artroscopia de joelho",
+          "Horário": "13:00 – 14:00",
+          "Tipo anestesia": "Regional",
+          "Complexidade": "Baixa",
+          "Notas": "Paciente ASA II"
+        }
+      }
+    },
+    {
+      "date": "06/02/2026",
+      "room": "Sala 6",
+      "start_time": "07:00",
+      "end_time": "08:00",
+      "procedure": "Prostatectomia",
+      "anesthesia_type": "Geral",
+      "complexity": "Alta",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Luiz"
+        }
+      ],
+      "notes": "Antibiótico profilático",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 15,
+        "raw": {
+          "Data": "06/02/2026",
+          "Sala": "Sala 6",
+          "Cirurgião": "Dr(a). Luiz",
+          "Procedimento": "Prostatectomia",
+          "Horário": "07:00 – 08:00",
+          "Tipo anestesia": "Geral",
+          "Complexidade": "Alta",
+          "Notas": "Antibiótico profilático"
+        }
+      }
+    },
+    {
+      "date": "06/02/2026",
+      "room": "Sala 2",
+      "start_time": "15:00",
+      "end_time": "16:00",
+      "procedure": "Cesárea",
+      "anesthesia_type": "Raqui",
+      "complexity": "Média",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Carla"
+        }
+      ],
+      "notes": "Antibiótico profilático",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 16,
+        "raw": {
+          "Data": "06/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Cesárea",
+          "Horário": "15:00 – 16:00",
+          "Tipo anestesia": "Raqui",
+          "Complexidade": "Média",
+          "Notas": "Antibiótico profilático"
+        }
+      }
+    },
+    {
+      "date": "06/02/2026",
+      "room": "Sala 2",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "procedure": "Histeroscopia",
+      "anesthesia_type": "Sedação",
+      "complexity": "Baixa",
+      "professionals": [
+        {
+          "role": "cirurgiao",
+          "name": "Dr(a). Carla"
+        }
+      ],
+      "notes": "Antibiótico profilático",
+      "source": {
+        "page": 1,
+        "table": "Mapa diário de cirurgias – Centro Cirúrgico (layout B – ajustado)",
+        "row_index": 17,
+        "raw": {
+          "Data": "06/02/2026",
+          "Sala": "Sala 2",
+          "Cirurgião": "Dr(a). Carla",
+          "Procedimento": "Histeroscopia",
+          "Horário": "09:00 – 12:00",
+          "Tipo anestesia": "Sedação",
+          "Complexidade": "Baixa",
+          "Notas": "Antibiótico profilático"
+        }
+      }
+    }
+  ]
+}
