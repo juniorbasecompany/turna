@@ -5,64 +5,77 @@
   "tables": [],
   "meta": {
     "period": "12/01/2026 a 18/01/2026",
-    "usage": "planejamento de alocação de anestesia e recursos",
     "generated_on": "10/01/2026 16:02",
+    "page": 1,
     "pdf_path": "C:\\git\\turna\\test\\demandas1.pdf",
     "extraction": {
       "model": "gpt-4.1-mini",
-      "dpi": 200,
-      "max_pages": null,
-      "strategy": "ai",
+      "strategy": "ai_text",
       "prompt_version": "v2.0"
-    },
-    "hybrid": {
-      "used": "ai",
-      "offline_failed": true
     }
   },
   "demands": [
     {
+      "id": "DC-1001",
       "date": "12/01/2026",
       "room": "Hospital Regina - Sala C",
       "start_time": "09:30",
       "end_time": "12:00",
+      "start_at": "2026-01-12T09:30:00-03:00",
+      "end_at": "2026-01-12T12:00:00-03:00",
       "procedure": "Histerectomia",
-      "anesthesia_type": null,
+      "anesthesia_type": "Geral",
       "complexity": null,
+      "skills": [
+        "Obstétrica"
+      ],
+      "priority": null,
       "professionals": [
         "Dr. André Leal"
       ],
-      "notes": "Caso prolongado | Prioridade: Urgente",
+      "notes": "Caso prolongado",
       "source": {
         "page": 1,
         "raw": "DC-1001 Hospital Regina - Sala C Dr. André Leal Histerectomia 12/01 09:30 12/01 12:00 Geral, Obstétrica Caso prolongado | Prioridade: Urgente"
       }
     },
     {
+      "id": "DC-1002",
       "date": "12/01/2026",
       "room": "Hospital Regina - Sala A",
       "start_time": "10:00",
       "end_time": "12:00",
+      "start_at": "2026-01-12T10:00:00-03:00",
+      "end_at": "2026-01-12T12:00:00-03:00",
       "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
+      "anesthesia_type": "Regional",
       "complexity": null,
+      "skills": [
+        "Obstétrica"
+      ],
+      "priority": null,
       "professionals": [
         "Dr. Carlos Silva"
       ],
-      "notes": "Prioridade: Emergência",
+      "notes": null,
       "source": {
         "page": 1,
         "raw": "DC-1002 Hospital Regina - Sala A Dr. Carlos Silva Cesárea eletiva 12/01 10:00 12/01 12:00 Obstétrica, Regional Prioridade: Emergência"
       }
     },
     {
+      "id": "DC-1003",
       "date": "12/01/2026",
       "room": "CC - Sala 2 (SL)",
       "start_time": "10:30",
       "end_time": "12:30",
+      "start_at": "2026-01-12T10:30:00-03:00",
+      "end_at": "2026-01-12T12:30:00-03:00",
       "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Geral",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -73,30 +86,42 @@
       }
     },
     {
+      "id": "DC-1004",
       "date": "12/01/2026",
       "room": "Hospital Regina - Sala B",
       "start_time": "13:30",
       "end_time": "14:15",
+      "start_at": "2026-01-12T13:30:00-03:00",
+      "end_at": "2026-01-12T14:15:00-03:00",
       "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [
+        "Monitorização"
+      ],
+      "priority": null,
       "professionals": [
         "Dr. João Ramos"
       ],
-      "notes": "Sala com hemodinâmica/monitorização",
+      "notes": "Sala com hemodinâmica/monitorização avançada",
       "source": {
         "page": 1,
-        "raw": "DC-1004 Hospital Regina - Sala B Dr. João Ramos Revascularização miocárdica 12/01 13:30 12/01 14:15 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
+        "raw": "DC-1004 Hospital Regina - Sala B Dr. João Ramos Revascularização miocárdica 12/01 13:30 12/01 14:15 Cardíaca, Monitorização Sala com hemodinâmica/monitorização avançada"
       }
     },
     {
+      "id": "DC-1005",
       "date": "12/01/2026",
       "room": "CC - Sala 1 (SL)",
       "start_time": "14:00",
       "end_time": "15:00",
+      "start_at": "2026-01-12T14:00:00-03:00",
+      "end_at": "2026-01-12T15:00:00-03:00",
       "procedure": "Endoscopia digestiva alta",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. André Leal"
       ],
@@ -107,13 +132,20 @@
       }
     },
     {
+      "id": "DC-1006",
       "date": "12/01/2026",
       "room": "CC - Sala 1 (SL)",
       "start_time": "14:30",
       "end_time": "15:45",
+      "start_at": "2026-01-12T14:30:00-03:00",
+      "end_at": "2026-01-12T15:45:00-03:00",
       "procedure": "Histerectomia",
-      "anesthesia_type": null,
+      "anesthesia_type": "Geral",
       "complexity": null,
+      "skills": [
+        "Obstétrica"
+      ],
+      "priority": null,
       "professionals": [
         "Dr. André Leal"
       ],
@@ -124,13 +156,20 @@
       }
     },
     {
+      "id": "DC-1007",
       "date": "12/01/2026",
       "room": "Hospital Regina - Sala B",
       "start_time": "16:00",
       "end_time": "16:45",
+      "start_at": "2026-01-12T16:00:00-03:00",
+      "end_at": "2026-01-12T16:45:00-03:00",
       "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
+      "anesthesia_type": "Regional",
       "complexity": null,
+      "skills": [
+        "Obstétrica"
+      ],
+      "priority": null,
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -141,47 +180,64 @@
       }
     },
     {
+      "id": "DC-1008",
       "date": "12/01/2026",
       "room": "CC - Sala 3 (SL)",
       "start_time": "16:30",
       "end_time": "18:00",
+      "start_at": "2026-01-12T16:30:00-03:00",
+      "end_at": "2026-01-12T18:00:00-03:00",
       "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [
+        "Monitorização"
+      ],
+      "priority": null,
       "professionals": [
         "Dra. Paula Menezes"
       ],
-      "notes": "Sala com hemodinâmica/monitorização",
+      "notes": "Sala com hemodinâmica/monitorização avançada",
       "source": {
         "page": 1,
-        "raw": "DC-1008 CC - Sala 3 (SL) Dra. Paula Menezes Revascularização miocárdica 12/01 16:30 12/01 18:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
+        "raw": "DC-1008 CC - Sala 3 (SL) Dra. Paula Menezes Revascularização miocárdica 12/01 16:30 12/01 18:00 Cardíaca, Monitorização Sala com hemodinâmica/monitorização avançada"
       }
     },
     {
+      "id": "DC-1009",
       "date": "12/01/2026",
       "room": "CC - Sala 3 (SL)",
       "start_time": "17:30",
       "end_time": "18:45",
+      "start_at": "2026-01-12T17:30:00-03:00",
+      "end_at": "2026-01-12T18:45:00-03:00",
       "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dra. Fernanda Costa"
       ],
-      "notes": "Sala com hemodinâmica/monitorização | Prioridade: Urgente",
+      "notes": "Sala com hemodinâmica/monitorização",
       "source": {
         "page": 1,
         "raw": "DC-1009 CC - Sala 3 (SL) Dra. Fernanda Costa Cateterismo cardíaco (adulto) 12/01 17:30 12/01 18:45 Cardíaca Sala com hemodinâmica/monitorização | Prioridade: Urgente"
       }
     },
     {
+      "id": "DC-1010",
       "date": "12/01/2026",
       "room": "CC - Sala 2 (SL)",
       "start_time": "18:00",
       "end_time": "21:00",
+      "start_at": "2026-01-12T18:00:00-03:00",
+      "end_at": "2026-01-12T21:00:00-03:00",
       "procedure": "Colonoscopia",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -192,30 +248,42 @@
       }
     },
     {
+      "id": "DC-1011",
       "date": "12/01/2026",
       "room": "CC - Sala 3 (SL)",
       "start_time": "18:30",
       "end_time": "20:00",
+      "start_at": "2026-01-12T18:30:00-03:00",
+      "end_at": "2026-01-12T20:00:00-03:00",
       "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [
+        "Monitorização"
+      ],
+      "priority": null,
       "professionals": [
         "Dra. Marina Teixeira"
       ],
-      "notes": "Sala com hemodinâmica/monitorização",
+      "notes": "Sala com hemodinâmica/monitorização avançada",
       "source": {
         "page": 1,
-        "raw": "DC-1011 CC - Sala 3 (SL) Dra. Marina Teixeira Revascularização miocárdica 12/01 18:30 12/01 20:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
+        "raw": "DC-1011 CC - Sala 3 (SL) Dra. Marina Teixeira Revascularização miocárdica 12/01 18:30 12/01 20:00 Cardíaca, Monitorização Sala com hemodinâmica/monitorização avançada"
       }
     },
     {
+      "id": "DC-1012",
       "date": "13/01/2026",
       "room": "CC - Sala 1 (SL)",
       "start_time": "10:30",
       "end_time": "13:30",
+      "start_at": "2026-01-13T10:30:00-03:00",
+      "end_at": "2026-01-13T13:30:00-03:00",
       "procedure": "Apendicectomia",
-      "anesthesia_type": null,
+      "anesthesia_type": "Geral",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -226,13 +294,18 @@
       }
     },
     {
+      "id": "DC-1013",
       "date": "13/01/2026",
       "room": "CC - Sala 1 (SL)",
       "start_time": "11:00",
       "end_time": "11:45",
+      "start_at": "2026-01-13T11:00:00-03:00",
+      "end_at": "2026-01-13T11:45:00-03:00",
       "procedure": "Endoscopia digestiva alta",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -243,13 +316,18 @@
       }
     },
     {
+      "id": "DC-1014",
       "date": "13/01/2026",
       "room": "Hospital Regina - Sala C",
       "start_time": "11:30",
       "end_time": "13:30",
+      "start_at": "2026-01-13T11:30:00-03:00",
+      "end_at": "2026-01-13T13:30:00-03:00",
       "procedure": "Endoscopia digestiva alta",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -260,13 +338,18 @@
       }
     },
     {
+      "id": "DC-1015",
       "date": "13/01/2026",
       "room": "Hospital Regina - Sala C",
       "start_time": "12:30",
       "end_time": "14:00",
+      "start_at": "2026-01-13T12:30:00-03:00",
+      "end_at": "2026-01-13T14:00:00-03:00",
       "procedure": "Colonoscopia",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -277,13 +360,18 @@
       }
     },
     {
+      "id": "DC-1016",
       "date": "13/01/2026",
       "room": "CC - Sala 2 (SL)",
       "start_time": "13:00",
       "end_time": "14:15",
+      "start_at": "2026-01-13T13:00:00-03:00",
+      "end_at": "2026-01-13T14:15:00-03:00",
       "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dr. André Leal"
       ],
@@ -294,13 +382,18 @@
       }
     },
     {
+      "id": "DC-1017",
       "date": "13/01/2026",
       "room": "CC - Sala 3 (SL)",
       "start_time": "14:00",
       "end_time": "15:00",
+      "start_at": "2026-01-13T14:00:00-03:00",
+      "end_at": "2026-01-13T15:00:00-03:00",
       "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Geral",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -311,13 +404,20 @@
       }
     },
     {
+      "id": "DC-1018",
       "date": "13/01/2026",
       "room": "Hospital Regina - Sala A",
       "start_time": "16:00",
       "end_time": "17:30",
+      "start_at": "2026-01-13T16:00:00-03:00",
+      "end_at": "2026-01-13T17:30:00-03:00",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
       "complexity": null,
+      "skills": [
+        "Pediatria"
+      ],
+      "priority": null,
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -328,47 +428,66 @@
       }
     },
     {
+      "id": "DC-1019",
       "date": "13/01/2026",
       "room": "CC - Sala 3 (SL)",
       "start_time": "17:00",
       "end_time": "19:00",
+      "start_at": "2026-01-13T17:00:00-03:00",
+      "end_at": "2026-01-13T19:00:00-03:00",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
       "complexity": null,
+      "skills": [
+        "Pediatria"
+      ],
+      "priority": null,
       "professionals": [
         "Dra. Fernanda Costa"
       ],
-      "notes": "Paciente pediátrico | Prioridade: Urgente",
+      "notes": "Paciente pediátrico",
       "source": {
         "page": 1,
         "raw": "DC-1019 CC - Sala 3 (SL) Dra. Fernanda Costa Correção de estrabismo (pediatria) 13/01 17:00 13/01 19:00 Pediatria Paciente pediátrico | Prioridade: Urgente"
       }
     },
     {
+      "id": "DC-1020",
       "date": "13/01/2026",
       "room": "Hospital Regina - Sala C",
       "start_time": "17:30",
       "end_time": "18:45",
+      "start_at": "2026-01-13T17:30:00-03:00",
+      "end_at": "2026-01-13T18:45:00-03:00",
       "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
+      "anesthesia_type": "Cardíaca",
       "complexity": null,
+      "skills": [
+        "Monitorização"
+      ],
+      "priority": null,
       "professionals": [
         "Dra. Paula Menezes"
       ],
-      "notes": "Sala com hemodinâmica/monitorização | Prioridade: Emergência",
+      "notes": "Sala com hemodinâmica/monitorização avançada",
       "source": {
         "page": 1,
-        "raw": "DC-1020 Hospital Regina - Sala C Dra. Paula Menezes Revascularização miocárdica 13/01 17:30 13/01 18:45 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização | Prioridade: Emergência"
+        "raw": "DC-1020 Hospital Regina - Sala C Dra. Paula Menezes Revascularização miocárdica 13/01 17:30 13/01 18:45 Cardíaca, Monitorização Sala com hemodinâmica/monitorização | avançada Prioridade: Emergência"
       }
     },
     {
+      "id": "DC-1021",
       "date": "13/01/2026",
       "room": "CC - Sala 2 (SL)",
       "start_time": "18:00",
       "end_time": "19:30",
+      "start_at": "2026-01-13T18:00:00-03:00",
+      "end_at": "2026-01-13T19:30:00-03:00",
       "procedure": "Endoscopia digestiva alta",
-      "anesthesia_type": null,
+      "anesthesia_type": "Sedação/MAC",
       "complexity": null,
+      "skills": [],
+      "priority": null,
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -376,941 +495,6 @@
       "source": {
         "page": 1,
         "raw": "DC-1021 CC - Sala 2 (SL) Dra. Fernanda Costa Endoscopia digestiva alta 13/01 18:00 13/01 19:30 Sedação/MAC -"
-      }
-    },
-    {
-      "date": "13/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "18:30",
-      "end_time": "19:30",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1022 Hospital Regina - Sala C Dra. Fernanda Costa Artroplastia total de quadril 13/01 18:30 13/01 19:30 Regional, Ortopedia -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "07:30",
-      "end_time": "08:30",
-      "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1023 CC - Sala 1 (SL) Dra. Fernanda Costa Colecistectomia videolaparoscópica 14/01 07:30 14/01 08:30 Geral -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "08:30",
-      "end_time": "09:45",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1024 Hospital Regina - Sala B Dr. Carlos Silva Apendicectomia 14/01 08:30 14/01 09:45 Geral -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "10:00",
-      "end_time": "11:00",
-      "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": "Prioridade: Urgente",
-      "source": {
-        "page": 2,
-        "raw": "DC-1025 Hospital Regina - Sala B Dr. Carlos Silva Cesárea eletiva 14/01 10:00 14/01 11:00 Obstétrica, Regional Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "10:30",
-      "end_time": "11:15",
-      "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1026 CC - Sala 1 (SL) Dr. Vinícius Nogueira Cesárea eletiva 14/01 10:30 14/01 11:15 Obstétrica, Regional -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "13:00",
-      "end_time": "14:00",
-      "procedure": "Correção de estrabismo (pediatria)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": "Paciente pediátrico | Prioridade: Emergência",
-      "source": {
-        "page": 2,
-        "raw": "DC-1027 Hospital Regina - Sala C Dr. João Ramos Correção de estrabismo (pediatria) 14/01 13:00 14/01 14:00 Pediatria Paciente pediátrico | Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "14:00",
-      "end_time": "15:15",
-      "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1028 Hospital Regina - Sala A Dr. Carlos Silva Cesárea eletiva 14/01 14:00 14/01 15:15 Obstétrica, Regional -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "14:30",
-      "end_time": "16:00",
-      "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 2,
-        "raw": "DC-1029 Hospital Regina - Sala A Dra. Paula Menezes Cateterismo cardíaco (adulto) 14/01 14:30 14/01 16:00 Cardíaca Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "15:30",
-      "end_time": "16:15",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1030 Hospital Regina - Sala C Dr. João Ramos Artroplastia total de quadril 14/01 15:30 14/01 16:15 Regional, Ortopedia -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "16:30",
-      "end_time": "19:30",
-      "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização | Caso prolongado",
-      "source": {
-        "page": 2,
-        "raw": "DC-1031 Hospital Regina - Sala C Dra. Fernanda Costa Cateterismo cardíaco (adulto) 14/01 16:30 14/01 19:30 Cardíaca Sala com hemodinâmica/monitorização | Caso prolongado"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "18:00",
-      "end_time": "20:00",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1032 CC - Sala 3 (SL) Dra. Fernanda Costa Histerectomia 14/01 18:00 14/01 20:00 Geral, Obstétrica -"
-      }
-    },
-    {
-      "date": "14/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "18:30",
-      "end_time": "21:30",
-      "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": "Caso prolongado | Prioridade: Emergência",
-      "source": {
-        "page": 2,
-        "raw": "DC-1033 Hospital Regina - Sala B Dr. João Ramos Colecistectomia videolaparoscópica 14/01 18:30 14/01 21:30 Geral Caso prolongado | Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "07:00",
-      "end_time": "08:15",
-      "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 2,
-        "raw": "DC-1034 CC - Sala 2 (SL) Dra. Marina Teixeira Cateterismo cardíaco (adulto) 15/01 07:00 15/01 08:15 Cardíaca Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "07:30",
-      "end_time": "09:00",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": "Prioridade: Emergência",
-      "source": {
-        "page": 2,
-        "raw": "DC-1035 Hospital Regina - Sala C Dr. João Ramos Tireoidectomia 15/01 07:30 15/01 09:00 Geral Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "09:00",
-      "end_time": "09:45",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1036 CC - Sala 2 (SL) Dr. Carlos Silva Tireoidectomia 15/01 09:00 15/01 09:45 Geral -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "10:00",
-      "end_time": "11:15",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1037 CC - Sala 2 (SL) Dra. Paula Menezes Histerectomia 15/01 10:00 15/01 11:15 Geral, Obstétrica -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "13:00",
-      "end_time": "16:00",
-      "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Caso prolongado | Prioridade: Urgente",
-      "source": {
-        "page": 2,
-        "raw": "DC-1038 CC - Sala 1 (SL) Dra. Paula Menezes Cesárea eletiva 15/01 13:00 15/01 16:00 Obstétrica, Regional Caso prolongado | Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "14:00",
-      "end_time": "17:00",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": "Caso prolongado | Prioridade: Urgente",
-      "source": {
-        "page": 2,
-        "raw": "DC-1039 Hospital Regina - Sala C Dr. Carlos Silva Tireoidectomia 15/01 14:00 15/01 17:00 Geral Caso prolongado | Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "15:30",
-      "end_time": "17:00",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1040 Hospital Regina - Sala C Dr. Vinícius Nogueira Apendicectomia 15/01 15:30 15/01 17:00 Geral -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "16:00",
-      "end_time": "17:30",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1041 Hospital Regina - Sala C Dr. João Ramos Artroplastia total de quadril 15/01 16:00 15/01 17:30 Regional, Ortopedia -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "17:00",
-      "end_time": "18:30",
-      "procedure": "Colonoscopia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1042 Hospital Regina - Sala A Dra. Paula Menezes Colonoscopia 15/01 17:00 15/01 18:30 Sedação/MAC -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "17:30",
-      "end_time": "20:00",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Caso prolongado | Prioridade: Emergência",
-      "source": {
-        "page": 2,
-        "raw": "DC-1043 CC - Sala 2 (SL) Dra. Fernanda Costa Apendicectomia 15/01 17:30 15/01 20:00 Geral Caso prolongado | Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "18:30",
-      "end_time": "19:30",
-      "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Prioridade: Urgente",
-      "source": {
-        "page": 2,
-        "raw": "DC-1044 Hospital Regina - Sala B Dra. Paula Menezes Colecistectomia videolaparoscópica 15/01 18:30 15/01 19:30 Geral Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "07:30",
-      "end_time": "09:30",
-      "procedure": "Herniorrafia inguinal",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1045 CC - Sala 2 (SL) Dr. Vinícius Nogueira Herniorrafia inguinal 16/01 07:30 16/01 09:30 Geral, Regional -"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "08:00",
-      "end_time": "10:00",
-      "procedure": "Herniorrafia inguinal",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1046 Hospital Regina - Sala A Dr. Vinícius Nogueira Herniorrafia inguinal 16/01 08:00 16/01 10:00 Geral, Regional -"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "09:30",
-      "end_time": "11:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 2,
-        "raw": "DC-1048 Hospital Regina - Sala B Dra. Fernanda Costa Revascularização miocárdica 16/01 09:30 16/01 11:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "10:00",
-      "end_time": "12:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 3,
-        "raw": "DC-1049 CC - Sala 1 (SL) Dr. Vinícius Nogueira Revascularização miocárdica 16/01 10:00 16/01 12:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "10:30",
-      "end_time": "12:30",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": "Prioridade: Urgente",
-      "source": {
-        "page": 3,
-        "raw": "DC-1050 CC - Sala 1 (SL) Dr. Vinícius Nogueira Artroplastia total de quadril 16/01 10:30 16/01 12:30 Regional, Ortopedia Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "11:00",
-      "end_time": "12:00",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. André Leal"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1051 Hospital Regina - Sala A Dr. André Leal Artroplastia total de quadril 16/01 11:00 16/01 12:00 Regional, Ortopedia -"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "11:30",
-      "end_time": "12:15",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 3,
-        "raw": "DC-1052 CC - Sala 3 (SL) Dra. Marina Teixeira Revascularização miocárdica 16/01 11:30 16/01 12:15 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "13:30",
-      "end_time": "15:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. André Leal"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 3,
-        "raw": "DC-1053 CC - Sala 1 (SL) Dr. André Leal Revascularização miocárdica 16/01 13:30 16/01 15:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "14:00",
-      "end_time": "15:15",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1054 CC - Sala 1 (SL) Dr. Vinícius Nogueira Histerectomia 16/01 14:00 16/01 15:15 Geral, Obstétrica -"
-      }
-    },
-    {
-      "date": "16/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "15:00",
-      "end_time": "17:00",
-      "procedure": "Cateterismo cardíaco (adulto)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização | Prioridade: Urgente",
-      "source": {
-        "page": 3,
-        "raw": "DC-1055 CC - Sala 1 (SL) Dr. Vinícius Nogueira Cateterismo cardíaco (adulto) 16/01 15:00 16/01 17:00 Cardíaca Sala com hemodinâmica/monitorização | Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "07:00",
-      "end_time": "08:30",
-      "procedure": "Correção de estrabismo (pediatria)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": "Paciente pediátrico",
-      "source": {
-        "page": 3,
-        "raw": "DC-1056 CC - Sala 3 (SL) Dr. Carlos Silva Correção de estrabismo (pediatria) 17/01 07:00 17/01 08:30 Pediatria Paciente pediátrico"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "07:30",
-      "end_time": "08:15",
-      "procedure": "Correção de estrabismo (pediatria)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": "Paciente pediátrico",
-      "source": {
-        "page": 3,
-        "raw": "DC-1057 CC - Sala 2 (SL) Dra. Marina Teixeira Correção de estrabismo (pediatria) 17/01 07:30 17/01 08:15 Pediatria Paciente pediátrico"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "08:30",
-      "end_time": "11:30",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": "Caso prolongado",
-      "source": {
-        "page": 3,
-        "raw": "DC-1058 CC - Sala 2 (SL) Dra. Marina Teixeira Apendicectomia 17/01 08:30 17/01 11:30 Geral Caso prolongado"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "09:00",
-      "end_time": "10:00",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Prioridade: Emergência",
-      "source": {
-        "page": 3,
-        "raw": "DC-1059 CC - Sala 3 (SL) Dra. Fernanda Costa Tireoidectomia 17/01 09:00 17/01 10:00 Geral Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "09:30",
-      "end_time": "12:00",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Caso prolongado | Prioridade: Urgente",
-      "source": {
-        "page": 3,
-        "raw": "DC-1060 CC - Sala 1 (SL) Dra. Paula Menezes Histerectomia 17/01 09:30 17/01 12:00 Geral, Obstétrica Caso prolongado | Prioridade: Urgente"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "11:30",
-      "end_time": "14:00",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Caso prolongado",
-      "source": {
-        "page": 3,
-        "raw": "DC-1061 CC - Sala 2 (SL) Dra. Fernanda Costa Artroplastia total de quadril 17/01 11:30 17/01 14:00 Regional, Ortopedia Caso prolongado"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "12:30",
-      "end_time": "14:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 3,
-        "raw": "DC-1062 CC - Sala 3 (SL) Dra. Paula Menezes Revascularização miocárdica 17/01 12:30 17/01 14:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "13:30",
-      "end_time": "14:15",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1063 Hospital Regina - Sala C Dr. João Ramos Tireoidectomia 17/01 13:30 17/01 14:15 Geral -"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "15:30",
-      "end_time": "17:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 3,
-        "raw": "DC-1064 Hospital Regina - Sala A Dra. Marina Teixeira Revascularização miocárdica 17/01 15:30 17/01 17:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "17:30",
-      "end_time": "19:30",
-      "procedure": "Tireoidectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1065 Hospital Regina - Sala B Dr. João Ramos Tireoidectomia 17/01 17:30 17/01 19:30 Geral -"
-      }
-    },
-    {
-      "date": "17/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "18:30",
-      "end_time": "19:15",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1066 CC - Sala 2 (SL) Dr. Carlos Silva Apendicectomia 17/01 18:30 17/01 19:15 Geral -"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "07:00",
-      "end_time": "09:30",
-      "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Vinícius Nogueira"
-      ],
-      "notes": "Caso prolongado",
-      "source": {
-        "page": 3,
-        "raw": "DC-1067 CC - Sala 1 (SL) Dr. Vinícius Nogueira Colecistectomia videolaparoscópica 18/01 07:00 18/01 09:30 Geral Caso prolongado"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "08:00",
-      "end_time": "11:00",
-      "procedure": "Cesárea eletiva",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. Carlos Silva"
-      ],
-      "notes": "Caso prolongado",
-      "source": {
-        "page": 3,
-        "raw": "DC-1068 CC - Sala 2 (SL) Dr. Carlos Silva Cesárea eletiva 18/01 08:00 18/01 11:00 Obstétrica, Regional Caso prolongado"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "08:30",
-      "end_time": "10:00",
-      "procedure": "Apendicectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": "Prioridade: Emergência",
-      "source": {
-        "page": 3,
-        "raw": "DC-1069 CC - Sala 1 (SL) Dr. João Ramos Apendicectomia 18/01 08:30 18/01 10:00 Geral Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "10:00",
-      "end_time": "11:15",
-      "procedure": "Correção de estrabismo (pediatria)",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": "Paciente pediátrico",
-      "source": {
-        "page": 3,
-        "raw": "DC-1070 Hospital Regina - Sala B Dra. Fernanda Costa Correção de estrabismo (pediatria) 18/01 10:00 18/01 11:15 Pediatria Paciente pediátrico"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "12:00",
-      "end_time": "13:00",
-      "procedure": "Colonoscopia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Fernanda Costa"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1071 CC - Sala 1 (SL) Dra. Fernanda Costa Colonoscopia 18/01 12:00 18/01 13:00 Sedação/MAC -"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 3 (SL)",
-      "start_time": "12:30",
-      "end_time": "13:30",
-      "procedure": "Artroplastia total de quadril",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Marina Teixeira"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1072 CC - Sala 3 (SL) Dra. Marina Teixeira Artroplastia total de quadril 18/01 12:30 18/01 13:30 Regional, Ortopedia -"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "Hospital Regina - Sala A",
-      "start_time": "14:30",
-      "end_time": "15:45",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. André Leal"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1073 Hospital Regina - Sala A Dr. André Leal Histerectomia 18/01 14:30 18/01 15:45 Geral, Obstétrica -"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "15:00",
-      "end_time": "16:15",
-      "procedure": "Herniorrafia inguinal",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. João Ramos"
-      ],
-      "notes": null,
-      "source": {
-        "page": 3,
-        "raw": "DC-1074 CC - Sala 1 (SL) Dr. João Ramos Herniorrafia inguinal 18/01 15:00 18/01 16:15 Geral, Regional -"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "Hospital Regina - Sala B",
-      "start_time": "16:00",
-      "end_time": "18:30",
-      "procedure": "Colecistectomia videolaparoscópica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dr. André Leal"
-      ],
-      "notes": "Caso prolongado | Prioridade: Emergência",
-      "source": {
-        "page": 4,
-        "raw": "DC-1075 Hospital Regina - Sala B Dr. André Leal Colecistectomia videolaparoscópica 18/01 16:00 18/01 18:30 Geral Caso prolongado | Prioridade: Emergência"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "CC - Sala 2 (SL)",
-      "start_time": "17:30",
-      "end_time": "19:00",
-      "procedure": "Revascularização miocárdica",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": "Sala com hemodinâmica/monitorização",
-      "source": {
-        "page": 4,
-        "raw": "DC-1076 CC - Sala 2 (SL) Dra. Paula Menezes Revascularização miocárdica 18/01 17:30 18/01 19:00 Cardíaca, Monitorização avançada Sala com hemodinâmica/monitorização"
-      }
-    },
-    {
-      "date": "18/01/2026",
-      "room": "Hospital Regina - Sala C",
-      "start_time": "18:00",
-      "end_time": "19:30",
-      "procedure": "Endoscopia digestiva alta",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": null,
-      "source": {
-        "page": 4,
-        "raw": "DC-1077 Hospital Regina - Sala C Dra. Paula Menezes Endoscopia digestiva alta 18/01 18:00 18/01 19:30 Sedação/MAC -"
       }
     }
   ]
