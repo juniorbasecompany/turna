@@ -154,7 +154,6 @@ DMHM_RE = re.compile(r"^\d{2}/\d{2}\s+\d{2}:\d{2}$")  # ex: 11/03 09:00
 ID_RE = re.compile(r"\b[A-Z]{2,5}-\d{3,6}\b")
 ISO_DT_TZ_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
 
-ALLOWED_DOC_TYPES = {"demands", "agenda", "unknown"}
 DEFAULT_TZ_OFFSET = "-03:00"
 
 def _period_start_ymd(meta: dict) -> Optional[Tuple[int, int, int]]:
@@ -319,20 +318,11 @@ def _validate_and_normalize_result(obj: dict) -> dict:
     """
     out: Dict[str, Any] = {}
 
-    out["doc_type_guess"] = obj.get("doc_type_guess")
-    if out["doc_type_guess"] not in ALLOWED_DOC_TYPES:
-        out["doc_type_guess"] = "unknown"
-
-    # entities
-    entities = obj.get("entities") if isinstance(obj.get("entities"), dict) else {}
-    out["entities"] = entities
-
-    # sections / tables
-    out["sections"] = _as_list(obj.get("sections"))
-    out["tables"] = _as_list(obj.get("tables"))
-
     # meta
     meta = obj.get("meta") if isinstance(obj.get("meta"), dict) else {}
+    # Remove timezone (não necessário no output)
+    if "timezone" in meta:
+        del meta["timezone"]
     out["meta"] = meta
 
     # demands
@@ -391,6 +381,30 @@ def _validate_and_normalize_result(obj: dict) -> dict:
         demands.append(dd)
 
     out["demands"] = demands
+
+    # Normaliza date_reference: prioriza cabeçalho (meta.period), fallback para primeira demanda
+    date_ref: Optional[str] = None
+
+    # 1) Tenta extrair do cabeçalho (meta.period)
+    ymd = _period_start_ymd(out.get("meta", {}))
+    if ymd:
+        yyyy, mm, dd = ymd
+        date_ref = f"{yyyy:04d}-{mm:02d}-{dd:02d}"
+
+    # 2) Fallback: primeira demanda válida
+    if not date_ref and demands:
+        for d in demands:
+            st = d.get("start_time")
+            if isinstance(st, str) and ISO_DT_TZ_RE.match(st):
+                date_ref = st[:10]  # YYYY-MM-DD
+                break
+
+    if date_ref:
+        out["meta"]["date_reference"] = date_ref
+    elif "date_reference" in out["meta"]:
+        # Se veio da IA mas não conseguimos normalizar, remove
+        del out["meta"]["date_reference"]
+
     return out
 
 # -----------------------------
@@ -405,7 +419,7 @@ Você DEVE responder APENAS com JSON válido (sem markdown, sem explicações).
 USER_PROMPT = """Extraia as demandas cirúrgicas do documento.
 Regras:
 - Responda APENAS JSON.
-- O JSON DEVE conter as chaves: doc_type_guess, entities, tables, sections, meta, demands.
+- O JSON DEVE conter as chaves: meta, demands.
 - demands é uma lista de objetos com:
   - room (string ou null)
   - start_time (ISO datetime com timezone, ex: "2026-01-12T09:30:00-03:00")
@@ -468,10 +482,6 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
     obj["meta"]["extraction"].update(
         {"model": model, "strategy": "ai_text", "prompt_version": PROMPT_VERSION}
     )
-    obj.setdefault("doc_type_guess", "unknown")
-    obj.setdefault("entities", {})
-    obj.setdefault("tables", [])
-    obj.setdefault("sections", [])
     obj.setdefault("demands", [])
 
     return _validate_and_normalize_result(obj)
@@ -520,10 +530,6 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     obj["meta"]["extraction"].update(
         {"model": model, "dpi": dpi, "max_pages": max_pages, "strategy": "ai", "prompt_version": PROMPT_VERSION}
     )
-    obj.setdefault("doc_type_guess", "unknown")
-    obj.setdefault("entities", {})
-    obj.setdefault("tables", [])
-    obj.setdefault("sections", [])
     obj.setdefault("demands", [])
 
     return _validate_and_normalize_result(obj)
