@@ -1,10 +1,7 @@
 {
   "doc_type_guess": "unknown",
   "entities": {},
-  "sections": [
-    "Mapa de Demandas Cirúrgicas - Semana Operatória (exemplo)",
-    "Legenda de campos"
-  ],
+  "sections": [],
   "tables": [],
   "meta": {
     "period": "12/01/2026 a 18/01/2026",
@@ -31,7 +28,7 @@
       "end_time": "12:00",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -48,7 +45,7 @@
       "end_time": "12:00",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -65,7 +62,7 @@
       "end_time": "12:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -82,7 +79,7 @@
       "end_time": "14:15",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -99,7 +96,7 @@
       "end_time": "15:00",
       "procedure": "Endoscopia digestiva alta",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -116,7 +113,7 @@
       "end_time": "15:45",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -133,7 +130,7 @@
       "end_time": "16:45",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -150,7 +147,7 @@
       "end_time": "18:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -167,7 +164,7 @@
       "end_time": "18:45",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -184,7 +181,7 @@
       "end_time": "21:00",
       "procedure": "Colonoscopia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -201,7 +198,7 @@
       "end_time": "20:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -218,7 +215,7 @@
       "end_time": "13:30",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -235,7 +232,7 @@
       "end_time": "11:45",
       "procedure": "Endoscopia digestiva alta",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -252,7 +249,7 @@
       "end_time": "13:30",
       "procedure": "Endoscopia digestiva alta",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -269,7 +266,7 @@
       "end_time": "14:00",
       "procedure": "Colonoscopia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -286,7 +283,7 @@
       "end_time": "14:15",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -303,7 +300,7 @@
       "end_time": "15:00",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -320,7 +317,7 @@
       "end_time": "17:30",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -337,7 +334,7 @@
       "end_time": "19:00",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -354,7 +351,7 @@
       "end_time": "18:45",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -371,7 +368,7 @@
       "end_time": "19:30",
       "procedure": "Endoscopia digestiva alta",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -382,13 +379,13 @@
       }
     },
     {
-      "date": "13/01/2026",
+      "date": "14/01/2026",
       "room": "Hospital Regina - Sala C",
       "start_time": "18:30",
       "end_time": "19:30",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -405,7 +402,7 @@
       "end_time": "08:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -422,7 +419,7 @@
       "end_time": "09:45",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -439,7 +436,7 @@
       "end_time": "11:00",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -456,7 +453,7 @@
       "end_time": "11:15",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -473,7 +470,7 @@
       "end_time": "14:00",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -490,7 +487,7 @@
       "end_time": "15:15",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -507,7 +504,7 @@
       "end_time": "16:00",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -524,7 +521,7 @@
       "end_time": "16:15",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -541,7 +538,7 @@
       "end_time": "19:30",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -558,7 +555,7 @@
       "end_time": "20:00",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -575,14 +572,14 @@
       "end_time": "21:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
-      "notes": "Caso prolongado | Prioridade: Emergência",
+      "notes": "Caso prolongado | Prioridade:",
       "source": {
         "page": 2,
-        "raw": "DC-1033 Hospital Regina - Sala B Dr. João Ramos Colecistectomia videolaparoscópica 14/01 18:30 14/01 21:30 Geral Caso prolongado | Prioridade: Emergência"
+        "raw": "DC-1033 Hospital Regina - Sala B Dr. João Ramos Colecistectomia videolaparoscópica 14/01 18:30 14/01 21:30 Geral Caso prolongado | Prioridade:"
       }
     },
     {
@@ -592,7 +589,7 @@
       "end_time": "08:15",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -609,7 +606,7 @@
       "end_time": "09:00",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -626,7 +623,7 @@
       "end_time": "09:45",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -641,26 +638,9 @@
       "room": "CC - Sala 2 (SL)",
       "start_time": "10:00",
       "end_time": "11:15",
-      "procedure": "Histerectomia",
-      "anesthesia_type": null,
-      "complexity": null,
-      "professionals": [
-        "Dra. Paula Menezes"
-      ],
-      "notes": null,
-      "source": {
-        "page": 2,
-        "raw": "DC-1037 CC - Sala 2 (SL) Dra. Paula Menezes Histerectomia 15/01 10:00 15/01 11:15 Geral, Obstétrica -"
-      }
-    },
-    {
-      "date": "15/01/2026",
-      "room": "CC - Sala 1 (SL)",
-      "start_time": "13:00",
-      "end_time": "16:00",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -677,7 +657,7 @@
       "end_time": "17:00",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -694,7 +674,7 @@
       "end_time": "17:00",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -711,7 +691,7 @@
       "end_time": "17:30",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -728,7 +708,7 @@
       "end_time": "18:30",
       "procedure": "Colonoscopia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -745,7 +725,7 @@
       "end_time": "20:00",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -762,7 +742,7 @@
       "end_time": "19:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -779,7 +759,7 @@
       "end_time": "09:30",
       "procedure": "Herniorrafia inguinal",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Regional",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -796,7 +776,7 @@
       "end_time": "10:00",
       "procedure": "Herniorrafia inguinal",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Regional",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -813,7 +793,7 @@
       "end_time": "11:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -830,7 +810,7 @@
       "end_time": "12:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -847,7 +827,7 @@
       "end_time": "12:30",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -864,7 +844,7 @@
       "end_time": "12:00",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -881,7 +861,7 @@
       "end_time": "12:15",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -898,7 +878,7 @@
       "end_time": "15:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -915,7 +895,7 @@
       "end_time": "15:15",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -932,7 +912,7 @@
       "end_time": "17:00",
       "procedure": "Cateterismo cardíaco (adulto)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -949,7 +929,7 @@
       "end_time": "08:30",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -966,7 +946,7 @@
       "end_time": "08:15",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -983,7 +963,7 @@
       "end_time": "11:30",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -1000,7 +980,7 @@
       "end_time": "10:00",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -1017,7 +997,7 @@
       "end_time": "12:00",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -1034,7 +1014,7 @@
       "end_time": "14:00",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -1051,7 +1031,7 @@
       "end_time": "14:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -1068,7 +1048,7 @@
       "end_time": "14:15",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -1085,7 +1065,7 @@
       "end_time": "17:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -1102,7 +1082,7 @@
       "end_time": "19:30",
       "procedure": "Tireoidectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -1119,7 +1099,7 @@
       "end_time": "19:15",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -1136,7 +1116,7 @@
       "end_time": "09:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. Vinícius Nogueira"
       ],
@@ -1153,7 +1133,7 @@
       "end_time": "11:00",
       "procedure": "Cesárea eletiva",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Obstétrica, Regional",
       "professionals": [
         "Dr. Carlos Silva"
       ],
@@ -1170,7 +1150,7 @@
       "end_time": "10:00",
       "procedure": "Apendicectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -1187,7 +1167,7 @@
       "end_time": "11:15",
       "procedure": "Correção de estrabismo (pediatria)",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Pediatria",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -1204,7 +1184,7 @@
       "end_time": "13:00",
       "procedure": "Colonoscopia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dra. Fernanda Costa"
       ],
@@ -1221,7 +1201,7 @@
       "end_time": "13:30",
       "procedure": "Artroplastia total de quadril",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Regional, Ortopedia",
       "professionals": [
         "Dra. Marina Teixeira"
       ],
@@ -1238,7 +1218,7 @@
       "end_time": "15:45",
       "procedure": "Histerectomia",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Obstétrica",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -1255,7 +1235,7 @@
       "end_time": "16:15",
       "procedure": "Herniorrafia inguinal",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral, Regional",
       "professionals": [
         "Dr. João Ramos"
       ],
@@ -1272,7 +1252,7 @@
       "end_time": "18:30",
       "procedure": "Colecistectomia videolaparoscópica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Geral",
       "professionals": [
         "Dr. André Leal"
       ],
@@ -1289,7 +1269,7 @@
       "end_time": "19:00",
       "procedure": "Revascularização miocárdica",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Cardíaca, Monitorização avançada",
       "professionals": [
         "Dra. Paula Menezes"
       ],
@@ -1306,7 +1286,7 @@
       "end_time": "19:30",
       "procedure": "Endoscopia digestiva alta",
       "anesthesia_type": null,
-      "complexity": null,
+      "complexity": "Sedação/MAC",
       "professionals": [
         "Dra. Paula Menezes"
       ],

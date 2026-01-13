@@ -32,6 +32,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # -----------------------------
+# Progresso (stderr, não altera JSON em stdout)
+# -----------------------------
+def _progress(msg: str) -> None:
+    """
+    Logs de progresso para evitar impressão de "congelamento".
+    Vai para stderr para não interferir no JSON impresso em stdout.
+    Desative com: DEMAND_PROGRESS=0
+    """
+    v = (os.getenv("DEMAND_PROGRESS") or "1").strip().lower()
+    if v in {"0", "false", "no", "off"}:
+        return
+    try:
+        print(f"[turna] {msg}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+# -----------------------------
 # Env loading (robusto)
 # -----------------------------
 try:
@@ -39,7 +56,10 @@ try:
 
     here = Path(__file__).resolve().parent       # demand/
     project_root = here.parent                   # turna/
+    # 1) Preferir sempre o .env na raiz do projeto (robusto mesmo se CWD mudar)
     load_dotenv(project_root / ".env")
+    # 2) Também tenta .env no diretório atual (útil em execuções ad-hoc)
+    load_dotenv(".env")
 except Exception:
     pass
 
@@ -284,7 +304,9 @@ def _call_ai_extract(pdf_path: Path, model: str, dpi: int, max_pages: Optional[i
     client = _openai_client()
 
     # render -> imagens base64
+    _progress(f"renderizando PDF -> imagens (dpi={dpi}, max_pages={max_pages})...")
     images_b64 = _render_pdf_to_png_b64(pdf_path, dpi=dpi, max_pages=max_pages)
+    _progress(f"renderização concluída: {len(images_b64)} página(s)")
 
     # Monta input multimodal
     # OBS: API Responses (openai python) aceita input_text + input_image
@@ -292,6 +314,7 @@ def _call_ai_extract(pdf_path: Path, model: str, dpi: int, max_pages: Optional[i
     for b64 in images_b64:
         content.append({"type": "input_image", "image_url": f"data:image/png;base64,{b64}"})
 
+    _progress(f"chamando OpenAI (model={model})...")
     resp = client.responses.create(
         model=model,
         input=[
@@ -300,6 +323,7 @@ def _call_ai_extract(pdf_path: Path, model: str, dpi: int, max_pages: Optional[i
         ],
         temperature=0,
     )
+    _progress("OpenAI respondeu; parseando JSON...")
 
     # Extrai texto final
     txt = ""
@@ -364,23 +388,30 @@ def extract_demands(pdf_path: str, model: str = "gpt-4.1-mini", dpi: int = 200, 
     if not pdf.exists():
         raise FileNotFoundError(str(pdf))
 
+    _progress(f"calculando hash: {pdf.name} ...")
     pdf_hash = _sha256_file(pdf)
     key = _cache_key(pdf_hash, model=model, dpi=dpi, max_pages=max_pages, prompt_version=PROMPT_VERSION)
 
     if use_cache:
+        _progress("verificando cache...")
         cached = _cache_read(key)
         if cached:
+            _progress("cache HIT")
             cached.setdefault("meta", {})
             cached["meta"].setdefault("hybrid", {})
             cached["meta"]["hybrid"]["used"] = "cache"
             return cached
+        _progress("cache MISS")
 
     # 1) offline
+    _progress("tentando extração offline...")
     offline = _try_offline(pdf)
     if offline is not None:
+        _progress("offline OK")
         if use_cache:
             _cache_write(key, offline)
         return offline
+    _progress("offline vazio/indisponível; usando IA...")
 
     # 2) IA
     ai = _call_ai_extract(pdf, model=model, dpi=dpi, max_pages=max_pages)
