@@ -16,7 +16,7 @@ from output.console import (
     print_professionals_overview,
     print_total_cost,
 )
-from strategy.greedy import solve_greedy
+from strategy.greedy.solve import solve_greedy
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -184,7 +184,7 @@ def main(allocation_mode: str = "greedy") -> None:
         )
     else:
         # Import lazy: CP-SAT depende de ortools (opcional em modo greedy).
-        from strategy.cd_sat import solve_cp_sat
+        from strategy.cd_sat.solve import solve_cp_sat
 
         per_day, total_cost = solve_cp_sat(
             demands=demands,
