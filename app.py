@@ -5,11 +5,11 @@ Importante: a intenção é manter a MESMA lógica e a MESMA saída,
 apenas separando em arquivos menores.
 """
 
+import json
 import sys
 from pathlib import Path
 
 from core import overlap
-from data import DEMANDS_BY_DAY, PROS
 from output.console import (
     print_day_result,
     print_demands_overview,
@@ -148,8 +148,25 @@ def _try_generate_day1_pdf(per_day: list[dict]) -> None:
 
 
 def main(allocation_mode: str = "greedy") -> None:
+    # Carrega demandas do arquivo JSON
+    json_path = Path(__file__).resolve().parent / "test" / "demandas.json"
+    with json_path.open(encoding="utf-8") as f:
+        json_data = json.load(f)
+
+    # Converte chaves de string para int (JSON usa strings como chaves)
+    DEMANDS_BY_DAY = {int(k): v for k, v in json_data.items()}
+
+    # Carrega profissionais do arquivo JSON
+    pros_path = Path(__file__).resolve().parent / "test" / "profissionais.json"
+    with pros_path.open(encoding="utf-8") as f:
+        pros_json = json.load(f)
+
+    # Converte vacation de listas para tuplas (JSON usa listas, código espera tuplas)
+    pros = [
+        {**p, "vacation": [tuple(v) for v in p["vacation"]]} for p in pros_json
+    ]
+
     demands = build_demands_from_by_day(DEMANDS_BY_DAY)
-    pros = list(PROS)
 
     days = max(DEMANDS_BY_DAY.keys(), default=0)
 
