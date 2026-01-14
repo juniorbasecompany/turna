@@ -32,4 +32,16 @@ if static_dir.exists():
 @app.get("/login", response_class=HTMLResponse, tags=["Interface"])
 def login_page():
     """Página de login para testar autenticação Google (retorna HTML, não JSON)."""
+    html_path = static_dir / "login.html"
+    if html_path.exists():
+        html_content = html_path.read_text(encoding="utf-8")
+        # Substitui o placeholder pelo Client ID real (garante que frontend e backend usam o mesmo)
+        google_client_id = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+        if not google_client_id:
+            return HTMLResponse(
+                content="<h1>Erro: GOOGLE_CLIENT_ID não configurado no .env</h1>",
+                status_code=500
+            )
+        html_content = html_content.replace("COLE_AQUI_SEU_GOOGLE_CLIENT_ID", google_client_id)
+        return HTMLResponse(content=html_content)
     return HTMLResponse(content="<h1>Login page not found</h1>", status_code=404)
