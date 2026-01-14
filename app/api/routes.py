@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.models.tenant import Tenant
@@ -6,6 +7,8 @@ from pydantic import BaseModel as PydanticBaseModel
 from app.api.auth import router as auth_router
 from app.auth.dependencies import get_current_account
 from app.models.user import Account
+from app.storage.service import StorageService
+from app.models.file import File
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
@@ -66,3 +69,69 @@ def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_sess
     session.refresh(tenant)
 
     return tenant
+
+
+class FileUploadResponse(PydanticBaseModel):
+    file_id: int
+    filename: str
+    content_type: str
+    file_size: int
+    s3_url: str
+    presigned_url: str
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/files/upload", response_model=FileUploadResponse, status_code=201, tags=["Files"])
+def upload_file(
+    file: UploadFile = FastAPIFile(...),
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    """
+    Faz upload de arquivo para MinIO/S3 e cria registro File no banco.
+
+    Retorna file_id, s3_url e presigned_url para acesso ao arquivo.
+    """
+    if not account.tenant_id:
+        raise HTTPException(
+            status_code=400, detail="Account não possui tenant_id associado"
+        )
+
+    storage_service = StorageService()
+
+    try:
+        # Upload arquivo e criar registro
+        file_model = storage_service.upload_imported_file(
+            session=session,
+            tenant_id=account.tenant_id,
+            file=file,
+        )
+
+        # Gerar URL presignada
+        presigned_url = storage_service.get_file_presigned_url(
+            s3_key=file_model.s3_key,
+            expiration=3600,  # 1 hora
+        )
+
+        return FileUploadResponse(
+            file_id=file_model.id,
+            filename=file_model.filename,
+            content_type=file_model.content_type,
+            file_size=file_model.file_size,
+            s3_url=file_model.s3_url,
+            presigned_url=presigned_url,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_detail = f"Erro ao fazer upload do arquivo: {str(e)}"
+        # Em desenvolvimento, incluir traceback completo
+        if os.getenv("APP_ENV", "dev") == "dev":
+            error_detail += f"\n\nTraceback:\n{traceback.format_exc()}"
+        raise HTTPException(
+            status_code=500,
+            detail=error_detail
+        )

@@ -36,10 +36,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: login via Google, verificar JWT, chamar `/me`
 
 ### Etapa 3: Upload + File + MinIO
-- [ ] Modelo File
-- [ ] StorageService básico (upload/download)
-- [ ] Endpoint `POST /files/upload` retorna URL/presigned
-- [ ] Testar: upload arquivo, verificar MinIO e banco
+- [x] Modelo File
+- [x] StorageService básico (upload/download)
+- [x] Endpoint `POST /files/upload` retorna URL/presigned
+- [x] Testar: upload arquivo, verificar MinIO e banco
 
 ### Etapa 4: Arq - Job fake primeiro
 - [ ] WorkerSettings configurado
@@ -94,8 +94,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
   - [x] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
   - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
-- [ ] Criar `app/models/file.py`:
-  - [ ] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
+- [x] Criar `app/models/file.py`:
+  - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
 - [ ] Criar `app/models/schedule_version.py`:
   - [ ] Modelo `ScheduleVersion` (id, tenant_id, name, period_start, period_end, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
   - [ ] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
@@ -400,32 +400,34 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 3: Storage (S3/MinIO)
 
 ### 3.1 Configuração S3/MinIO
-- [ ] Criar `app/storage/__init__.py`
-- [ ] Criar `app/storage/config.py`:
-  - [ ] Classe `S3Config` lendo variáveis: `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `S3_REGION`, `S3_USE_SSL`
-- [ ] Criar `app/storage/client.py`:
-  - [ ] Classe `S3Client` usando boto3
-  - [ ] Método `upload_file(file_path, s3_key, content_type) -> s3_url`
-  - [ ] Método `download_file(s3_key, local_path)`
-  - [ ] Método `get_presigned_url(s3_key, expiration)`
-  - [ ] Método `ensure_bucket_exists()` (criar bucket se não existir)
-- [ ] Criar `app/storage/service.py`:
-  - [ ] Classe `StorageService` que usa `S3Client`
-  - [ ] Método `upload_imported_file(tenant_id, file, filename) -> File model`
-  - [ ] Método `upload_schedule_pdf(tenant_id, schedule_version_id, pdf_bytes) -> File model`
-  - [ ] Método `get_file_url(file_id, tenant_id) -> str`
-  - [ ] Padrão de S3 keys: `{tenant_id}/{file_type}/{filename}`
+- [x] Criar `app/storage/__init__.py`
+- [x] Criar `app/storage/config.py`:
+  - [x] Classe `S3Config` lendo variáveis: `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `S3_REGION`, `S3_USE_SSL`
+  - [x] Validar placeholder de `S3_ENDPOINT_URL` (evita `https://SEU_S3`)
+- [x] Criar `app/storage/client.py`:
+  - [x] Classe `S3Client` usando boto3
+  - [x] Método `upload_file(file_path, s3_key, content_type) -> s3_url`
+  - [x] Método `upload_fileobj(file_obj, s3_key, content_type) -> s3_url`
+  - [x] Método `download_file(s3_key, local_path)`
+  - [x] Método `get_presigned_url(s3_key, expiration)`
+  - [x] Método `ensure_bucket_exists()` (criar bucket se não existir)
+- [x] Criar `app/storage/service.py`:
+  - [x] Classe `StorageService` que usa `S3Client`
+  - [x] Método `upload_imported_file(session, tenant_id, file, filename) -> File`
+  - [x] Método `upload_schedule_pdf(session, tenant_id, schedule_version_id, pdf_bytes) -> File`
+  - [x] Método `get_file_presigned_url(s3_key, expiration) -> str`
+  - [x] Padrão de S3 keys: `{tenant_id}/{file_type}/{filename}` (com sufixo UUID pra evitar colisão)
 
 ### 3.2 Integração com Modelos
-- [ ] Criar endpoint `POST /files/upload`:
-  - [ ] Receber arquivo via multipart
-  - [ ] Upload para S3 (StorageService)
-  - [ ] Criar File no banco
-  - [ ] Retornar `{file_id, s3_url, presigned_url}`
-- [ ] Testar upload/download:
-  - [ ] Upload de arquivo cria registro no banco e arquivo no MinIO
+- [x] Criar endpoint `POST /files/upload`:
+  - [x] Receber arquivo via multipart
+  - [x] Upload para S3 (StorageService)
+  - [x] Criar File no banco
+  - [x] Retornar `{file_id, s3_url, presigned_url}`
+- [x] Testar upload/download:
+  - [x] Upload de arquivo cria registro no banco e arquivo no MinIO
   - [ ] Download retorna arquivo correto
-  - [ ] URLs presignadas funcionam
+  - [x] URLs presignadas funcionam
 
 ---
 
