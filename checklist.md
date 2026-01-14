@@ -30,10 +30,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: criar tenant via `/docs`, verificar no banco
 
 ### Etapa 2: OAuth + JWT + `/me`
-- [ ] OAuth Google integrado
-- [ ] JWT com `tenant_id` no token
-- [ ] Endpoint `GET /me` retorna User do banco
-- [ ] Testar: login via Google, verificar JWT, chamar `/me`
+- [x] OAuth Google integrado
+- [x] JWT com `tenant_id` no token
+- [x] Endpoint `GET /me` retorna User do banco
+- [x] Testar: login via Google, verificar JWT, chamar `/me`
 
 ### Etapa 3: Upload + File + MinIO
 - [ ] Modelo File
@@ -129,28 +129,29 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 2: Autenticação e Multi-Tenant
 
 ### 2.1 Integração de Autenticação
-- [ ] Criar `app/auth/__init__.py`
-- [ ] Criar `app/auth/jwt.py`:
-  - [ ] Função `create_access_token(user_id, tenant_id, role)` retornando JWT
-  - [ ] Função `verify_token(token)` retornando payload (user_id, tenant_id, role)
-  - [ ] Usar `JWT_SECRET` e `JWT_ISSUER` do ambiente
-  - [ ] Claims obrigatórios: `user_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
-- [ ] Criar `app/auth/dependencies.py`:
-  - [ ] Dependency `get_current_user(session, token)` retornando User
-  - [ ] Dependency `require_role(role: str)` para verificar permissões
-  - [ ] Dependency `get_current_tenant(session, token)` retornando Tenant
-- [ ] Migrar lógica do `login.py` para `app/auth/oauth.py`:
-  - [ ] Função `verify_google_token(token)`
-  - [ ] Endpoint `POST /auth/google` (adaptar do login.py)
-  - [ ] Endpoint `POST /auth/google/register` (adaptar do login.py)
-  - [ ] Integrar com modelos User/Tenant (criar usuário no banco, não JSON)
-- [ ] Atualizar `app/api/routes.py`:
-  - [ ] Importar router de autenticação
-  - [ ] Incluir rotas de auth
-- [ ] Testar autenticação:
-  - [ ] Login com Google retorna JWT válido
-  - [ ] JWT contém `tenant_id`
-  - [ ] `GET /me` retorna dados do usuário do banco
+- [x] Criar `app/auth/__init__.py`
+- [x] Criar `app/auth/jwt.py`:
+  - [x] Função `create_access_token(user_id, tenant_id, role)` retornando JWT
+  - [x] Função `verify_token(token)` retornando payload (user_id, tenant_id, role)
+  - [x] Usar `JWT_SECRET` e `JWT_ISSUER` do ambiente
+  - [x] Claims obrigatórios: `user_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
+- [x] Criar `app/auth/dependencies.py`:
+  - [x] Dependency `get_current_user(session, token)` retornando User
+  - [x] Dependency `require_role(role: str)` para verificar permissões
+  - [x] Dependency `get_current_tenant(session, token)` retornando Tenant
+- [x] Migrar lógica do `login.py` para `app/auth/oauth.py`:
+  - [x] Função `verify_google_token(token)` com clock_skew_in_seconds
+  - [x] Endpoint `POST /auth/google` (adaptar do login.py)
+  - [x] Endpoint `POST /auth/google/register` (adaptar do login.py)
+  - [x] Integrar com modelos User/Tenant (criar usuário no banco, não JSON)
+- [x] Atualizar `app/api/routes.py`:
+  - [x] Importar router de autenticação
+  - [x] Incluir rotas de auth
+  - [x] Endpoint `GET /me` na raiz
+- [x] Testar autenticação:
+  - [x] Login com Google retorna JWT válido
+  - [x] JWT contém `tenant_id`
+  - [x] `GET /me` retorna dados do usuário do banco
 
 ### 2.2 Multi-Tenant Enforcement
 - [ ] Criar `app/services/tenant_service.py`:

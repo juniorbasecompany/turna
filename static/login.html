@@ -34,6 +34,8 @@
             margin-top: 30px;
             white-space: pre-wrap;
             font-size: 13px;
+            max-height: 400px;
+            word-break: break-all;
         }
         .error {
             color: #d32f2f;
@@ -85,7 +87,26 @@
                 return;
             }
             appToken = data.access_token;
-            showMessage(successMsg, "success");
+            
+            // Mostra mensagem de sucesso e o token
+            const tokenDisplay = `
+${successMsg}
+
+Token JWT (copie para usar no Swagger):
+${data.access_token}
+
+Você pode:
+1. Copiar o token acima
+2. Ir em http://localhost:8001/docs
+3. Clicar em "Authorize" (cadeado no topo)
+4. Colar o token e clicar "Authorize"
+5. Testar o endpoint GET /me
+            `.trim();
+            showMessage(tokenDisplay, "success");
+            
+            // Também salva no console para facilitar
+            console.log("Access Token:", data.access_token);
+            console.log("Para usar no Swagger, copie o token acima e cole no botão 'Authorize'");
         }
 
         function showMessage(message, type) {
