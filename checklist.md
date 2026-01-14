@@ -6,10 +6,11 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 
 ## Status Geral
 
-- **Infraestrutura**: Docker Compose configurado (PostgreSQL, Redis, MinIO)
-- **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, etc.)
+- **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
+- **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
-- **Implementação**: ~20% - código de negócio existe mas não integrado à nova arquitetura
+- **Etapa 1**: ✅ Concluída - Modelos Tenant, User, Job criados e migrados
+- **Implementação**: ~25% - Fundações do banco de dados e modelos básicos implementados
 
 ---
 
@@ -23,10 +24,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Dependências instaladas
 
 ### Etapa 1: DB + 3 tabelas básicas
-- [ ] Modelos: Tenant, User, Job
-- [ ] Alembic configurado e migração aplicada
-- [ ] Endpoint `POST /tenants` (criar tenant simples)
-- [ ] Testar: criar tenant via `/docs`, verificar no banco
+- [x] Modelos: Tenant, User, Job
+- [x] Alembic configurado e migração aplicada
+- [x] Endpoint `POST /tenants` (criar tenant simples)
+- [x] Testar: criar tenant via `/docs`, verificar no banco
 
 ### Etapa 2: OAuth + JWT + `/me`
 - [ ] OAuth Google integrado
@@ -74,24 +75,24 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 **Começar simples, evoluir depois:**
 
-- [ ] Criar `app/models/__init__.py`
-- [ ] Criar `app/models/base.py`:
-  - [ ] Classe base `BaseModel` (SQLModel) com:
-    - [ ] `id: int` (primary key)
-    - [ ] `created_at: datetime`
-    - [ ] `updated_at: datetime`
-    - [ ] `tenant_id: int` (ForeignKey para Tenant, nullable=False)
-- [ ] Criar `app/models/tenant.py`:
-  - [ ] Modelo `Tenant` (id, name, slug, created_at, updated_at)
-  - [ ] Sem `tenant_id` (é a raiz do multi-tenant)
-- [ ] Criar `app/models/user.py`:
-  - [ ] Modelo `User` (id, email, name, role, tenant_id FK, auth_provider, created_at, updated_at)
-  - [ ] Índice único em `(email, tenant_id)`
-- [ ] Criar `app/models/job.py`:
-  - [ ] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
-  - [ ] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
-  - [ ] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
-  - [ ] **Nota**: `result_data` guarda Demandas como JSON inicialmente
+- [x] Criar `app/models/__init__.py`
+- [x] Criar `app/models/base.py`:
+  - [x] Classe base `BaseModel` (SQLModel) com:
+    - [x] `id: int` (primary key)
+    - [x] `created_at: datetime`
+    - [x] `updated_at: datetime`
+    - [ ] `tenant_id: int` (ForeignKey para Tenant, nullable=False) - *Nota: BaseModel não tem tenant_id, apenas modelos filhos*
+- [x] Criar `app/models/tenant.py`:
+  - [x] Modelo `Tenant` (id, name, slug, created_at, updated_at)
+  - [x] Sem `tenant_id` (é a raiz do multi-tenant)
+- [x] Criar `app/models/user.py`:
+  - [x] Modelo `User` (id, email, name, role, tenant_id FK, auth_provider, created_at, updated_at)
+  - [x] Índice único em `(email, tenant_id)`
+- [x] Criar `app/models/job.py`:
+  - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
+  - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
+  - [x] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
+  - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
 - [ ] Criar `app/models/file.py`:
   - [ ] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
 - [ ] Criar `app/models/schedule_version.py`:
@@ -105,23 +106,23 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Criar `app/models/professional.py` (quando precisar CRUD de profissionais)
 
 ### 1.2 Configuração do Alembic
-- [ ] Atualizar `alembic/env.py`:
-  - [ ] Importar `Base` do SQLModel (ou metadata do SQLAlchemy)
-  - [ ] Definir `target_metadata` apontando para os modelos
-  - [ ] Garantir que `compare_type=True` está ativo
-- [ ] Criar migração inicial: `alembic revision --autogenerate -m "Initial schema - 5 tables"`
-- [ ] Revisar migração gerada (verificar se 5 tabelas foram incluídas)
-- [ ] Testar migração: `alembic upgrade head`
-- [ ] Verificar se tabelas foram criadas no PostgreSQL
+- [x] Atualizar `alembic/env.py`:
+  - [x] Importar `Base` do SQLModel (ou metadata do SQLAlchemy)
+  - [x] Definir `target_metadata` apontando para os modelos
+  - [x] Garantir que `compare_type=True` está ativo
+- [x] Criar migração inicial: `alembic revision --autogenerate -m "Initial schema - Tenant, User, Job"`
+- [x] Revisar migração gerada (verificar se 3 tabelas foram incluídas)
+- [x] Testar migração: `alembic upgrade head`
+- [x] Verificar se tabelas foram criadas no PostgreSQL
 
 ### 1.3 Utilitários de Banco
-- [ ] Criar `app/db/__init__.py`
-- [ ] Criar `app/db/session.py`:
-  - [ ] Função `get_session()` (dependency do FastAPI)
-  - [ ] Configurar engine do SQLModel com `DATABASE_URL`
-  - [ ] Criar engine singleton
-- [ ] Criar `app/db/base.py`:
-  - [ ] Função para criar todas as tabelas (útil para testes)
+- [x] Criar `app/db/__init__.py`
+- [x] Criar `app/db/session.py`:
+  - [x] Função `get_session()` (dependency do FastAPI)
+  - [x] Configurar engine do SQLModel com `DATABASE_URL`
+  - [x] Criar engine singleton
+- [x] Criar `app/db/base.py`:
+  - [x] Função para criar todas as tabelas (útil para testes)
 
 ---
 
@@ -406,7 +407,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 Antes de considerar completo, verificar:
 
-- [ ] 5 modelos SQLModel criados e migrados (Tenant, User, File, Job, ScheduleVersion)
+- [x] 3 modelos SQLModel criados e migrados (Tenant, User, Job) - *Fase 1 concluída*
+- [ ] Modelos File e ScheduleVersion (próximas etapas)
 - [ ] Autenticação funcionando com tenant_id no JWT
 - [ ] Multi-tenant enforcement ativo em todos os endpoints
 - [ ] Storage S3/MinIO funcionando (upload/download)
