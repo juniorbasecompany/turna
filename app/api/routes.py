@@ -8,11 +8,11 @@ from app.auth.dependencies import get_current_user
 from app.models.user import User
 
 
-router = APIRouter()
+router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
 router.include_router(auth_router)
 
 
-@router.get("/me")
+@router.get("/me", tags=["Auth"])
 def get_me(user: User = Depends(get_current_user)):
     """
     Retorna os dados do usuário autenticado.
@@ -46,22 +46,23 @@ class TenantResponse(PydanticBaseModel):
         from_attributes = True
 
 
-@router.get("/health")
+@router.get("/health", tags=["System"])
 def health():
+    """Health check endpoint."""
     return {"status": "ok"}
 
 
-@router.post("/tenants", response_model=TenantResponse, status_code=201)
+@router.post("/tenants", response_model=TenantResponse, status_code=201, tags=["Tenants"])
 def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_session)):
     """Cria um novo tenant."""
     # Verifica se já existe um tenant com o mesmo slug
     existing = session.exec(select(Tenant).where(Tenant.slug == tenant_data.slug)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Tenant com este slug já existe")
-    
+
     tenant = Tenant(name=tenant_data.name, slug=tenant_data.slug)
     session.add(tenant)
     session.commit()
     session.refresh(tenant)
-    
+
     return tenant

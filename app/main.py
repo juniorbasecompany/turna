@@ -14,7 +14,11 @@ try:
 except Exception:
     pass
 
-app = FastAPI(title="Turna API (Fase 1)")
+app = FastAPI(
+    title="Turna API",
+    description="API para gerenciamento de escalas médicas",
+    version="1.0.0"
+)
 app.include_router(router)
 
 # Serve arquivos estáticos (para login.html)
@@ -24,19 +28,8 @@ if static_dir.exists():
 
 
 # Endpoint /login deve vir depois do mount para ter prioridade
-@app.get("/login", response_class=HTMLResponse)
+# Tag "Interface" para diferenciar visualmente no Swagger
+@app.get("/login", response_class=HTMLResponse, tags=["Interface"])
 def login_page():
-    """Página de login para testar autenticação Google."""
-    html_path = static_dir / "login.html"
-    if html_path.exists():
-        html_content = html_path.read_text(encoding="utf-8")
-        # Substitui o placeholder pelo Client ID real (garante que frontend e backend usam o mesmo)
-        google_client_id = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
-        if not google_client_id:
-            return HTMLResponse(
-                content="<h1>Erro: GOOGLE_CLIENT_ID não configurado no .env</h1>",
-                status_code=500
-            )
-        html_content = html_content.replace("COLE_AQUI_SEU_GOOGLE_CLIENT_ID", google_client_id)
-        return HTMLResponse(content=html_content)
+    """Página de login para testar autenticação Google (retorna HTML, não JSON)."""
     return HTMLResponse(content="<h1>Login page not found</h1>", status_code=404)
