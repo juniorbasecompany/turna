@@ -1,0 +1,22 @@
+# Dependências principais
+openai
+python-dotenv
+pypdfium2
+pillow
+pdfplumber
+
+# Dependências opcionais
+# ortools - necessário apenas para estratégia CP-SAT
+ortools
+
+# reportlab - necessário apenas para geração de PDFs de escalas
+reportlab
+
+# Dependências adicionais
+fastapi==0.115.6
+uvicorn[standard]==0.30.6
+python-jose[cryptography]==3.3.0
+google-auth==2.34.0
+python-multipart==0.0.9
+requests
+bcrypt

@@ -210,3 +210,6 @@ marimo/_lsp/
 __marimo__/
 
 test/
+
+# Dados de usuários (senhas hasheadas)
+data/users.json

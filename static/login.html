@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Login - Sistema</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 400px;
+            margin: 80px auto;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+        }
+        .buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .button-wrapper {
+            text-align: center;
+        }
+        #out {
+            background: #f6f6f6;
+            padding: 12px;
+            border-radius: 8px;
+            overflow: auto;
+            margin-top: 30px;
+            white-space: pre-wrap;
+            font-size: 13px;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            color: #2e7d32;
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Sistema de Autenticação</h2>
+
+    <div class="buttons-container">
+        <div class="button-wrapper">
+            <div id="btn_login"></div>
+        </div>
+
+        <div class="button-wrapper">
+            <div id="btn_register"></div>
+        </div>
+    </div>
+
+    <div id="out"></div>
+
+    <script>
+        let appToken = null;
+        let currentAction = 'register'; // default
+        const CLIENT_ID = "COLE_AQUI_SEU_GOOGLE_CLIENT_ID";
+
+        async function handleGoogleResponse(response) {
+            const endpoint = currentAction === 'login' ? '/auth/google' : '/auth/google/register';
+            const successMsg = currentAction === 'login' ? 'Login realizado com sucesso!' : 'Cadastro realizado com sucesso! Você está logado.';
+            
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id_token: response.credential })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                showMessage(data.detail || "Erro na autenticação", "error");
+                return;
+            }
+            appToken = data.access_token;
+            showMessage(successMsg, "success");
+        }
+
+        function showMessage(message, type) {
+            const out = document.getElementById("out");
+            out.textContent = message;
+            out.className = type;
+        }
+
+        // Inicializa os botões quando a API do Google carregar
+        function initButtons() {
+            if (window.google && window.google.accounts && window.google.accounts.id) {
+                // Inicializa uma vez
+                window.google.accounts.id.initialize({
+                    client_id: CLIENT_ID,
+                    callback: handleGoogleResponse
+                });
+
+                // Renderiza botão de Login
+                const loginDiv = document.getElementById("btn_login");
+                loginDiv.addEventListener('click', function() {
+                    currentAction = 'login';
+                }, true);
+                window.google.accounts.id.renderButton(loginDiv, { 
+                    theme: "outline", 
+                    size: "large", 
+                    text: "signin_with", 
+                    shape: "rectangular"
+                });
+
+                // Renderiza botão de Cadastro
+                const registerDiv = document.getElementById("btn_register");
+                registerDiv.addEventListener('click', function() {
+                    currentAction = 'register';
+                }, true);
+                window.google.accounts.id.renderButton(registerDiv, { 
+                    theme: "outline", 
+                    size: "large", 
+                    text: "signup_with", 
+                    shape: "rectangular"
+                });
+            } else {
+                setTimeout(initButtons, 100);
+            }
+        }
+
+        // Aguarda o carregamento
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initButtons);
+        } else {
+            initButtons();
+        }
+    </script>
+</body>
+
+</html>
