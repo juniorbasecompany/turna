@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import UniqueConstraint
-from app.models.base import BaseModel
+from app.model.base import BaseModel
 from typing import Optional
 
 

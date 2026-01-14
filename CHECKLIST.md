@@ -76,36 +76,36 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 **Começar simples, evoluir depois:**
 
-- [x] Criar `app/models/__init__.py`
-- [x] Criar `app/models/base.py`:
+- [x] Criar `app/model/__init__.py`
+- [x] Criar `app/model/base.py`:
   - [x] Classe base `BaseModel` (SQLModel) com:
     - [x] `id: int` (primary key)
     - [x] `created_at: datetime`
     - [x] `updated_at: datetime`
     - [ ] `tenant_id: int` (ForeignKey para Tenant, nullable=False) - *Nota: BaseModel não tem tenant_id, apenas modelos filhos*
-- [x] Criar `app/models/tenant.py`:
+- [x] Criar `app/model/tenant.py`:
   - [x] Modelo `Tenant` (id, name, slug, created_at, updated_at)
   - [x] Sem `tenant_id` (é a raiz do multi-tenant)
-- [x] Criar `app/models/user.py`:
+- [x] Criar `app/model/user.py`:
   - [x] Modelo `User` (id, email, name, role, tenant_id FK, auth_provider, created_at, updated_at)
   - [x] Índice único em `(email, tenant_id)`
   - [ ] **Nota**: Será corrigido na seção 2.3 - remover `tenant_id` e criar tabela `membership` (Membership)
-- [x] Criar `app/models/job.py`:
+- [x] Criar `app/model/job.py`:
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
   - [x] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
   - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
-- [x] Criar `app/models/file.py`:
+- [x] Criar `app/model/file.py`:
   - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
-- [ ] Criar `app/models/schedule_version.py`:
+- [ ] Criar `app/model/schedule_version.py`:
   - [ ] Modelo `ScheduleVersion` (id, tenant_id, name, period_start, period_end, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
   - [ ] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
   - [ ] **Nota**: `result_data` guarda resultado da geração (alocação) como JSON
 
 **Evolução futura (quando necessário):**
-- [ ] Criar `app/models/schedule.py` (quando precisar de múltiplas versões por schedule)
-- [ ] Criar `app/models/demand.py` (quando precisar queryar demandas diretamente)
-- [ ] Criar `app/models/professional.py` (quando precisar CRUD de profissionais)
+- [ ] Criar `app/model/schedule.py` (quando precisar de múltiplas versões por schedule)
+- [ ] Criar `app/model/demand.py` (quando precisar queryar demandas diretamente)
+- [ ] Criar `app/model/professional.py` (quando precisar CRUD de profissionais)
 
 ### 1.2 Configuração do Alembic
 - [x] Atualizar `alembic/env.py`:
@@ -181,7 +181,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.1 Ajuste do Modelo de Dados
 
-- [ ] Criar modelo `app/models/membership.py`:
+- [ ] Criar modelo `app/model/membership.py`:
   - [ ] Modelo `Membership` com:
     - [ ] `id: int` (PK)
     - [ ] `tenant_id: int` (FK para Tenant, não nullable)
@@ -197,7 +197,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Criar tabela `membership`
   - [ ] Adicionar constraints e índices
   - [ ] **NÃO remover** `user.tenant_id` ainda (fazer depois)
-- [ ] Atualizar `app/models/user.py`:
+- [ ] Atualizar `app/model/user.py`:
   - [ ] Remover constraint único `(email, tenant_id)`
   - [ ] Adicionar constraint único em `email` apenas (email único global)
   - [ ] Manter `tenant_id` temporariamente (será removido depois)
@@ -338,7 +338,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Remover coluna `tenant_id` de `user`
   - [ ] Remover índice `ix_user_tenant_id`
   - [ ] Remover foreign key constraint de `user.tenant_id`
-- [ ] Atualizar `app/models/user.py`:
+- [ ] Atualizar `app/model/user.py`:
   - [ ] Remover campo `tenant_id`
   - [ ] Remover relacionamento direto com Tenant (se existir)
 - [ ] Atualizar código que ainda referencia `user.tenant_id`:
@@ -434,15 +434,15 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ## FASE 4: Jobs Assíncronos (Arq) - Incremental
 
-### 4.1 Configuração Básica de Workers
-- [x] Atualizar `app/workers/worker_settings.py`:
+### 4.1 Configuração Básica de Worker
+- [x] Atualizar `app/worker/worker_settings.py`:
   - [x] Configurar `redis_settings` usando `REDIS_URL`
   - [x] Registrar `functions` do Arq (inclui `ping_job`)
-- [x] Atualizar `app/workers/run.py`:
+- [x] Atualizar `app/worker/run.py`:
   - [x] Iniciar worker com `run_worker(WorkerSettings)`
 
 ### 4.2 Job Fake (PING) - Validar Fila
-- [x] Criar `app/workers/jobs.py`:
+- [x] Criar `app/worker/jobs.py`:
   - [x] Função `ping_job(ctx, job_id)` (job fake) atualiza status no banco e grava `result_data={"pong": true}`
 - [x] Criar endpoint `POST /jobs/ping`:
   - [x] Criar Job no banco (tipo PING, status PENDING)

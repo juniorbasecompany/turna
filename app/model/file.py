@@ -3,7 +3,7 @@ from datetime import datetime
 import sqlalchemy as sa
 from sqlmodel import SQLModel, Field, Column
 
-from app.models.base import BaseModel, utc_now
+from app.model.base import BaseModel, utc_now
 from typing import Optional
 
 

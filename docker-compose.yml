@@ -117,7 +117,7 @@ services:
       - ./:/app
     command: >
       bash -lc "
-      python -m app.workers.run
+      python -m app.worker.run
       "
 
 volumes:

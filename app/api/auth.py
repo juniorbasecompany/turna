@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db.session import get_session
-from app.models.user import Account
-from app.models.tenant import Tenant
+from app.model.user import Account
+from app.model.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
 

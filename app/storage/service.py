@@ -6,8 +6,8 @@ from fastapi import UploadFile
 from sqlmodel import Session
 from app.storage.client import S3Client
 from app.storage.config import S3Config
-from app.models.file import File
-from app.models.base import utc_now
+from app.model.file import File
+from app.model.base import utc_now
 
 
 class StorageService:

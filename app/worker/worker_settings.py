@@ -9,7 +9,7 @@ class WorkerSettings:
     # Arq procura estes atributos na classe de settings
     from arq.connections import RedisSettings
 
-    from app.workers.jobs import ping_job
+    from app.worker.jobs import ping_job
 
     redis_settings = RedisSettings.from_dsn(redis_dsn())
     functions = [ping_job]

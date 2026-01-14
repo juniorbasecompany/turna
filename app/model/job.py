@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlmodel import SQLModel, Field, Column
 from sqlalchemy import JSON
 import sqlalchemy as sa
-from app.models.base import BaseModel
+from app.model.base import BaseModel
 from typing import Optional
 import enum
 

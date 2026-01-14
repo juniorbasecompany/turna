@@ -5,8 +5,8 @@ from typing import Any
 from sqlmodel import Session
 
 from app.db.session import engine
-from app.models.base import utc_now
-from app.models.job import Job, JobStatus
+from app.model.base import utc_now
+from app.model.job import Job, JobStatus
 
 
 async def ping_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:

@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from app.models.base import BaseModel
+from app.model.base import BaseModel
 
 
 class Tenant(BaseModel, table=True):

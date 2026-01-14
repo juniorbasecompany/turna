@@ -3,8 +3,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 from app.db.session import get_session
-from app.models.user import Account
-from app.models.tenant import Tenant
+from app.model.user import Account
+from app.model.tenant import Tenant
 from app.auth.jwt import verify_token
 
 bearer = HTTPBearer(auto_error=False)

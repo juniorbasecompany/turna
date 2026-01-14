@@ -9,15 +9,15 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlmodel import Session, select
 from app.db.session import get_session
-from app.models.tenant import Tenant
+from app.model.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel, field_validator
 from app.api.auth import router as auth_router
 from app.auth.dependencies import get_current_account
-from app.models.user import Account
+from app.model.user import Account
 from app.storage.service import StorageService
-from app.models.file import File
-from app.models.job import Job, JobStatus, JobType
-from app.workers.worker_settings import WorkerSettings
+from app.model.file import File
+from app.model.job import Job, JobStatus, JobType
+from app.worker.worker_settings import WorkerSettings
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
