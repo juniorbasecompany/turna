@@ -31,6 +31,18 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Contratos**: endpoints devem ter schemas claros de request/response.
 - **Erros**: padronize respostas de erro (mensagens e status codes).
 
+## Execução (Dev): Docker vs Local
+
+- **Padrão (recomendado)**: rodar via **Docker Compose** (API + worker + Postgres + Redis + MinIO).
+- **Local (exceção)**: rodar no venv apenas para depuração pontual (scripts/diagnóstico), não como modo “oficial”.
+- **Portas**:
+  - **Docker Compose**: API em `http://localhost:8000`
+  - **Local**: a porta pode variar (ex.: `8001`) e isso impacta integrações.
+- **Hosts de serviços (env vars)**:
+  - **Dentro do Docker**: usar nomes de service (`REDIS_URL=redis://redis:6379/0`, `DATABASE_URL=...@postgres...`)
+  - **Rodando local com infra no Docker**: usar `localhost` (`REDIS_URL=redis://localhost:6379/0`, `DATABASE_URL=...@localhost:5433...`)
+- **OAuth (Google)**: o **origin** depende de host/porta; ao trocar (ex. `8001` → `8000`) é necessário atualizar **Authorized JavaScript origins** no Google Console para evitar `origin_mismatch`.
+
 ## Estilo / Formatters
 
 - **Consistência**: priorize consistência com o código existente (imports, nomes, organização de módulos).
