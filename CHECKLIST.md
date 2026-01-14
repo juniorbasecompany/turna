@@ -58,14 +58,14 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Modelo ScheduleVersion
 - [ ] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
 - [ ] Salvar resultado no ScheduleVersion
-- [ ] Endpoint `POST /schedules/generate`
+- [ ] Endpoint `POST /schedule/generate`
 - [ ] Testar: gerar escala, ver ScheduleVersion criado
 
 ### Etapa 7: PDF + Publicação
 - [ ] Gerar PDF (adaptar `output/day.py`)
 - [ ] Upload PDF para S3
-- [ ] Endpoint `POST /schedules/{id}/publish`
-- [ ] Endpoint `GET /schedules/{id}/pdf` (download)
+- [ ] Endpoint `POST /schedule/{id}/publish`
+- [ ] Endpoint `GET /schedule/{id}/pdf` (download)
 - [ ] Testar: gerar → publicar → download PDF
 
 ---
@@ -371,7 +371,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Testar que endpoints existentes continuam funcionando:
   - [ ] `GET /me` retorna dados corretos
   - [ ] Endpoints de Job respeitam tenant_id do JWT
-  - [ ] Endpoints futuros de Files/Schedules respeitam tenant_id
+  - [ ] Endpoints futuros de Files/Schedule respeitam tenant_id
   - [ ] **Como testar**: Executar suite de testes via Swagger
 
 #### 2.3.8 Rollback e Segurança
@@ -485,7 +485,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
     7. Upload PDF para S3
     8. Atualizar `ScheduleVersion.pdf_file_id`
     9. Atualizar Job status
-- [ ] Criar endpoint `POST /schedules/generate`:
+- [ ] Criar endpoint `POST /schedule/generate`:
   - [ ] Receber `schedule_version_id`, `allocation_mode`
   - [ ] Criar Job (tipo GENERATE_SCHEDULE, status PENDING)
   - [ ] Enfileirar job no Arq
@@ -503,13 +503,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] `POST /tenants` (criar tenant - apenas admin ou primeiro usuário)
   - [ ] `GET /tenants/me` (tenant atual do usuário)
 
-### 5.2 Endpoints de Schedules
-- [ ] Criar `app/api/schedules.py`:
-  - [ ] `GET /schedules` (listar ScheduleVersions - filtrado por tenant)
-  - [ ] `POST /schedules` (criar ScheduleVersion - filtrado por tenant)
-  - [ ] `GET /schedules/{id}` (detalhes - validar tenant)
-  - [ ] `POST /schedules/{id}/publish` (publicar versão - validar tenant)
-  - [ ] `GET /schedules/{id}/pdf` (download PDF - validar tenant)
+### 5.2 Endpoints de Schedule
+- [ ] Criar `app/api/schedule.py`:
+  - [ ] `GET /schedule/list` (listar ScheduleVersions - filtrado por tenant)
+  - [ ] `POST /schedule` (criar ScheduleVersion - filtrado por tenant)
+  - [ ] `GET /schedule/{id}` (detalhes - validar tenant)
+  - [ ] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
+  - [ ] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
   - [ ] Retornar URL presignada do S3
 
 ### 5.3 Endpoint de Job

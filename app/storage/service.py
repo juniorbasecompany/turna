@@ -123,7 +123,7 @@ class StorageService:
         file_size = len(pdf_bytes)
 
         # Gerar chave S3
-        s3_key = self._generate_s3_key(tenant_id, "schedules", filename)
+        s3_key = self._generate_s3_key(tenant_id, "schedule", filename)
 
         # Upload para S3
         import io
