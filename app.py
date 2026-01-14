@@ -137,7 +137,7 @@ def _try_generate_day1_pdf(per_day: list[dict]) -> None:
         rows=rows,
     )
 
-    out_path = Path("escala_dia1.pdf")
+    out_path = Path(__file__).resolve().parent / "test" / "escala_dia1.pdf"
     try:
         render_pdf(schedule, out_path)
         print(f"[pdf] PDF gerado em: {out_path}", file=sys.stderr)
