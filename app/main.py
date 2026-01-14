@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from app.api.routes import router
+from app.api.route import router
 
 # Carrega variáveis de ambiente do .env
 try:
