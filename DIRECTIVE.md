@@ -2,6 +2,11 @@
 
 Este documento concentra **diretivas que devem ser seguidas** durante a construção do projeto (código, sugestões, revisões e automações).
 
+## Nome de classe, arquivo, objeto, atributo, etc
+- **Singular**: sempre dê preferência a nomes no singular.
+- **Plural**: evite usar.
+- **Listas e Arrays**: use o sufixo List.
+
 ## Datas e Horários
 
 - **Tipo obrigatório**: todos os campos de data/hora devem ser `timestamptz` (PostgreSQL).
