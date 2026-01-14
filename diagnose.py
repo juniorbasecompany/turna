@@ -2,7 +2,7 @@
 Diagnóstico de inviabilidade (regras hard).
 """
 
-from core import overlap, is_available
+from strategy.core import overlap, is_available
 
 
 def diagnose_infeasibility(demands, pros) -> None:

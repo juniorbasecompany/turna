@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-from core import overlap
+from strategy.core import overlap
 from output.console import (
     print_day_result,
     print_demands_overview,

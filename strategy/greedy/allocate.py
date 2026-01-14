@@ -4,7 +4,7 @@ Implementação da alocação ambiciosa.
 Tudo que for específico de greedy deve ficar nesta pasta.
 """
 
-from core import overlap, is_available
+from strategy.core import overlap, is_available
 
 
 def greedy_allocate(demands, pros):

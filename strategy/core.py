@@ -11,4 +11,3 @@ def overlap(a_start, a_end, b_start, b_end) -> bool:
 
 def is_available(p, start: int, end: int) -> bool:
     return not any(overlap(vs, ve, start, end) for (vs, ve) in p["vacation"])
-

@@ -4,7 +4,7 @@ Estratégia CP-SAT (OR-Tools): função de resolução usada pelo app (orquestra
 
 from ortools.sat.python import cp_model
 
-from core import overlap
+from strategy.core import overlap
 from diagnose import diagnose_infeasibility
 
 
