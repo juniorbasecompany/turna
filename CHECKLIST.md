@@ -44,14 +44,14 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### Etapa 4: Arq - Job fake primeiro
 - [x] WorkerSettings configurado
 - [x] Job `PING_JOB` (fake, só valida fila)
-- [x] Endpoint `POST /jobs/ping` cria Job e enfileira
-- [x] Endpoint `GET /jobs/{job_id}` retorna status/resultado (validando tenant)
+- [x] Endpoint `POST /job/ping` cria Job e enfileira
+- [x] Endpoint `GET /job/{job_id}` retorna status/resultado (validando tenant)
 - [x] Testar: criar job, ver worker processar, ver status
 
 ### Etapa 5: Arq - EXTRACT_DEMANDS
 - [ ] Job `EXTRACT_DEMANDS` com OpenAI (adaptar `demand/read.py`)
 - [ ] Salvar resultado como JSON no `Job.result_data`
-- [ ] Endpoint `POST /jobs/extract` (recebe file_id)
+- [ ] Endpoint `POST /job/extract` (recebe file_id)
 - [ ] Testar: upload → extract → ver resultado no Job
 
 ### Etapa 6: ScheduleVersion + GenerateSchedule
@@ -370,7 +370,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] **Como testar**: Criar dados em dois tenants, trocar entre eles, verificar isolamento
 - [ ] Testar que endpoints existentes continuam funcionando:
   - [ ] `GET /me` retorna dados corretos
-  - [ ] Endpoints de Jobs respeitam tenant_id do JWT
+  - [ ] Endpoints de Job respeitam tenant_id do JWT
   - [ ] Endpoints futuros de Files/Schedules respeitam tenant_id
   - [ ] **Como testar**: Executar suite de testes via Swagger
 
@@ -432,7 +432,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ---
 
-## FASE 4: Jobs Assíncronos (Arq) - Incremental
+## FASE 4: Job Assíncrono (Arq) - Incremental
 
 ### 4.1 Configuração Básica de Worker
 - [x] Atualizar `app/worker/worker_settings.py`:
@@ -442,18 +442,18 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Iniciar worker com `run_worker(WorkerSettings)`
 
 ### 4.2 Job Fake (PING) - Validar Fila
-- [x] Criar `app/worker/jobs.py`:
+- [x] Criar `app/worker/job.py`:
   - [x] Função `ping_job(ctx, job_id)` (job fake) atualiza status no banco e grava `result_data={"pong": true}`
-- [x] Criar endpoint `POST /jobs/ping`:
+- [x] Criar endpoint `POST /job/ping`:
   - [x] Criar Job no banco (tipo PING, status PENDING)
   - [x] Enfileirar job no Arq
   - [x] Retornar `{job_id}`
-- [x] Criar endpoint `GET /jobs/{job_id}`:
+- [x] Criar endpoint `GET /job/{job_id}`:
   - [x] Retornar status e resultado do Job (validando tenant)
 - [x] Testar: criar job ping, ver worker processar, verificar status COMPLETED
 
 ### 4.3 Job EXTRACT_DEMANDS (OpenAI)
-- [ ] Criar `app/jobs/extract_demands.py`:
+- [ ] Criar `app/job/extract_demands.py`:
   - [ ] Função `extract_demands_job(ctx, job_id, file_id, tenant_id)` decorada com `@arq.job`
   - [ ] Lógica:
     1. Buscar File do banco (validar tenant_id)
@@ -465,7 +465,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Função `extract_demands_from_file(file_path, file_type) -> List[dict]`
   - [ ] Adaptar código de `demand/read.py` (OpenAI Vision)
   - [ ] Retornar lista de demandas como dicts
-- [ ] Criar endpoint `POST /jobs/extract`:
+- [ ] Criar endpoint `POST /job/extract`:
   - [ ] Receber `file_id`
   - [ ] Criar Job (tipo EXTRACT_DEMANDS, status PENDING)
   - [ ] Enfileirar job no Arq
@@ -473,7 +473,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Testar: upload arquivo → extract → ver demandas no `Job.result_data`
 
 ### 4.4 Job GENERATE_SCHEDULE
-- [ ] Criar `app/jobs/generate_schedule.py`:
+- [ ] Criar `app/job/generate_schedule.py`:
   - [ ] Função `generate_schedule_job(ctx, job_id, schedule_version_id, tenant_id, allocation_mode)` decorada com `@arq.job`
   - [ ] Lógica:
     1. Buscar ScheduleVersion do banco (validar tenant_id)
@@ -512,10 +512,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] `GET /schedules/{id}/pdf` (download PDF - validar tenant)
   - [ ] Retornar URL presignada do S3
 
-### 5.3 Endpoints de Jobs
-- [ ] Atualizar `app/api/jobs.py`:
-  - [ ] `GET /jobs` (listar jobs do tenant)
-  - [ ] `GET /jobs/{job_id}` (detalhes - validar tenant)
+### 5.3 Endpoint de Job
+- [ ] Atualizar `app/api/job.py`:
+  - [ ] `GET /job/list` (listar jobs do tenant)
+  - [ ] `GET /job/{job_id}` (detalhes - validar tenant)
 
 ### 5.4 Validações e Segurança
 - [ ] Garantir que TODOS os endpoints validam tenant_id:

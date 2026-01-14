@@ -119,7 +119,7 @@ class JobResponse(PydanticBaseModel):
         from_attributes = True
 
 
-@router.post("/jobs/ping", response_model=JobPingResponse, status_code=201, tags=["Jobs"])
+@router.post("/job/ping", response_model=JobPingResponse, status_code=201, tags=["Job"])
 async def create_ping_job(
     account: Account = Depends(get_current_account),
     session: Session = Depends(get_session),
@@ -150,7 +150,7 @@ async def create_ping_job(
     return JobPingResponse(job_id=job.id)
 
 
-@router.get("/jobs/{job_id}", response_model=JobResponse, tags=["Jobs"])
+@router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
 def get_job(
     job_id: int,
     account: Account = Depends(get_current_account),
