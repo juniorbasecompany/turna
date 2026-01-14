@@ -88,6 +88,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Criar `app/models/user.py`:
   - [x] Modelo `User` (id, email, name, role, tenant_id FK, auth_provider, created_at, updated_at)
   - [x] Índice único em `(email, tenant_id)`
+  - [ ] **Nota**: Será corrigido na seção 2.3 - remover `tenant_id` e criar tabela `memberships` (Membership)
 - [x] Criar `app/models/job.py`:
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
@@ -135,15 +136,18 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Função `verify_token(token)` retornando payload (user_id, tenant_id, role)
   - [x] Usar `JWT_SECRET` e `JWT_ISSUER` do ambiente
   - [x] Claims obrigatórios: `user_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
+  - [ ] **Nota**: Será ajustado na seção 2.3 para usar role do Membership
 - [x] Criar `app/auth/dependencies.py`:
   - [x] Dependency `get_current_user(session, token)` retornando User
   - [x] Dependency `require_role(role: str)` para verificar permissões
   - [x] Dependency `get_current_tenant(session, token)` retornando Tenant
+  - [ ] **Nota**: Será ajustado na seção 2.3 para usar Membership em vez de User.tenant_id
 - [x] Migrar lógica do `login.py` para `app/auth/oauth.py`:
   - [x] Função `verify_google_token(token)` com clock_skew_in_seconds
   - [x] Endpoint `POST /auth/google` (adaptar do login.py)
   - [x] Endpoint `POST /auth/google/register` (adaptar do login.py)
   - [x] Integrar com modelos User/Tenant (criar usuário no banco, não JSON)
+  - [ ] **Nota**: Será ajustado na seção 2.3 para criar User sem tenant_id e usar Memberships
 - [x] Atualizar `app/api/routes.py`:
   - [x] Importar router de autenticação
   - [x] Incluir rotas de auth
@@ -152,6 +156,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Login com Google retorna JWT válido
   - [x] JWT contém `tenant_id`
   - [x] `GET /me` retorna dados do usuário do banco
+  - [ ] **Nota**: Testes serão atualizados na seção 2.3 para validar modelo correto
 
 ### 2.2 Multi-Tenant Enforcement
 - [ ] Criar `app/services/tenant_service.py`:
@@ -163,6 +168,232 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Aplicar middleware em `app/main.py`
 - [ ] Criar helper `get_tenant_id(request)` para endpoints
 - [ ] Documentar padrão: todas as queries devem usar `tenant_id` do `request.state`
+
+### 2.3 Correção do Modelo Multi-Tenant (Users sem tenant_id)
+
+**Contexto**: O modelo atual tem `users.tenant_id`, mas o correto é:
+- **Tenant** = clínica (entidade organizacional)
+- **User** = pessoa física (login Google, único global por email)
+- **Membership** = vínculo User↔Tenant com role e status (um usuário pode estar em múltiplos tenants)
+
+**Objetivo**: Migrar para modelo correto sem quebrar o que já funciona, mantendo abordagem incremental e testável.
+
+#### 2.3.1 Ajuste do Modelo de Dados
+
+- [ ] Criar modelo `app/models/membership.py`:
+  - [ ] Modelo `Membership` com:
+    - [ ] `id: int` (PK)
+    - [ ] `tenant_id: int` (FK para Tenant, não nullable)
+    - [ ] `user_id: int` (FK para User, não nullable)
+    - [ ] `role: str` (ADMIN, ANESTHESIOLOGIST, etc.) - usar Enum
+    - [ ] `status: str` (PENDING, ACTIVE, REJECTED, REMOVED) - usar Enum
+    - [ ] `created_at: datetime`
+    - [ ] `updated_at: datetime`
+    - [ ] UniqueConstraint em `(tenant_id, user_id)` - um usuário só pode ter um membership por tenant
+  - [ ] Índices: `tenant_id`, `user_id`, `status`
+  - [ ] Relationships SQLModel (opcional, se necessário para queries)
+- [ ] Criar migração Alembic `add_membership_table`:
+  - [ ] Criar tabela `memberships`
+  - [ ] Adicionar constraints e índices
+  - [ ] **NÃO remover** `users.tenant_id` ainda (fazer depois)
+- [ ] Atualizar `app/models/user.py`:
+  - [ ] Remover constraint único `(email, tenant_id)`
+  - [ ] Adicionar constraint único em `email` apenas (email único global)
+  - [ ] Manter `tenant_id` temporariamente (será removido depois)
+  - [ ] Adicionar índice único em `email`
+- [ ] Criar migração Alembic `make_user_email_unique`:
+  - [ ] Remover constraint `uq_user_email_tenant`
+  - [ ] Adicionar constraint único em `email`
+  - [ ] **Como testar**: Verificar que não é possível criar dois usuários com mesmo email
+
+#### 2.3.2 Migração de Dados Existentes
+
+- [ ] Criar script de migração `script_migrate_to_memberships.py`:
+  - [ ] Ler todos os usuários existentes (`users` com `tenant_id`)
+  - [ ] Para cada usuário:
+    - [ ] Criar `Membership` com:
+      - [ ] `tenant_id` = `user.tenant_id`
+      - [ ] `user_id` = `user.id`
+      - [ ] `role` = `user.role` (ou ADMIN se for admin)
+      - [ ] `status` = ACTIVE
+      - [ ] `created_at` = `user.created_at`
+      - [ ] `updated_at` = `user.updated_at`
+  - [ ] Validar que todos os usuários foram migrados (contagem)
+  - [ ] **Como testar**: Executar script, verificar que cada user tem membership ACTIVE correspondente
+- [ ] Criar migração Alembic `migrate_existing_users_to_memberships`:
+  - [ ] Executar lógica de migração via SQL ou Python (usar `alembic.op.execute()` se necessário)
+  - [ ] Garantir que nenhum usuário fica sem membership
+  - [ ] **Como testar**: Verificar no banco que todos os users têm pelo menos 1 membership ACTIVE
+
+#### 2.3.3 Ajuste de Fluxos de Autenticação e Entrada
+
+- [ ] Atualizar `app/auth/oauth.py` (ou `app/api/auth.py`):
+  - [ ] Após login Google, identificar User por email (criar se não existir, SEM tenant_id)
+  - [ ] Criar função `get_user_memberships(session, user_id)`:
+    - [ ] Retornar memberships com status ACTIVE (tenants disponíveis)
+    - [ ] Retornar memberships com status PENDING (convites pendentes)
+  - [ ] Criar função `get_active_tenant_for_user(session, user_id)`:
+    - [ ] Se 0 ACTIVE: retornar None (usuário precisa criar tenant ou aceitar convite)
+    - [ ] Se 1 ACTIVE: retornar esse tenant (seleção automática)
+    - [ ] Se >1 ACTIVE: retornar None (exigir seleção)
+- [ ] Atualizar endpoint `POST /auth/google`:
+  - [ ] Buscar User por email (sem filtro de tenant)
+  - [ ] Carregar memberships do usuário
+  - [ ] Se não tiver nenhum ACTIVE: retornar erro ou permitir criar tenant
+  - [ ] Se tiver 1 ACTIVE: emitir JWT com esse tenant_id
+  - [ ] Se tiver >1 ACTIVE: retornar lista de tenants disponíveis (não emitir JWT ainda)
+- [ ] Atualizar endpoint `POST /auth/google/register`:
+  - [ ] Criar User SEM tenant_id (ou com tenant_id NULL temporariamente)
+  - [ ] Se for primeiro usuário do sistema: criar Tenant + Membership ADMIN ACTIVE
+  - [ ] Caso contrário: criar Membership PENDING (aguardar convite) ou permitir criar tenant
+  - [ ] Emitir JWT apenas se tiver membership ACTIVE
+- [ ] Criar endpoint `POST /auth/select-tenant`:
+  - [ ] Receber `tenant_id` no body
+  - [ ] Validar que User tem membership ACTIVE nesse tenant
+  - [ ] Emitir novo JWT com `tenant_id` escolhido + `role` do membership
+  - [ ] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
+- [ ] Criar endpoint `GET /auth/tenants`:
+  - [ ] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
+  - [ ] Retornar lista de convites pendentes (memberships PENDING)
+  - [ ] **Como testar**: Chamar endpoint após login, verificar lista de tenants e convites
+
+#### 2.3.4 Implementação de Convites
+
+- [ ] Criar endpoint `POST /tenants/{tenant_id}/invite`:
+  - [ ] Requer role ADMIN no tenant
+  - [ ] Receber `email` no body
+  - [ ] Buscar User por email (criar se não existir, SEM tenant_id)
+  - [ ] Verificar se já existe membership (não criar duplicado)
+  - [ ] Criar `Membership` com:
+    - [ ] `tenant_id` = tenant do admin
+    - [ ] `user_id` = usuário encontrado/criado
+    - [ ] `role` = ANESTHESIOLOGIST (ou receber no body)
+    - [ ] `status` = PENDING
+  - [ ] Retornar `{membership_id, email, status: "PENDING"}`
+  - [ ] **Como testar**: Admin convida email → verificar membership PENDING criado
+- [ ] Criar endpoint `GET /auth/invites`:
+  - [ ] Retornar lista de memberships PENDING do usuário autenticado
+  - [ ] Incluir informações do tenant (name, slug)
+  - [ ] **Como testar**: Listar convites pendentes após login
+- [ ] Criar endpoint `POST /auth/invites/{membership_id}/accept`:
+  - [ ] Validar que membership pertence ao usuário autenticado
+  - [ ] Validar que status é PENDING
+  - [ ] Atualizar `status` para ACTIVE
+  - [ ] Opcional: emitir novo JWT com tenant_id do membership aceito
+  - [ ] Retornar `{membership_id, tenant_id, status: "ACTIVE"}`
+  - [ ] **Como testar**: Aceitar convite → verificar status ACTIVE → poder selecionar tenant
+- [ ] Criar endpoint `POST /auth/invites/{membership_id}/reject`:
+  - [ ] Validar que membership pertence ao usuário autenticado
+  - [ ] Validar que status é PENDING
+  - [ ] Atualizar `status` para REJECTED (não deletar)
+  - [ ] Retornar `{membership_id, status: "REJECTED"}`
+  - [ ] **Como testar**: Recusar convite → verificar status REJECTED (não deletado)
+- [ ] Criar endpoint `POST /tenants` (criar clínica):
+  - [ ] Permitir se usuário não tem nenhum membership ACTIVE (primeiro tenant)
+  - [ ] Criar Tenant
+  - [ ] Criar Membership ADMIN ACTIVE para o usuário
+  - [ ] Emitir JWT com novo tenant_id
+  - [ ] **Como testar**: Criar tenant → verificar membership ADMIN ACTIVE criado
+
+#### 2.3.5 Ajuste de JWT e Enforcement
+
+- [ ] Atualizar `app/auth/jwt.py`:
+  - [ ] Manter `create_access_token(user_id, tenant_id, role, email, name)`
+  - [ ] **Importante**: `role` agora vem do Membership, não do User
+  - [ ] Adicionar claim opcional `membership_id` (se necessário para auditoria)
+- [ ] Atualizar `app/auth/dependencies.py`:
+  - [ ] Modificar `get_current_user()`:
+    - [ ] Extrair `user_id` do JWT (sem mudança)
+    - [ ] Buscar User por `user_id` (sem filtro de tenant)
+  - [ ] Criar nova dependency `get_current_membership()`:
+    - [ ] Extrair `tenant_id` e `user_id` do JWT
+    - [ ] Buscar `Membership` com `tenant_id` + `user_id` + `status=ACTIVE`
+    - [ ] Retornar objeto Membership (ou erro se não existir)
+  - [ ] Modificar `get_current_tenant()`:
+    - [ ] Usar `get_current_membership()` para validar acesso
+    - [ ] Buscar Tenant por `tenant_id` do JWT
+  - [ ] Modificar `require_role(required_role)`:
+    - [ ] Usar `get_current_membership()` em vez de `get_current_user()`
+    - [ ] Verificar `membership.role == required_role`
+- [ ] Atualizar `app/api/auth.py`:
+  - [ ] Ao emitir JWT, buscar role do Membership (não do User)
+  - [ ] Garantir que JWT só é emitido se membership existe e está ACTIVE
+- [ ] Criar endpoint `POST /auth/switch-tenant`:
+  - [ ] Receber `tenant_id` no body
+  - [ ] Validar que User tem membership ACTIVE nesse tenant
+  - [ ] Buscar role do membership
+  - [ ] Emitir novo JWT com `tenant_id` + `role` atualizados
+  - [ ] Retornar novo token
+  - [ ] **Como testar**: Trocar de tenant → verificar JWT atualizado → chamar `/me` com novo token
+- [ ] Garantir que TODAS as queries continuam filtradas por `tenant_id`:
+  - [ ] Revisar todos os endpoints existentes
+  - [ ] Validar que usam `tenant_id` do JWT (via `get_current_tenant()` ou `request.state`)
+  - [ ] Documentar padrão: sempre filtrar por `tenant_id` do JWT, nunca confiar em parâmetros do body
+
+#### 2.3.6 Remoção Final de tenant_id de Users
+
+- [ ] Criar migração Alembic `remove_tenant_id_from_users`:
+  - [ ] Validar que todos os users têm pelo menos 1 membership (não pode ter user órfão)
+  - [ ] Remover coluna `tenant_id` de `users`
+  - [ ] Remover índice `ix_users_tenant_id`
+  - [ ] Remover foreign key constraint de `users.tenant_id`
+- [ ] Atualizar `app/models/user.py`:
+  - [ ] Remover campo `tenant_id`
+  - [ ] Remover relacionamento direto com Tenant (se existir)
+- [ ] Atualizar código que ainda referencia `user.tenant_id`:
+  - [ ] Buscar todas as referências a `user.tenant_id` no código
+  - [ ] Substituir por lógica que busca membership ACTIVE (ou usar `get_current_membership()`)
+  - [ ] **Como testar**: Executar testes completos, verificar que nenhum código quebra
+- [ ] Criar script de validação `script_validate_memberships.py`:
+  - [ ] Verificar que todos os users têm pelo menos 1 membership
+  - [ ] Verificar que não há memberships com user_id ou tenant_id inválidos
+  - [ ] Verificar que não há duplicatas (tenant_id, user_id)
+  - [ ] **Como testar**: Executar script antes e depois da remoção de tenant_id
+
+#### 2.3.7 Testes e Validação da Migração
+
+- [ ] Testar fluxo completo de login:
+  - [ ] Usuário novo cria tenant → membership ADMIN ACTIVE criado
+  - [ ] Usuário existente com 1 tenant → login automático
+  - [ ] Usuário existente com múltiplos tenants → precisa selecionar
+  - [ ] **Como testar**: Via Swagger, testar cada cenário
+- [ ] Testar fluxo de convites:
+  - [ ] Admin convida email → membership PENDING criado
+  - [ ] Usuário lista convites → vê convite pendente
+  - [ ] Usuário aceita convite → membership ACTIVE
+  - [ ] Usuário pode trocar para novo tenant
+  - [ ] **Como testar**: Via Swagger, criar dois usuários, testar convite completo
+- [ ] Testar multi-tenant isolation:
+  - [ ] Usuário em Tenant A não vê dados de Tenant B
+  - [ ] Trocar tenant → ver dados do novo tenant
+  - [ ] **Como testar**: Criar dados em dois tenants, trocar entre eles, verificar isolamento
+- [ ] Testar que endpoints existentes continuam funcionando:
+  - [ ] `GET /me` retorna dados corretos
+  - [ ] Endpoints de Jobs respeitam tenant_id do JWT
+  - [ ] Endpoints futuros de Files/Schedules respeitam tenant_id
+  - [ ] **Como testar**: Executar suite de testes via Swagger
+
+#### 2.3.8 Rollback e Segurança
+
+- [ ] Documentar plano de rollback:
+  - [ ] Manter migração `remove_tenant_id_from_users` reversível (se possível)
+  - [ ] Se necessário rollback: recriar coluna `tenant_id` e popular com membership ACTIVE principal
+- [ ] Adicionar validações de segurança:
+  - [ ] Não permitir criar membership duplicado (tenant_id, user_id)
+  - [ ] Não permitir deletar último membership ACTIVE de um user (ou exigir transferência de admin)
+  - [ ] Validar que role existe no enum
+  - [ ] Validar que status existe no enum
+- [ ] Adicionar logs/auditoria:
+  - [ ] Logar criação de memberships (para rastrear convites)
+  - [ ] Logar mudanças de status (aceitar/rejeitar convites)
+  - [ ] Logar troca de tenant (switch-tenant)
+
+**Notas importantes**:
+- Esta correção é **incremental**: cada sub-etapa pode ser testada isoladamente
+- Manter `users.tenant_id` temporariamente durante transição permite rollback seguro
+- Não quebrar endpoints existentes: ajustar gradualmente, manter compatibilidade durante migração
+- JWT continua contendo `tenant_id` e `role`, mas agora `role` vem do Membership, não do User
+- Todos os testes devem ser feitos via Swagger (`/docs`) ou curl após cada etapa
 
 ---
 
@@ -409,16 +640,19 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 Antes de considerar completo, verificar:
 
 - [x] 3 modelos SQLModel criados e migrados (Tenant, User, Job) - *Fase 1 concluída*
+- [ ] Modelo Membership criado e migrado (tabela `memberships`) - *Seção 2.3*
+- [ ] Modelo User corrigido (sem tenant_id, email único global) - *Seção 2.3*
 - [ ] Modelos File e ScheduleVersion (próximas etapas)
-- [ ] Autenticação funcionando com tenant_id no JWT
-- [ ] Multi-tenant enforcement ativo em todos os endpoints
+- [ ] Autenticação funcionando com tenant_id no JWT (role do Membership) - *Seção 2.3*
+- [ ] Fluxos de convites e seleção de tenant funcionando - *Seção 2.3*
+- [ ] Multi-tenant enforcement ativo em todos os endpoints (via Membership)
 - [ ] Storage S3/MinIO funcionando (upload/download)
 - [ ] Jobs Arq processando corretamente (PING, EXTRACT, GENERATE)
 - [ ] API endpoints seguindo princípios arquiteturais
 - [ ] Código legado ainda funciona (ou foi migrado)
 - [ ] Docker Compose sobe sem erros
-- [ ] Migrações Alembic aplicam sem erros
-- [ ] Fluxo completo testável via `/docs`
+- [ ] Migrações Alembic aplicam sem erros (incluindo migrações de correção multi-tenant)
+- [ ] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
 
 ---
 
