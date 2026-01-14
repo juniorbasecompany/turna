@@ -26,7 +26,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### Etapa 1: DB + 3 tabelas básicas
 - [x] Modelos: Tenant, User, Job
 - [x] Alembic configurado e migração aplicada
-- [x] Endpoint `POST /tenants` (criar tenant simples)
+- [x] Endpoint `POST /tenant` (criar tenant simples)
 - [x] Testar: criar tenant via `/docs`, verificar no banco
 
 ### Etapa 2: OAuth + JWT + `/me`
@@ -38,7 +38,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### Etapa 3: Upload + File + MinIO
 - [x] Modelo File
 - [x] StorageService básico (upload/download)
-- [x] Endpoint `POST /files/upload` retorna URL/presigned
+- [x] Endpoint `POST /file/upload` retorna URL/presigned
 - [x] Testar: upload arquivo, verificar MinIO e banco
 
 ### Etapa 4: Arq - Job fake primeiro
@@ -253,14 +253,14 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Validar que User tem membership ACTIVE nesse tenant
   - [ ] Emitir novo JWT com `tenant_id` escolhido + `role` do membership
   - [ ] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
-- [ ] Criar endpoint `GET /auth/tenants`:
+- [ ] Criar endpoint `GET /auth/tenant/list`:
   - [ ] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
   - [ ] Retornar lista de convites pendentes (memberships PENDING)
   - [ ] **Como testar**: Chamar endpoint após login, verificar lista de tenants e convites
 
 #### 2.3.4 Implementação de Convites
 
-- [ ] Criar endpoint `POST /tenants/{tenant_id}/invite`:
+- [ ] Criar endpoint `POST /tenant/{tenant_id}/invite`:
   - [ ] Requer role ADMIN no tenant
   - [ ] Receber `email` no body
   - [ ] Buscar User por email (criar se não existir, SEM tenant_id)
@@ -289,7 +289,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Atualizar `status` para REJECTED (não deletar)
   - [ ] Retornar `{membership_id, status: "REJECTED"}`
   - [ ] **Como testar**: Recusar convite → verificar status REJECTED (não deletado)
-- [ ] Criar endpoint `POST /tenants` (criar clínica):
+- [ ] Criar endpoint `POST /tenant` (criar clínica):
   - [ ] Permitir se usuário não tem nenhum membership ACTIVE (primeiro tenant)
   - [ ] Criar Tenant
   - [ ] Criar Membership ADMIN ACTIVE para o usuário
@@ -371,7 +371,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Testar que endpoints existentes continuam funcionando:
   - [ ] `GET /me` retorna dados corretos
   - [ ] Endpoints de Job respeitam tenant_id do JWT
-  - [ ] Endpoints futuros de Files/Schedule respeitam tenant_id
+  - [ ] Endpoints futuros de File/Schedule respeitam tenant_id
   - [ ] **Como testar**: Executar suite de testes via Swagger
 
 #### 2.3.8 Rollback e Segurança
@@ -420,7 +420,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Padrão de S3 keys: `{tenant_id}/{file_type}/{filename}` (com sufixo UUID pra evitar colisão)
 
 ### 3.2 Integração com Modelos
-- [x] Criar endpoint `POST /files/upload`:
+- [x] Criar endpoint `POST /file/upload`:
   - [x] Receber arquivo via multipart
   - [x] Upload para S3 (StorageService)
   - [x] Criar File no banco
@@ -499,9 +499,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 5: API Endpoints Completos
 
 ### 5.1 Endpoints de Tenants
-- [ ] Criar `app/api/tenants.py`:
-  - [ ] `POST /tenants` (criar tenant - apenas admin ou primeiro usuário)
-  - [ ] `GET /tenants/me` (tenant atual do usuário)
+- [ ] Criar `app/api/tenant.py`:
+  - [ ] `POST /tenant` (criar tenant - apenas admin ou primeiro usuário)
+  - [ ] `GET /tenant/me` (tenant atual do usuário)
 
 ### 5.2 Endpoints de Schedule
 - [ ] Criar `app/api/schedule.py`:

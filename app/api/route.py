@@ -83,7 +83,7 @@ def health():
     return {"status": "ok"}
 
 
-@router.post("/tenants", response_model=TenantResponse, status_code=201, tags=["Tenants"])
+@router.post("/tenant", response_model=TenantResponse, status_code=201, tags=["Tenant"])
 def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_session)):
     """Cria um novo tenant."""
     # Verifica se já existe um tenant com o mesmo slug
@@ -176,7 +176,7 @@ class FileUploadResponse(PydanticBaseModel):
         from_attributes = True
 
 
-@router.post("/files/upload", response_model=FileUploadResponse, status_code=201, tags=["Files"])
+@router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
 def upload_file(
     file: UploadFile = FastAPIFile(...),
     account: Account = Depends(get_current_account),
