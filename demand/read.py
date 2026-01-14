@@ -3,14 +3,14 @@
 
 """
 read_demands_ai.py
-Extractor híbrido para demandas cirúrgicas a partir de PDFs:
+Extractor híbrido para demandas cirúrgicas a partir de PDFs ou imagens:
 1) usa IA (OpenAI) com JSON estrito
 2) (cache removido)
 
 Uso:
   python read_demands_ai.py "arquivo.pdf"
-  python read_demands_ai.py "arquivo.pdf"
-  python read_demands_ai.py "arquivo.pdf" --model gpt-4.1-mini
+  python read_demands_ai.py "arquivo.jpg"
+  python read_demands_ai.py "arquivo.png" --model gpt-4.1-mini
 
 Requisitos:
   pip install openai python-dotenv pypdfium2 pillow
@@ -158,6 +158,51 @@ def _render_pdf_to_png_b64(pdf_path: Path, dpi: int = None, max_pages: Optional[
     return out
 
 # -----------------------------
+# Imagem (JPEG/PNG) -> base64 (para IA)
+# -----------------------------
+def _render_image_to_png_b64(image_path: Path) -> List[str]:
+    try:
+        from PIL import Image
+    except Exception as e:
+        raise RuntimeError("Instale pillow: pip install pillow") from e
+
+    import io
+    img = Image.open(str(image_path))
+
+    # Converte para RGB se necessário (JPEG pode ser RGB, PNG pode ter transparência)
+    if img.mode in ("RGBA", "LA", "P"):
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    # encode PNG -> base64
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return [b64]
+
+# -----------------------------
+# Arquivo (PDF/Imagem) -> imagens base64 (para IA)
+# -----------------------------
+def _render_file_to_png_b64(file_path: Path, dpi: int = None, max_pages: Optional[int] = None) -> List[str]:
+    """
+    Detecta o tipo de arquivo e renderiza para lista de imagens base64.
+    Aceita PDF, JPEG e PNG.
+    """
+    suffix_lower = file_path.suffix.lower()
+
+    if suffix_lower in (".jpg", ".jpeg", ".png"):
+        return _render_image_to_png_b64(file_path)
+    elif suffix_lower == ".pdf":
+        return _render_pdf_to_png_b64(file_path, dpi=dpi, max_pages=max_pages)
+    else:
+        raise ValueError(f"Formato não suportado: {suffix_lower}. Use PDF, JPEG ou PNG.")
+
+# -----------------------------
 # PDF -> texto (text layer)
 # -----------------------------
 def _extract_pdf_text(pdf_path: Path, max_pages: Optional[int] = None) -> List[Tuple[int, str]]:
@@ -260,9 +305,9 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     client = _openai_client()
 
     # render -> imagens base64
-    _progress(f"renderizando PDF -> imagens (dpi={dpi}, max_pages={max_pages})...")
-    images_b64 = _render_pdf_to_png_b64(pdf_path, dpi=dpi, max_pages=max_pages)
-    _progress(f"renderização concluída: {len(images_b64)} página(s)")
+    _progress(f"renderizando arquivo -> imagens (dpi={dpi}, max_pages={max_pages})...")
+    images_b64 = _render_file_to_png_b64(pdf_path, dpi=dpi, max_pages=max_pages)
+    _progress(f"renderização concluída: {len(images_b64)} imagem(ns)")
 
     # Monta input multimodal
     # OBS: API Responses (openai python) aceita input_text + input_image
@@ -340,16 +385,22 @@ def extract_demands(pdf_path: str, model: str = None, dpi: int = None, max_pages
         model = config.DEFAULT_MODEL
     if dpi is None:
         dpi = config.DEFAULT_DPI
-    pdf = Path(pdf_path).resolve()
-    if not pdf.exists():
-        raise FileNotFoundError(str(pdf))
+    file_path = Path(pdf_path).resolve()
+    if not file_path.exists():
+        raise FileNotFoundError(str(file_path))
 
-    # Decide: text-only (text layer) vs visão (imagens)
+    suffix_lower = file_path.suffix.lower()
+
+    # Se for imagem, usa visão diretamente (sem text layer)
+    if suffix_lower in (".jpg", ".jpeg", ".png"):
+        return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages)
+
+    # Para PDFs: Decide: text-only (text layer) vs visão (imagens)
     pages_text: List[Tuple[int, str]] = []
     use_text_only = False
     try:
         _progress("checando text layer (pdfplumber)...")
-        pages_text = _extract_pdf_text(pdf, max_pages=max_pages)
+        pages_text = _extract_pdf_text(file_path, max_pages=max_pages)
         use_text_only = _should_use_text_only(pages_text)
     except Exception as e:
         # Se pdfplumber não estiver disponível, seguimos com visão.
@@ -359,19 +410,19 @@ def extract_demands(pdf_path: str, model: str = None, dpi: int = None, max_pages
     if use_text_only:
         _progress("text layer detectado; enviando somente texto para a IA...")
         try:
-            return _call_ai_extract_text_only(pdf, model=model, pages_text=pages_text)
+            return _call_ai_extract_text_only(file_path, model=model, pages_text=pages_text)
         except Exception as e:
             _progress(f"modo text-only falhou ({e}); usando visão...")
 
     # fallback: visão
-    return _call_ai_extract_vision(pdf, model=model, dpi=dpi, max_pages=max_pages)
+    return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages)
 
 # -----------------------------
 # CLI
 # -----------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("pdf_path", help="Caminho do PDF")
+    parser.add_argument("pdf_path", help="Caminho do PDF ou imagem (JPEG/PNG)")
     parser.add_argument("--model", default=config.DEFAULT_MODEL, help="Modelo OpenAI")
     parser.add_argument("--dpi", type=int, default=config.DEFAULT_DPI, help="DPI para render do PDF")
     parser.add_argument("--max-pages", type=int, default=None, help="Limitar páginas (debug/custo)")
