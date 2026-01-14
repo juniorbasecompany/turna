@@ -2,7 +2,11 @@ import os
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.models.tenant import Tenant
@@ -12,6 +16,8 @@ from app.auth.dependencies import get_current_account
 from app.models.user import Account
 from app.storage.service import StorageService
 from app.models.file import File
+from app.models.job import Job, JobStatus, JobType
+from app.workers.worker_settings import WorkerSettings
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
@@ -91,6 +97,71 @@ def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_sess
     session.refresh(tenant)
 
     return tenant
+
+
+class JobPingResponse(PydanticBaseModel):
+    job_id: int
+
+
+class JobResponse(PydanticBaseModel):
+    id: int
+    tenant_id: int
+    job_type: str
+    status: str
+    input_data: dict | None = None
+    result_data: dict | None = None
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/jobs/ping", response_model=JobPingResponse, status_code=201, tags=["Jobs"])
+async def create_ping_job(
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    if not account.tenant_id:
+        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
+
+    job = Job(
+        tenant_id=account.tenant_id,
+        job_type=JobType.PING,
+        status=JobStatus.PENDING,
+        input_data={"ping": True},
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    redis_dsn = WorkerSettings.redis_dsn()
+    try:
+        redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+        await redis.enqueue_job("ping_job", job.id)
+    except (RedisTimeoutError, RedisConnectionError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
+        ) from e
+
+    return JobPingResponse(job_id=job.id)
+
+
+@router.get("/jobs/{job_id}", response_model=JobResponse, tags=["Jobs"])
+def get_job(
+    job_id: int,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != account.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return job
 
 
 class FileUploadResponse(PydanticBaseModel):

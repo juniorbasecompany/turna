@@ -26,6 +26,12 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class DevTokenRequest(BaseModel):
+    email: str
+    name: str = "Dev User"
+
+
+
 def _determine_role(email: str, hd: Optional[str] = None) -> str:
     """Determina a role do usuário baseado em email e hosted domain."""
     email_lower = email.lower()
@@ -146,4 +152,46 @@ def auth_google_register(
         name=account.name,
     )
 
+    return TokenResponse(access_token=token)
+
+
+@router.post("/dev/token", response_model=TokenResponse, tags=["Auth"])
+def auth_dev_token(
+    body: DevTokenRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Gera um JWT de desenvolvimento sem Google OAuth.
+
+    Proteção: só funciona quando APP_ENV=dev.
+    """
+    if os.getenv("APP_ENV", "dev") != "dev":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    email = body.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    account = session.exec(select(Account).where(Account.email == email)).first()
+    if not account:
+        tenant = _get_or_create_default_tenant(session)
+        role = _determine_role(email)
+        account = Account(
+            email=email,
+            name=body.name,
+            role=role,
+            tenant_id=tenant.id,
+            auth_provider="dev",
+        )
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+
+    token = create_access_token(
+        account_id=account.id,
+        tenant_id=account.tenant_id,
+        role=account.role,
+        email=account.email,
+        name=account.name,
+    )
     return TokenResponse(access_token=token)

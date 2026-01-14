@@ -42,10 +42,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: upload arquivo, verificar MinIO e banco
 
 ### Etapa 4: Arq - Job fake primeiro
-- [ ] WorkerSettings configurado
-- [ ] Job `PING_JOB` (fake, só valida fila)
-- [ ] Endpoint `POST /jobs/ping` cria Job e enfileira
-- [ ] Testar: criar job, ver worker processar, ver status
+- [x] WorkerSettings configurado
+- [x] Job `PING_JOB` (fake, só valida fila)
+- [x] Endpoint `POST /jobs/ping` cria Job e enfileira
+- [x] Endpoint `GET /jobs/{job_id}` retorna status/resultado (validando tenant)
+- [x] Testar: criar job, ver worker processar, ver status
 
 ### Etapa 5: Arq - EXTRACT_DEMANDS
 - [ ] Job `EXTRACT_DEMANDS` com OpenAI (adaptar `demand/read.py`)
@@ -434,26 +435,22 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 4: Jobs Assíncronos (Arq) - Incremental
 
 ### 4.1 Configuração Básica de Workers
-- [ ] Atualizar `app/workers/worker_settings.py`:
-  - [ ] Classe `WorkerSettings` (herdando de `arq.worker.WorkerSettings`)
-  - [ ] Configurar `redis_settings` usando `REDIS_URL`
-  - [ ] Configurar `max_jobs=10` (inicial)
-- [ ] Atualizar `app/workers/run.py`:
-  - [ ] Usar `WorkerSettings` corretamente
-  - [ ] Iniciar worker com `arq.run_worker(WorkerSettings)`
+- [x] Atualizar `app/workers/worker_settings.py`:
+  - [x] Configurar `redis_settings` usando `REDIS_URL`
+  - [x] Registrar `functions` do Arq (inclui `ping_job`)
+- [x] Atualizar `app/workers/run.py`:
+  - [x] Iniciar worker com `run_worker(WorkerSettings)`
 
 ### 4.2 Job Fake (PING) - Validar Fila
-- [ ] Criar `app/jobs/__init__.py`
-- [ ] Criar `app/jobs/ping.py`:
-  - [ ] Função `ping_job(ctx, job_id, tenant_id, message)` decorada com `@arq.job`
-  - [ ] Lógica simples: atualizar Job com `result_data={"message": message}`
-- [ ] Criar endpoint `POST /jobs/ping`:
-  - [ ] Criar Job no banco (tipo PING, status PENDING)
-  - [ ] Enfileirar job no Arq
-  - [ ] Retornar `{job_id}`
-- [ ] Criar endpoint `GET /jobs/{job_id}`:
-  - [ ] Retornar status e resultado do Job
-- [ ] Testar: criar job ping, ver worker processar, verificar status COMPLETED
+- [x] Criar `app/workers/jobs.py`:
+  - [x] Função `ping_job(ctx, job_id)` (job fake) atualiza status no banco e grava `result_data={"pong": true}`
+- [x] Criar endpoint `POST /jobs/ping`:
+  - [x] Criar Job no banco (tipo PING, status PENDING)
+  - [x] Enfileirar job no Arq
+  - [x] Retornar `{job_id}`
+- [x] Criar endpoint `GET /jobs/{job_id}`:
+  - [x] Retornar status e resultado do Job (validando tenant)
+- [x] Testar: criar job ping, ver worker processar, verificar status COMPLETED
 
 ### 4.3 Job EXTRACT_DEMANDS (OpenAI)
 - [ ] Criar `app/jobs/extract_demands.py`:
