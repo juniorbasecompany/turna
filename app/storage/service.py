@@ -7,6 +7,7 @@ from sqlmodel import Session
 from app.storage.client import S3Client
 from app.storage.config import S3Config
 from app.models.file import File
+from app.models.base import utc_now
 
 
 class StorageService:
@@ -82,7 +83,7 @@ class StorageService:
             s3_key=s3_key,
             s3_url=s3_url,
             file_size=file_size,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=utc_now(),
         )
 
         try:
@@ -139,7 +140,7 @@ class StorageService:
             s3_key=s3_key,
             s3_url=s3_url,
             file_size=file_size,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=utc_now(),
         )
 
         try:

@@ -1,6 +1,9 @@
 from datetime import datetime
-from sqlmodel import SQLModel, Field
-from app.models.base import BaseModel
+
+import sqlalchemy as sa
+from sqlmodel import SQLModel, Field, Column
+
+from app.models.base import BaseModel, utc_now
 from typing import Optional
 
 
@@ -15,4 +18,8 @@ class File(BaseModel, table=True):
     s3_key: str = Field(unique=True, index=True)
     s3_url: str
     file_size: int  # Tamanho em bytes
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(
+        default_factory=utc_now,
+        sa_type=sa.DateTime(timezone=True),
+        nullable=False,
+    )

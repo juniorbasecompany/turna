@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Column
 from sqlalchemy import JSON
+import sqlalchemy as sa
 from app.models.base import BaseModel
 from typing import Optional
 import enum
@@ -30,4 +31,8 @@ class Job(BaseModel, table=True):
     input_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     result_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     error_message: Optional[str] = None
-    completed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = Field(
+        default=None,
+        sa_type=sa.DateTime(timezone=True),
+        nullable=True,
+    )

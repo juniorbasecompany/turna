@@ -1,9 +1,12 @@
 import os
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.models.tenant import Tenant
-from pydantic import BaseModel as PydanticBaseModel
+from pydantic import BaseModel as PydanticBaseModel, field_validator
 from app.api.auth import router as auth_router
 from app.auth.dependencies import get_current_account
 from app.models.user import Account
@@ -13,6 +16,14 @@ from app.models.file import File
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
 router.include_router(auth_router)
+
+
+def _isoformat_utc(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @router.get("/me", tags=["Auth"])
@@ -28,22 +39,33 @@ def get_me(account: Account = Depends(get_current_account)):
         "role": account.role,
         "tenant_id": account.tenant_id,
         "auth_provider": account.auth_provider,
-        "created_at": account.created_at.isoformat() if account.created_at else None,
-        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
+        "created_at": _isoformat_utc(account.created_at),
+        "updated_at": _isoformat_utc(account.updated_at),
     }
 
 
 class TenantCreate(PydanticBaseModel):
     name: str
     slug: str
+    timezone: str = "UTC"
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+        except Exception as e:
+            raise ValueError("timezone inválido (esperado IANA, ex: America/Sao_Paulo)") from e
+        return v
 
 
 class TenantResponse(PydanticBaseModel):
     id: int
     name: str
     slug: str
-    created_at: str
-    updated_at: str
+    timezone: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -63,7 +85,7 @@ def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_sess
     if existing:
         raise HTTPException(status_code=400, detail="Tenant com este slug já existe")
 
-    tenant = Tenant(name=tenant_data.name, slug=tenant_data.slug)
+    tenant = Tenant(name=tenant_data.name, slug=tenant_data.slug, timezone=tenant_data.timezone)
     session.add(tenant)
     session.commit()
     session.refresh(tenant)

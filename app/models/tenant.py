@@ -9,3 +9,4 @@ class Tenant(BaseModel, table=True):
 
     name: str = Field(index=True)
     slug: str = Field(unique=True, index=True)
+    timezone: str = Field(default="UTC")
