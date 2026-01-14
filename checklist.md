@@ -88,7 +88,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Criar `app/models/user.py`:
   - [x] Modelo `User` (id, email, name, role, tenant_id FK, auth_provider, created_at, updated_at)
   - [x] Índice único em `(email, tenant_id)`
-  - [ ] **Nota**: Será corrigido na seção 2.3 - remover `tenant_id` e criar tabela `memberships` (Membership)
+  - [ ] **Nota**: Será corrigido na seção 2.3 - remover `tenant_id` e criar tabela `membership` (Membership)
 - [x] Criar `app/models/job.py`:
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
@@ -169,9 +169,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Criar helper `get_tenant_id(request)` para endpoints
 - [ ] Documentar padrão: todas as queries devem usar `tenant_id` do `request.state`
 
-### 2.3 Correção do Modelo Multi-Tenant (Users sem tenant_id)
+### 2.3 Correção do Modelo Multi-Tenant (Account sem tenant_id)
 
-**Contexto**: O modelo atual tem `users.tenant_id`, mas o correto é:
+**Contexto**: O modelo atual tem `user.tenant_id`, mas o correto é:
 - **Tenant** = clínica (entidade organizacional)
 - **User** = pessoa física (login Google, único global por email)
 - **Membership** = vínculo User↔Tenant com role e status (um usuário pode estar em múltiplos tenants)
@@ -193,9 +193,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Índices: `tenant_id`, `user_id`, `status`
   - [ ] Relationships SQLModel (opcional, se necessário para queries)
 - [ ] Criar migração Alembic `add_membership_table`:
-  - [ ] Criar tabela `memberships`
+  - [ ] Criar tabela `membership`
   - [ ] Adicionar constraints e índices
-  - [ ] **NÃO remover** `users.tenant_id` ainda (fazer depois)
+  - [ ] **NÃO remover** `user.tenant_id` ainda (fazer depois)
 - [ ] Atualizar `app/models/user.py`:
   - [ ] Remover constraint único `(email, tenant_id)`
   - [ ] Adicionar constraint único em `email` apenas (email único global)
@@ -209,7 +209,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 #### 2.3.2 Migração de Dados Existentes
 
 - [ ] Criar script de migração `script_migrate_to_memberships.py`:
-  - [ ] Ler todos os usuários existentes (`users` com `tenant_id`)
+  - [ ] Ler todos os usuários existentes (`user` com `tenant_id`)
   - [ ] Para cada usuário:
     - [ ] Criar `Membership` com:
       - [ ] `tenant_id` = `user.tenant_id`
@@ -220,10 +220,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
       - [ ] `updated_at` = `user.updated_at`
   - [ ] Validar que todos os usuários foram migrados (contagem)
   - [ ] **Como testar**: Executar script, verificar que cada user tem membership ACTIVE correspondente
-- [ ] Criar migração Alembic `migrate_existing_users_to_memberships`:
+- [ ] Criar migração Alembic `migrate_existing_account_to_memberships`:
   - [ ] Executar lógica de migração via SQL ou Python (usar `alembic.op.execute()` se necessário)
   - [ ] Garantir que nenhum usuário fica sem membership
-  - [ ] **Como testar**: Verificar no banco que todos os users têm pelo menos 1 membership ACTIVE
+  - [ ] **Como testar**: Verificar no banco que todos os account têm pelo menos 1 membership ACTIVE
 
 #### 2.3.3 Ajuste de Fluxos de Autenticação e Entrada
 
@@ -330,13 +330,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Validar que usam `tenant_id` do JWT (via `get_current_tenant()` ou `request.state`)
   - [ ] Documentar padrão: sempre filtrar por `tenant_id` do JWT, nunca confiar em parâmetros do body
 
-#### 2.3.6 Remoção Final de tenant_id de Users
+#### 2.3.6 Remoção Final de tenant_id de Account
 
-- [ ] Criar migração Alembic `remove_tenant_id_from_users`:
-  - [ ] Validar que todos os users têm pelo menos 1 membership (não pode ter user órfão)
-  - [ ] Remover coluna `tenant_id` de `users`
-  - [ ] Remover índice `ix_users_tenant_id`
-  - [ ] Remover foreign key constraint de `users.tenant_id`
+- [ ] Criar migração Alembic `remove_tenant_id_from_account`:
+  - [ ] Validar que todos os account têm pelo menos 1 membership (não pode ter user órfão)
+  - [ ] Remover coluna `tenant_id` de `user`
+  - [ ] Remover índice `ix_user_tenant_id`
+  - [ ] Remover foreign key constraint de `user.tenant_id`
 - [ ] Atualizar `app/models/user.py`:
   - [ ] Remover campo `tenant_id`
   - [ ] Remover relacionamento direto com Tenant (se existir)
@@ -345,7 +345,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Substituir por lógica que busca membership ACTIVE (ou usar `get_current_membership()`)
   - [ ] **Como testar**: Executar testes completos, verificar que nenhum código quebra
 - [ ] Criar script de validação `script_validate_memberships.py`:
-  - [ ] Verificar que todos os users têm pelo menos 1 membership
+  - [ ] Verificar que todos os account têm pelo menos 1 membership
   - [ ] Verificar que não há memberships com user_id ou tenant_id inválidos
   - [ ] Verificar que não há duplicatas (tenant_id, user_id)
   - [ ] **Como testar**: Executar script antes e depois da remoção de tenant_id
@@ -376,7 +376,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 #### 2.3.8 Rollback e Segurança
 
 - [ ] Documentar plano de rollback:
-  - [ ] Manter migração `remove_tenant_id_from_users` reversível (se possível)
+  - [ ] Manter migração `remove_tenant_id_from_account` reversível (se possível)
   - [ ] Se necessário rollback: recriar coluna `tenant_id` e popular com membership ACTIVE principal
 - [ ] Adicionar validações de segurança:
   - [ ] Não permitir criar membership duplicado (tenant_id, user_id)
@@ -390,7 +390,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 **Notas importantes**:
 - Esta correção é **incremental**: cada sub-etapa pode ser testada isoladamente
-- Manter `users.tenant_id` temporariamente durante transição permite rollback seguro
+- Manter `user.tenant_id` temporariamente durante transição permite rollback seguro
 - Não quebrar endpoints existentes: ajustar gradualmente, manter compatibilidade durante migração
 - JWT continua contendo `tenant_id` e `role`, mas agora `role` vem do Membership, não do User
 - Todos os testes devem ser feitos via Swagger (`/docs`) ou curl após cada etapa
@@ -640,7 +640,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 Antes de considerar completo, verificar:
 
 - [x] 3 modelos SQLModel criados e migrados (Tenant, User, Job) - *Fase 1 concluída*
-- [ ] Modelo Membership criado e migrado (tabela `memberships`) - *Seção 2.3*
+- [ ] Modelo Membership criado e migrado (tabela `membership`) - *Seção 2.3*
 - [ ] Modelo User corrigido (sem tenant_id, email único global) - *Seção 2.3*
 - [ ] Modelos File e ScheduleVersion (próximas etapas)
 - [ ] Autenticação funcionando com tenant_id no JWT (role do Membership) - *Seção 2.3*

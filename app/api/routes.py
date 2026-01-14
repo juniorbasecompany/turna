@@ -4,8 +4,8 @@ from app.db.session import get_session
 from app.models.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel
 from app.api.auth import router as auth_router
-from app.auth.dependencies import get_current_user
-from app.models.user import User
+from app.auth.dependencies import get_current_account
+from app.models.user import Account
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
@@ -13,20 +13,20 @@ router.include_router(auth_router)
 
 
 @router.get("/me", tags=["Auth"])
-def get_me(user: User = Depends(get_current_user)):
+def get_me(account: Account = Depends(get_current_account)):
     """
-    Retorna os dados do usuário autenticado.
+    Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
     """
     return {
-        "id": user.id,
-        "email": user.email,
-        "name": user.name,
-        "role": user.role,
-        "tenant_id": user.tenant_id,
-        "auth_provider": user.auth_provider,
-        "created_at": user.created_at.isoformat() if user.created_at else None,
-        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+        "id": account.id,
+        "email": account.email,
+        "name": account.name,
+        "role": account.role,
+        "tenant_id": account.tenant_id,
+        "auth_provider": account.auth_provider,
+        "created_at": account.created_at.isoformat() if account.created_at else None,
+        "updated_at": account.updated_at.isoformat() if account.updated_at else None,
     }
 
 

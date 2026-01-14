@@ -22,9 +22,9 @@ class JobStatus(str, enum.Enum):
 class Job(BaseModel, table=True):
     """Modelo Job - jobs assíncronos processados pelo Arq."""
 
-    __tablename__ = "jobs"
+    __tablename__ = "job"
 
-    tenant_id: int = Field(foreign_key="tenants.id", index=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
     job_type: JobType = Field(index=True)
     status: JobStatus = Field(default=JobStatus.PENDING, index=True)
     input_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))

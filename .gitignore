@@ -212,4 +212,4 @@ __marimo__/
 test/
 
 # Dados de usuários (senhas hasheadas)
-data/users.json
+data/account.json

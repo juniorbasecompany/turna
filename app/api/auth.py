@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db.session import get_session
-from app.models.user import User
+from app.models.user import Account
 from app.models.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
@@ -71,12 +71,12 @@ def auth_google(
     email = idinfo["email"]
     name = idinfo["name"]
 
-    # Busca usuário no banco
-    user = session.exec(
-        select(User).where(User.email == email)
+    # Busca conta no banco
+    account = session.exec(
+        select(Account).where(Account.email == email)
     ).first()
 
-    if not user:
+    if not account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuário não encontrado. Use a opção 'Cadastrar-se' para criar uma conta."
@@ -84,11 +84,11 @@ def auth_google(
 
     # Cria token JWT
     token = create_access_token(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        role=user.role,
-        email=user.email,
-        name=user.name,
+        account_id=account.id,
+        tenant_id=account.tenant_id,
+        role=account.role,
+        email=account.email,
+        name=account.name,
     )
 
     return TokenResponse(access_token=token)
@@ -111,13 +111,13 @@ def auth_google_register(
     hd = idinfo.get("hd")
 
     # Verifica se o usuário já existe
-    user = session.exec(
-        select(User).where(User.email == email)
+    account = session.exec(
+        select(Account).where(Account.email == email)
     ).first()
 
-    if user:
+    if account:
         # Usuário já existe, apenas autentica
-        role = user.role
+        role = account.role
     else:
         # Cria novo usuário
         role = _determine_role(email, hd)
@@ -125,25 +125,25 @@ def auth_google_register(
         # Obtém ou cria tenant padrão
         tenant = _get_or_create_default_tenant(session)
 
-        # Cria usuário no banco
-        user = User(
+        # Cria conta no banco
+        account = Account(
             email=email,
             name=name,
             role=role,
             tenant_id=tenant.id,
             auth_provider="google",
         )
-        session.add(user)
+        session.add(account)
         session.commit()
-        session.refresh(user)
+        session.refresh(account)
 
     # Cria token JWT
     token = create_access_token(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        role=user.role,
-        email=user.email,
-        name=user.name,
+        account_id=account.id,
+        tenant_id=account.tenant_id,
+        role=account.role,
+        email=account.email,
+        name=account.name,
     )
 
     return TokenResponse(access_token=token)

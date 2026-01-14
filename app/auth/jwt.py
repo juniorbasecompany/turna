@@ -22,23 +22,23 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 8
 
 
-def create_access_token(user_id: int, tenant_id: int, role: str, email: str, name: str) -> str:
+def create_access_token(account_id: int, tenant_id: int, role: str, email: str, name: str) -> str:
     """
-    Cria um token JWT com as informações do usuário.
+    Cria um token JWT com as informações da conta.
 
     Args:
-        user_id: ID do usuário no banco
-        tenant_id: ID do tenant do usuário
-        role: Role do usuário (user, admin)
-        email: Email do usuário
-        name: Nome do usuário
+        account_id: ID da conta no banco
+        tenant_id: ID do tenant da conta
+        role: Role da conta (user, admin)
+        email: Email da conta
+        name: Nome da conta
 
     Returns:
         Token JWT codificado
     """
     now = datetime.now(timezone.utc)
     payload: Dict[str, any] = {
-        "sub": str(user_id),  # Subject (user_id)
+        "sub": str(account_id),  # Subject (account_id)
         "email": email,
         "name": name,
         "tenant_id": tenant_id,

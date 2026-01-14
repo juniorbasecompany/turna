@@ -45,8 +45,8 @@ ADMIN_EMAILS: Set[str] = {e.strip().lower() for e in ADMIN_EMAILS_RAW.split(",")
 ADMIN_HOSTED_DOMAIN = os.getenv("ADMIN_HOSTED_DOMAIN")  # ex: "suaempresa.com"
 
 # Caminho do arquivo de usuários
-USERS_FILE = project_root / "data" / "users.json"
-USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+ACCOUNT_FILE = project_root / "data" / "account.json"
+ACCOUNT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Sistema de Autenticação (Login e Cadastro)")
 
@@ -59,26 +59,26 @@ bearer = HTTPBearer(auto_error=False)
 # Gerenciamento de usuários
 # -----------------------------
 
-def load_users() -> List[Dict]:
+def load_account() -> List[Dict]:
     """Carrega usuários do arquivo JSON"""
-    if not USERS_FILE.exists():
+    if not ACCOUNT_FILE.exists():
         return []
     try:
-        with USERS_FILE.open(encoding="utf-8") as f:
+        with ACCOUNT_FILE.open(encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
 
-def save_users(users: List[Dict]) -> None:
+def save_account(account: List[Dict]) -> None:
     """Salva usuários no arquivo JSON"""
-    with USERS_FILE.open("w", encoding="utf-8") as f:
-        json.dump(users, f, indent=2, ensure_ascii=False)
+    with ACCOUNT_FILE.open("w", encoding="utf-8") as f:
+        json.dump(account, f, indent=2, ensure_ascii=False)
 
 def find_user_by_email(email: str) -> Optional[Dict]:
     """Busca um usuário pelo email"""
-    users = load_users()
+    account = load_account()
     email_lower = email.lower()
-    for user in users:
+    for user in account:
         if user.get("email", "").lower() == email_lower:
             return user
     return None
@@ -172,7 +172,7 @@ def auth_google(body: dict):
 
     # Determina role
     role = user.get("role", "user")
-    
+
     # Verifica permissões de admin (se necessário)
     if ADMIN_EMAILS and email not in ADMIN_EMAILS:
         if ADMIN_HOSTED_DOMAIN:
@@ -203,7 +203,7 @@ def auth_google_register(body: dict):
 
     # Verifica se o usuário já existe
     user = find_user_by_email(email)
-    
+
     if user:
         # Usuário já existe, apenas autentica
         role = user.get("role", "user")
@@ -226,9 +226,9 @@ def auth_google_register(body: dict):
             "auth_provider": "google"
         }
 
-        users = load_users()
-        users.append(new_user)
-        save_users(users)
+        account = load_account()
+        account.append(new_user)
+        save_account(account)
 
     # Verifica permissões de admin (se necessário)
     if ADMIN_EMAILS and email not in ADMIN_EMAILS:
