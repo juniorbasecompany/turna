@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.route import router
 
 # Carrega variáveis de ambiente do .env
@@ -20,6 +24,41 @@ app = FastAPI(
     version="1.0.0"
 )
 app.include_router(router)
+
+
+def _error_payload(*, code: str, message: str, details: object | None = None) -> dict:
+    payload: dict = {"error": {"code": code, "message": message}}
+    if details is not None:
+        payload["error"]["details"] = details
+    return payload
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # Normaliza erros HTTP do FastAPI/Starlette para um payload consistente.
+    # Não expõe exceções internas nem detalhes sensíveis por padrão.
+    code = f"HTTP_{exc.status_code}"
+    message = exc.detail if isinstance(exc.detail, str) else "Request failed"
+    return JSONResponse(status_code=exc.status_code, content=_error_payload(code=code, message=message))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Normaliza erros de validação (422) para payload consistente.
+    return JSONResponse(
+        status_code=422,
+        content=_error_payload(code="VALIDATION_ERROR", message="Invalid request", details=exc.errors()),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Fallback: evita vazar stacktrace/detalhes no response.
+    return JSONResponse(
+        status_code=500,
+        content=_error_payload(code="INTERNAL_ERROR", message="Internal server error"),
+    )
+
 
 # Serve arquivos estáticos (para login.html)
 static_dir = Path(__file__).resolve().parent.parent / "static"

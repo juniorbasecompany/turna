@@ -69,7 +69,7 @@ class S3Client:
 
         Args:
             file_path: Caminho local do arquivo
-            s3_key: Chave S3 (ex: "1/imports/arquivo.pdf")
+            s3_key: Chave S3 (ex: "1/import/arquivo.pdf")
             content_type: MIME type (opcional)
 
         Returns:
@@ -101,7 +101,7 @@ class S3Client:
 
         Args:
             file_obj: Objeto de arquivo (BytesIO, file handle, etc)
-            s3_key: Chave S3 (ex: "1/imports/arquivo.pdf")
+            s3_key: Chave S3 (ex: "1/import/arquivo.pdf")
             content_type: MIME type (opcional)
 
         Returns:

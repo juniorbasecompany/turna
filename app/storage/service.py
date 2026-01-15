@@ -25,11 +25,11 @@ class StorageService:
 
         Args:
             tenant_id: ID do tenant
-            file_type: Tipo de arquivo (ex: "imports", "pdfs", "schedules")
+            file_type: Tipo de arquivo (ex: "import", "pdf", "schedule")
             filename: Nome do arquivo
 
         Returns:
-            Chave S3 (ex: "1/imports/demanda.pdf")
+            Chave S3 (ex: "1/import/demanda.pdf")
         """
         # Sanitizar filename (remover caracteres problemáticos)
         safe_filename = filename.replace(" ", "_")
@@ -65,7 +65,7 @@ class StorageService:
         file.file.seek(0)
 
         # Gerar chave S3
-        s3_key = self._generate_s3_key(tenant_id, "imports", filename)
+        s3_key = self._generate_s3_key(tenant_id, "import", filename)
 
         # Upload para S3
         import io

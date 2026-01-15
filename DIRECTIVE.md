@@ -6,6 +6,7 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Singular**: sempre dê preferência a nomes no singular.
 - **Plural**: evite usar.
 - **Listas e Arrays**: use o sufixo List.
+- **Exceções por convenção de tooling**: quando uma ferramenta possui convenção/padrão consolidado (ex.: `alembic/versions/`), mantenha o padrão e documente a exceção.
 
 ## Datas e Horários
 

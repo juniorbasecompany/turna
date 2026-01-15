@@ -28,7 +28,9 @@ def _isoformat_utc(dt: datetime | None) -> str | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        # Diretiva: timestamps sem fuso explícito são inválidos.
+        # Como este helper é usado para serialização, falhamos explicitamente para não "assumir UTC".
+        raise ValueError("datetime sem timezone (tzinfo=None) é inválido")
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 

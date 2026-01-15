@@ -21,13 +21,13 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_OAUTH_CLIE
 def verify_google_token(token: str) -> Dict[str, str]:
     """
     Verifica o token do Google e retorna as informações do usuário.
-    
+
     Args:
         token: Token ID do Google OAuth
-    
+
     Returns:
         Dict com email, name e hd (hosted domain)
-    
+
     Raises:
         HTTPException: Se o token for inválido
     """
@@ -36,7 +36,7 @@ def verify_google_token(token: str) -> Dict[str, str]:
             status_code=500,
             detail="GOOGLE_CLIENT_ID not configured"
         )
-    
+
     try:
         # clock_skew_in_seconds permite tolerar diferenças de relógio entre servidor e Google
         # Padrão: 60 segundos (suficiente para pequenas dessincronias)
@@ -51,11 +51,12 @@ def verify_google_token(token: str) -> Dict[str, str]:
         if "Token's audience" in error_msg or "Wrong audience" in error_msg:
             raise HTTPException(
                 status_code=401,
-                detail=f"Token audience mismatch. Verifique se o GOOGLE_CLIENT_ID no .env corresponde ao Client ID usado no frontend."
+                detail="Token audience mismatch. Verifique se o GOOGLE_CLIENT_ID no .env corresponde ao Client ID usado no frontend."
             )
-        raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {error_msg}")
+        # Não expõe detalhes do erro do provider para evitar leakage e inconsistências.
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid Google ID token: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
 
     email = str(idinfo.get("email", "")).lower()
     name = str(idinfo.get("name", ""))

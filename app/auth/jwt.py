@@ -72,4 +72,5 @@ def verify_token(token: str) -> Dict[str, any]:
         )
         return payload
     except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+        # Evita vazar detalhes internos no payload de erro.
+        raise HTTPException(status_code=401, detail="Invalid token")

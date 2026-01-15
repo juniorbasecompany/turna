@@ -1,9 +1,9 @@
 # Dependências principais
-openai
-python-dotenv
-pypdfium2
-pillow
-pdfplumber
+openai>=1.0,<2.0
+python-dotenv>=1.0,<2.0
+pypdfium2>=4.30,<5.0
+pillow>=10.0,<11.0
+pdfplumber>=0.11,<1.0
 
 # Dependências opcionais
 # ortools - necessário apenas para estratégia CP-SAT
@@ -18,8 +18,8 @@ uvicorn[standard]==0.30.6
 python-jose[cryptography]==3.3.0
 google-auth==2.34.0
 python-multipart==0.0.12
-requests
-bcrypt
+requests>=2.31,<3.0
+bcrypt>=4.0,<5.0
 
 pydantic==2.10.6
 sqlmodel==0.0.22
