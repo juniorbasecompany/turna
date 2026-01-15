@@ -8,11 +8,15 @@ def redis_dsn() -> str:
 class WorkerSettings:
     # Arq procura estes atributos na classe de settings
     from arq.connections import RedisSettings
+    from arq.cron import cron
 
-    from app.worker.job import ping_job
+    from app.worker.job import extract_demand_job, ping_job, reconcile_pending_orphans
 
     redis_settings = RedisSettings.from_dsn(redis_dsn())
-    functions = [ping_job]
+    functions = [ping_job, extract_demand_job]
+    cron_jobs = [
+        cron(reconcile_pending_orphans, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}),
+    ]
 
     @staticmethod
     def redis_dsn() -> str:

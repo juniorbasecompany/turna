@@ -49,10 +49,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: criar job, ver worker processar, ver status
 
 ### Etapa 5: Arq - EXTRACT_DEMAND
-- [ ] Job `EXTRACT_DEMAND` com OpenAI (adaptar `demand/read.py`)
-- [ ] Salvar resultado como JSON no `Job.result_data`
-- [ ] Endpoint `POST /job/extract` (recebe file_id)
-- [ ] Testar: upload → extract → ver resultado no Job
+- [x] Job `EXTRACT_DEMAND` com OpenAI (adaptar `demand/read.py`)
+- [x] Salvar resultado como JSON no `Job.result_data`
+- [x] Endpoint `POST /job/extract` (recebe file_id)
+- [x] Testar: upload → extract → ver resultado no Job
 
 ### Etapa 6: ScheduleVersion + GenerateSchedule
 - [ ] Modelo ScheduleVersion
@@ -453,24 +453,23 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: criar job ping, ver worker processar, verificar status COMPLETED
 
 ### 4.3 Job EXTRACT_DEMAND (OpenAI)
-- [ ] Criar `app/job/extract_demand.py`:
-  - [ ] Função `extract_demand_job(ctx, job_id, file_id, tenant_id)` decorada com `@arq.job`
-  - [ ] Lógica:
-    1. Buscar File do banco (validar tenant_id)
-    2. Download do S3 para arquivo temporário
-    3. Chamar `extract_demand_from_file()` (adaptar `demand/read.py`)
-    4. Salvar resultado como JSON no `Job.result_data`
-    5. Atualizar Job status (COMPLETED/FAILED)
-- [ ] Criar `app/ai/openai_provider.py`:
-  - [ ] Função `extract_demand_from_file(file_path, file_type) -> List[dict]`
-  - [ ] Adaptar código de `demand/read.py` (OpenAI Vision)
-  - [ ] Retornar lista de demandas como dicts
-- [ ] Criar endpoint `POST /job/extract`:
-  - [ ] Receber `file_id`
-  - [ ] Criar Job (tipo EXTRACT_DEMAND, status PENDING)
-  - [ ] Enfileirar job no Arq
-  - [ ] Retornar `{job_id}`
-- [ ] Testar: upload arquivo → extract → ver demandas no `Job.result_data`
+- [x] Implementar `extract_demand_job(ctx, job_id)` no worker (Arq):
+  - [x] Buscar File do banco (validar tenant_id)
+  - [x] Download do S3/MinIO para arquivo temporário
+  - [x] Chamar `demand/read.py` (OpenAI text-only/vision conforme disponível)
+  - [x] Salvar resultado como JSON no `Job.result_data`
+  - [x] Atualizar Job status (RUNNING/COMPLETED/FAILED)
+- [x] Criar endpoint `POST /job/extract`:
+  - [x] Receber `file_id`
+  - [x] Criar Job (tipo EXTRACT_DEMAND, status PENDING)
+  - [x] Enfileirar job no Arq
+  - [x] Retornar `{job_id}`
+- [x] Testar: upload arquivo → extract → ver demandas no `Job.result_data`
+- [x] Job robustness (órfãos):
+  - [x] Campo `Job.started_at` (migration Alembic)
+  - [x] Worker marca `started_at` ao entrar em RUNNING
+  - [x] Reconciler (cron) auto-fail apenas de `PENDING` stale com `started_at IS NULL`
+  - [x] Endpoint admin `POST /job/{id}/requeue` com `force` e `wipe_result` (regras anti-duplicação)
 
 ### 4.4 Job GENERATE_SCHEDULE
 - [ ] Criar `app/job/generate_schedule.py`:

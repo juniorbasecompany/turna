@@ -32,6 +32,11 @@ class Job(BaseModel, table=True):
     input_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     result_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     error_message: Optional[str] = None
+    started_at: Optional[datetime] = Field(
+        default=None,
+        sa_type=sa.DateTime(timezone=True),
+        nullable=True,
+    )
     completed_at: Optional[datetime] = Field(
         default=None,
         sa_type=sa.DateTime(timezone=True),

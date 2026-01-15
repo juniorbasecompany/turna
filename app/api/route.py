@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from arq import create_pool
@@ -12,16 +12,19 @@ from app.db.session import get_session
 from app.model.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel, field_validator
 from app.api.auth import router as auth_router
-from app.auth.dependencies import get_current_account
+from app.auth.dependencies import get_current_account, require_role
 from app.model.user import Account
 from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.worker.worker_settings import WorkerSettings
+from app.model.base import utc_now
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
 router.include_router(auth_router)
+
+_MAX_STALE_WINDOW = timedelta(hours=1)
 
 
 def _isoformat_utc(dt: datetime | None) -> str | None:
@@ -105,6 +108,14 @@ class JobPingResponse(PydanticBaseModel):
     job_id: int
 
 
+class JobExtractRequest(PydanticBaseModel):
+    file_id: int
+
+
+class JobExtractResponse(PydanticBaseModel):
+    job_id: int
+
+
 class JobResponse(PydanticBaseModel):
     id: int
     tenant_id: int
@@ -115,10 +126,55 @@ class JobResponse(PydanticBaseModel):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
+    started_at: datetime | None = None
     completed_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class JobRequeueRequest(PydanticBaseModel):
+    force: bool = False
+    wipe_result: bool = False
+
+
+class JobRequeueResponse(PydanticBaseModel):
+    job_id: int
+    enqueued_function: str
+
+
+def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) -> timedelta:
+    """
+    Janela dinâmica:
+      - 10x a média de duração dos últimos 10 jobs COMPLETED do mesmo tipo (tenant + job_type)
+      - fallback: 1h se não existir média
+      - teto: 1h em qualquer situação
+    """
+    rows = session.exec(
+        select(Job)
+        .where(
+            Job.tenant_id == tenant_id,
+            Job.job_type == job_type,
+            Job.status == JobStatus.COMPLETED,
+            Job.started_at.is_not(None),  # type: ignore[attr-defined]
+            Job.completed_at.is_not(None),
+        )
+        .order_by(Job.completed_at.desc())  # type: ignore[union-attr]
+        .limit(10)
+    ).all()
+
+    durations: list[float] = []
+    for j in rows:
+        if not j.started_at or not j.completed_at:
+            continue
+        durations.append((j.completed_at - j.started_at).total_seconds())
+
+    if not durations:
+        return _MAX_STALE_WINDOW
+
+    avg_seconds = sum(durations) / len(durations)
+    window = timedelta(seconds=avg_seconds * 10)
+    return min(window, _MAX_STALE_WINDOW)
 
 
 @router.post("/job/ping", response_model=JobPingResponse, status_code=201, tags=["Job"])
@@ -152,6 +208,44 @@ async def create_ping_job(
     return JobPingResponse(job_id=job.id)
 
 
+@router.post("/job/extract", response_model=JobExtractResponse, status_code=201, tags=["Job"])
+async def create_extract_job(
+    body: JobExtractRequest,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    if not account.tenant_id:
+        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
+
+    file_model = session.get(File, body.file_id)
+    if not file_model:
+        raise HTTPException(status_code=404, detail="File não encontrado")
+    if file_model.tenant_id != account.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    job = Job(
+        tenant_id=account.tenant_id,
+        job_type=JobType.EXTRACT_DEMAND,
+        status=JobStatus.PENDING,
+        input_data={"file_id": body.file_id},
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    redis_dsn = WorkerSettings.redis_dsn()
+    try:
+        redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+        await redis.enqueue_job("extract_demand_job", job.id)
+    except (RedisTimeoutError, RedisConnectionError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
+        ) from e
+
+    return JobExtractResponse(job_id=job.id)
+
+
 @router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
 def get_job(
     job_id: int,
@@ -164,6 +258,94 @@ def get_job(
     if job.tenant_id != account.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return job
+
+
+@router.post("/job/{job_id}/requeue", response_model=JobRequeueResponse, status_code=202, tags=["Job"])
+async def requeue_job(
+    job_id: int,
+    body: JobRequeueRequest,
+    account: Account = Depends(get_current_account),
+    _admin: Account = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Reenfileira um job (ex.: quando ficou órfão em PENDING por restart/worker antigo).
+
+    Regras:
+      - Apenas admin
+      - Mesmo tenant
+      - Por padrão só permite requeue se status estiver PENDING/FAILED (use force=true para ignorar)
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != account.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Por padrão, requeue só é permitido para:
+    # - FAILED (manual)
+    # - PENDING "stale" e ainda não iniciado (started_at is NULL)
+    # Sem heartbeat, não auto-tratamos RUNNING.
+    now = utc_now()
+    window = _stale_window_for(session, tenant_id=job.tenant_id, job_type=job.job_type)
+    is_pending_stale = (
+        job.status == JobStatus.PENDING
+        and job.started_at is None  # type: ignore[attr-defined]
+        and (now - job.created_at) > window
+    )
+
+    if not body.force:
+        if job.job_type == JobType.PING:
+            raise HTTPException(
+                status_code=400,
+                detail="Job transiente (PING) não deve ser reenfileirado; prefira expirar/cancelar.",
+            )
+        if job.status == JobStatus.FAILED:
+            pass
+        elif is_pending_stale:
+            pass
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Requeue permitido apenas para FAILED ou PENDING stale (started_at ausente). "
+                    "Use force=true para ignorar."
+                ),
+            )
+    else:
+        # Com force, permitimos requeue mesmo para RUNNING/COMPLETED (alto risco de duplicação/custo).
+        # Mantemos result_data por padrão; wipe_result controla limpeza explícita.
+        pass
+
+    if job.job_type == JobType.PING:
+        fn = "ping_job"
+    elif job.job_type == JobType.EXTRACT_DEMAND:
+        fn = "extract_demand_job"
+    else:
+        raise HTTPException(status_code=400, detail=f"job_type não suportado para requeue: {job.job_type}")
+
+    # Reseta campos de execução para evitar confusão na leitura do job.
+    job.status = JobStatus.PENDING
+    job.error_message = None
+    if body.wipe_result:
+        job.result_data = None
+    job.completed_at = None
+    job.started_at = None  # type: ignore[attr-defined]
+    job.updated_at = utc_now()
+    session.add(job)
+    session.commit()
+
+    redis_dsn = WorkerSettings.redis_dsn()
+    try:
+        redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+        await redis.enqueue_job(fn, job.id)
+    except (RedisTimeoutError, RedisConnectionError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
+        ) from e
+
+    return JobRequeueResponse(job_id=job.id, enqueued_function=fn)
 
 
 class FileUploadResponse(PydanticBaseModel):
