@@ -48,8 +48,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Endpoint `GET /job/{job_id}` retorna status/resultado (validando tenant)
 - [x] Testar: criar job, ver worker processar, ver status
 
-### Etapa 5: Arq - EXTRACT_DEMANDS
-- [ ] Job `EXTRACT_DEMANDS` com OpenAI (adaptar `demand/read.py`)
+### Etapa 5: Arq - EXTRACT_DEMAND
+- [ ] Job `EXTRACT_DEMAND` com OpenAI (adaptar `demand/read.py`)
 - [ ] Salvar resultado como JSON no `Job.result_data`
 - [ ] Endpoint `POST /job/extract` (recebe file_id)
 - [ ] Testar: upload → extract → ver resultado no Job
@@ -92,7 +92,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] **Nota**: Será corrigido na seção 2.3 - remover `tenant_id` e criar tabela `membership` (Membership)
 - [x] Criar `app/model/job.py`:
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
-  - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMANDS`, `GENERATE_SCHEDULE`
+  - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMAND`, `GENERATE_SCHEDULE`
   - [x] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
   - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
 - [x] Criar `app/model/file.py`:
@@ -452,22 +452,22 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Retornar status e resultado do Job (validando tenant)
 - [x] Testar: criar job ping, ver worker processar, verificar status COMPLETED
 
-### 4.3 Job EXTRACT_DEMANDS (OpenAI)
-- [ ] Criar `app/job/extract_demands.py`:
-  - [ ] Função `extract_demands_job(ctx, job_id, file_id, tenant_id)` decorada com `@arq.job`
+### 4.3 Job EXTRACT_DEMAND (OpenAI)
+- [ ] Criar `app/job/extract_demand.py`:
+  - [ ] Função `extract_demand_job(ctx, job_id, file_id, tenant_id)` decorada com `@arq.job`
   - [ ] Lógica:
     1. Buscar File do banco (validar tenant_id)
     2. Download do S3 para arquivo temporário
-    3. Chamar `extract_demands_from_file()` (adaptar `demand/read.py`)
+    3. Chamar `extract_demand_from_file()` (adaptar `demand/read.py`)
     4. Salvar resultado como JSON no `Job.result_data`
     5. Atualizar Job status (COMPLETED/FAILED)
 - [ ] Criar `app/ai/openai_provider.py`:
-  - [ ] Função `extract_demands_from_file(file_path, file_type) -> List[dict]`
+  - [ ] Função `extract_demand_from_file(file_path, file_type) -> List[dict]`
   - [ ] Adaptar código de `demand/read.py` (OpenAI Vision)
   - [ ] Retornar lista de demandas como dicts
 - [ ] Criar endpoint `POST /job/extract`:
   - [ ] Receber `file_id`
-  - [ ] Criar Job (tipo EXTRACT_DEMANDS, status PENDING)
+  - [ ] Criar Job (tipo EXTRACT_DEMAND, status PENDING)
   - [ ] Enfileirar job no Arq
   - [ ] Retornar `{job_id}`
 - [ ] Testar: upload arquivo → extract → ver demandas no `Job.result_data`

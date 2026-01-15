@@ -34,7 +34,7 @@ Este arquivo lista itens que ainda precisam ser ajustados para ficar 100% coeren
 
 - **Enums/constantes com plural**
   - **Motivo**: diretiva recomenda evitar plural em nomes.
-  - **Onde**: `app/model/job.py` (`JobType.EXTRACT_DEMANDS`)
+  - **Onde**: `app/model/job.py` (`JobType.EXTRACT_DEMAND`)
   - **Ajuste esperado**: renomear para singular (ex.: `EXTRACT_DEMAND`), se fizer sentido no domínio e sem quebrar compatibilidade com dados existentes.
 
 - **Pastas/padrões que permanecem em plural por convenção**

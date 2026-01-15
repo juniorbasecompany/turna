@@ -10,7 +10,7 @@ import enum
 class JobType(str, enum.Enum):
     PING = "PING"
     # Nome no singular para aderir à diretiva; valor mantido por compatibilidade com dados existentes.
-    EXTRACT_DEMAND = "EXTRACT_DEMANDS"
+    EXTRACT_DEMAND = "EXTRACT_DEMAND"
     GENERATE_SCHEDULE = "GENERATE_SCHEDULE"
 
 

@@ -379,7 +379,7 @@ def _parse_json_strict(txt: str) -> dict:
 # -----------------------------
 # Orquestração híbrida (cache removido)
 # -----------------------------
-def extract_demands(pdf_path: str, model: str = None, dpi: int = None, max_pages: Optional[int] = None,
+def extract_demand(pdf_path: str, model: str = None, dpi: int = None, max_pages: Optional[int] = None,
                     ) -> dict:
     if model is None:
         model = config.DEFAULT_MODEL
@@ -430,7 +430,7 @@ def main():
 
     args = parser.parse_args()
 
-    result = extract_demands(
+    result = extract_demand(
         args.pdf_path,
         model=args.model,
         dpi=args.dpi,
