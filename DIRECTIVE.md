@@ -41,6 +41,12 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 
 - **Padrão (recomendado)**: rodar via **Docker Compose** (API + worker + Postgres + Redis + MinIO).
 - **Local (exceção)**: rodar no venv apenas para depuração pontual (scripts/diagnóstico), não como modo “oficial”.
+- **Comandos úteis (Docker Compose)**:
+  - **Subir stack**: `docker compose up -d --build`
+  - **Logs worker**: `docker compose logs -f worker`
+  - **Logs API**: `docker compose logs -f api`
+- **Comandos úteis (Local / exceção)**:
+  - **Rodar worker local**: `python .\app\worker\run.py`
 - **Portas**:
   - **Docker Compose**: API em `http://localhost:8000`
   - **Local**: a porta pode variar (ex.: `8001`) e isso impacta integrações.
