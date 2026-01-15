@@ -55,11 +55,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: upload → extract → ver resultado no Job
 
 ### Etapa 6: ScheduleVersion + GenerateSchedule
-- [ ] Modelo ScheduleVersion
-- [ ] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
-- [ ] Salvar resultado no ScheduleVersion
-- [ ] Endpoint `POST /schedule/generate`
-- [ ] Testar: gerar escala, ver ScheduleVersion criado
+- [x] Modelo ScheduleVersion
+- [x] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
+- [x] Salvar resultado no ScheduleVersion
+- [x] Endpoint `POST /schedule/generate`
+- [x] Testar: gerar escala, ver ScheduleVersion criado (script `script_test_schedule_generate.py`)
 
 ### Etapa 7: PDF + Publicação
 - [ ] Gerar PDF (adaptar `output/day.py`)
@@ -97,10 +97,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
 - [x] Criar `app/model/file.py`:
   - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
-- [ ] Criar `app/model/schedule_version.py`:
-  - [ ] Modelo `ScheduleVersion` (id, tenant_id, name, period_start, period_end, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
-  - [ ] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
-  - [ ] **Nota**: `result_data` guarda resultado da geração (alocação) como JSON
+- [x] Criar `app/model/schedule_version.py`:
+  - [x] Modelo `ScheduleVersion` (id, tenant_id, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
+  - [x] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
+  - [x] **Nota**: `result_data` guarda resultado da geração (alocação) como JSON
 
 **Evolução futura (quando necessário):**
 - [ ] Criar `app/model/schedule.py` (quando precisar de múltiplas versões por schedule)
@@ -472,24 +472,24 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Endpoint admin `POST /job/{id}/requeue` com `force` e `wipe_result` (regras anti-duplicação)
 
 ### 4.4 Job GENERATE_SCHEDULE
-- [ ] Criar `app/job/generate_schedule.py`:
-  - [ ] Função `generate_schedule_job(ctx, job_id, schedule_version_id, tenant_id, allocation_mode)` decorada com `@arq.job`
-  - [ ] Lógica:
-    1. Buscar ScheduleVersion do banco (validar tenant_id)
-    2. Buscar demandas do `Job.result_data` (do job de extração anterior)
-    3. Buscar profissionais (por enquanto, usar dados mock ou JSON)
-    4. Chamar solver (greedy ou CP-SAT) - usar código de `strategy/`
-    5. Salvar resultado no `ScheduleVersion.result_data`
-    6. Gerar PDF (usar código de `output/day.py`)
-    7. Upload PDF para S3
-    8. Atualizar `ScheduleVersion.pdf_file_id`
-    9. Atualizar Job status
-- [ ] Criar endpoint `POST /schedule/generate`:
-  - [ ] Receber `schedule_version_id`, `allocation_mode`
-  - [ ] Criar Job (tipo GENERATE_SCHEDULE, status PENDING)
-  - [ ] Enfileirar job no Arq
-  - [ ] Retornar `{job_id}`
-- [ ] Testar: gerar escala, ver ScheduleVersion criado, ver PDF no S3
+- [x] Implementar no worker (`app/worker/job.py`):
+  - [x] Função `generate_schedule_job(ctx, job_id)`
+  - [x] Lógica (MVP):
+    1. Buscar `Job` e marcar `RUNNING` + `started_at`
+    2. Buscar `ScheduleVersion` do banco (validar tenant)
+    3. Buscar job de extração (`extract_job_id`) e ler demandas do `result_data`
+    4. Buscar profissionais (`pros_by_sequence` no input; mock no script)
+    5. Chamar solver greedy (código de `strategy/`)
+    6. Salvar resultado no `ScheduleVersion.result_data` e `generated_at`
+    7. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`
+  - [ ] PDF + S3 + `pdf_file_id` (Etapa 7)
+- [x] Criar endpoint `POST /schedule/generate`:
+  - [x] Receber `extract_job_id`, `period_start_at`, `period_end_at`, `allocation_mode`, `pros_by_sequence` (opcional)
+  - [x] Criar `ScheduleVersion` (DRAFT) e vincular `job_id`
+  - [x] Criar Job (tipo GENERATE_SCHEDULE, status PENDING)
+  - [x] Enfileirar `generate_schedule_job` no Arq
+  - [x] Retornar `{job_id, schedule_version_id}`
+- [x] Testar: gerar escala, ver `schedule_version.result_data` preenchido (script `script_test_schedule_generate.py --db-check`)
 
 **Nota**: Abstração completa de AI Provider (interface formal) fica para depois, quando precisar plugar outro provedor.
 

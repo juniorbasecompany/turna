@@ -11,9 +11,11 @@ from app.db.session import engine
 from app.model.base import utc_now
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
+from app.model.schedule_version import ScheduleStatus, ScheduleVersion
 from app.storage.client import S3Client
 
 from demand.read import extract_demand
+from strategy.greedy.solve import solve_greedy
 
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
@@ -98,6 +100,174 @@ def _safe_error_message(e: Exception, max_len: int = 500) -> str:
     msg = f"{type(e).__name__}: {str(e)}".strip()
     return msg[:max_len]
 
+
+def _load_pros_from_repo_test() -> list[dict]:
+    """
+    Fallback de DEV: usa `test/profissionais.json` (mesmo formato do `app.py`).
+    Em produção, o ideal é ter modelo/tabela de profissionais.
+    """
+    from pathlib import Path
+    import json
+
+    project_root = Path(__file__).resolve().parents[2]
+    path = project_root / "test" / "profissionais.json"
+    pros_json = json.loads(path.read_text(encoding="utf-8"))
+    pros = [{**p, "vacation": [tuple(v) for v in p.get("vacation", [])]} for p in pros_json]
+    return sorted(pros, key=lambda p: p.get("sequence", 0))
+
+
+def _demands_from_extract_result(result_data: dict, *, period_start_at, period_end_at) -> tuple[list[dict], int]:
+    """
+    Converte `result_data` do EXTRACT_DEMAND para o formato esperado pelos solvers:
+      - day: 1..N
+      - start/end: horas em float (ex.: 9.5 = 09:30)
+      - is_pediatric: bool (default False)
+    """
+    from datetime import datetime
+
+    demands_raw = (result_data or {}).get("demands") or []
+    if not isinstance(demands_raw, list):
+        raise RuntimeError("result_data.demands inválido")
+
+    # Assume timestamps com offset/Z (diretiva).
+    start_date = period_start_at.date()
+    end_date = period_end_at.date()
+    days = (end_date - start_date).days
+    if days <= 0:
+        raise RuntimeError("Período inválido: period_end_at deve ser maior que period_start_at")
+
+    def parse_dt(s: str) -> datetime:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+    out: list[dict] = []
+    for i, d in enumerate(demands_raw):
+        if not isinstance(d, dict):
+            continue
+        st = parse_dt(str(d.get("start_time")))
+        en = parse_dt(str(d.get("end_time")))
+        if en <= st:
+            continue
+
+        # Dia relativo ao period_start_at (mesma data do start_time).
+        day_idx = (st.date() - start_date).days + 1
+        if day_idx < 1 or day_idx > days:
+            continue
+
+        start_h = st.hour + (st.minute / 60.0)
+        end_h = en.hour + (en.minute / 60.0)
+        did = str(d.get("room") or f"D{i+1}")
+        out.append(
+            {
+                "id": did,
+                "day": int(day_idx),
+                "start": float(start_h),
+                "end": float(end_h),
+                "is_pediatric": bool(d.get("is_pediatric") or False),
+                "source": d.get("source"),
+            }
+        )
+
+    return out, days
+
+
+async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
+    """
+    Gera escala a partir de um Job de extração (EXTRACT_DEMAND) e grava em ScheduleVersion.result_data.
+    MVP: usa solver greedy.
+    """
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if not job:
+            return {"ok": False, "error": "job_not_found", "job_id": job_id}
+
+        if job.status != JobStatus.PENDING:
+            return {"ok": False, "error": "job_not_pending", "job_id": job_id, "status": job.status}
+
+        now = utc_now()
+        job.status = JobStatus.RUNNING
+        job.started_at = now  # type: ignore[attr-defined]
+        job.updated_at = now
+        session.add(job)
+        session.commit()
+
+        try:
+            input_data = job.input_data or {}
+            schedule_version_id = int(input_data.get("schedule_version_id"))
+            extract_job_id = int(input_data.get("extract_job_id"))
+            allocation_mode = str(input_data.get("allocation_mode") or "greedy").strip().lower()
+
+            if allocation_mode != "greedy":
+                raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
+
+            sv = session.get(ScheduleVersion, schedule_version_id)
+            if not sv:
+                raise RuntimeError(f"ScheduleVersion não encontrado (id={schedule_version_id})")
+            if sv.tenant_id != job.tenant_id:
+                raise RuntimeError("Acesso negado (tenant mismatch)")
+
+            extract_job = session.get(Job, extract_job_id)
+            if not extract_job:
+                raise RuntimeError(f"Job de extração não encontrado (id={extract_job_id})")
+            if extract_job.tenant_id != job.tenant_id:
+                raise RuntimeError("Acesso negado (tenant mismatch)")
+            if extract_job.status != JobStatus.COMPLETED or not isinstance(extract_job.result_data, dict):
+                raise RuntimeError("Job de extração não está COMPLETED (ou result_data ausente)")
+
+            # Profissionais: payload > fallback dev
+            pros_by_sequence = input_data.get("pros_by_sequence")
+            if pros_by_sequence is None:
+                pros_by_sequence = _load_pros_from_repo_test()
+            if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
+                raise RuntimeError("pros_by_sequence ausente/ inválido")
+
+            demands, days = _demands_from_extract_result(
+                extract_job.result_data,
+                period_start_at=sv.period_start_at,
+                period_end_at=sv.period_end_at,
+            )
+            if not demands:
+                raise RuntimeError("Nenhuma demanda dentro do período informado")
+
+            per_day, total_cost = solve_greedy(
+                demands=demands,
+                pros_by_sequence=pros_by_sequence,
+                days=days,
+                unassigned_penalty=1000,
+                ped_unassigned_extra_penalty=1000,
+                base_shift=0,
+            )
+
+            sv.result_data = {
+                "allocation_mode": "greedy",
+                "days": days,
+                "total_cost": total_cost,
+                "per_day": per_day,
+                "extract_job_id": extract_job_id,
+            }
+            sv.generated_at = now
+            sv.updated_at = now
+            sv.status = ScheduleStatus.DRAFT
+            session.add(sv)
+
+            job.status = JobStatus.COMPLETED
+            job.completed_at = utc_now()
+            job.updated_at = job.completed_at
+            job.result_data = {"schedule_version_id": sv.id, "total_cost": total_cost}
+            job.error_message = None
+            session.add(job)
+
+            session.commit()
+            session.refresh(job)
+            return {"ok": True, "job_id": job.id, "schedule_version_id": sv.id}
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.error_message = _safe_error_message(e)
+            now = utc_now()
+            job.completed_at = now
+            job.updated_at = now
+            session.add(job)
+            session.commit()
+            return {"ok": False, "error": job.error_message, "job_id": job.id}
 
 async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
     """

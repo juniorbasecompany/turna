@@ -17,6 +17,7 @@ from app.model.user import Account
 from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
+from app.model.schedule_version import ScheduleVersion, ScheduleStatus
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
 
@@ -360,6 +361,20 @@ class FileUploadResponse(PydanticBaseModel):
         from_attributes = True
 
 
+class ScheduleGenerateRequest(PydanticBaseModel):
+    extract_job_id: int
+    period_start_at: datetime
+    period_end_at: datetime
+    name: str = "Schedule"
+    allocation_mode: str = "greedy"  # MVP: greedy
+    pros_by_sequence: list[dict] | None = None
+
+
+class ScheduleGenerateResponse(PydanticBaseModel):
+    job_id: int
+    schedule_version_id: int
+
+
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
 def upload_file(
     file: UploadFile = FastAPIFile(...),
@@ -412,3 +427,75 @@ def upload_file(
             status_code=500,
             detail=error_detail
         )
+
+
+@router.post("/schedule/generate", response_model=ScheduleGenerateResponse, status_code=201, tags=["Schedule"])
+async def schedule_generate(
+    body: ScheduleGenerateRequest,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    if not account.tenant_id:
+        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
+
+    # Validar período (intervalo meio-aberto [start, end))
+    if body.period_end_at <= body.period_start_at:
+        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
+    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
+
+    extract_job = session.get(Job, body.extract_job_id)
+    if not extract_job:
+        raise HTTPException(status_code=404, detail="Job de extração não encontrado")
+    if extract_job.tenant_id != account.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    if extract_job.status != JobStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Job de extração deve estar COMPLETED")
+    if not extract_job.result_data:
+        raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
+
+    sv = ScheduleVersion(
+        tenant_id=account.tenant_id,
+        name=body.name,
+        period_start_at=body.period_start_at,
+        period_end_at=body.period_end_at,
+        status=ScheduleStatus.DRAFT,
+        version_number=1,
+        result_data=None,
+    )
+    session.add(sv)
+    session.commit()
+    session.refresh(sv)
+
+    job = Job(
+        tenant_id=account.tenant_id,
+        job_type=JobType.GENERATE_SCHEDULE,
+        status=JobStatus.PENDING,
+        input_data={
+            "schedule_version_id": sv.id,
+            "extract_job_id": body.extract_job_id,
+            "allocation_mode": body.allocation_mode,
+            "pros_by_sequence": body.pros_by_sequence,
+        },
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    # Atualiza vínculo ScheduleVersion -> Job (útil para rastreabilidade)
+    sv.job_id = job.id
+    sv.updated_at = utc_now()
+    session.add(sv)
+    session.commit()
+
+    redis_dsn = WorkerSettings.redis_dsn()
+    try:
+        redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+        await redis.enqueue_job("generate_schedule_job", job.id)
+    except (RedisTimeoutError, RedisConnectionError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
+        ) from e
+
+    return ScheduleGenerateResponse(job_id=job.id, schedule_version_id=sv.id)
