@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.route import router
+from app.middleware.tenant import tenant_context_middleware
 
 # Carrega variáveis de ambiente do .env
 try:
@@ -23,6 +24,13 @@ app = FastAPI(
     description="API para gerenciamento de escalas médicas",
     version="1.0.0"
 )
+
+
+@app.middleware("http")
+async def _tenant_context(request: Request, call_next):
+    return await tenant_context_middleware(request, call_next)
+
+
 app.include_router(router)
 
 

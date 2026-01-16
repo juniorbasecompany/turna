@@ -160,15 +160,15 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] **Nota**: Testes serão atualizados na seção 2.3 para validar modelo correto
 
 ### 2.2 Multi-Tenant Enforcement
-- [ ] Criar `app/services/tenant_service.py`:
-  - [ ] Função `get_tenant_by_id(tenant_id)`
-  - [ ] Função `create_tenant(name, slug)`
-- [ ] Criar `app/middleware/tenant.py`:
-  - [ ] Middleware que extrai `tenant_id` do JWT e adiciona ao `request.state`
-  - [ ] Validar que tenant existe no banco
-- [ ] Aplicar middleware em `app/main.py`
-- [ ] Criar helper `get_tenant_id(request)` para endpoints
-- [ ] Documentar padrão: todas as queries devem usar `tenant_id` do `request.state`
+- [x] Criar `app/services/tenant_service.py`:
+  - [x] Função `get_tenant_by_id(tenant_id)`
+  - [x] Função `create_tenant(name, slug)`
+- [x] Criar `app/middleware/tenant.py`:
+  - [x] Middleware que extrai `tenant_id` do JWT e adiciona ao `request.state` (contexto, sem DB)
+  - [x] **Nota**: validação/enforcement real continua no `get_current_membership()` (não consultar DB no middleware)
+- [x] Aplicar middleware em `app/main.py`
+- [x] Criar helper `get_tenant_id(request)` para endpoints
+- [x] Documentar padrão: `tenant_id` nunca vem do body/querystring; sempre do contexto (membership/JWT/request.state)
 
 ### 2.3 Correção do Modelo Multi-Tenant (Account sem tenant_id)
 
