@@ -47,3 +47,21 @@ Console para administrar a forma de autenticação
   ```
   npm run build; npm start
   ```
+
+## NGROK - Acesso pelo Celular em desenvolvimento
+Precisa estar na mesma rede WiFi:
+
+- **Ativar**
+   ```
+   ngrok http 3001
+   ```
+   A URL do ngork muda sempre que reiniciar (plano free)
+
+- **Atualizar a URL do ngrok no [`console do Google`](https://console.cloud.google.com/auth/clients/1049570929300-f43333081hhvtpampiu18v4klmtel1a0.apps.googleusercontent.com?project=turna-483304)**
+
+- **Acessar no celular**
+
+- **Configuração inicial - apenas na primeira vez**
+  ```
+  ngrok config add-authtoken 37oTHeaR4VGIwnTLu7wPXGSCAZu_4Vb1QZ3sFCf5P8u5KEcNb
+  ```
