@@ -1,5 +1,7 @@
 # Diretivas do Projeto (Fonte da Verdade)
 
+Frontend e backend são projetos independentes no mesmo repositório, comunicando-se exclusivamente via API HTTP; nenhuma camada pode depender, acoplar ou assumir detalhes internos da outra.
+
 Este documento concentra **diretivas que devem ser seguidas** durante a construção do projeto (código, sugestões, revisões e automações).
 
 ## Nome de classe, arquivo, objeto, atributo, etc

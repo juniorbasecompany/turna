@@ -406,17 +406,186 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Princípio 3: Multi-tenant por tenant_id em todas as tabelas
 - [x] Princípio 4: Storage fora do banco (S3, banco só metadados)
 
----
+## FASE 8: Frontend e Mobile
 
-## FASE 8: Frontend e Mobile (Futuro)
+### 8.1 Organização do Repositório (Monorepo)
+- [ ] Manter **um único repositório `turna`** (monorepo)
+- [ ] Criar pasta `frontend/` para o projeto Next.js
+- [ ] **Não mover o backend neste momento**
+  - [ ] Manter código FastAPI na estrutura atual
+  - [ ] Evitar impacto em imports, Alembic, Docker e scripts existentes
+- [ ] Manter `docker-compose.yml` na raiz do projeto
+- [ ] Garantir independência entre backend e frontend:
+  - [ ] Backend com seu próprio `requirements.txt`
+  - [ ] Frontend com seu próprio `package.json`
+  - [ ] Comunicação exclusivamente via API HTTP
+  - [ ] Nenhuma dependência direta de código entre as camadas
 
-### 8.1 Frontend Web (Next.js)
-- [ ] Criar projeto Next.js
-- [ ] Configurar autenticação (OAuth Google)
-- [ ] Páginas: Login, Dashboard, Importação, Escalas
-- [ ] Integração com API
+### 8.2 Frontend Web (Next.js) – Setup Básico
+- [ ] Criar projeto Next.js:
+  - [ ] Executar `npx create-next-app@latest frontend` com **App Router**
+  - [ ] Configurar TypeScript
+  - [ ] Configurar ESLint (Prettier opcional)
+  - [ ] Criar estrutura inicial:
+    - `app/`
+    - `components/`
+    - `lib/`
+    - `hooks/`
+    - `types/`
+- [ ] Configurar Tailwind CSS (opcional, recomendado):
+  - [ ] Instalar e configurar Tailwind
+  - [ ] Definir tema mínimo (cores e tipografia)
+- [ ] Configurar variáveis de ambiente:
+  - [ ] `NEXT_PUBLIC_API_URL` (ex.: `http://localhost:8000`)
+  - [ ] `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+  - [ ] Criar `.env.local` para desenvolvimento
 
-### 8.2 Mobile (React Native)
+### 8.3 Cliente HTTP e Infraestrutura
+- [ ] Criar wrapper de chamadas HTTP (`lib/api.ts`):
+  - [ ] Baseado em `fetch`
+  - [ ] Usar `credentials: "include"` (cookies httpOnly)
+  - [ ] Função única para chamadas à API
+  - [ ] Tratamento centralizado de erros:
+    - 401 → redirecionar para `/login`
+    - 403 → mensagem clara de acesso negado
+- [ ] Criar types TypeScript:
+  - [ ] `AuthResponse`
+  - [ ] `TenantOption`
+  - [ ] `TokenResponse`
+  - [ ] Types para demais endpoints consumidos
+- [ ] Gerenciamento de estado (mínimo):
+  - [ ] Zustand ou Context API
+  - [ ] Estado para informações de sessão (usuário, tenant atual)
+  - [ ] Evitar armazenar JWT em estado ou storage
+
+### 8.4 Autenticação – Login e OAuth Google
+- [ ] Implementar página de login (`app/(auth)/login/page.tsx`):
+  - [ ] Botão “Entrar com Google” (Google Identity Services)
+  - [ ] Obter `id_token` do Google
+  - [ ] Enviar `id_token` para handler do Next.js
+  - [ ] Loading state durante autenticação
+- [ ] Criar handlers de autenticação no Next.js:
+  - [ ] `app/api/auth/google/login`
+    - Recebe `id_token`
+    - Chama `POST /auth/google` no backend
+    - Grava JWT em **cookie httpOnly**
+    - Retorna estado para o frontend
+  - [ ] `app/api/auth/google/select-tenant`
+    - Recebe `id_token` + `tenant_id`
+    - Chama backend
+    - Atualiza cookie com novo JWT
+  - [ ] `app/api/auth/logout`
+    - Remove cookie de autenticação
+- [ ] Tratamento de resposta no login:
+  - [ ] Token direto → redirect dashboard
+  - [ ] `requires_tenant_selection = true` → redirect seleção de tenant
+  - [ ] 403 → mensagem clara (“usuário sem acesso a nenhum tenant”)
+
+### 8.5 Seleção de Tenant
+- [ ] Implementar página de seleção (`app/(auth)/select-tenant/page.tsx`):
+  - [ ] Listar tenants via `GET /auth/tenant/list`
+  - [ ] Usar response do login apenas como atalho inicial
+  - [ ] Permitir refresh da página sem quebrar o fluxo
+  - [ ] Loading state durante seleção
+- [ ] Seleção de tenant:
+  - [ ] Chamar handler `api/auth/google/select-tenant`
+  - [ ] Atualizar cookie httpOnly
+  - [ ] Redirect para dashboard
+
+### 8.6 Layout Autenticado e Header
+- [ ] Criar layout autenticado (`app/(protected)/layout.tsx`):
+  - [ ] Considerar `(protected)` ou `(app)` como grupo de rotas
+  - [ ] Proteção via middleware (verificação de cookie)
+  - [ ] Carregar tenant atual (`GET /tenant/me`)
+- [ ] Criar componente Header:
+  - [ ] Nome do tenant atual
+  - [ ] Seletor para troca de tenant
+  - [ ] Menu do usuário (email, logout)
+- [ ] Troca de tenant:
+  - [ ] Chamar `GET /auth/tenant/list`
+  - [ ] Chamar `POST /auth/switch-tenant`
+  - [ ] Atualizar cookie
+  - [ ] Recarregar dados dependentes do tenant
+
+### 8.7 Middleware de Proteção de Rotas
+- [ ] Criar `middleware.ts` no Next.js:
+  - [ ] Verificar **apenas** a presença do cookie
+  - [ ] Não validar JWT no frontend
+  - [ ] Redirecionar para `/login` se não autenticado
+  - [ ] Permitir acesso a rotas públicas (`/login`, `/select-tenant`, `/api/auth/*`)
+
+### 8.8 Dashboard
+- [ ] Implementar página Dashboard (`app/(protected)/page.tsx`):
+  - [ ] Layout simples e direto
+  - [ ] Links rápidos:
+    - Nova Importação
+    - Ver Escalas
+  - [ ] Cards informativos (opcional)
+
+### 8.9 Página de Importação
+- [ ] Implementar página de importação (`app/(protected)/import/page.tsx`):
+  - [ ] Upload de arquivo (PDF, JPEG, PNG, XLSX, XLS, CSV)
+  - [ ] Validação de tipo
+  - [ ] Chamar `POST /file/upload`
+  - [ ] Receber `file_id`
+  - [ ] Criar job (`POST /job/extract`)
+  - [ ] Polling de status (`GET /job/{id}`)
+  - [ ] Estados: PENDING, RUNNING, COMPLETED, FAILED
+  - [ ] Feedback visual claro
+  - [ ] Tratamento de erro de job
+
+### 8.10 Página de Escalas
+- [ ] Listagem de escalas (`app/(protected)/schedules/page.tsx`):
+  - [ ] `GET /schedule/list`
+  - [ ] Paginação
+  - [ ] Filtros por status
+  - [ ] Ordenação por data
+- [ ] Detalhe de escala (`app/(protected)/schedules/[id]/page.tsx`):
+  - [ ] `GET /schedule/{id}`
+  - [ ] Exibir dados principais
+  - [ ] Ações:
+    - Publicar (DRAFT)
+    - Download PDF (PUBLISHED)
+  - [ ] Loading e tratamento de erros
+
+### 8.11 UX Essencial e Tratamento de Erros
+- [ ] Loading states:
+  - [ ] Login OAuth
+  - [ ] Seleção de tenant
+  - [ ] Upload e processamento
+- [ ] Mensagens claras:
+  - [ ] 401 → “Sessão expirada”
+  - [ ] 403 → “Sem acesso a este tenant”
+  - [ ] Erros de upload e job
+- [ ] Feedback visual:
+  - [ ] Toasts de sucesso/erro
+  - [ ] Indicadores de status
+
+### 8.12 Integração com Docker Compose (pós-MVP)
+- [ ] Rodar frontend local sem Docker durante desenvolvimento inicial
+- [ ] Criar Dockerfile para frontend
+- [ ] Adicionar serviço frontend no `docker-compose.yml`:
+  - [ ] Porta 3000
+  - [ ] Variáveis de ambiente
+  - [ ] Hot-reload em desenvolvimento
+- [ ] Configurar CORS no backend:
+  - [ ] Permitir `http://localhost:3000`
+  - [ ] Habilitar credentials
+  - [ ] Origin configurável via variável de ambiente
+
+### 8.13 Testes e Validação
+- [ ] Fluxos principais:
+  - [ ] Login com token direto
+  - [ ] Login com seleção de tenant
+  - [ ] Troca de tenant pós-login
+  - [ ] Logout e re-login
+- [ ] Proteção de rotas:
+  - [ ] Acesso sem cookie → redirect `/login`
+  - [ ] Token inválido → redirect `/login`
+- [ ] Refresh em `/select-tenant` não quebra o fluxo
+- [ ] Cookies e CORS funcionando corretamente
+
+### 8.13 Mobile (React Native) - Futuro
 - [ ] Criar projeto React Native
 - [ ] Configurar autenticação (OAuth Google)
 - [ ] Telas: Login, Lista de Escalas, Detalhes de Escala
@@ -437,7 +606,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 2. **Importante**: Fase 5 (API endpoints)
 3. **Necessário**: Fase 6 (integração)
 4. **Desejável**: Fase 7 (testes)
-5. **Futuro**: Fase 8 (frontend/mobile)
+5. **Em Andamento**: Fase 8.1-8.12 (frontend web)
+6. **Futuro**: Fase 8.13 (mobile)
 
 ### Boas Práticas
 - Sempre validar `tenant_id` em queries
