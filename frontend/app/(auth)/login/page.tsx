@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { AuthResponse } from '@/types/api'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 declare global {
     interface Window {
@@ -26,6 +26,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+    const initializedRef = useRef(false)
 
     const handleGoogleSignIn = useCallback(async (response: { credential: string }) => {
         setLoading(true)
@@ -80,55 +81,70 @@ export default function LoginPage() {
     }, [router])
 
     useEffect(() => {
-        // Verificar Client ID antes de carregar script
+        // Verificar Client ID
         const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
         if (!clientId) {
             setError('Google Client ID não configurado. Configure NEXT_PUBLIC_GOOGLE_CLIENT_ID no arquivo .env.local')
             return
         }
 
-        // Carregar Google Identity Services
-        const script = document.createElement('script')
-        script.src = 'https://accounts.google.com/gsi/client'
-        script.async = true
-        script.defer = true
-
-        script.onload = () => {
-            if (!window.google) {
-                setError('Erro ao carregar Google Identity Services')
-                return
+        // Função para inicializar o botão quando o script estiver pronto
+        const initGoogleButton = () => {
+            if (!window.google?.accounts?.id) {
+                return false
             }
 
-            setGoogleClientId(clientId)
+            const buttonElement = document.getElementById('google-signin-button')
+            if (!buttonElement) {
+                return false
+            }
 
+            // Verifica se já foi inicializado para evitar múltiplas inicializações
+            if (initializedRef.current) {
+                return true
+            }
+
+            // Inicializa a API do Google
             window.google.accounts.id.initialize({
                 client_id: clientId,
                 callback: handleGoogleSignIn,
             })
 
-            // Aguardar um pouco para garantir que o DOM está pronto
-            setTimeout(() => {
-                const buttonElement = document.getElementById('google-signin-button')
-                if (buttonElement && window.google) {
-                    window.google.accounts.id.renderButton(buttonElement, {
-                        theme: 'outline',
-                        size: 'large',
-                        width: '100%',
-                    })
-                }
-            }, 100)
+            // Renderiza o botão imediatamente
+            window.google.accounts.id.renderButton(buttonElement, {
+                theme: 'outline',
+                size: 'large',
+            })
+
+            initializedRef.current = true
+            setGoogleClientId(clientId)
+            return true
         }
 
-        script.onerror = () => {
-            setError('Erro ao carregar script do Google Identity Services')
+        // Se o script já estiver carregado, inicializa imediatamente
+        if (initGoogleButton()) {
+            return
         }
 
-        document.head.appendChild(script)
+        // Caso contrário, aguarda o script carregar
+        // O script é carregado via next/script no layout, mas pode não estar pronto ainda
+        const checkInterval = setInterval(() => {
+            if (initGoogleButton()) {
+                clearInterval(checkInterval)
+            }
+        }, 50) // Verifica a cada 50ms (mais rápido que o setTimeout anterior)
+
+        // Timeout de segurança (5 segundos)
+        const timeout = setTimeout(() => {
+            clearInterval(checkInterval)
+            if (!window.google?.accounts?.id) {
+                setError('Erro ao carregar Google Identity Services')
+            }
+        }, 5000)
 
         return () => {
-            if (document.head.contains(script)) {
-                document.head.removeChild(script)
-            }
+            clearInterval(checkInterval)
+            clearTimeout(timeout)
         }
     }, [handleGoogleSignIn])
 
@@ -158,18 +174,11 @@ export default function LoginPage() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {googleClientId ? (
-                                <div
-                                    id="google-signin-button"
-                                    className="flex justify-center"
-                                />
-                            ) : (
-                                <div className="text-center py-4">
-                                    <p className="text-sm text-gray-500">
-                                        Carregando botão de login...
-                                    </p>
-                                </div>
-                            )}
+                            {/* Elemento onde o Google renderiza o botão real - sempre presente no DOM */}
+                            <div
+                                id="google-signin-button"
+                                className="flex justify-center min-h-[48px]"
+                            />
                         </div>
                     )}
                 </div>
