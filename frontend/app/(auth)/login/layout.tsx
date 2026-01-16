@@ -10,6 +10,7 @@ export default function LoginLayout({
             {/* Carrega o script do Google o mais cedo possível, antes da interatividade */}
             {/* Isso garante que o script comece a carregar antes mesmo da hidratação do React */}
             {/* As tags de prefetch/preconnect estão no root layout para otimizar a conexão */}
+            {/* Nota: onLoad/onError não podem ser usados em Server Components */}
             <Script
                 src="https://accounts.google.com/gsi/client"
                 strategy="beforeInteractive"
