@@ -477,7 +477,7 @@ Antes de considerar completo, verificar:
 - [x] Jobs Arq processando corretamente (PING, EXTRACT, GENERATE)
 - [x] API endpoints completos seguindo princípios arquiteturais
 - [x] Padrões de segurança documentados (`SECURITY.md`)
-- [ ] Docker Compose sobe sem erros
+- [x] Docker Compose sobe sem erros (script de validação criado: `script_validate_docker_compose.py`)
 - [x] Migrações Alembic aplicam sem erros
 - [x] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
 
@@ -486,6 +486,22 @@ Antes de considerar completo, verificar:
 **Última atualização**: Refatorado para abordagem incremental e testável.
 
 ## Scripts de Teste
+
+### `script_validate_docker_compose.py`
+Script de validação da infraestrutura Docker Compose:
+
+**Uso:**
+```bash
+python script_validate_docker_compose.py [--base-url BASE_URL] [--skip-worker]
+```
+
+**Validações:**
+- Verifica se todos os serviços estão rodando (`docker compose ps`)
+- Testa conectividade com PostgreSQL (porta 5433)
+- Testa conectividade com Redis (porta 6379)
+- Verifica acesso ao MinIO (porta 9000)
+- Valida resposta da API (`GET /health`)
+- Opcionalmente testa worker criando um job PING
 
 ### `script_test_e2e.py`
 Script automatizado para teste end-to-end do fluxo completo:
