@@ -1,6 +1,6 @@
 # Turna Frontend
 
-Frontend web do Turna construído com Next.js (App Router) e TypeScript.
+Frontend web do Turna construído com Next.js (App Router), TypeScript e Tailwind CSS.
 
 ## Estrutura
 
@@ -9,6 +9,13 @@ Frontend web do Turna construído com Next.js (App Router) e TypeScript.
 - `lib/` - Utilitários e helpers
 - `types/` - Definições TypeScript
 - `hooks/` - Custom React hooks
+
+## Tecnologias
+
+- **Next.js 14** (App Router)
+- **TypeScript**
+- **Tailwind CSS** (estilização)
+- **ESLint** (linting)
 
 ## Desenvolvimento
 

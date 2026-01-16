@@ -422,23 +422,23 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Nenhuma dependência direta de código entre as camadas
 
 ### 8.2 Frontend Web (Next.js) – Setup Básico
-- [ ] Criar projeto Next.js:
-  - [ ] Executar `npx create-next-app@latest frontend` com **App Router**
-  - [ ] Configurar TypeScript
-  - [ ] Configurar ESLint (Prettier opcional)
-  - [ ] Criar estrutura inicial:
+- [x] Criar projeto Next.js:
+  - [x] Executar `npx create-next-app@latest frontend` com **App Router**
+  - [x] Configurar TypeScript
+  - [x] Configurar ESLint (Prettier opcional)
+  - [x] Criar estrutura inicial:
     - `app/`
     - `components/`
     - `lib/`
     - `hooks/`
     - `types/`
-- [ ] Configurar Tailwind CSS (opcional, recomendado):
-  - [ ] Instalar e configurar Tailwind
-  - [ ] Definir tema mínimo (cores e tipografia)
-- [ ] Configurar variáveis de ambiente:
-  - [ ] `NEXT_PUBLIC_API_URL` (ex.: `http://localhost:8000`)
-  - [ ] `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
-  - [ ] Criar `.env.local` para desenvolvimento
+- [x] Configurar Tailwind CSS (opcional, recomendado):
+  - [x] Instalar e configurar Tailwind
+  - [x] Definir tema mínimo (cores e tipografia)
+- [x] Configurar variáveis de ambiente:
+  - [x] `NEXT_PUBLIC_API_URL` (ex.: `http://localhost:8000`)
+  - [x] `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+  - [x] Criar `.env.local` para desenvolvimento
 
 ### 8.3 Cliente HTTP e Infraestrutura
 - [ ] Criar wrapper de chamadas HTTP (`lib/api.ts`):

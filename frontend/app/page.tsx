@@ -1,8 +1,8 @@
 export default function Home() {
   return (
-    <main style={{ padding: '2rem' }}>
-      <h1>Turna</h1>
-      <p>Frontend em construção...</p>
+    <main className="p-8">
+      <h1 className="text-3xl font-bold text-gray-900">Turna</h1>
+      <p className="mt-4 text-gray-600">Frontend em construção...</p>
     </main>
   )
 }
