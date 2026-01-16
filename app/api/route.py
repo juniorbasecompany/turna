@@ -13,7 +13,8 @@ from app.model.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel, field_validator
 from app.api.auth import router as auth_router
 from app.api.schedule import router as schedule_router
-from app.auth.dependencies import get_current_account, require_role
+from app.auth.dependencies import get_current_account, get_current_membership, require_role
+from app.model.membership import Membership, MembershipRole, MembershipStatus
 from app.model.user import Account
 from app.storage.service import StorageService
 from app.model.file import File
@@ -41,7 +42,10 @@ def _isoformat_utc(dt: datetime | None) -> str | None:
 
 
 @router.get("/me", tags=["Auth"])
-def get_me(account: Account = Depends(get_current_account)):
+def get_me(
+    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
+):
     """
     Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
@@ -50,8 +54,8 @@ def get_me(account: Account = Depends(get_current_account)):
         "id": account.id,
         "email": account.email,
         "name": account.name,
-        "role": account.role,
-        "tenant_id": account.tenant_id,
+        "role": membership.role.value,
+        "tenant_id": membership.tenant_id,
         "auth_provider": account.auth_provider,
         "created_at": _isoformat_utc(account.created_at),
         "updated_at": _isoformat_utc(account.updated_at),
@@ -92,8 +96,12 @@ def health():
 
 
 @router.post("/tenant", response_model=TenantResponse, status_code=201, tags=["Tenant"])
-def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_session)):
-    """Cria um novo tenant."""
+def create_tenant(
+    tenant_data: TenantCreate,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    """Cria um novo tenant e cria Membership ADMIN para o criador."""
     # Verifica se já existe um tenant com o mesmo slug
     existing = session.exec(select(Tenant).where(Tenant.slug == tenant_data.slug)).first()
     if existing:
@@ -103,6 +111,15 @@ def create_tenant(tenant_data: TenantCreate, session: Session = Depends(get_sess
     session.add(tenant)
     session.commit()
     session.refresh(tenant)
+
+    membership = Membership(
+        tenant_id=tenant.id,
+        account_id=account.id,
+        role=MembershipRole.ADMIN,
+        status=MembershipStatus.ACTIVE,
+    )
+    session.add(membership)
+    session.commit()
 
     return tenant
 
@@ -182,14 +199,11 @@ def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) ->
 
 @router.post("/job/ping", response_model=JobPingResponse, status_code=201, tags=["Job"])
 async def create_ping_job(
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
-    if not account.tenant_id:
-        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
-
     job = Job(
-        tenant_id=account.tenant_id,
+        tenant_id=membership.tenant_id,
         job_type=JobType.PING,
         status=JobStatus.PENDING,
         input_data={"ping": True},
@@ -214,20 +228,17 @@ async def create_ping_job(
 @router.post("/job/extract", response_model=JobExtractResponse, status_code=201, tags=["Job"])
 async def create_extract_job(
     body: JobExtractRequest,
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
-    if not account.tenant_id:
-        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
-
     file_model = session.get(File, body.file_id)
     if not file_model:
         raise HTTPException(status_code=404, detail="File não encontrado")
-    if file_model.tenant_id != account.tenant_id:
+    if file_model.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     job = Job(
-        tenant_id=account.tenant_id,
+        tenant_id=membership.tenant_id,
         job_type=JobType.EXTRACT_DEMAND,
         status=JobStatus.PENDING,
         input_data={"file_id": body.file_id},
@@ -252,13 +263,13 @@ async def create_extract_job(
 @router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
 def get_job(
     job_id: int,
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job.tenant_id != account.tenant_id:
+    if job.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return job
 
@@ -267,8 +278,7 @@ def get_job(
 async def requeue_job(
     job_id: int,
     body: JobRequeueRequest,
-    account: Account = Depends(get_current_account),
-    _admin: Account = Depends(require_role("admin")),
+    _admin: Membership = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -282,7 +292,7 @@ async def requeue_job(
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job.tenant_id != account.tenant_id:
+    if job.tenant_id != _admin.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     # Por padrão, requeue só é permitido para:
@@ -380,7 +390,7 @@ class ScheduleGenerateResponse(PydanticBaseModel):
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
 def upload_file(
     file: UploadFile = FastAPIFile(...),
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
     """
@@ -388,18 +398,13 @@ def upload_file(
 
     Retorna file_id, s3_url e presigned_url para acesso ao arquivo.
     """
-    if not account.tenant_id:
-        raise HTTPException(
-            status_code=400, detail="Account não possui tenant_id associado"
-        )
-
     storage_service = StorageService()
 
     try:
         # Upload arquivo e criar registro
         file_model = storage_service.upload_imported_file(
             session=session,
-            tenant_id=account.tenant_id,
+            tenant_id=membership.tenant_id,
             file=file,
         )
 
@@ -434,12 +439,9 @@ def upload_file(
 @router.post("/schedule/generate", response_model=ScheduleGenerateResponse, status_code=201, tags=["Schedule"])
 async def schedule_generate(
     body: ScheduleGenerateRequest,
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
-    if not account.tenant_id:
-        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
-
     # Validar período (intervalo meio-aberto [start, end))
     if body.period_end_at <= body.period_start_at:
         raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
@@ -449,7 +451,7 @@ async def schedule_generate(
     extract_job = session.get(Job, body.extract_job_id)
     if not extract_job:
         raise HTTPException(status_code=404, detail="Job de extração não encontrado")
-    if extract_job.tenant_id != account.tenant_id:
+    if extract_job.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if extract_job.status != JobStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Job de extração deve estar COMPLETED")
@@ -457,7 +459,7 @@ async def schedule_generate(
         raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
 
     sv = ScheduleVersion(
-        tenant_id=account.tenant_id,
+        tenant_id=membership.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
         period_end_at=body.period_end_at,
@@ -470,7 +472,7 @@ async def schedule_generate(
     session.refresh(sv)
 
     job = Job(
-        tenant_id=account.tenant_id,
+        tenant_id=membership.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={

@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db.session import get_session
+from app.model.membership import Membership, MembershipRole, MembershipStatus
 from app.model.user import Account
 from app.model.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
+from app.auth.dependencies import get_current_account
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -21,6 +23,20 @@ class GoogleTokenRequest(BaseModel):
     id_token: str
 
 
+class TenantOption(BaseModel):
+    tenant_id: int
+    name: str
+    slug: str
+    role: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str | None = None
+    token_type: str = "bearer"
+    requires_tenant_selection: bool = False
+    tenants: list[TenantOption] = []
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -29,6 +45,12 @@ class TokenResponse(BaseModel):
 class DevTokenRequest(BaseModel):
     email: str
     name: str = "Dev User"
+    tenant_id: int | None = None
+
+
+class GoogleSelectTenantRequest(BaseModel):
+    id_token: str
+    tenant_id: int
 
 
 
@@ -62,7 +84,54 @@ def _get_or_create_default_tenant(session: Session) -> Tenant:
     return default_tenant
 
 
-@router.post("/google", response_model=TokenResponse)
+def _list_active_tenants_for_account(session: Session, *, account_id: int) -> list[TenantOption]:
+    rows = session.exec(
+        select(Tenant, Membership)
+        .join(Membership, Membership.tenant_id == Tenant.id)
+        .where(
+            Membership.account_id == account_id,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+        .order_by(Tenant.id.asc())
+    ).all()
+
+    opts: list[TenantOption] = []
+    for tenant, membership in rows:
+        opts.append(
+            TenantOption(
+                tenant_id=tenant.id,
+                name=tenant.name,
+                slug=tenant.slug,
+                role=membership.role.value,
+            )
+        )
+    return opts
+
+
+def _get_active_membership(
+    session: Session, *, account_id: int, tenant_id: int
+) -> Membership | None:
+    return session.exec(
+        select(Membership).where(
+            Membership.account_id == account_id,
+            Membership.tenant_id == tenant_id,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+    ).first()
+
+
+def _issue_token_for_membership(*, account: Account, membership: Membership) -> str:
+    return create_access_token(
+        account_id=account.id,
+        tenant_id=membership.tenant_id,
+        role=membership.role.value,
+        email=account.email,
+        name=account.name,
+        membership_id=membership.id,
+    )
+
+
+@router.post("/google", response_model=AuthResponse)
 def auth_google(
     body: GoogleTokenRequest,
     session: Session = Depends(get_session),
@@ -77,7 +146,7 @@ def auth_google(
     email = idinfo["email"]
     name = idinfo["name"]
 
-    # Busca conta no banco
+    # Busca conta no banco (email é globalmente único)
     account = session.exec(
         select(Account).where(Account.email == email)
     ).first()
@@ -88,19 +157,22 @@ def auth_google(
             detail="Usuário não encontrado. Use a opção 'Cadastrar-se' para criar uma conta."
         )
 
-    # Cria token JWT
-    token = create_access_token(
-        account_id=account.id,
-        tenant_id=account.tenant_id,
-        role=account.role,
-        email=account.email,
-        name=account.name,
-    )
+    tenants = _list_active_tenants_for_account(session, account_id=account.id)
+    if not tenants:
+        raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
+    if len(tenants) > 1:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenants)
 
-    return TokenResponse(access_token=token)
+    # Único tenant ativo -> emite token direto.
+    only = tenants[0]
+    membership = _get_active_membership(session, account_id=account.id, tenant_id=only.tenant_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="Membership ACTIVE não encontrado para o tenant selecionado")
+    token = _issue_token_for_membership(account=account, membership=membership)
+    return AuthResponse(access_token=token)
 
 
-@router.post("/google/register", response_model=TokenResponse)
+@router.post("/google/register", response_model=AuthResponse)
 def auth_google_register(
     body: GoogleTokenRequest,
     session: Session = Depends(get_session),
@@ -121,17 +193,11 @@ def auth_google_register(
         select(Account).where(Account.email == email)
     ).first()
 
-    if account:
-        # Usuário já existe, apenas autentica
-        role = account.role
-    else:
-        # Cria novo usuário
+    if not account:
+        # Cria novo account (mantém tenant_id por compatibilidade; o enforcement passa a ser via Membership)
         role = _determine_role(email, hd)
-
-        # Obtém ou cria tenant padrão
         tenant = _get_or_create_default_tenant(session)
 
-        # Cria conta no banco
         account = Account(
             email=email,
             name=name,
@@ -143,19 +209,48 @@ def auth_google_register(
         session.commit()
         session.refresh(account)
 
-    # Cria token JWT
-    token = create_access_token(
-        account_id=account.id,
-        tenant_id=account.tenant_id,
-        role=account.role,
-        email=account.email,
-        name=account.name,
-    )
+        membership = Membership(
+            tenant_id=tenant.id,
+            account_id=account.id,
+            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.USER,
+            status=MembershipStatus.ACTIVE,
+        )
+        session.add(membership)
+        session.commit()
+        session.refresh(membership)
 
+        token = _issue_token_for_membership(account=account, membership=membership)
+        return AuthResponse(access_token=token)
+
+    # Account já existe -> comportamento igual ao login (pode exigir seleção).
+    return auth_google(body=body, session=session)
+
+
+@router.post("/google/select-tenant", response_model=TokenResponse)
+def auth_google_select_tenant(
+    body: GoogleSelectTenantRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Quando o usuário tem múltiplos tenants ACTIVE, este endpoint emite o JWT do sistema
+    para o tenant escolhido, validando via Google ID token + Membership.
+    """
+    idinfo = verify_google_token(body.id_token)
+    email = idinfo["email"]
+
+    account = session.exec(select(Account).where(Account.email == email)).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="Acesso negado (membership ACTIVE não encontrado)")
+
+    token = _issue_token_for_membership(account=account, membership=membership)
     return TokenResponse(access_token=token)
 
 
-@router.post("/dev/token", response_model=TokenResponse, tags=["Auth"])
+@router.post("/dev/token", response_model=AuthResponse, tags=["Auth"])
 def auth_dev_token(
     body: DevTokenRequest,
     session: Session = Depends(get_session),
@@ -187,11 +282,61 @@ def auth_dev_token(
         session.commit()
         session.refresh(account)
 
-    token = create_access_token(
-        account_id=account.id,
-        tenant_id=account.tenant_id,
-        role=account.role,
-        email=account.email,
-        name=account.name,
-    )
+        membership = Membership(
+            tenant_id=tenant.id,
+            account_id=account.id,
+            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.USER,
+            status=MembershipStatus.ACTIVE,
+        )
+        session.add(membership)
+        session.commit()
+
+    # Se tenant_id foi informado, emite token para ele (valida membership).
+    if body.tenant_id is not None:
+        membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
+        if not membership:
+            raise HTTPException(status_code=403, detail="Acesso negado (membership ACTIVE não encontrado)")
+        token = _issue_token_for_membership(account=account, membership=membership)
+        return AuthResponse(access_token=token)
+
+    tenants = _list_active_tenants_for_account(session, account_id=account.id)
+    if not tenants:
+        raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
+    if len(tenants) > 1:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenants)
+
+    only = tenants[0]
+    membership = _get_active_membership(session, account_id=account.id, tenant_id=only.tenant_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="Membership ACTIVE não encontrado para o tenant selecionado")
+    token = _issue_token_for_membership(account=account, membership=membership)
+    return AuthResponse(access_token=token)
+
+
+@router.get("/tenant/list", response_model=list[TenantOption], tags=["Auth"])
+def list_my_tenants(
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    """Lista tenants ACTIVE disponíveis para a conta autenticada (para switch)."""
+    return _list_active_tenants_for_account(session, account_id=account.id)
+
+
+class SwitchTenantRequest(BaseModel):
+    tenant_id: int
+
+
+@router.post("/switch-tenant", response_model=TokenResponse, tags=["Auth"])
+def switch_tenant(
+    body: SwitchTenantRequest,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    """
+    Emite um novo JWT do sistema para outro tenant (sem passar pelo Google novamente).
+    """
+    membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="Acesso negado (membership ACTIVE não encontrado)")
+    token = _issue_token_for_membership(account=account, membership=membership)
     return TokenResponse(access_token=token)

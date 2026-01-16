@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import Field
 from sqlalchemy import UniqueConstraint
 from app.model.base import BaseModel
 from typing import Optional
@@ -15,7 +15,7 @@ class Account(BaseModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
     auth_provider: str = Field(default="google")  # google, etc.
 
-    # Índice único em (email, tenant_id)
+    # Email globalmente único (um Account pode participar de múltiplos tenants via Membership)
     __table_args__ = (
-        UniqueConstraint("email", "tenant_id", name="uq_account_email_tenant"),
+        UniqueConstraint("email", name="uq_account_email"),
     )

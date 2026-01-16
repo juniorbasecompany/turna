@@ -7,12 +7,12 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel as PydanticBaseModel
 from sqlmodel import Session
 
-from app.auth.dependencies import get_current_account
+from app.auth.dependencies import get_current_membership
 from app.db.session import get_session
 from app.model.base import utc_now
 from app.model.file import File
+from app.model.membership import Membership
 from app.model.schedule_version import ScheduleStatus, ScheduleVersion
-from app.model.user import Account
 from app.storage.service import StorageService
 
 
@@ -173,16 +173,13 @@ def _day_schedules_from_result(*, sv: ScheduleVersion) -> list:
 @router.post("/{schedule_version_id}/publish", response_model=SchedulePublishResponse, tags=["Schedule"])
 def publish_schedule(
     schedule_version_id: int,
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
-    if not account.tenant_id:
-        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
-
     sv = session.get(ScheduleVersion, schedule_version_id)
     if not sv:
         raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
-    if sv.tenant_id != account.tenant_id:
+    if sv.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     storage_service = StorageService()
@@ -209,7 +206,7 @@ def publish_schedule(
     pdf_bytes = render_multi_day_pdf_bytes(schedules)
     file_model = storage_service.upload_schedule_pdf(
         session=session,
-        tenant_id=account.tenant_id,
+        tenant_id=membership.tenant_id,
         schedule_version_id=sv.id,
         pdf_bytes=pdf_bytes,
     )
@@ -234,16 +231,13 @@ def publish_schedule(
 @router.get("/{schedule_version_id}/pdf", tags=["Schedule"])
 def download_schedule_pdf(
     schedule_version_id: int,
-    account: Account = Depends(get_current_account),
+    membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
-    if not account.tenant_id:
-        raise HTTPException(status_code=400, detail="Account não possui tenant_id associado")
-
     sv = session.get(ScheduleVersion, schedule_version_id)
     if not sv:
         raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
-    if sv.tenant_id != account.tenant_id:
+    if sv.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if not sv.pdf_file_id:
         raise HTTPException(status_code=404, detail="PDF não encontrado (schedule_version ainda não publicada)")

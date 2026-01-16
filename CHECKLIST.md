@@ -181,50 +181,50 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.1 Ajuste do Modelo de Dados
 
-- [ ] Criar modelo `app/model/membership.py`:
-  - [ ] Modelo `Membership` com:
-    - [ ] `id: int` (PK)
-    - [ ] `tenant_id: int` (FK para Tenant, não nullable)
-    - [ ] `account_id: int` (FK para User, não nullable)
-    - [ ] `role: str` (ADMIN, ANESTHESIOLOGIST, etc.) - usar Enum
-    - [ ] `status: str` (PENDING, ACTIVE, REJECTED, REMOVED) - usar Enum
-    - [ ] `created_at: datetime`
-    - [ ] `updated_at: datetime`
-    - [ ] UniqueConstraint em `(tenant_id, account_id)` - um usuário só pode ter um membership por tenant
-  - [ ] Índices: `tenant_id`, `account_id`, `status`
+- [x] Criar modelo `app/model/membership.py`:
+  - [x] Modelo `Membership` com:
+    - [x] `id: int` (PK)
+    - [x] `tenant_id: int` (FK para Tenant, não nullable)
+    - [x] `account_id: int` (FK para User, não nullable)
+    - [x] `role: str` (ADMIN/USER no MVP) - usar Enum
+    - [x] `status: str` (PENDING, ACTIVE, REJECTED, REMOVED) - usar Enum
+    - [x] `created_at: datetime`
+    - [x] `updated_at: datetime`
+    - [x] UniqueConstraint em `(tenant_id, account_id)` - um usuário só pode ter um membership por tenant
+  - [x] Índices: `tenant_id`, `account_id`, `status`
   - [ ] Relationships SQLModel (opcional, se necessário para queries)
-- [ ] Criar migração Alembic `add_membership_table`:
-  - [ ] Criar tabela `membership`
-  - [ ] Adicionar constraints e índices
-  - [ ] **NÃO remover** `user.tenant_id` ainda (fazer depois)
-- [ ] Atualizar `app/model/user.py`:
-  - [ ] Remover constraint único `(email, tenant_id)`
-  - [ ] Adicionar constraint único em `email` apenas (email único global)
-  - [ ] Manter `tenant_id` temporariamente (será removido depois)
-  - [ ] Adicionar índice único em `email`
-- [ ] Criar migração Alembic `make_user_email_unique`:
-  - [ ] Remover constraint `uq_user_email_tenant`
-  - [ ] Adicionar constraint único em `email`
-  - [ ] **Como testar**: Verificar que não é possível criar dois usuários com mesmo email
+- [x] Criar migração Alembic `add_membership_table`:
+  - [x] Criar tabela `membership`
+  - [x] Adicionar constraints e índices
+  - [x] **NÃO remover** `user.tenant_id` ainda (fazer depois)
+- [x] Atualizar `app/model/user.py`:
+  - [x] Remover constraint único `(email, tenant_id)`
+  - [x] Adicionar constraint único em `email` apenas (email único global)
+  - [x] Manter `tenant_id` temporariamente (será removido depois)
+  - [x] Adicionar índice único em `email`
+- [x] Criar migração Alembic `make_user_email_unique`:
+  - [x] Remover constraint `uq_user_email_tenant`
+  - [x] Adicionar constraint único em `email`
+  - [x] **Como testar**: Verificar que não é possível criar dois usuários com mesmo email
 
 #### 2.3.2 Migração de Dados Existentes
 
-- [ ] Criar script de migração `script_migrate_to_memberships.py`:
-  - [ ] Ler todos os usuários existentes (`user` com `tenant_id`)
-  - [ ] Para cada usuário:
-    - [ ] Criar `Membership` com:
-      - [ ] `tenant_id` = `user.tenant_id`
-      - [ ] `account_id` = `user.id`
-      - [ ] `role` = `user.role` (ou ADMIN se for admin)
-      - [ ] `status` = ACTIVE
-      - [ ] `created_at` = `user.created_at`
-      - [ ] `updated_at` = `user.updated_at`
-  - [ ] Validar que todos os usuários foram migrados (contagem)
-  - [ ] **Como testar**: Executar script, verificar que cada user tem membership ACTIVE correspondente
-- [ ] Criar migração Alembic `migrate_existing_account_to_memberships`:
-  - [ ] Executar lógica de migração via SQL ou Python (usar `alembic.op.execute()` se necessário)
-  - [ ] Garantir que nenhum usuário fica sem membership
-  - [ ] **Como testar**: Verificar no banco que todos os account têm pelo menos 1 membership ACTIVE
+- [x] Criar script de migração `script_migrate_to_memberships.py`:
+  - [x] Ler todos os usuários existentes (`user` com `tenant_id`)
+  - [x] Para cada usuário:
+    - [x] Criar `Membership` com:
+      - [x] `tenant_id` = `user.tenant_id`
+      - [x] `account_id` = `user.id`
+      - [x] `role` = `user.role` (ou ADMIN se for admin)
+      - [x] `status` = ACTIVE
+      - [x] `created_at` = `user.created_at`
+      - [x] `updated_at` = `user.updated_at`
+  - [x] Validar que todos os usuários foram migrados (contagem)
+  - [x] **Como testar**: Executar script, verificar que cada user tem membership ACTIVE correspondente
+- [x] Criar migração Alembic `migrate_existing_account_to_memberships`:
+  - [x] Executar lógica de migração via SQL ou Python (usar `alembic.op.execute()` se necessário)
+  - [x] Garantir que nenhum usuário fica sem membership
+  - [x] **Como testar**: Verificar no banco que todos os account têm pelo menos 1 membership ACTIVE
 
 #### 2.3.3 Ajuste de Fluxos de Autenticação e Entrada
 
@@ -248,13 +248,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Se for primeiro usuário do sistema: criar Tenant + Membership ADMIN ACTIVE
   - [ ] Caso contrário: criar Membership PENDING (aguardar convite) ou permitir criar tenant
   - [ ] Emitir JWT apenas se tiver membership ACTIVE
-- [ ] Criar endpoint `POST /auth/select-tenant`:
+- [x] Criar endpoint `POST /auth/select-tenant`:
   - [ ] Receber `tenant_id` no body
   - [ ] Validar que User tem membership ACTIVE nesse tenant
   - [ ] Emitir novo JWT com `tenant_id` escolhido + `role` do membership
   - [ ] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
-- [ ] Criar endpoint `GET /auth/tenant/list`:
-  - [ ] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
+- [x] Criar endpoint `GET /auth/tenant/list`:
+  - [x] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
   - [ ] Retornar lista de convites pendentes (memberships PENDING)
   - [ ] **Como testar**: Chamar endpoint após login, verificar lista de tenants e convites
 
@@ -298,37 +298,37 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.5 Ajuste de JWT e Enforcement
 
-- [ ] Atualizar `app/auth/jwt.py`:
-  - [ ] Manter `create_access_token(account_id, tenant_id, role, email, name)`
-  - [ ] **Importante**: `role` agora vem do Membership, não do User
-  - [ ] Adicionar claim opcional `membership_id` (se necessário para auditoria)
-- [ ] Atualizar `app/auth/dependencies.py`:
-  - [ ] Modificar `get_current_user()`:
-    - [ ] Extrair `account_id` do JWT (sem mudança)
-    - [ ] Buscar User por `account_id` (sem filtro de tenant)
-  - [ ] Criar nova dependency `get_current_membership()`:
-    - [ ] Extrair `tenant_id` e `account_id` do JWT
-    - [ ] Buscar `Membership` com `tenant_id` + `account_id` + `status=ACTIVE`
-    - [ ] Retornar objeto Membership (ou erro se não existir)
-  - [ ] Modificar `get_current_tenant()`:
-    - [ ] Usar `get_current_membership()` para validar acesso
-    - [ ] Buscar Tenant por `tenant_id` do JWT
-  - [ ] Modificar `require_role(required_role)`:
-    - [ ] Usar `get_current_membership()` em vez de `get_current_user()`
-    - [ ] Verificar `membership.role == required_role`
-- [ ] Atualizar `app/api/auth.py`:
-  - [ ] Ao emitir JWT, buscar role do Membership (não do User)
-  - [ ] Garantir que JWT só é emitido se membership existe e está ACTIVE
-- [ ] Criar endpoint `POST /auth/switch-tenant`:
-  - [ ] Receber `tenant_id` no body
-  - [ ] Validar que User tem membership ACTIVE nesse tenant
-  - [ ] Buscar role do membership
-  - [ ] Emitir novo JWT com `tenant_id` + `role` atualizados
-  - [ ] Retornar novo token
-  - [ ] **Como testar**: Trocar de tenant → verificar JWT atualizado → chamar `/me` com novo token
-- [ ] Garantir que TODAS as queries continuam filtradas por `tenant_id`:
-  - [ ] Revisar todos os endpoints existentes
-  - [ ] Validar que usam `tenant_id` do JWT (via `get_current_tenant()` ou `request.state`)
+- [x] Atualizar `app/auth/jwt.py`:
+  - [x] Manter `create_access_token(account_id, tenant_id, role, email, name)`
+  - [x] **Importante**: `role` agora vem do Membership, não do User
+  - [x] Adicionar claim opcional `membership_id` (se necessário para auditoria)
+- [x] Atualizar `app/auth/dependencies.py`:
+  - [x] Modificar `get_current_user()`:
+    - [x] Extrair `account_id` do JWT (sem mudança)
+    - [x] Buscar User por `account_id` (sem filtro de tenant)
+  - [x] Criar nova dependency `get_current_membership()`:
+    - [x] Extrair `tenant_id` e `account_id` do JWT
+    - [x] Buscar `Membership` com `tenant_id` + `account_id` + `status=ACTIVE`
+    - [x] Retornar objeto Membership (ou erro se não existir)
+  - [x] Modificar `get_current_tenant()`:
+    - [x] Usar `get_current_membership()` para validar acesso
+    - [x] Buscar Tenant por `tenant_id` do JWT
+  - [x] Modificar `require_role(required_role)`:
+    - [x] Usar `get_current_membership()` em vez de `get_current_user()`
+    - [x] Verificar `membership.role == required_role`
+- [x] Atualizar `app/api/auth.py`:
+  - [x] Ao emitir JWT, buscar role do Membership (não do User)
+  - [x] Garantir que JWT só é emitido se membership existe e está ACTIVE
+- [x] Criar endpoint `POST /auth/switch-tenant`:
+  - [x] Receber `tenant_id` no body
+  - [x] Validar que User tem membership ACTIVE nesse tenant
+  - [x] Buscar role do membership
+  - [x] Emitir novo JWT com `tenant_id` + `role` atualizados
+  - [x] Retornar novo token
+  - [x] **Como testar**: Trocar de tenant → verificar JWT atualizado → chamar `/me` com novo token
+- [x] Garantir que TODAS as queries continuam filtradas por `tenant_id`:
+  - [x] Revisar todos os endpoints existentes
+  - [x] Validar que usam `tenant_id` do JWT (via `get_current_tenant()` ou `request.state`)
   - [ ] Documentar padrão: sempre filtrar por `tenant_id` do JWT, nunca confiar em parâmetros do body
 
 #### 2.3.6 Remoção Final de tenant_id de Account
@@ -345,11 +345,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Buscar todas as referências a `user.tenant_id` no código
   - [ ] Substituir por lógica que busca membership ACTIVE (ou usar `get_current_membership()`)
   - [ ] **Como testar**: Executar testes completos, verificar que nenhum código quebra
-- [ ] Criar script de validação `script_validate_memberships.py`:
-  - [ ] Verificar que todos os account têm pelo menos 1 membership
+- [x] Criar script de validação `script_validate_memberships.py`:
+  - [x] Verificar que todos os account têm pelo menos 1 membership
   - [ ] Verificar que não há memberships com account_id ou tenant_id inválidos
-  - [ ] Verificar que não há duplicatas (tenant_id, account_id)
-  - [ ] **Como testar**: Executar script antes e depois da remoção de tenant_id
+  - [x] Verificar que não há duplicatas (tenant_id, account_id)
+  - [x] **Como testar**: Executar script antes e depois da remoção de tenant_id
 
 #### 2.3.7 Testes e Validação da Migração
 
@@ -637,18 +637,18 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 Antes de considerar completo, verificar:
 
 - [x] 3 modelos SQLModel criados e migrados (Tenant, User, Job) - *Fase 1 concluída*
-- [ ] Modelo Membership criado e migrado (tabela `membership`) - *Seção 2.3*
+- [x] Modelo Membership criado e migrado (tabela `membership`) - *Seção 2.3*
 - [ ] Modelo User corrigido (sem tenant_id, email único global) - *Seção 2.3*
 - [ ] Modelos File e ScheduleVersion (próximas etapas)
-- [ ] Autenticação funcionando com tenant_id no JWT (role do Membership) - *Seção 2.3*
+- [x] Autenticação funcionando com tenant_id no JWT (role do Membership) - *Seção 2.3*
 - [ ] Fluxos de convites e seleção de tenant funcionando - *Seção 2.3*
-- [ ] Multi-tenant enforcement ativo em todos os endpoints (via Membership)
+- [x] Multi-tenant enforcement ativo em todos os endpoints (via Membership)
 - [ ] Storage S3/MinIO funcionando (upload/download)
 - [ ] Jobs Arq processando corretamente (PING, EXTRACT, GENERATE)
 - [ ] API endpoints seguindo princípios arquiteturais
 - [ ] Código legado ainda funciona (ou foi migrado)
 - [ ] Docker Compose sobe sem erros
-- [ ] Migrações Alembic aplicam sem erros (incluindo migrações de correção multi-tenant)
+- [x] Migrações Alembic aplicam sem erros (incluindo migrações de correção multi-tenant)
 - [ ] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
 
 ---

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from jose import jwt, JWTError
 from fastapi import HTTPException
 
@@ -22,7 +22,15 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 8
 
 
-def create_access_token(account_id: int, tenant_id: int, role: str, email: str, name: str) -> str:
+def create_access_token(
+    *,
+    account_id: int,
+    tenant_id: int,
+    role: str,
+    email: str,
+    name: str,
+    membership_id: int | None = None,
+) -> str:
     """
     Cria um token JWT com as informações da conta.
 
@@ -37,7 +45,7 @@ def create_access_token(account_id: int, tenant_id: int, role: str, email: str, 
         Token JWT codificado
     """
     now = datetime.now(timezone.utc)
-    payload: Dict[str, any] = {
+    payload: Dict[str, Any] = {
         "sub": str(account_id),  # Subject (account_id)
         "email": email,
         "name": name,
@@ -47,6 +55,8 @@ def create_access_token(account_id: int, tenant_id: int, role: str, email: str, 
         "exp": int((now + timedelta(hours=JWT_EXPIRATION_HOURS)).timestamp()),
         "iss": JWT_ISSUER,
     }
+    if membership_id is not None:
+        payload["membership_id"] = int(membership_id)
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
