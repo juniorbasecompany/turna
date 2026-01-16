@@ -1,19 +1,22 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: 'Turna',
-  description: 'Sistema de gestão de escalas',
+    title: 'Turna',
+    description: 'Sistema de gestão de escalas',
 }
 
 export default function RootLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode
+    children: React.ReactNode
 }) {
-  return (
-    <html lang="pt-BR">
-      <body>{children}</body>
-    </html>
-  )
+    return (
+        <html lang="pt-BR">
+            <body>
+                <Providers>{children}</Providers>
+            </body>
+        </html>
+    )
 }

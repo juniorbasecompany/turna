@@ -441,22 +441,22 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Criar `.env.local` para desenvolvimento
 
 ### 8.3 Cliente HTTP e Infraestrutura
-- [ ] Criar wrapper de chamadas HTTP (`lib/api.ts`):
-  - [ ] Baseado em `fetch`
-  - [ ] Usar `credentials: "include"` (cookies httpOnly)
-  - [ ] Função única para chamadas à API
-  - [ ] Tratamento centralizado de erros:
+- [x] Criar wrapper de chamadas HTTP (`lib/api.ts`):
+  - [x] Baseado em `fetch`
+  - [x] Usar `credentials: "include"` (cookies httpOnly)
+  - [x] Função única para chamadas à API
+  - [x] Tratamento centralizado de erros:
     - 401 → redirecionar para `/login`
     - 403 → mensagem clara de acesso negado
-- [ ] Criar types TypeScript:
-  - [ ] `AuthResponse`
-  - [ ] `TenantOption`
-  - [ ] `TokenResponse`
-  - [ ] Types para demais endpoints consumidos
-- [ ] Gerenciamento de estado (mínimo):
-  - [ ] Zustand ou Context API
-  - [ ] Estado para informações de sessão (usuário, tenant atual)
-  - [ ] Evitar armazenar JWT em estado ou storage
+- [x] Criar types TypeScript:
+  - [x] `AuthResponse`
+  - [x] `TenantOption`
+  - [x] `TokenResponse`
+  - [x] Types para demais endpoints consumidos
+- [x] Gerenciamento de estado (mínimo):
+  - [x] Zustand ou Context API
+  - [x] Estado para informações de sessão (usuário, tenant atual)
+  - [x] Evitar armazenar JWT em estado ou storage
 
 ### 8.4 Autenticação – Login e OAuth Google
 - [ ] Implementar página de login (`app/(auth)/login/page.tsx`):
