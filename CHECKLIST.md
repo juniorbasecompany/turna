@@ -260,34 +260,34 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.4 Implementação de Convites
 
-- [ ] Criar endpoint `POST /tenant/{tenant_id}/invite`:
-  - [ ] Requer role ADMIN no tenant
-  - [ ] Receber `email` no body
-  - [ ] Buscar User por email (criar se não existir, SEM tenant_id)
-  - [ ] Verificar se já existe membership (não criar duplicado)
-  - [ ] Criar `Membership` com:
-    - [ ] `tenant_id` = tenant do admin
-    - [ ] `account_id` = usuário encontrado/criado
-    - [ ] `role` = ANESTHESIOLOGIST (ou receber no body)
-    - [ ] `status` = PENDING
-  - [ ] Retornar `{membership_id, email, status: "PENDING"}`
+- [x] Criar endpoint `POST /tenant/{tenant_id}/invite`:
+  - [x] Requer role ADMIN no tenant
+  - [x] Receber `email` no body
+  - [x] Buscar User por email (criar se não existir, SEM tenant_id)
+  - [x] Verificar se já existe membership (não criar duplicado)
+  - [x] Criar `Membership` com:
+    - [x] `tenant_id` = tenant do admin
+    - [x] `account_id` = usuário encontrado/criado
+    - [x] `role` = user/admin (MVP)
+    - [x] `status` = PENDING
+  - [x] Retornar `{membership_id, email, status: "PENDING"}`
   - [ ] **Como testar**: Admin convida email → verificar membership PENDING criado
-- [ ] Criar endpoint `GET /auth/invites`:
-  - [ ] Retornar lista de memberships PENDING do usuário autenticado
-  - [ ] Incluir informações do tenant (name, slug)
+- [x] Criar endpoint `GET /auth/invites`:
+  - [x] Retornar lista de memberships PENDING do usuário autenticado
+  - [x] Incluir informações do tenant (name, slug)
   - [ ] **Como testar**: Listar convites pendentes após login
-- [ ] Criar endpoint `POST /auth/invites/{membership_id}/accept`:
-  - [ ] Validar que membership pertence ao usuário autenticado
-  - [ ] Validar que status é PENDING
-  - [ ] Atualizar `status` para ACTIVE
+- [x] Criar endpoint `POST /auth/invites/{membership_id}/accept`:
+  - [x] Validar que membership pertence ao usuário autenticado
+  - [x] Validar que status é PENDING
+  - [x] Atualizar `status` para ACTIVE
   - [ ] Opcional: emitir novo JWT com tenant_id do membership aceito
-  - [ ] Retornar `{membership_id, tenant_id, status: "ACTIVE"}`
+  - [x] Retornar `{membership_id, tenant_id, status: "ACTIVE"}`
   - [ ] **Como testar**: Aceitar convite → verificar status ACTIVE → poder selecionar tenant
-- [ ] Criar endpoint `POST /auth/invites/{membership_id}/reject`:
-  - [ ] Validar que membership pertence ao usuário autenticado
-  - [ ] Validar que status é PENDING
-  - [ ] Atualizar `status` para REJECTED (não deletar)
-  - [ ] Retornar `{membership_id, status: "REJECTED"}`
+- [x] Criar endpoint `POST /auth/invites/{membership_id}/reject`:
+  - [x] Validar que membership pertence ao usuário autenticado
+  - [x] Validar que status é PENDING
+  - [x] Atualizar `status` para REJECTED (não deletar)
+  - [x] Retornar `{membership_id, status: "REJECTED"}`
   - [ ] **Como testar**: Recusar convite → verificar status REJECTED (não deletado)
 - [ ] Criar endpoint `POST /tenant` (criar clínica):
   - [ ] Permitir se usuário não tem nenhum membership ACTIVE (primeiro tenant)

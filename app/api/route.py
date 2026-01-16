@@ -124,6 +124,102 @@ def create_tenant(
     return tenant
 
 
+class TenantInviteRequest(PydanticBaseModel):
+    email: str
+    role: str = "user"  # MVP: user/admin
+    name: str | None = None
+
+
+class TenantInviteResponse(PydanticBaseModel):
+    membership_id: int
+    email: str
+    status: str
+    role: str
+
+
+@router.post("/tenant/{tenant_id}/invite", response_model=TenantInviteResponse, status_code=201, tags=["Tenant"])
+def invite_to_tenant(
+    tenant_id: int,
+    body: TenantInviteRequest,
+    admin_membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria/atualiza um convite (Membership PENDING) para um email no tenant atual.
+
+    Regras:
+      - O caller deve ser ADMIN e o tenant do token deve bater com o tenant_id do path.
+      - Idempotente por (tenant_id, account_id).
+    """
+    if admin_membership.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    email = body.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    role_raw = body.role.strip().lower()
+    if role_raw not in {"user", "admin"}:
+        raise HTTPException(status_code=400, detail="role inválida (esperado: user|admin)")
+    role = MembershipRole.ADMIN if role_raw == "admin" else MembershipRole.USER
+
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant não encontrado")
+
+    account = session.exec(select(Account).where(Account.email == email)).first()
+    if not account:
+        account = Account(
+            email=email,
+            name=body.name or email,
+            role="user",
+            tenant_id=tenant.id,  # compatibilidade (até remover account.tenant_id)
+            auth_provider="invite",
+        )
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+
+    membership = session.exec(
+        select(Membership).where(
+            Membership.tenant_id == tenant.id,
+            Membership.account_id == account.id,
+        )
+    ).first()
+
+    if membership:
+        # Não duplica. Se já estiver ACTIVE, apenas devolve.
+        if membership.status in {MembershipStatus.REJECTED, MembershipStatus.REMOVED}:
+            membership.status = MembershipStatus.PENDING
+        if membership.status == MembershipStatus.PENDING:
+            membership.role = role
+        session.add(membership)
+        session.commit()
+        session.refresh(membership)
+        return TenantInviteResponse(
+            membership_id=membership.id,
+            email=account.email,
+            status=membership.status.value,
+            role=membership.role.value,
+        )
+
+    membership = Membership(
+        tenant_id=tenant.id,
+        account_id=account.id,
+        role=role,
+        status=MembershipStatus.PENDING,
+    )
+    session.add(membership)
+    session.commit()
+    session.refresh(membership)
+    return TenantInviteResponse(
+        membership_id=membership.id,
+        email=account.email,
+        status=membership.status.value,
+        role=membership.role.value,
+    )
+
+
 class JobPingResponse(PydanticBaseModel):
     job_id: int
 

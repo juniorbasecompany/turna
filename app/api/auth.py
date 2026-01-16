@@ -10,6 +10,7 @@ from app.model.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
 from app.auth.dependencies import get_current_account
+from app.model.base import utc_now
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -383,6 +384,71 @@ def list_my_tenants(
     """Lista tenants ACTIVE disponíveis e convites PENDING para a conta autenticada."""
     tenants, invites = get_user_memberships(session, account_id=account.id)
     return TenantListResponse(tenants=tenants, invites=invites)
+
+
+@router.get("/invites", response_model=list[InviteOption], tags=["Auth"])
+def list_my_invites(
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    """Lista convites PENDING da conta autenticada."""
+    return _list_pending_invites_for_account(session, account_id=account.id)
+
+
+class InviteActionResponse(BaseModel):
+    membership_id: int
+    tenant_id: int
+    status: str
+
+
+@router.post("/invites/{membership_id}/accept", response_model=InviteActionResponse, tags=["Auth"])
+def accept_invite(
+    membership_id: int,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    membership = session.get(Membership, membership_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if membership.account_id != account.id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    if membership.status != MembershipStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Invite is not PENDING")
+
+    membership.status = MembershipStatus.ACTIVE
+    membership.updated_at = utc_now()
+    session.add(membership)
+    session.commit()
+    return InviteActionResponse(
+        membership_id=membership.id,
+        tenant_id=membership.tenant_id,
+        status=membership.status.value,
+    )
+
+
+@router.post("/invites/{membership_id}/reject", response_model=InviteActionResponse, tags=["Auth"])
+def reject_invite(
+    membership_id: int,
+    account: Account = Depends(get_current_account),
+    session: Session = Depends(get_session),
+):
+    membership = session.get(Membership, membership_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if membership.account_id != account.id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    if membership.status != MembershipStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Invite is not PENDING")
+
+    membership.status = MembershipStatus.REJECTED
+    membership.updated_at = utc_now()
+    session.add(membership)
+    session.commit()
+    return InviteActionResponse(
+        membership_id=membership.id,
+        tenant_id=membership.tenant_id,
+        status=membership.status.value,
+    )
 
 
 class SwitchTenantRequest(BaseModel):
