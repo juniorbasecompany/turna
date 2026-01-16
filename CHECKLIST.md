@@ -133,10 +133,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### 2.1 Integração de Autenticação
 - [x] Criar `app/auth/__init__.py`
 - [x] Criar `app/auth/jwt.py`:
-  - [x] Função `create_access_token(user_id, tenant_id, role)` retornando JWT
-  - [x] Função `verify_token(token)` retornando payload (user_id, tenant_id, role)
+  - [x] Função `create_access_token(account_id, tenant_id, role)` retornando JWT
+  - [x] Função `verify_token(token)` retornando payload (account_id, tenant_id, role)
   - [x] Usar `JWT_SECRET` e `JWT_ISSUER` do ambiente
-  - [x] Claims obrigatórios: `user_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
+  - [x] Claims obrigatórios: `account_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
   - [ ] **Nota**: Será ajustado na seção 2.3 para usar role do Membership
 - [x] Criar `app/auth/dependencies.py`:
   - [x] Dependency `get_current_user(session, token)` retornando User
@@ -185,13 +185,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Modelo `Membership` com:
     - [ ] `id: int` (PK)
     - [ ] `tenant_id: int` (FK para Tenant, não nullable)
-    - [ ] `user_id: int` (FK para User, não nullable)
+    - [ ] `account_id: int` (FK para User, não nullable)
     - [ ] `role: str` (ADMIN, ANESTHESIOLOGIST, etc.) - usar Enum
     - [ ] `status: str` (PENDING, ACTIVE, REJECTED, REMOVED) - usar Enum
     - [ ] `created_at: datetime`
     - [ ] `updated_at: datetime`
-    - [ ] UniqueConstraint em `(tenant_id, user_id)` - um usuário só pode ter um membership por tenant
-  - [ ] Índices: `tenant_id`, `user_id`, `status`
+    - [ ] UniqueConstraint em `(tenant_id, account_id)` - um usuário só pode ter um membership por tenant
+  - [ ] Índices: `tenant_id`, `account_id`, `status`
   - [ ] Relationships SQLModel (opcional, se necessário para queries)
 - [ ] Criar migração Alembic `add_membership_table`:
   - [ ] Criar tabela `membership`
@@ -214,7 +214,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Para cada usuário:
     - [ ] Criar `Membership` com:
       - [ ] `tenant_id` = `user.tenant_id`
-      - [ ] `user_id` = `user.id`
+      - [ ] `account_id` = `user.id`
       - [ ] `role` = `user.role` (ou ADMIN se for admin)
       - [ ] `status` = ACTIVE
       - [ ] `created_at` = `user.created_at`
@@ -230,10 +230,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 - [ ] Atualizar `app/auth/oauth.py` (ou `app/api/auth.py`):
   - [ ] Após login Google, identificar User por email (criar se não existir, SEM tenant_id)
-  - [ ] Criar função `get_user_memberships(session, user_id)`:
+  - [ ] Criar função `get_user_memberships(session, account_id)`:
     - [ ] Retornar memberships com status ACTIVE (tenants disponíveis)
     - [ ] Retornar memberships com status PENDING (convites pendentes)
-  - [ ] Criar função `get_active_tenant_for_user(session, user_id)`:
+  - [ ] Criar função `get_active_tenant_for_user(session, account_id)`:
     - [ ] Se 0 ACTIVE: retornar None (usuário precisa criar tenant ou aceitar convite)
     - [ ] Se 1 ACTIVE: retornar esse tenant (seleção automática)
     - [ ] Se >1 ACTIVE: retornar None (exigir seleção)
@@ -267,7 +267,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Verificar se já existe membership (não criar duplicado)
   - [ ] Criar `Membership` com:
     - [ ] `tenant_id` = tenant do admin
-    - [ ] `user_id` = usuário encontrado/criado
+    - [ ] `account_id` = usuário encontrado/criado
     - [ ] `role` = ANESTHESIOLOGIST (ou receber no body)
     - [ ] `status` = PENDING
   - [ ] Retornar `{membership_id, email, status: "PENDING"}`
@@ -299,16 +299,16 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 #### 2.3.5 Ajuste de JWT e Enforcement
 
 - [ ] Atualizar `app/auth/jwt.py`:
-  - [ ] Manter `create_access_token(user_id, tenant_id, role, email, name)`
+  - [ ] Manter `create_access_token(account_id, tenant_id, role, email, name)`
   - [ ] **Importante**: `role` agora vem do Membership, não do User
   - [ ] Adicionar claim opcional `membership_id` (se necessário para auditoria)
 - [ ] Atualizar `app/auth/dependencies.py`:
   - [ ] Modificar `get_current_user()`:
-    - [ ] Extrair `user_id` do JWT (sem mudança)
-    - [ ] Buscar User por `user_id` (sem filtro de tenant)
+    - [ ] Extrair `account_id` do JWT (sem mudança)
+    - [ ] Buscar User por `account_id` (sem filtro de tenant)
   - [ ] Criar nova dependency `get_current_membership()`:
-    - [ ] Extrair `tenant_id` e `user_id` do JWT
-    - [ ] Buscar `Membership` com `tenant_id` + `user_id` + `status=ACTIVE`
+    - [ ] Extrair `tenant_id` e `account_id` do JWT
+    - [ ] Buscar `Membership` com `tenant_id` + `account_id` + `status=ACTIVE`
     - [ ] Retornar objeto Membership (ou erro se não existir)
   - [ ] Modificar `get_current_tenant()`:
     - [ ] Usar `get_current_membership()` para validar acesso
@@ -347,8 +347,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] **Como testar**: Executar testes completos, verificar que nenhum código quebra
 - [ ] Criar script de validação `script_validate_memberships.py`:
   - [ ] Verificar que todos os account têm pelo menos 1 membership
-  - [ ] Verificar que não há memberships com user_id ou tenant_id inválidos
-  - [ ] Verificar que não há duplicatas (tenant_id, user_id)
+  - [ ] Verificar que não há memberships com account_id ou tenant_id inválidos
+  - [ ] Verificar que não há duplicatas (tenant_id, account_id)
   - [ ] **Como testar**: Executar script antes e depois da remoção de tenant_id
 
 #### 2.3.7 Testes e Validação da Migração
@@ -380,7 +380,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Manter migração `remove_tenant_id_from_account` reversível (se possível)
   - [ ] Se necessário rollback: recriar coluna `tenant_id` e popular com membership ACTIVE principal
 - [ ] Adicionar validações de segurança:
-  - [ ] Não permitir criar membership duplicado (tenant_id, user_id)
+  - [ ] Não permitir criar membership duplicado (tenant_id, account_id)
   - [ ] Não permitir deletar último membership ACTIVE de um user (ou exigir transferência de admin)
   - [ ] Validar que role existe no enum
   - [ ] Validar que status existe no enum
