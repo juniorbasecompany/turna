@@ -5,11 +5,12 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db.session import get_session
 from app.model.membership import Membership, MembershipRole, MembershipStatus
+from app.model.audit_log import AuditLog
 from app.model.user import Account
 from app.model.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
-from app.auth.dependencies import get_current_account
+from app.auth.dependencies import get_current_account, get_current_membership
 from app.model.base import utc_now
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -18,6 +19,17 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 ADMIN_EMAILS_RAW = os.getenv("ADMIN_EMAILS", "")
 ADMIN_EMAILS: set[str] = {e.strip().lower() for e in ADMIN_EMAILS_RAW.split(",") if e.strip()}
 ADMIN_HOSTED_DOMAIN = os.getenv("ADMIN_HOSTED_DOMAIN")
+
+
+def _try_write_audit_log(session: Session, audit: AuditLog) -> None:
+    """
+    Auditoria best-effort: não deve quebrar a request se falhar.
+    """
+    try:
+        session.add(audit)
+        session.commit()
+    except Exception:
+        session.rollback()
 
 
 class GoogleTokenRequest(BaseModel):
@@ -413,10 +425,24 @@ def accept_invite(
     if membership.status != MembershipStatus.PENDING:
         raise HTTPException(status_code=400, detail="Invite is not PENDING")
 
+    prev_status = membership.status
     membership.status = MembershipStatus.ACTIVE
     membership.updated_at = utc_now()
     session.add(membership)
     session.commit()
+    _try_write_audit_log(
+        session,
+        AuditLog(
+            tenant_id=membership.tenant_id,
+            actor_account_id=account.id,
+            membership_id=membership.id,
+            event_type="membership_status_changed",
+            data={
+                "from_status": prev_status.value,
+                "to_status": membership.status.value,
+            },
+        ),
+    )
     return InviteActionResponse(
         membership_id=membership.id,
         tenant_id=membership.tenant_id,
@@ -438,10 +464,24 @@ def reject_invite(
     if membership.status != MembershipStatus.PENDING:
         raise HTTPException(status_code=400, detail="Invite is not PENDING")
 
+    prev_status = membership.status
     membership.status = MembershipStatus.REJECTED
     membership.updated_at = utc_now()
     session.add(membership)
     session.commit()
+    _try_write_audit_log(
+        session,
+        AuditLog(
+            tenant_id=membership.tenant_id,
+            actor_account_id=account.id,
+            membership_id=membership.id,
+            event_type="membership_status_changed",
+            data={
+                "from_status": prev_status.value,
+                "to_status": membership.status.value,
+            },
+        ),
+    )
     return InviteActionResponse(
         membership_id=membership.id,
         tenant_id=membership.tenant_id,
@@ -457,6 +497,7 @@ class SwitchTenantRequest(BaseModel):
 def switch_tenant(
     body: SwitchTenantRequest,
     account: Account = Depends(get_current_account),
+    current_membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
     """
@@ -465,5 +506,19 @@ def switch_tenant(
     membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Acesso negado (membership ACTIVE não encontrado)")
+    _try_write_audit_log(
+        session,
+        AuditLog(
+            tenant_id=current_membership.tenant_id,
+            actor_account_id=account.id,
+            membership_id=current_membership.id,
+            event_type="tenant_switched",
+            data={
+                "from_tenant_id": current_membership.tenant_id,
+                "to_tenant_id": body.tenant_id,
+                "to_membership_id": membership.id,
+            },
+        ),
+    )
     token = _issue_token_for_membership(account=account, membership=membership)
     return TokenResponse(access_token=token)

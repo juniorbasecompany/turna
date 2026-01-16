@@ -7,6 +7,8 @@ from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.model.tenant import Tenant
@@ -15,6 +17,7 @@ from app.api.auth import router as auth_router
 from app.api.schedule import router as schedule_router
 from app.auth.dependencies import get_current_account, get_current_membership, require_role
 from app.model.membership import Membership, MembershipRole, MembershipStatus
+from app.model.audit_log import AuditLog
 from app.model.user import Account
 from app.storage.service import StorageService
 from app.model.file import File
@@ -29,6 +32,17 @@ router.include_router(auth_router)
 router.include_router(schedule_router)
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
+
+
+def _try_write_audit_log(session: Session, audit: AuditLog) -> None:
+    """
+    Auditoria best-effort: não deve quebrar a request se falhar.
+    """
+    try:
+        session.add(audit)
+        session.commit()
+    except Exception:
+        session.rollback()
 
 
 def _isoformat_utc(dt: datetime | None) -> str | None:
@@ -188,13 +202,35 @@ def invite_to_tenant(
 
     if membership:
         # Não duplica. Se já estiver ACTIVE, apenas devolve.
+        prev_status = membership.status
+        prev_role = membership.role
         if membership.status in {MembershipStatus.REJECTED, MembershipStatus.REMOVED}:
             membership.status = MembershipStatus.PENDING
         if membership.status == MembershipStatus.PENDING:
             membership.role = role
+        membership.updated_at = utc_now()
         session.add(membership)
         session.commit()
         session.refresh(membership)
+
+        if prev_status != membership.status or prev_role != membership.role:
+            _try_write_audit_log(
+                session,
+                AuditLog(
+                    tenant_id=tenant.id,
+                    actor_account_id=admin_membership.account_id,
+                    membership_id=membership.id,
+                    event_type="membership_invited",
+                    data={
+                        "target_account_id": account.id,
+                        "email": account.email,
+                        "from_status": prev_status.value,
+                        "to_status": membership.status.value,
+                        "from_role": prev_role.value,
+                        "to_role": membership.role.value,
+                    },
+                ),
+            )
         return TenantInviteResponse(
             membership_id=membership.id,
             email=account.email,
@@ -209,14 +245,111 @@ def invite_to_tenant(
         status=MembershipStatus.PENDING,
     )
     session.add(membership)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Membership duplicado (tenant_id, account_id) não permitido",
+        ) from e
     session.refresh(membership)
+    _try_write_audit_log(
+        session,
+        AuditLog(
+            tenant_id=tenant.id,
+            actor_account_id=admin_membership.account_id,
+            membership_id=membership.id,
+            event_type="membership_invited",
+            data={
+                "target_account_id": account.id,
+                "email": account.email,
+                "from_status": None,
+                "to_status": membership.status.value,
+                "from_role": None,
+                "to_role": membership.role.value,
+            },
+        ),
+    )
     return TenantInviteResponse(
         membership_id=membership.id,
         email=account.email,
         status=membership.status.value,
         role=membership.role.value,
     )
+
+
+class MembershipRemoveResponse(PydanticBaseModel):
+    membership_id: int
+    status: str
+
+
+@router.post(
+    "/tenant/{tenant_id}/memberships/{membership_id}/remove",
+    response_model=MembershipRemoveResponse,
+    status_code=200,
+    tags=["Tenant"],
+)
+def remove_membership(
+    tenant_id: int,
+    membership_id: int,
+    admin_membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Remove (soft-delete) um membership do tenant (status -> REMOVED).
+
+    Regra de segurança:
+      - não permitir remover o último membership ACTIVE de um account.
+    """
+    if admin_membership.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    membership = session.get(Membership, membership_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membership não encontrado")
+    if membership.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    if membership.status == MembershipStatus.ACTIVE:
+        active_count = session.exec(
+            select(func.count())
+            .select_from(Membership)
+            .where(
+                Membership.account_id == membership.account_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).one()
+        if int(active_count or 0) <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Não é permitido remover o último membership ACTIVE do usuário. "
+                    "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
+                ),
+            )
+
+    prev_status = membership.status
+    membership.status = MembershipStatus.REMOVED
+    membership.updated_at = utc_now()
+    session.add(membership)
+    session.commit()
+    session.refresh(membership)
+    _try_write_audit_log(
+        session,
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_account_id=admin_membership.account_id,
+            membership_id=membership.id,
+            event_type="membership_status_changed",
+            data={
+                "from_status": prev_status.value,
+                "to_status": membership.status.value,
+                "target_account_id": membership.account_id,
+            },
+        ),
+    )
+    return MembershipRemoveResponse(membership_id=membership.id, status=membership.status.value)
 
 
 class JobPingResponse(PydanticBaseModel):

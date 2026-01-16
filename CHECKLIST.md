@@ -374,26 +374,30 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Endpoints futuros de File/Schedule respeitam tenant_id
   - [x] **Como testar**: Automatizado via `script_test_multi_tenant_236_237.py`
 
-#### 2.3.8 Rollback e Segurança
+#### 2.3.8 Segurança
 
-- [ ] Documentar plano de rollback:
-  - [ ] Manter migração `remove_tenant_id_from_account` reversível (se possível)
-  - [ ] Se necessário rollback: recriar coluna `tenant_id` e popular com membership ACTIVE principal
-- [ ] Adicionar validações de segurança:
-  - [ ] Não permitir criar membership duplicado (tenant_id, account_id)
-  - [ ] Não permitir deletar último membership ACTIVE de um user (ou exigir transferência de admin)
-  - [ ] Validar que role existe no enum
-  - [ ] Validar que status existe no enum
-- [ ] Adicionar logs/auditoria:
-  - [ ] Logar criação de memberships (para rastrear convites)
-  - [ ] Logar mudanças de status (aceitar/rejeitar convites)
-  - [ ] Logar troca de tenant (switch-tenant)
+- [x] Adicionar validações de segurança:
+  - [x] Não permitir criar membership duplicado (tenant_id, account_id)
+    - [x] Banco: `uq_membership_tenant_account` (migration `0097yz012345_add_membership_table.py`)
+    - [x] API: `POST /tenant/{tenant_id}/invite` trata corrida como HTTP 409 (`app/api/route.py`)
+  - [x] Não permitir deletar último membership ACTIVE de um user (ou exigir transferência de admin)
+    - [x] Endpoint (soft-delete): `POST /tenant/{tenant_id}/memberships/{membership_id}/remove` bloqueia se for o último ACTIVE (HTTP 409) (`app/api/route.py`)
+  - [x] Validar que role existe no enum
+    - [x] Banco: CHECK constraint `ck_membership_role_valid` (`alembic/versions/0100ef123456_add_audit_log_and_membership_checks.py`)
+  - [x] Validar que status existe no enum
+    - [x] Banco: CHECK constraint `ck_membership_status_valid` (`alembic/versions/0100ef123456_add_audit_log_and_membership_checks.py`)
+- [x] Adicionar logs/auditoria:
+  - [x] Logar criação de memberships (para rastrear convites)
+    - [x] `event_type=membership_invited` + tabela `audit_log` (`app/model/audit_log.py`, `app/api/route.py`, migration `0100ef123456...`)
+  - [x] Logar mudanças de status (aceitar/rejeitar convites)
+    - [x] `event_type=membership_status_changed` (`app/api/auth.py`)
+  - [x] Logar troca de tenant (switch-tenant)
+    - [x] `event_type=tenant_switched` (`app/api/auth.py`)
 
 **Notas importantes**:
 - Esta correção é **incremental**: cada sub-etapa pode ser testada isoladamente
-- Manter `user.tenant_id` temporariamente durante transição permite rollback seguro
 - Não quebrar endpoints existentes: ajustar gradualmente, manter compatibilidade durante migração
-- JWT continua contendo `tenant_id` e `role`, mas agora `role` vem do Membership, não do User
+- JWT continua contendo `tenant_id` e `role`, mas agora `role` vem do Membership, não da account
 - Todos os testes devem ser feitos via Swagger (`/docs`) ou curl após cada etapa
 
 ---

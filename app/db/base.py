@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel
-from app.model import Tenant, Account, Job, File, ScheduleVersion
+from app.model import Tenant, Account, Membership, AuditLog, Job, File, ScheduleVersion
 
 
 # Importa todos os modelos para que o SQLModel os registre
