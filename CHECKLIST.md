@@ -384,23 +384,27 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 7: Testes e Validação
 
 ### 7.1 Testes Básicos
-- [ ] Testar fluxo completo via `/docs`:
-  1. Criar tenant
-  2. Login (obter JWT)
-  3. Upload arquivo
-  4. Job de extração processa
-  5. Criar ScheduleVersion
-  6. Job de geração processa
-  7. Publicar escala
-  8. Download PDF
-- [ ] Testar multi-tenant isolation (usuário de tenant A não vê dados de tenant B)
-- [ ] Testar que jobs respeitam tenant_id
+- [x] Script de teste end-to-end criado (`script_test_e2e.py`):
+  - [x] Testa fluxo completo automatizado
+  - [x] Cria tenant e autentica
+  - [x] Faz upload de arquivo
+  - [x] Aguarda job de extração processar
+  - [x] Cria ScheduleVersion via `/schedule/generate` (pula se não houver demandas)
+  - [x] Aguarda job de geração processar
+  - [x] Publica escala (`POST /schedule/{id}/publish`) (pula se schedule não gerado)
+  - [x] Faz download do PDF (`GET /schedule/{id}/pdf`) (pula se schedule não gerado)
+  - [x] Testa endpoints independentes (`/job/list`, `/schedule/list`, `/tenant/me`)
+  - [x] Testa isolamento multi-tenant (cria segundo tenant, valida isolamento de jobs/schedules/files)
+  - [x] Valida princípios arquiteturais (passo 9)
+- [ ] Testar fluxo completo via `/docs` manualmente (validação adicional)
+- [x] Testar multi-tenant isolation (usuário de tenant A não vê dados de tenant B) - implementado no script
+- [x] Testar que jobs respeitam tenant_id - implementado no script
 
 ### 7.2 Validação de Princípios
-- [ ] Princípio 1: Requests HTTP nunca rodam solver/IA (sempre criam Job)
-- [ ] Princípio 2: ScheduleVersion imutável, publicação separada
-- [ ] Princípio 3: Multi-tenant por tenant_id em todas as tabelas
-- [ ] Princípio 4: Storage fora do banco (S3, banco só metadados)
+- [x] Princípio 1: Requests HTTP nunca rodam solver/IA (sempre criam Job)
+- [x] Princípio 2: ScheduleVersion imutável, publicação separada (estrutura validada; requer schedule gerado para teste completo)
+- [x] Princípio 3: Multi-tenant por tenant_id em todas as tabelas
+- [x] Princípio 4: Storage fora do banco (S3, banco só metadados)
 
 ---
 
@@ -480,3 +484,33 @@ Antes de considerar completo, verificar:
 ---
 
 **Última atualização**: Refatorado para abordagem incremental e testável.
+
+## Scripts de Teste
+
+### `script_test_e2e.py`
+Script automatizado para teste end-to-end do fluxo completo:
+
+**Uso:**
+```bash
+python script_test_e2e.py [--base-url BASE_URL] [--test-file FILE_PATH]
+```
+
+**Exemplo:**
+```bash
+python script_test_e2e.py --base-url http://localhost:8000 --test-file test/escala_dia1.pdf
+```
+
+**O que testa:**
+1. Criar tenant e autenticar (via `/auth/dev/token`)
+2. Upload de arquivo (`POST /file/upload`)
+3. Criação e processamento de job de extração (`POST /job/extract`)
+4. Criação de ScheduleVersion e job de geração (`POST /schedule/generate`)
+5. Processamento de job de geração
+6. Publicação de escala (`POST /schedule/{id}/publish`)
+7. Download do PDF (`GET /schedule/{id}/pdf`)
+
+**Requisitos:**
+- API rodando (Docker Compose ou local)
+- Worker rodando (para processar jobs)
+- Redis disponível
+- Arquivo de teste (PDF)

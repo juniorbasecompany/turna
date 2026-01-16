@@ -503,20 +503,6 @@ async def create_extract_job(
     return JobExtractResponse(job_id=job.id)
 
 
-@router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
-def get_job(
-    job_id: int,
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-):
-    job = session.get(Job, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job.tenant_id != membership.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    return job
-
-
 class JobListResponse(PydanticBaseModel):
     items: list[JobResponse]
     total: int
@@ -572,6 +558,20 @@ def list_jobs(
         items=[JobResponse.model_validate(item) for item in items],
         total=total,
     )
+
+
+@router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
+def get_job(
+    job_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return job
 
 
 @router.post("/job/{job_id}/requeue", response_model=JobRequeueResponse, status_code=202, tags=["Job"])
