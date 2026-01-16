@@ -333,18 +333,18 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.6 Remoção Final de tenant_id de Account
 
-- [ ] Criar migração Alembic `remove_tenant_id_from_account`:
-  - [ ] Validar que todos os account têm pelo menos 1 membership (não pode ter user órfão)
-  - [ ] Remover coluna `tenant_id` de `user`
-  - [ ] Remover índice `ix_user_tenant_id`
-  - [ ] Remover foreign key constraint de `user.tenant_id`
-- [ ] Atualizar `app/model/user.py`:
-  - [ ] Remover campo `tenant_id`
-  - [ ] Remover relacionamento direto com Tenant (se existir)
-- [ ] Atualizar código que ainda referencia `user.tenant_id`:
-  - [ ] Buscar todas as referências a `user.tenant_id` no código
-  - [ ] Substituir por lógica que busca membership ACTIVE (ou usar `get_current_membership()`)
-  - [ ] **Como testar**: Executar testes completos, verificar que nenhum código quebra
+- [x] Criar migração Alembic `remove_tenant_id_from_account`:
+  - [x] Validar que todos os account têm pelo menos 1 membership (não pode ter user órfão)
+  - [x] Remover coluna `tenant_id` de `account`
+  - [x] Remover índice `ix_account_tenant_id`
+  - [x] Remover foreign key constraint de `account.tenant_id`
+- [x] Atualizar `app/model/user.py`:
+  - [x] Remover campo `tenant_id`
+  - [x] Remover relacionamento direto com Tenant (se existir)
+- [x] Atualizar código que ainda referencia `user.tenant_id`:
+  - [x] Buscar todas as referências a `user.tenant_id` no código
+  - [x] Substituir por lógica que busca membership ACTIVE (ou usar `get_current_membership()`)
+  - [x] **Como testar**: Executar testes completos, verificar que nenhum código quebra
 - [x] Criar script de validação `script_validate_memberships.py`:
   - [x] Verificar que todos os account têm pelo menos 1 membership
   - [ ] Verificar que não há memberships com account_id ou tenant_id inválidos
@@ -353,26 +353,26 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.7 Testes e Validação da Migração
 
-- [ ] Testar fluxo completo de login:
-  - [ ] Usuário novo cria tenant → membership ADMIN ACTIVE criado
-  - [ ] Usuário existente com 1 tenant → login automático
-  - [ ] Usuário existente com múltiplos tenants → precisa selecionar
-  - [ ] **Como testar**: Via Swagger, testar cada cenário
-- [ ] Testar fluxo de convites:
-  - [ ] Admin convida email → membership PENDING criado
-  - [ ] Usuário lista convites → vê convite pendente
-  - [ ] Usuário aceita convite → membership ACTIVE
-  - [ ] Usuário pode trocar para novo tenant
-  - [ ] **Como testar**: Via Swagger, criar dois usuários, testar convite completo
-- [ ] Testar multi-tenant isolation:
-  - [ ] Usuário em Tenant A não vê dados de Tenant B
-  - [ ] Trocar tenant → ver dados do novo tenant
-  - [ ] **Como testar**: Criar dados em dois tenants, trocar entre eles, verificar isolamento
-- [ ] Testar que endpoints existentes continuam funcionando:
-  - [ ] `GET /me` retorna dados corretos
-  - [ ] Endpoints de Job respeitam tenant_id do JWT
+- [x] Testar fluxo completo de login:
+  - [x] Usuário novo cria tenant → membership ADMIN ACTIVE criado
+  - [x] Usuário existente com 1 tenant → login automático
+  - [x] Usuário existente com múltiplos tenants → precisa selecionar
+  - [x] **Como testar**: Automatizado via `script_test_multi_tenant_236_237.py`
+- [x] Testar fluxo de convites:
+  - [x] Admin convida email → membership PENDING criado
+  - [x] Usuário lista convites → vê convite pendente
+  - [x] Usuário aceita convite → membership ACTIVE
+  - [x] Usuário pode trocar para novo tenant
+  - [x] **Como testar**: Automatizado via `script_test_multi_tenant_236_237.py`
+- [x] Testar multi-tenant isolation:
+  - [x] Usuário em Tenant A não vê dados de Tenant B
+  - [x] Trocar tenant → ver dados do novo tenant
+  - [x] **Como testar**: Automatizado via `script_test_multi_tenant_236_237.py`
+- [x] Testar que endpoints existentes continuam funcionando:
+  - [x] `GET /me` retorna dados corretos
+  - [x] Endpoints de Job respeitam tenant_id do JWT
   - [ ] Endpoints futuros de File/Schedule respeitam tenant_id
-  - [ ] **Como testar**: Executar suite de testes via Swagger
+  - [x] **Como testar**: Automatizado via `script_test_multi_tenant_236_237.py`
 
 #### 2.3.8 Rollback e Segurança
 

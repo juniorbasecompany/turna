@@ -173,7 +173,6 @@ def invite_to_tenant(
             email=email,
             name=body.name or email,
             role="user",
-            tenant_id=tenant.id,  # compatibilidade (até remover account.tenant_id)
             auth_provider="invite",
         )
         session.add(account)

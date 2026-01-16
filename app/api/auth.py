@@ -257,7 +257,7 @@ def auth_google_register(
     ).first()
 
     if not account:
-        # Cria novo account (mantém tenant_id por compatibilidade; o enforcement passa a ser via Membership)
+        # Cria novo account (Account não possui tenant_id; o vínculo é via Membership)
         role = _determine_role(email, hd)
         tenant = _get_or_create_default_tenant(session)
 
@@ -265,7 +265,6 @@ def auth_google_register(
             email=email,
             name=name,
             role=role,
-            tenant_id=tenant.id,
             auth_provider="google",
         )
         session.add(account)
@@ -338,7 +337,6 @@ def auth_dev_token(
             email=email,
             name=body.name,
             role=role,
-            tenant_id=tenant.id,
             auth_provider="dev",
         )
         session.add(account)

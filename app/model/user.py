@@ -12,7 +12,6 @@ class Account(BaseModel, table=True):
     email: str = Field(index=True)
     name: str
     role: str = Field(default="user")  # user, admin
-    tenant_id: int = Field(foreign_key="tenant.id", index=True)
     auth_provider: str = Field(default="google")  # google, etc.
 
     # Email globalmente único (um Account pode participar de múltiplos tenants via Membership)
