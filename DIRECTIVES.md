@@ -32,6 +32,15 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Migrações**: toda mudança de schema deve vir acompanhada de migration Alembic.
 - **Consistência**: mantenha nomes e padrões alinhados ao histórico das migrations existentes.
 
+## Modelos e Multi-Tenant
+
+- **Account**: modelo de pessoa física (login Google), email único global, sem `tenant_id`.
+- **Membership**: vínculo Account↔Tenant com `role` e `status` (um Account pode ter múltiplos memberships).
+- **Role e Status**: sempre usar do Membership, não do Account (Account.role é apenas legado/conveniência).
+- **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_membership()`).
+- **Dependencies**: usar `get_current_membership()` para validar acesso ao tenant, não `get_current_account()` diretamente.
+- **JWT**: `role` no token vem do Membership, não do Account.
+
 ## API / FastAPI
 
 - **Contratos**: endpoints devem ter schemas claros de request/response.
