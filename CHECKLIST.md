@@ -322,9 +322,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 5: API Endpoints Completos
 
 ### 5.1 Endpoints de Tenants
-- [ ] Criar `app/api/tenant.py`:
-  - [ ] `POST /tenant` (criar tenant - apenas admin ou primeiro usuário)
-  - [ ] `GET /tenant/me` (tenant atual do usuário)
+- [x] `POST /tenant` (criar tenant - já implementado em `app/api/route.py`)
+  - [x] Cria Tenant e Membership ADMIN ACTIVE para o criador
+- [x] `GET /tenant/me` (tenant atual do usuário - implementado em `app/api/route.py`)
 
 ### 5.2 Endpoints de Schedule
 - [x] Criar `app/api/schedule.py`:
@@ -336,9 +336,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Retornar URL presignada do S3
 
 ### 5.3 Endpoint de Job
-- [ ] Atualizar `app/api/job.py`:
-  - [ ] `GET /job/list` (listar jobs do tenant)
-  - [ ] `GET /job/{job_id}` (detalhes - validar tenant)
+- [x] Endpoints implementados em `app/api/route.py`:
+  - [x] `GET /job/list` (listar jobs do tenant, com paginação e filtros por tipo/status)
+  - [x] `GET /job/{job_id}` (detalhes - validar tenant)
 
 ### 5.4 Validações e Segurança
 - [ ] Garantir que TODOS os endpoints validam tenant_id:

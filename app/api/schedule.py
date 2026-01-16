@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel as PydanticBaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
+from sqlalchemy import func
 
 from app.auth.dependencies import get_current_membership
 from app.db.session import get_session
@@ -24,6 +26,37 @@ class SchedulePublishResponse(PydanticBaseModel):
     status: str
     pdf_file_id: int
     presigned_url: str
+
+
+class ScheduleVersionResponse(PydanticBaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    period_start_at: datetime
+    period_end_at: datetime
+    status: str
+    version_number: int
+    job_id: Optional[int]
+    pdf_file_id: Optional[int]
+    generated_at: Optional[datetime]
+    published_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduleListResponse(PydanticBaseModel):
+    items: list[ScheduleVersionResponse]
+    total: int
+
+
+class ScheduleCreateRequest(PydanticBaseModel):
+    name: str
+    period_start_at: datetime
+    period_end_at: datetime
+    version_number: int = 1
 
 
 def _to_minutes(h: int | float) -> int:
@@ -248,4 +281,92 @@ def download_schedule_pdf(
 
     presigned_url = StorageService().get_file_presigned_url(file_model.s3_key, expiration=3600)
     return RedirectResponse(url=presigned_url, status_code=302)
+
+
+@router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])
+def list_schedules(
+    status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista ScheduleVersions do tenant atual, com filtros opcionais.
+    """
+    # Validar status se fornecido
+    status_enum = None
+    if status:
+        try:
+            status_enum = ScheduleStatus(status.upper())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+
+    # Query base
+    query = select(ScheduleVersion).where(ScheduleVersion.tenant_id == membership.tenant_id)
+    if status_enum:
+        query = query.where(ScheduleVersion.status == status_enum)
+
+    # Contar total antes de aplicar paginação
+    count_query = select(func.count(ScheduleVersion.id)).where(ScheduleVersion.tenant_id == membership.tenant_id)
+    if status_enum:
+        count_query = count_query.where(ScheduleVersion.status == status_enum)
+    total = session.exec(count_query).one()
+
+    # Aplicar ordenação e paginação
+    query = query.order_by(ScheduleVersion.created_at.desc()).limit(limit).offset(offset)
+
+    items = session.exec(query).all()
+    return ScheduleListResponse(
+        items=[ScheduleVersionResponse.model_validate(item) for item in items],
+        total=total,
+    )
+
+
+@router.get("/{schedule_version_id}", response_model=ScheduleVersionResponse, tags=["Schedule"])
+def get_schedule(
+    schedule_version_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Retorna detalhes de uma ScheduleVersion específica.
+    """
+    sv = session.get(ScheduleVersion, schedule_version_id)
+    if not sv:
+        raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
+    if sv.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return ScheduleVersionResponse.model_validate(sv)
+
+
+@router.post("", response_model=ScheduleVersionResponse, status_code=201, tags=["Schedule"])
+def create_schedule(
+    body: ScheduleCreateRequest,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria uma ScheduleVersion manualmente (sem job de geração).
+    Útil para criar escalas vazias ou importar de outras fontes.
+    """
+    # Validar período
+    if body.period_end_at <= body.period_start_at:
+        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
+    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
+
+    sv = ScheduleVersion(
+        tenant_id=membership.tenant_id,
+        name=body.name,
+        period_start_at=body.period_start_at,
+        period_end_at=body.period_end_at,
+        status=ScheduleStatus.DRAFT,
+        version_number=body.version_number,
+    )
+    session.add(sv)
+    session.commit()
+    session.refresh(sv)
+
+    return ScheduleVersionResponse.model_validate(sv)
 

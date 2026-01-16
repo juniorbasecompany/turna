@@ -1,10 +1,11 @@
 import os
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File as FastAPIFile
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import func
@@ -135,6 +136,20 @@ def create_tenant(
     session.add(membership)
     session.commit()
 
+    return tenant
+
+
+@router.get("/tenant/me", response_model=TenantResponse, tags=["Tenant"])
+def get_current_tenant_info(
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Retorna informações do tenant atual do usuário autenticado.
+    """
+    tenant = session.get(Tenant, membership.tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant não encontrado")
     return tenant
 
 
@@ -500,6 +515,63 @@ def get_job(
     if job.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return job
+
+
+class JobListResponse(PydanticBaseModel):
+    items: list[JobResponse]
+    total: int
+
+
+@router.get("/job/list", response_model=JobListResponse, tags=["Job"])
+def list_jobs(
+    job_type: Optional[str] = Query(None, description="Filtrar por tipo (PING, EXTRACT_DEMAND, GENERATE_SCHEDULE)"),
+    status: Optional[str] = Query(None, description="Filtrar por status (PENDING, RUNNING, COMPLETED, FAILED)"),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista jobs do tenant atual, com filtros opcionais.
+    """
+    # Validar filtros se fornecidos
+    job_type_enum = None
+    if job_type:
+        try:
+            job_type_enum = JobType(job_type.upper())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Job type inválido: {job_type}")
+
+    status_enum = None
+    if status:
+        try:
+            status_enum = JobStatus(status.upper())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+
+    # Query base
+    query = select(Job).where(Job.tenant_id == membership.tenant_id)
+    if job_type_enum:
+        query = query.where(Job.job_type == job_type_enum)
+    if status_enum:
+        query = query.where(Job.status == status_enum)
+
+    # Contar total antes de aplicar paginação
+    count_query = select(func.count(Job.id)).where(Job.tenant_id == membership.tenant_id)
+    if job_type_enum:
+        count_query = count_query.where(Job.job_type == job_type_enum)
+    if status_enum:
+        count_query = count_query.where(Job.status == status_enum)
+    total = session.exec(count_query).one()
+
+    # Aplicar ordenação e paginação
+    query = query.order_by(Job.created_at.desc()).limit(limit).offset(offset)
+
+    items = session.exec(query).all()
+    return JobListResponse(
+        items=[JobResponse.model_validate(item) for item in items],
+        total=total,
+    )
 
 
 @router.post("/job/{job_id}/requeue", response_model=JobRequeueResponse, status_code=202, tags=["Job"])
