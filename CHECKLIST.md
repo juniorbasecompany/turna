@@ -248,11 +248,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Se for primeiro usuário do sistema: criar Tenant + Membership ADMIN ACTIVE
   - [ ] Caso contrário: criar Membership PENDING (aguardar convite) ou permitir criar tenant
   - [x] Emitir JWT apenas se tiver membership ACTIVE
-- [x] Criar endpoint `POST /auth/select-tenant`:
-  - [ ] Receber `tenant_id` no body
-  - [ ] Validar que Account tem membership ACTIVE nesse tenant
-  - [ ] Emitir novo JWT com `tenant_id` escolhido + `role` do membership
-  - [ ] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
+- [x] Criar endpoint `POST /auth/switch-tenant` (trocar tenant quando já autenticado):
+  - [x] Receber `tenant_id` no body
+  - [x] Validar que Account tem membership ACTIVE nesse tenant
+  - [x] Emitir novo JWT com `tenant_id` escolhido + `role` do membership
+  - [x] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
 - [x] Criar endpoint `GET /auth/tenant/list`:
   - [x] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
   - [x] Retornar lista de convites pendentes (memberships PENDING)
@@ -289,12 +289,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Atualizar `status` para REJECTED (não deletar)
   - [x] Retornar `{membership_id, status: "REJECTED"}`
   - [ ] **Como testar**: Recusar convite → verificar status REJECTED (não deletado)
-- [ ] Criar endpoint `POST /tenant` (criar clínica):
-  - [ ] Permitir se usuário não tem nenhum membership ACTIVE (primeiro tenant)
-  - [ ] Criar Tenant
-  - [ ] Criar Membership ADMIN ACTIVE para o usuário
-  - [ ] Emitir JWT com novo tenant_id
-  - [ ] **Como testar**: Criar tenant → verificar membership ADMIN ACTIVE criado
+- [x] Criar endpoint `POST /tenant` (criar clínica):
+  - [x] Criar Tenant
+  - [x] Criar Membership ADMIN ACTIVE para o usuário
+  - [x] **Nota**: Usuário pode usar `/auth/switch-tenant` depois para trocar para o novo tenant
+  - [x] **Como testar**: Criar tenant → verificar membership ADMIN ACTIVE criado
 
 #### 2.3.5 Ajuste de JWT e Enforcement
 
