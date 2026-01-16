@@ -1,6 +1,6 @@
 from app.model.base import BaseModel
 from app.model.tenant import Tenant
-from app.model.user import Account
+from app.model.account import Account
 from app.model.membership import Membership
 from app.model.audit_log import AuditLog
 from app.model.job import Job

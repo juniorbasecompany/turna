@@ -9,9 +9,8 @@ from app.model.base import BaseModel
 
 
 class MembershipRole(str, enum.Enum):
-    # Mantém valores compatíveis com o sistema atual (account.role)
     ADMIN = "admin"
-    USER = "user"
+    ACCOUNT = "account"
 
 
 class MembershipStatus(str, enum.Enum):
@@ -35,10 +34,10 @@ class Membership(BaseModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
     account_id: int = Field(foreign_key="account.id", index=True)
 
-    # Importante: persistir enums pelos *values* ("admin"/"user", etc),
-    # pois o banco usa strings (ver migration 0097...).
+    # Importante: persistir enums pelos *values* ("admin"/"account", etc),
+    # pois o banco usa strings.
     role: MembershipRole = Field(
-        default=MembershipRole.USER,
+        default=MembershipRole.ACCOUNT,
         sa_type=sa.Enum(
             MembershipRole,
             name="membership_role",

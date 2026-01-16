@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from app.db.session import get_session
 from app.model.membership import Membership, MembershipStatus
-from app.model.user import Account
+from app.model.account import Account
 from app.model.tenant import Tenant
 from app.auth.jwt import verify_token
 
@@ -87,7 +87,7 @@ def get_current_tenant(
 
 def require_role(required_role: str):
     """
-    Dependency factory para verificar se o usuário tem uma role específica.
+    Dependency factory para verificar se a conta tem uma role específica.
 
     Args:
         required_role: Role necessária (ex: "admin")

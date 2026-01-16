@@ -18,7 +18,7 @@ from app.api.schedule import router as schedule_router
 from app.auth.dependencies import get_current_account, get_current_membership, require_role
 from app.model.membership import Membership, MembershipRole, MembershipStatus
 from app.model.audit_log import AuditLog
-from app.model.user import Account
+from app.model.account import Account
 from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
@@ -140,7 +140,7 @@ def create_tenant(
 
 class TenantInviteRequest(PydanticBaseModel):
     email: str
-    role: str = "user"  # MVP: user/admin
+    role: str = "account"  # MVP: account/admin
     name: str | None = None
 
 
@@ -173,9 +173,9 @@ def invite_to_tenant(
         raise HTTPException(status_code=400, detail="email is required")
 
     role_raw = body.role.strip().lower()
-    if role_raw not in {"user", "admin"}:
-        raise HTTPException(status_code=400, detail="role inválida (esperado: user|admin)")
-    role = MembershipRole.ADMIN if role_raw == "admin" else MembershipRole.USER
+    if role_raw not in {"account", "admin"}:
+        raise HTTPException(status_code=400, detail="role inválida (esperado: account|admin)")
+    role = MembershipRole.ADMIN if role_raw == "admin" else MembershipRole.ACCOUNT
 
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
@@ -186,7 +186,7 @@ def invite_to_tenant(
         account = Account(
             email=email,
             name=body.name or email,
-            role="user",
+            role="account",
             auth_provider="invite",
         )
         session.add(account)
@@ -324,7 +324,7 @@ def remove_membership(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Não é permitido remover o último membership ACTIVE do usuário. "
+                    "Não é permitido remover o último membership ACTIVE da conta. "
                     "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
                 ),
             )

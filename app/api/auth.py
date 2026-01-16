@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.db.session import get_session
 from app.model.membership import Membership, MembershipRole, MembershipStatus
 from app.model.audit_log import AuditLog
-from app.model.user import Account
+from app.model.account import Account
 from app.model.tenant import Tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
@@ -71,7 +71,7 @@ class TokenResponse(BaseModel):
 
 class DevTokenRequest(BaseModel):
     email: str
-    name: str = "Dev User"
+    name: str = "Dev Account"
     tenant_id: int | None = None
 
 
@@ -82,7 +82,7 @@ class GoogleSelectTenantRequest(BaseModel):
 
 
 def _determine_role(email: str, hd: Optional[str] = None) -> str:
-    """Determina a role do usuário baseado em email e hosted domain."""
+    """Determina a role da conta baseada em email e hosted domain."""
     email_lower = email.lower()
 
     if ADMIN_EMAILS and email_lower in ADMIN_EMAILS:
@@ -91,13 +91,13 @@ def _determine_role(email: str, hd: Optional[str] = None) -> str:
     if ADMIN_HOSTED_DOMAIN and hd == ADMIN_HOSTED_DOMAIN:
         return "admin"
 
-    return "user"
+    return "account"
 
 
 def _get_or_create_default_tenant(session: Session) -> Tenant:
-    """Obtém ou cria um tenant padrão para novos usuários."""
+    """Obtém ou cria um tenant padrão para novas contas."""
     # Por enquanto, cria um tenant padrão se não existir
-    # Em produção, isso deve ser configurado ou o usuário deve escolher durante registro
+    # Em produção, isso deve ser configurado ou a conta deve escolher durante registro
     default_tenant = session.exec(
         select(Tenant).where(Tenant.slug == "default")
     ).first()
@@ -161,7 +161,7 @@ def _list_pending_invites_for_account(session: Session, *, account_id: int) -> l
     return invites
 
 
-def get_user_memberships(session: Session, *, account_id: int) -> tuple[list[TenantOption], list[InviteOption]]:
+def get_account_memberships(session: Session, *, account_id: int) -> tuple[list[TenantOption], list[InviteOption]]:
     """
     Retorna (ACTIVE tenants, PENDING invites) para a conta.
     """
@@ -170,7 +170,7 @@ def get_user_memberships(session: Session, *, account_id: int) -> tuple[list[Ten
     return tenants, invites
 
 
-def get_active_tenant_for_user(session: Session, *, account_id: int) -> int | None:
+def get_active_tenant_for_account(session: Session, *, account_id: int) -> int | None:
     """
     Seleção automática de tenant:
       - 0 ACTIVE: None
@@ -212,7 +212,7 @@ def auth_google(
     session: Session = Depends(get_session),
 ):
     """
-    Login com Google - apenas autentica se o usuário já existe.
+    Login com Google - apenas autentica se a conta já existe.
 
     Recebe: {"id_token": "<JWT do Google>"}
     Retorna: {"access_token": "<JWT do sistema>", "token_type": "bearer"}
@@ -229,10 +229,10 @@ def auth_google(
     if not account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado. Use a opção 'Cadastrar-se' para criar uma conta."
+            detail="Conta não encontrada. Use a opção 'Cadastrar-se' para criar uma conta."
         )
 
-    tenants, invites = get_user_memberships(session, account_id=account.id)
+    tenants, invites = get_account_memberships(session, account_id=account.id)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
     if len(tenants) > 1:
@@ -253,7 +253,7 @@ def auth_google_register(
     session: Session = Depends(get_session),
 ):
     """
-    Cadastro com Google - cria o usuário se não existir, ou autentica se já existe.
+    Cadastro com Google - cria a conta se não existir, ou autentica se já existe.
 
     Recebe: {"id_token": "<JWT do Google>"}
     Retorna: {"access_token": "<JWT do sistema>", "token_type": "bearer"}
@@ -263,7 +263,7 @@ def auth_google_register(
     name = idinfo["name"]
     hd = idinfo.get("hd")
 
-    # Verifica se o usuário já existe
+    # Verifica se a conta já existe
     account = session.exec(
         select(Account).where(Account.email == email)
     ).first()
@@ -286,7 +286,7 @@ def auth_google_register(
         membership = Membership(
             tenant_id=tenant.id,
             account_id=account.id,
-            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.USER,
+            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.ACCOUNT,
             status=MembershipStatus.ACTIVE,
         )
         session.add(membership)
@@ -306,7 +306,7 @@ def auth_google_select_tenant(
     session: Session = Depends(get_session),
 ):
     """
-    Quando o usuário tem múltiplos tenants ACTIVE, este endpoint emite o JWT do sistema
+    Quando a conta tem múltiplos tenants ACTIVE, este endpoint emite o JWT do sistema
     para o tenant escolhido, validando via Google ID token + Membership.
     """
     idinfo = verify_google_token(body.id_token)
@@ -314,7 +314,7 @@ def auth_google_select_tenant(
 
     account = session.exec(select(Account).where(Account.email == email)).first()
     if not account:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
 
     membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
     if not membership:
@@ -358,7 +358,7 @@ def auth_dev_token(
         membership = Membership(
             tenant_id=tenant.id,
             account_id=account.id,
-            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.USER,
+            role=MembershipRole.ADMIN if role == "admin" else MembershipRole.ACCOUNT,
             status=MembershipStatus.ACTIVE,
         )
         session.add(membership)
@@ -372,7 +372,7 @@ def auth_dev_token(
         token = _issue_token_for_membership(account=account, membership=membership)
         return AuthResponse(access_token=token)
 
-    tenants, invites = get_user_memberships(session, account_id=account.id)
+    tenants, invites = get_account_memberships(session, account_id=account.id)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
     if len(tenants) > 1:
@@ -392,7 +392,7 @@ def list_my_tenants(
     session: Session = Depends(get_session),
 ):
     """Lista tenants ACTIVE disponíveis e convites PENDING para a conta autenticada."""
-    tenants, invites = get_user_memberships(session, account_id=account.id)
+    tenants, invites = get_account_memberships(session, account_id=account.id)
     return TenantListResponse(tenants=tenants, invites=invites)
 
 

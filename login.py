@@ -56,11 +56,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 bearer = HTTPBearer(auto_error=False)
 
 # -----------------------------
-# Gerenciamento de usuários
+# Gerenciamento de contas
 # -----------------------------
 
 def load_account() -> List[Dict]:
-    """Carrega usuários do arquivo JSON"""
+    """Carrega contas do arquivo JSON"""
     if not ACCOUNT_FILE.exists():
         return []
     try:
@@ -70,24 +70,24 @@ def load_account() -> List[Dict]:
         return []
 
 def save_account(account: List[Dict]) -> None:
-    """Salva usuários no arquivo JSON"""
+    """Salva contas no arquivo JSON"""
     with ACCOUNT_FILE.open("w", encoding="utf-8") as f:
         json.dump(account, f, indent=2, ensure_ascii=False)
 
-def find_user_by_email(email: str) -> Optional[Dict]:
-    """Busca um usuário pelo email"""
-    account = load_account()
+def find_account_by_email(email: str) -> Optional[Dict]:
+    """Busca uma conta pelo email"""
+    accounts = load_account()
     email_lower = email.lower()
-    for user in account:
-        if user.get("email", "").lower() == email_lower:
-            return user
+    for account in accounts:
+        if account.get("email", "").lower() == email_lower:
+            return account
     return None
 
 # -----------------------------
 # JWT
 # -----------------------------
 
-def issue_app_jwt(email: str, name: str, role: str = "user") -> str:
+def issue_app_jwt(email: str, name: str, role: str = "account") -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": email,
@@ -126,7 +126,7 @@ def index():
 
 
 def _verify_google_token(token: str) -> dict:
-    """Verifica o token do Google e retorna as informações do usuário"""
+    """Verifica o token do Google e retorna as informações da conta"""
     try:
         idinfo = id_token.verify_oauth2_token(
             token, google_requests.Request(), GOOGLE_CLIENT_ID
@@ -153,7 +153,7 @@ def _verify_google_token(token: str) -> dict:
 @app.post("/auth/google")
 def auth_google(body: dict):
     """
-    Login com Google - apenas autentica se o usuário já existe
+    Login com Google - apenas autentica se a conta já existe
     Recebe: {"id_token": "<JWT do Google>"}
     Retorna: {"access_token": "<JWT do seu sistema>"}
     """
@@ -165,13 +165,13 @@ def auth_google(body: dict):
     email = idinfo["email"]
     name = idinfo["name"]
 
-    # Verifica se o usuário existe
-    user = find_user_by_email(email)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado. Use a opção 'Cadastrar-se' para criar uma conta.")
+    # Verifica se a conta existe
+    account = find_account_by_email(email)
+    if not account:
+        raise HTTPException(status_code=404, detail="Conta não encontrada. Use a opção 'Cadastrar-se' para criar uma conta.")
 
     # Determina role
-    role = user.get("role", "user")
+    role = account.get("role", "account")
 
     # Verifica permissões de admin (se necessário)
     if ADMIN_EMAILS and email not in ADMIN_EMAILS:
@@ -188,7 +188,7 @@ def auth_google(body: dict):
 @app.post("/auth/google/register")
 def auth_google_register(body: dict):
     """
-    Cadastro com Google - cria o usuário se não existir, ou autentica se já existe
+    Cadastro com Google - cria a conta se não existir, ou autentica se já existe
     Recebe: {"id_token": "<JWT do Google>"}
     Retorna: {"access_token": "<JWT do seu sistema>"}
     """
@@ -201,24 +201,24 @@ def auth_google_register(body: dict):
     name = idinfo["name"]
     hd = idinfo.get("hd")
 
-    # Verifica se o usuário já existe
-    user = find_user_by_email(email)
+    # Verifica se a conta já existe
+    account = find_account_by_email(email)
 
-    if user:
-        # Usuário já existe, apenas autentica
-        role = user.get("role", "user")
+    if account:
+        # Conta já existe, apenas autentica
+        role = account.get("role", "account")
     else:
-        # Cria novo usuário
-        # Determina role: admin se estiver na lista de admins, senão user
+        # Cria nova conta
+        # Determina role: admin se estiver na lista de admins, senão account
         is_admin = False
         if ADMIN_EMAILS and email in ADMIN_EMAILS:
             is_admin = True
         elif ADMIN_HOSTED_DOMAIN and hd == ADMIN_HOSTED_DOMAIN:
             is_admin = True
 
-        role = "admin" if is_admin else "user"
+        role = "admin" if is_admin else "account"
 
-        new_user = {
+        new_account = {
             "name": name,
             "email": email,
             "role": role,
@@ -226,9 +226,9 @@ def auth_google_register(body: dict):
             "auth_provider": "google"
         }
 
-        account = load_account()
-        account.append(new_user)
-        save_account(account)
+        accounts = load_account()
+        accounts.append(new_account)
+        save_account(accounts)
 
     # Verifica permissões de admin (se necessário)
     if ADMIN_EMAILS and email not in ADMIN_EMAILS:
@@ -242,9 +242,9 @@ def auth_google_register(body: dict):
     return {"access_token": app_token, "token_type": "bearer"}
 
 @app.get("/me")
-def me(user=Depends(verify_app_jwt)):
-    return {"user": user}
+def me(account=Depends(verify_app_jwt)):
+    return {"account": account}
 
 @app.get("/admin/ping")
-def admin_ping(user=Depends(verify_app_jwt)):
-    return {"ok": True, "email": user["sub"], "role": user.get("role")}
+def admin_ping(account=Depends(verify_app_jwt)):
+    return {"ok": True, "email": account["sub"], "role": account.get("role")}

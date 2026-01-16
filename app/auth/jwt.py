@@ -37,7 +37,7 @@ def create_access_token(
     Args:
         account_id: ID da conta no banco
         tenant_id: ID do tenant da conta
-        role: Role da conta (user, admin)
+        role: Role pública da conta (account, admin)
         email: Email da conta
         name: Nome da conta
 
