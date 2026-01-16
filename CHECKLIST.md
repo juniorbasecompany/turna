@@ -341,12 +341,18 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] `GET /job/{job_id}` (detalhes - validar tenant)
 
 ### 5.4 Validações e Segurança
-- [ ] Garantir que TODOS os endpoints validam tenant_id:
-  - [ ] Extrair de JWT
-  - [ ] Validar que tenant existe
-  - [ ] Filtrar queries por tenant_id
-- [ ] Garantir que endpoints de criação/atualização não permitem alterar tenant_id
-- [ ] Documentar API com OpenAPI/Swagger (FastAPI já faz isso)
+- [x] Garantir que TODOS os endpoints validam tenant_id:
+  - [x] Extrair de JWT via `get_current_membership()` (implementado em todos os endpoints)
+  - [x] Validar que tenant existe (validação implícita em `get_current_membership()`)
+  - [x] Filtrar queries por tenant_id (implementado em todos os endpoints de listagem)
+- [x] Garantir que endpoints de criação/atualização não permitem alterar tenant_id:
+  - [x] Endpoints de criação usam `membership.tenant_id` (não aceitam do body)
+  - [x] Endpoints de atualização validam `tenant_id` e não permitem alteração
+- [x] Documentar padrões de segurança:
+  - [x] Criado `SECURITY.md` com padrões de validação multi-tenant
+  - [x] Documentação de exemplos corretos e incorretos
+  - [x] Checklist de validação para novos endpoints
+- [x] Documentar API com OpenAPI/Swagger (FastAPI já faz isso automaticamente)
 
 ---
 
@@ -465,7 +471,8 @@ Antes de considerar completo, verificar:
 - [x] Multi-tenant enforcement ativo em todos os endpoints (via Membership)
 - [x] Storage S3/MinIO funcionando (upload/download)
 - [x] Jobs Arq processando corretamente (PING, EXTRACT, GENERATE)
-- [ ] API endpoints completos seguindo princípios arquiteturais
+- [x] API endpoints completos seguindo princípios arquiteturais
+- [x] Padrões de segurança documentados (`SECURITY.md`)
 - [ ] Docker Compose sobe sem erros
 - [x] Migrações Alembic aplicam sem erros
 - [x] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
