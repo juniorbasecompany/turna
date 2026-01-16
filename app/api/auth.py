@@ -30,11 +30,25 @@ class TenantOption(BaseModel):
     role: str
 
 
+class InviteOption(BaseModel):
+    membership_id: int
+    tenant_id: int
+    name: str
+    slug: str
+    role: str
+    status: str
+
+
 class AuthResponse(BaseModel):
     access_token: str | None = None
     token_type: str = "bearer"
     requires_tenant_selection: bool = False
     tenants: list[TenantOption] = []
+
+
+class TenantListResponse(BaseModel):
+    tenants: list[TenantOption] = []
+    invites: list[InviteOption] = []
 
 
 class TokenResponse(BaseModel):
@@ -108,6 +122,54 @@ def _list_active_tenants_for_account(session: Session, *, account_id: int) -> li
     return opts
 
 
+def _list_pending_invites_for_account(session: Session, *, account_id: int) -> list[InviteOption]:
+    rows = session.exec(
+        select(Tenant, Membership)
+        .join(Membership, Membership.tenant_id == Tenant.id)
+        .where(
+            Membership.account_id == account_id,
+            Membership.status == MembershipStatus.PENDING,
+        )
+        .order_by(Tenant.id.asc())
+    ).all()
+
+    invites: list[InviteOption] = []
+    for tenant, membership in rows:
+        invites.append(
+            InviteOption(
+                membership_id=membership.id,
+                tenant_id=tenant.id,
+                name=tenant.name,
+                slug=tenant.slug,
+                role=membership.role.value,
+                status=membership.status.value,
+            )
+        )
+    return invites
+
+
+def get_user_memberships(session: Session, *, account_id: int) -> tuple[list[TenantOption], list[InviteOption]]:
+    """
+    Retorna (ACTIVE tenants, PENDING invites) para a conta.
+    """
+    tenants = _list_active_tenants_for_account(session, account_id=account_id)
+    invites = _list_pending_invites_for_account(session, account_id=account_id)
+    return tenants, invites
+
+
+def get_active_tenant_for_user(session: Session, *, account_id: int) -> int | None:
+    """
+    Seleção automática de tenant:
+      - 0 ACTIVE: None
+      - 1 ACTIVE: tenant_id
+      - >1 ACTIVE: None (exige seleção)
+    """
+    tenants = _list_active_tenants_for_account(session, account_id=account_id)
+    if len(tenants) == 1:
+        return tenants[0].tenant_id
+    return None
+
+
 def _get_active_membership(
     session: Session, *, account_id: int, tenant_id: int
 ) -> Membership | None:
@@ -157,7 +219,7 @@ def auth_google(
             detail="Usuário não encontrado. Use a opção 'Cadastrar-se' para criar uma conta."
         )
 
-    tenants = _list_active_tenants_for_account(session, account_id=account.id)
+    tenants, invites = get_user_memberships(session, account_id=account.id)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
     if len(tenants) > 1:
@@ -299,7 +361,7 @@ def auth_dev_token(
         token = _issue_token_for_membership(account=account, membership=membership)
         return AuthResponse(access_token=token)
 
-    tenants = _list_active_tenants_for_account(session, account_id=account.id)
+    tenants, invites = get_user_memberships(session, account_id=account.id)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
     if len(tenants) > 1:
@@ -313,13 +375,14 @@ def auth_dev_token(
     return AuthResponse(access_token=token)
 
 
-@router.get("/tenant/list", response_model=list[TenantOption], tags=["Auth"])
+@router.get("/tenant/list", response_model=TenantListResponse, tags=["Auth"])
 def list_my_tenants(
     account: Account = Depends(get_current_account),
     session: Session = Depends(get_session),
 ):
-    """Lista tenants ACTIVE disponíveis para a conta autenticada (para switch)."""
-    return _list_active_tenants_for_account(session, account_id=account.id)
+    """Lista tenants ACTIVE disponíveis e convites PENDING para a conta autenticada."""
+    tenants, invites = get_user_memberships(session, account_id=account.id)
+    return TenantListResponse(tenants=tenants, invites=invites)
 
 
 class SwitchTenantRequest(BaseModel):

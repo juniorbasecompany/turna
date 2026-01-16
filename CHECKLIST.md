@@ -228,26 +228,26 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### 2.3.3 Ajuste de Fluxos de Autenticação e Entrada
 
-- [ ] Atualizar `app/auth/oauth.py` (ou `app/api/auth.py`):
-  - [ ] Após login Google, identificar User por email (criar se não existir, SEM tenant_id)
-  - [ ] Criar função `get_user_memberships(session, account_id)`:
-    - [ ] Retornar memberships com status ACTIVE (tenants disponíveis)
-    - [ ] Retornar memberships com status PENDING (convites pendentes)
-  - [ ] Criar função `get_active_tenant_for_user(session, account_id)`:
-    - [ ] Se 0 ACTIVE: retornar None (usuário precisa criar tenant ou aceitar convite)
-    - [ ] Se 1 ACTIVE: retornar esse tenant (seleção automática)
-    - [ ] Se >1 ACTIVE: retornar None (exigir seleção)
-- [ ] Atualizar endpoint `POST /auth/google`:
-  - [ ] Buscar User por email (sem filtro de tenant)
-  - [ ] Carregar memberships do usuário
-  - [ ] Se não tiver nenhum ACTIVE: retornar erro ou permitir criar tenant
-  - [ ] Se tiver 1 ACTIVE: emitir JWT com esse tenant_id
-  - [ ] Se tiver >1 ACTIVE: retornar lista de tenants disponíveis (não emitir JWT ainda)
-- [ ] Atualizar endpoint `POST /auth/google/register`:
-  - [ ] Criar User SEM tenant_id (ou com tenant_id NULL temporariamente)
-  - [ ] Se for primeiro usuário do sistema: criar Tenant + Membership ADMIN ACTIVE
+- [x] Atualizar `app/auth/oauth.py` (ou `app/api/auth.py`):
+  - [x] Após login Google, identificar User por email (criar se não existir, SEM tenant_id)
+  - [x] Criar função `get_user_memberships(session, account_id)`:
+    - [x] Retornar memberships com status ACTIVE (tenants disponíveis)
+    - [x] Retornar memberships com status PENDING (convites pendentes)
+  - [x] Criar função `get_active_tenant_for_user(session, account_id)`:
+    - [x] Se 0 ACTIVE: retornar None (usuário precisa criar tenant ou aceitar convite)
+    - [x] Se 1 ACTIVE: retornar esse tenant (seleção automática)
+    - [x] Se >1 ACTIVE: retornar None (exigir seleção)
+- [x] Atualizar endpoint `POST /auth/google`:
+  - [x] Buscar User por email (sem filtro de tenant)
+  - [x] Carregar memberships do usuário
+  - [x] Se não tiver nenhum ACTIVE: retornar erro ou permitir criar tenant
+  - [x] Se tiver 1 ACTIVE: emitir JWT com esse tenant_id
+  - [x] Se tiver >1 ACTIVE: retornar lista de tenants disponíveis (não emitir JWT ainda)
+- [x] Atualizar endpoint `POST /auth/google/register`:
+  - [x] Criar User SEM tenant_id (ou com tenant_id NULL temporariamente)
+  - [x] Se for primeiro usuário do sistema: criar Tenant + Membership ADMIN ACTIVE
   - [ ] Caso contrário: criar Membership PENDING (aguardar convite) ou permitir criar tenant
-  - [ ] Emitir JWT apenas se tiver membership ACTIVE
+  - [x] Emitir JWT apenas se tiver membership ACTIVE
 - [x] Criar endpoint `POST /auth/select-tenant`:
   - [ ] Receber `tenant_id` no body
   - [ ] Validar que User tem membership ACTIVE nesse tenant
@@ -255,8 +255,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] **Como testar**: Login → selecionar tenant → verificar JWT contém tenant_id correto
 - [x] Criar endpoint `GET /auth/tenant/list`:
   - [x] Retornar lista de tenants disponíveis (memberships ACTIVE do usuário)
-  - [ ] Retornar lista de convites pendentes (memberships PENDING)
-  - [ ] **Como testar**: Chamar endpoint após login, verificar lista de tenants e convites
+  - [x] Retornar lista de convites pendentes (memberships PENDING)
+  - [x] **Como testar**: Chamar endpoint após login, verificar lista de tenants e convites
 
 #### 2.3.4 Implementação de Convites
 
