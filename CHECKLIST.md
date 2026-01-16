@@ -482,15 +482,15 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] 403 → mensagem clara (“usuário sem acesso a nenhum tenant”)
 
 ### 8.5 Seleção de Tenant
-- [ ] Implementar página de seleção (`app/(auth)/select-tenant/page.tsx`):
-  - [ ] Listar tenants via `GET /auth/tenant/list`
-  - [ ] Usar response do login apenas como atalho inicial
-  - [ ] Permitir refresh da página sem quebrar o fluxo
-  - [ ] Loading state durante seleção
-- [ ] Seleção de tenant:
-  - [ ] Chamar handler `api/auth/google/select-tenant`
-  - [ ] Atualizar cookie httpOnly
-  - [ ] Redirect para dashboard
+- [x] Implementar página de seleção (`app/(auth)/select-tenant/page.tsx`):
+  - [x] Listar tenants via `GET /auth/tenant/list`
+  - [x] Usar response do login apenas como atalho inicial
+  - [x] Permitir refresh da página sem quebrar o fluxo
+  - [x] Loading state durante seleção
+- [x] Seleção de tenant:
+  - [x] Chamar handler `api/auth/google/select-tenant`
+  - [x] Atualizar cookie httpOnly
+  - [x] Redirect para dashboard
 
 ### 8.6 Layout Autenticado e Header
 - [ ] Criar layout autenticado (`app/(protected)/layout.tsx`):

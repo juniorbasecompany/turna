@@ -94,7 +94,7 @@ export default function LoginPage() {
 
                 // Outros erros
                 if (res.status === 403) {
-                    setError('Usuário sem acesso a nenhum tenant')
+                    setError('Usuário sem acesso a nenhuma clínica')
                 } else {
                     setError(result.detail || 'Erro ao fazer login')
                 }
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 router.push('/select-tenant')
             } else if (result.access_token) {
                 // Token direto → redirect para dashboard
-                router.push('/')
+                router.push('/dashboard')
             } else {
                 setError('Resposta inesperada do servidor')
             }

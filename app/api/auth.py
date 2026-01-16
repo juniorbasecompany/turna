@@ -57,6 +57,7 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
     requires_tenant_selection: bool = False
     tenants: list[TenantOption] = []
+    invites: list[InviteOption] = []
 
 
 class TenantListResponse(BaseModel):
@@ -235,10 +236,12 @@ def auth_google(
     tenants, invites = get_account_memberships(session, account_id=account.id)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
-    if len(tenants) > 1:
-        return AuthResponse(requires_tenant_selection=True, tenants=tenants)
 
-    # Único tenant ativo -> emite token direto.
+    # Se há múltiplos tenants ACTIVE ou convites PENDING, exige seleção
+    if len(tenants) > 1 or len(invites) > 0:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenants, invites=invites)
+
+    # Único tenant ativo e sem convites -> emite token direto.
     only = tenants[0]
     membership = _get_active_membership(session, account_id=account.id, tenant_id=only.tenant_id)
     if not membership:

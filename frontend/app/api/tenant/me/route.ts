@@ -1,18 +1,15 @@
-import { TenantListResponse } from '@/types/api'
 import { NextRequest, NextResponse } from 'next/server'
-import { api } from '@/lib/api'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
- * Handler Next.js para listar tenants disponíveis
+ * Handler Next.js para obter informações do tenant atual
  *
- * Chama GET /auth/tenant/list no backend.
+ * Chama GET /tenant/me no backend.
  * Requer autenticação via cookie httpOnly.
  */
 export async function GET(request: NextRequest) {
     try {
-        // Obter token do cookie
         const token = request.cookies.get('access_token')?.value
 
         if (!token) {
@@ -23,7 +20,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Chamar backend com token no header
-        const response = await fetch(`${API_URL}/auth/tenant/list`, {
+        const response = await fetch(`${API_URL}/tenant/me`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -31,7 +28,7 @@ export async function GET(request: NextRequest) {
             },
         })
 
-        const data: TenantListResponse = await response.json()
+        const data = await response.json()
 
         if (!response.ok) {
             return NextResponse.json(data, { status: response.status })
@@ -39,7 +36,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json(data)
     } catch (error) {
-        console.error('Erro no handler de listar tenants:', error)
+        console.error('Erro ao obter informações do tenant:', error)
         return NextResponse.json(
             { detail: 'Erro interno do servidor' },
             { status: 500 }

@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
         const token = request.cookies.get('access_token')?.value
 
         if (!token) {
+            // Cookie não encontrado - não autenticado
             return NextResponse.json(
                 { authenticated: false },
                 { status: 401 }

@@ -4,14 +4,17 @@ Frontend e backend são projetos independentes no mesmo repositório, comunicand
 
 Este documento concentra **diretivas que devem ser seguidas** durante a construção do projeto (código, sugestões, revisões e automações).
 
-## Nome de classe, arquivo, objeto, atributo, etc
-- **Singular**: sempre dê preferência a nomes no singular.
-- **Plural**: evite usar.
-- **Listas e Arrays**: use o sufixo List.
-- **Exceções por convenção de tooling**: quando uma ferramenta possui convenção/padrão consolidado (ex.: `alembic/versions/`), mantenha o padrão e documente a exceção.
+## Convenções de nomenclatura e idioma
+
+- **Idioma do código**: todo o código-fonte (nomes de classes, arquivos, métodos, variáveis, atributos, etc.) deve ser escrito **em inglês**.
+- **Idioma de comunicação**: todos os **comentários**, **documentação** e **mensagens exibidas ao usuário** devem ser escritos **em português**, tanto no **backend** quanto no **frontend**.
+- **Singular**: utilize nomes no singular como padrão (ex.: `User`, `Invoice`, `Schedule`).
+- **Plural**: evite o uso de nomes no plural, exceto quando estritamente necessário.
+- **Listas e arrays**: utilize o sufixo `List` para indicar coleções (ex.: `userList`, `invoiceList`).
+- **Exceções por convenção de ferramentas**: quando uma ferramenta ou framework adotar um padrão consolidado (ex.: `alembic/versions/`), preserve a convenção original e registre explicitamente a exceção na documentação do projeto.
+
 
 ## Datas e Horários
-
 - **Tipo obrigatório**: todos os campos de data/hora devem ser `timestamptz` (PostgreSQL).
 - **Proibição**: não usar `date`, `time` ou `timestamp without time zone`.
 - **Convenção de nomes**: todo campo de data/hora termina com `_at` (`created_at`, `start_at`, `end_at`, `published_at`).
@@ -47,6 +50,40 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 
 - **Contratos**: endpoints devem ter schemas claros de request/response.
 - **Erros**: padronize respostas de erro (mensagens e status codes).
+
+## Frontend / Autenticação
+
+- **Padrão de carregamento em páginas protegidas**: use `fetch()` diretamente (NÃO use `api.get()` do `lib/api.ts` ou hooks de autenticação), seguindo exatamente o padrão de `/select-tenant` e `/dashboard`:
+  - Estrutura: `try { try { fetch() } catch {} } catch {}` - try interno para API, catch que ignora erro
+  - Não redirecionar para `/login` em caso de erro de API - apenas mostrar mensagem de erro
+  - Isso evita logout desnecessário ao pressionar F5 em caso de erros temporários de rede/servidor
+- **F5/Refresh**: ao recarregar a página (F5), tentar carregar dados do servidor. Se falhar, mostrar erro mas NÃO redirecionar para `/login` automaticamente. Apenas redirecionar quando realmente não houver cookie válido (401 real do backend).
+- **Redirecionamento automático**: o `lib/api.ts` faz redirecionamento automático para `/login` em 401. Páginas que usam `fetch()` diretamente devem ter exceção adicionada em `lib/api.ts` se usarem `api.get()` em algum lugar (ver `/dashboard` como exceção).
+- **Exemplo de padrão** (como `/select-tenant` e `/dashboard`):
+  ```tsx
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      try {
+        const res = await fetch('/api/endpoint', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          setData(data)
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        // Se API falhar, continuar (não redirecionar)
+      }
+      setError('Não foi possível carregar dados. Tente recarregar a página.')
+    } catch (err) {
+      setError('Erro ao carregar dados')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  ```
 
 ## Execução (Dev): Docker vs Local
 

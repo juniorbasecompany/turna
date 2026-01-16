@@ -5,6 +5,7 @@ export interface AuthResponse {
   token_type: string
   requires_tenant_selection: boolean
   tenants: TenantOption[]
+  invites?: InviteOption[] // Convites pendentes
   detail?: string // Para mensagens de erro
 }
 
