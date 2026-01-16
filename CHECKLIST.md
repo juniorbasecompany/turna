@@ -409,17 +409,17 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ## FASE 8: Frontend e Mobile
 
 ### 8.1 Organização do Repositório (Monorepo)
-- [ ] Manter **um único repositório `turna`** (monorepo)
-- [ ] Criar pasta `frontend/` para o projeto Next.js
-- [ ] **Não mover o backend neste momento**
-  - [ ] Manter código FastAPI na estrutura atual
-  - [ ] Evitar impacto em imports, Alembic, Docker e scripts existentes
-- [ ] Manter `docker-compose.yml` na raiz do projeto
-- [ ] Garantir independência entre backend e frontend:
-  - [ ] Backend com seu próprio `requirements.txt`
-  - [ ] Frontend com seu próprio `package.json`
-  - [ ] Comunicação exclusivamente via API HTTP
-  - [ ] Nenhuma dependência direta de código entre as camadas
+- [x] Manter **um único repositório `turna`** (monorepo)
+- [x] Criar pasta `frontend/` para o projeto Next.js
+- [x] **Não mover o backend neste momento**
+  - [x] Manter código FastAPI na estrutura atual
+  - [x] Evitar impacto em imports, Alembic, Docker e scripts existentes
+- [x] Manter `docker-compose.yml` na raiz do projeto
+- [x] Garantir independência entre backend e frontend:
+  - [x] Backend com seu próprio `requirements.txt`
+  - [x] Frontend com seu próprio `package.json`
+  - [x] Comunicação exclusivamente via API HTTP
+  - [x] Nenhuma dependência direta de código entre as camadas
 
 ### 8.2 Frontend Web (Next.js) – Setup Básico
 - [ ] Criar projeto Next.js:
