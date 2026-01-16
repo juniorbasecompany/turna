@@ -4,9 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
- * Handler Next.js para login com Google
+ * Handler Next.js para cadastro com Google
  *
- * Recebe id_token do frontend, chama backend POST /auth/google,
+ * Recebe id_token do frontend, chama backend POST /auth/google/register,
  * e grava JWT em cookie httpOnly.
  */
 export async function POST(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Chamar backend
-        const response = await fetch(`${API_URL}/auth/google`, {
+        const response = await fetch(`${API_URL}/auth/google/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         // Sem token e sem requires_tenant_selection (resposta inesperada)
         return NextResponse.json(data)
     } catch (error) {
-        console.error('Erro no handler de login:', error)
+        console.error('Erro no handler de cadastro:', error)
         return NextResponse.json(
             { detail: 'Erro interno do servidor' },
             { status: 500 }

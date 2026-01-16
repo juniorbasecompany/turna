@@ -13,7 +13,10 @@ declare global {
                         client_id: string
                         callback: (response: { credential: string }) => void
                     }) => void
-                    renderButton: (element: HTMLElement, config: { theme?: string; size?: string }) => void
+                    renderButton: (
+                        element: HTMLElement,
+                        config: { theme?: string; size?: string; text?: string; shape?: string }
+                    ) => void
                     prompt: () => void
                 }
             }
@@ -28,7 +31,7 @@ export default function LoginPage() {
     const [googleClientId, setGoogleClientId] = useState<string | null>(null)
     const [retryKey, setRetryKey] = useState(0)
     const [isRetry, setIsRetry] = useState(false)
-    const initializedRef = useRef(false)
+    const initializedLoginRef = useRef(false)
 
     const handleGoogleSignIn = useCallback(async (response: { credential: string }) => {
         setLoading(true)
@@ -50,11 +53,48 @@ export default function LoginPage() {
             const result: AuthResponse = await res.json()
 
             if (!res.ok) {
-                // Erro do servidor
+                // Se a conta não foi encontrada (404), tentar cadastro automático
+                if (res.status === 404) {
+                    // Automaticamente chamar registro com os mesmos dados do Google
+                    const registerRes = await fetch('/api/auth/google/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            id_token: response.credential,
+                        }),
+                    })
+
+                    const registerResult: AuthResponse = await registerRes.json()
+
+                    if (!registerRes.ok) {
+                        // Se o registro também falhar, mostrar erro
+                        setError(registerResult.detail || 'Erro ao cadastrar')
+                        return
+                    }
+
+                    // Registro bem-sucedido - tratar resposta como login normal
+                    // (continuar com o código abaixo que trata requires_tenant_selection)
+                    const finalResult = registerResult
+
+                    // Tratamento de resposta do registro (mesmo comportamento do login)
+                    if (finalResult.requires_tenant_selection) {
+                        sessionStorage.setItem('login_id_token', response.credential)
+                        sessionStorage.setItem('login_response', JSON.stringify(finalResult))
+                        router.push('/select-tenant')
+                    } else if (finalResult.access_token) {
+                        router.push('/')
+                    } else {
+                        setError('Resposta inesperada do servidor')
+                    }
+                    return
+                }
+
+                // Outros erros
                 if (res.status === 403) {
                     setError('Usuário sem acesso a nenhum tenant')
-                } else if (res.status === 404) {
-                    setError('Conta não encontrada. Use a opção "Cadastrar-se" para criar uma conta.')
                 } else {
                     setError(result.detail || 'Erro ao fazer login')
                 }
@@ -62,12 +102,17 @@ export default function LoginPage() {
             }
 
             // Tratamento de resposta
-            if (result.access_token) {
+            // Verificar requires_tenant_selection PRIMEIRO antes de access_token
+            // Isso garante que quando há múltiplos tenants, vamos para seleção
+            if (result.requires_tenant_selection) {
+                // Exige seleção de tenant → salvar dados e redirect para seleção
+                // Salvar id_token e resposta do login no sessionStorage para permitir refresh
+                sessionStorage.setItem('login_id_token', response.credential)
+                sessionStorage.setItem('login_response', JSON.stringify(result))
+                router.push('/select-tenant')
+            } else if (result.access_token) {
                 // Token direto → redirect para dashboard
                 router.push('/')
-            } else if (result.requires_tenant_selection) {
-                // Exige seleção de tenant → redirect para seleção
-                router.push('/select-tenant')
             } else {
                 setError('Resposta inesperada do servidor')
             }
@@ -110,30 +155,33 @@ export default function LoginPage() {
                 return false
             }
 
-            const buttonElement = document.getElementById('google-signin-button')
-            if (!buttonElement) {
+            const loginButtonElement = document.getElementById('google-signin-button')
+            if (!loginButtonElement) {
                 return false
             }
 
-            // Verifica se já foi inicializado para evitar múltiplas inicializações
-            if (initializedRef.current) {
+            // Verifica se já foi inicializado
+            if (initializedLoginRef.current) {
                 return true
             }
 
             try {
-                // Inicializa a API do Google
+                // Inicializar o Google Identity Services
                 google.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleGoogleSignIn,
                 })
 
-                // Renderiza o botão imediatamente
-                google.accounts.id.renderButton(buttonElement, {
+                // Renderizar botão de Login com texto do Google (não hardcoded)
+                google.accounts.id.renderButton(loginButtonElement, {
                     theme: 'outline',
                     size: 'large',
+                    text: 'signin_with',
+                    shape: 'rectangular',
                 })
 
-                initializedRef.current = true
+                initializedLoginRef.current = true
+
                 setGoogleClientId(clientId)
                 return true
             } catch (error) {
@@ -203,37 +251,37 @@ export default function LoginPage() {
         const google = window.google
         setError(null)
         setGoogleClientId(null)
-        initializedRef.current = false
+        initializedLoginRef.current = false
 
         // Limpa qualquer conteúdo do botão que possa ter sido renderizado pelo Google
-        const buttonElement = document.getElementById('google-signin-button')
-        if (buttonElement) {
-            while (buttonElement.firstChild) {
-                buttonElement.removeChild(buttonElement.firstChild)
+        const loginButtonElement = document.getElementById('google-signin-button')
+        if (loginButtonElement) {
+            while (loginButtonElement.firstChild) {
+                loginButtonElement.removeChild(loginButtonElement.firstChild)
             }
         }
 
         // Aguarda um frame para garantir que o DOM foi atualizado
         requestAnimationFrame(() => {
-            // Se o script já está carregado, tenta inicializar imediatamente
-            if (google?.accounts?.id && buttonElement) {
-                const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-                if (clientId) {
-                    try {
-                        google.accounts.id.initialize({
-                            client_id: clientId,
-                            callback: handleGoogleSignIn,
-                        })
-                        google.accounts.id.renderButton(buttonElement, {
-                            theme: 'outline',
-                            size: 'large',
-                        })
-                        initializedRef.current = true
-                        setGoogleClientId(clientId)
-                        return // Sucesso, não precisa rodar o useEffect novamente
-                    } catch (err) {
-                        // Se falhar, continua para tentar novamente via useEffect
-                    }
+            const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+            if (google?.accounts?.id && clientId && loginButtonElement) {
+                try {
+                    // Reinicializar o botão
+                    google.accounts.id.initialize({
+                        client_id: clientId,
+                        callback: handleGoogleSignIn,
+                    })
+                    google.accounts.id.renderButton(loginButtonElement, {
+                        theme: 'outline',
+                        size: 'large',
+                        text: 'signin_with',
+                        shape: 'rectangular',
+                    })
+                    initializedLoginRef.current = true
+                    setGoogleClientId(clientId)
+                    return // Sucesso, não precisa rodar o useEffect novamente
+                } catch (err) {
+                    // Se falhar, continua para tentar novamente via useEffect
                 }
             }
 
@@ -275,7 +323,7 @@ export default function LoginPage() {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {/* Elemento onde o Google renderiza o botão real - sempre presente no DOM */}
+                            {/* Elemento onde o Google renderiza o botão de login - sempre presente no DOM */}
                             <div
                                 id="google-signin-button"
                                 className="flex justify-center min-h-[48px]"
