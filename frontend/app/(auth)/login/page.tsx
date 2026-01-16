@@ -262,7 +262,7 @@ export default function LoginPage() {
                             <p className="text-sm text-red-800 mb-3">{error}</p>
                             <button
                                 onClick={handleRetry}
-                                className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
+                                className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                             >
                                 Tentar novamente
                             </button>
@@ -271,8 +271,7 @@ export default function LoginPage() {
 
                     {loading ? (
                         <div className="flex justify-center items-center py-4">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                            <span className="ml-3 text-gray-600">Autenticando...</span>
+                            <span className="text-gray-600">Autenticando...</span>
                         </div>
                     ) : (
                         <div className="space-y-4">
