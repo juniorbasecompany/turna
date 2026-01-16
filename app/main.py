@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.route import router
 from app.middleware.tenant import tenant_context_middleware
@@ -23,6 +24,20 @@ app = FastAPI(
     title="Turna API",
     description="API para gerenciamento de escalas médicas",
     version="1.0.0"
+)
+
+# Configuração CORS
+# Permite requisições do frontend (localhost:3000 e localhost:3001)
+# Pode ser configurado via variável de ambiente CORS_ORIGINS (separado por vírgula)
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001")
+cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -74,9 +89,9 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
-# Endpoint /login deve vir depois do mount para ter prioridade
+# Endpoint /loginbackend deve vir depois do mount para ter prioridade
 # Tag "Interface" para diferenciar visualmente no Swagger
-@app.get("/login", response_class=HTMLResponse, tags=["Interface"])
+@app.get("/loginbackend", response_class=HTMLResponse, tags=["Interface"])
 def login_page():
     """Página de login para testar autenticação Google (retorna HTML, não JSON)."""
     html_path = static_dir / "login.html"

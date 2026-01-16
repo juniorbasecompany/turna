@@ -459,27 +459,27 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Evitar armazenar JWT em estado ou storage
 
 ### 8.4 Autenticação – Login e OAuth Google
-- [ ] Implementar página de login (`app/(auth)/login/page.tsx`):
-  - [ ] Botão “Entrar com Google” (Google Identity Services)
-  - [ ] Obter `id_token` do Google
-  - [ ] Enviar `id_token` para handler do Next.js
-  - [ ] Loading state durante autenticação
-- [ ] Criar handlers de autenticação no Next.js:
-  - [ ] `app/api/auth/google/login`
+- [x] Implementar página de login (`app/(auth)/login/page.tsx`):
+  - [x] Botão “Entrar com Google” (Google Identity Services)
+  - [x] Obter `id_token` do Google
+  - [x] Enviar `id_token` para handler do Next.js
+  - [x] Loading state durante autenticação
+- [x] Criar handlers de autenticação no Next.js:
+  - [x] `app/api/auth/google/login`
     - Recebe `id_token`
     - Chama `POST /auth/google` no backend
     - Grava JWT em **cookie httpOnly**
     - Retorna estado para o frontend
-  - [ ] `app/api/auth/google/select-tenant`
+  - [x] `app/api/auth/google/select-tenant`
     - Recebe `id_token` + `tenant_id`
     - Chama backend
     - Atualiza cookie com novo JWT
-  - [ ] `app/api/auth/logout`
+  - [x] `app/api/auth/logout`
     - Remove cookie de autenticação
-- [ ] Tratamento de resposta no login:
-  - [ ] Token direto → redirect dashboard
-  - [ ] `requires_tenant_selection = true` → redirect seleção de tenant
-  - [ ] 403 → mensagem clara (“usuário sem acesso a nenhum tenant”)
+- [x] Tratamento de resposta no login:
+  - [x] Token direto → redirect dashboard
+  - [x] `requires_tenant_selection = true` → redirect seleção de tenant
+  - [x] 403 → mensagem clara (“usuário sem acesso a nenhum tenant”)
 
 ### 8.5 Seleção de Tenant
 - [ ] Implementar página de seleção (`app/(auth)/select-tenant/page.tsx`):
