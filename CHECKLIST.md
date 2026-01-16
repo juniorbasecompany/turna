@@ -62,11 +62,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Testar: gerar escala, ver ScheduleVersion criado (script `script_test_schedule_generate.py`)
 
 ### Etapa 7: PDF + Publicação
-- [ ] Gerar PDF (adaptar `output/day.py`)
-- [ ] Upload PDF para S3
-- [ ] Endpoint `POST /schedule/{id}/publish`
-- [ ] Endpoint `GET /schedule/{id}/pdf` (download)
-- [ ] Testar: gerar → publicar → download PDF
+- [x] Gerar PDF (adaptar `output/day.py`)
+- [x] Upload PDF para S3
+- [x] Endpoint `POST /schedule/{id}/publish`
+- [x] Endpoint `GET /schedule/{id}/pdf` (download)
+- [x] Testar: publicar → download PDF (ok no container, gerou `output_test_schedule.pdf`)
 
 ---
 
@@ -482,7 +482,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
     5. Chamar solver greedy (código de `strategy/`)
     6. Salvar resultado no `ScheduleVersion.result_data` e `generated_at`
     7. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`
-  - [ ] PDF + S3 + `pdf_file_id` (Etapa 7)
+  - [x] PDF + S3 + `pdf_file_id` (Etapa 7) (via endpoint `POST /schedule/{id}/publish`)
 - [x] Criar endpoint `POST /schedule/generate`:
   - [x] Receber `extract_job_id`, `period_start_at`, `period_end_at`, `allocation_mode`, `pros_by_sequence` (opcional)
   - [x] Criar `ScheduleVersion` (DRAFT) e vincular `job_id`
@@ -503,13 +503,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] `GET /tenant/me` (tenant atual do usuário)
 
 ### 5.2 Endpoints de Schedule
-- [ ] Criar `app/api/schedule.py`:
+- [x] Criar `app/api/schedule.py`:
   - [ ] `GET /schedule/list` (listar ScheduleVersions - filtrado por tenant)
   - [ ] `POST /schedule` (criar ScheduleVersion - filtrado por tenant)
   - [ ] `GET /schedule/{id}` (detalhes - validar tenant)
-  - [ ] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
-  - [ ] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
-  - [ ] Retornar URL presignada do S3
+  - [x] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
+  - [x] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
+  - [x] Retornar URL presignada do S3
 
 ### 5.3 Endpoint de Job
 - [ ] Atualizar `app/api/job.py`:
@@ -540,9 +540,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Chama solver apropriado (greedy ou CP-SAT)
 
 ### 6.2 Adaptação de Geração de PDF
-- [ ] Revisar `output/day.py`:
-  - [ ] Adaptar `render_pdf()` para receber dados do ScheduleVersion
-  - [ ] Retornar bytes do PDF (não salvar em arquivo)
+- [x] Revisar `output/day.py`:
+  - [x] Retornar bytes do PDF (helpers `render_pdf_bytes()` e `render_multi_day_pdf_bytes()`)
 - [ ] Integrar no job `generate_schedule_job`:
   - [ ] Gerar PDF em memória
   - [ ] Upload para S3 via StorageService

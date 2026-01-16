@@ -42,6 +42,7 @@ Dependência:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import math
 import sys
@@ -277,6 +278,57 @@ def render_pdf(schedule: DaySchedule, out_path: Path) -> None:
     page_w, page_h = landscape(A4)
     c = Canvas(str(out_path), pagesize=(page_w, page_h))
 
+    _render_pdf_to_canvas(c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics)
+    c.save()
+
+
+def render_pdf_bytes(schedule: DaySchedule) -> bytes:
+    """
+    Renderiza um PDF em memória e retorna bytes.
+
+    Observação: mantém `render_pdf()` para o uso via CLI.
+    """
+    _require_reportlab()
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfgen.canvas import Canvas
+
+    page_w, page_h = landscape(A4)
+    buf = io.BytesIO()
+    c = Canvas(buf, pagesize=(page_w, page_h))
+    _render_pdf_to_canvas(c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics)
+    c.save()
+    return buf.getvalue()
+
+
+def render_multi_day_pdf_bytes(schedules: list[DaySchedule]) -> bytes:
+    """
+    Renderiza múltiplos `DaySchedule` no mesmo PDF (uma sequência de páginas) e retorna bytes.
+    """
+    if not schedules:
+        raise ValueError("schedules vazio")
+
+    _require_reportlab()
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfgen.canvas import Canvas
+
+    page_w, page_h = landscape(A4)
+    buf = io.BytesIO()
+    c = Canvas(buf, pagesize=(page_w, page_h))
+
+    for i, schedule in enumerate(schedules):
+        _render_pdf_to_canvas(c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics)
+        if i != len(schedules) - 1:
+            c.showPage()
+
+    c.save()
+    return buf.getvalue()
+
+
+def _render_pdf_to_canvas(c, schedule: DaySchedule, *, page_w: float, page_h: float, colors, pdfmetrics) -> None:
     margin = 18
     header_h = 42
     row_h = 22
@@ -404,8 +456,6 @@ def render_pdf(schedule: DaySchedule, out_path: Path) -> None:
         draw_row(y, idx, row)
         y -= row_h
         idx += 1
-
-    c.save()
 
 
 def _write_example(path: Path) -> None:

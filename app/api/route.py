@@ -12,6 +12,7 @@ from app.db.session import get_session
 from app.model.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel, field_validator
 from app.api.auth import router as auth_router
+from app.api.schedule import router as schedule_router
 from app.auth.dependencies import get_current_account, require_role
 from app.model.user import Account
 from app.storage.service import StorageService
@@ -24,6 +25,7 @@ from app.model.base import utc_now
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
 router.include_router(auth_router)
+router.include_router(schedule_router)
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
 
