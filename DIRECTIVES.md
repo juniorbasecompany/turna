@@ -53,37 +53,39 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 
 ## Frontend / Autenticação
 
-- **Padrão de carregamento em páginas protegidas**: use `fetch()` diretamente (NÃO use `api.get()` do `lib/api.ts` ou hooks de autenticação), seguindo exatamente o padrão de `/select-tenant` e `/dashboard`:
-  - Estrutura: `try { try { fetch() } catch {} } catch {}` - try interno para API, catch que ignora erro
-  - Não redirecionar para `/login` em caso de erro de API - apenas mostrar mensagem de erro
-  - Isso evita logout desnecessário ao pressionar F5 em caso de erros temporários de rede/servidor
-- **F5/Refresh**: ao recarregar a página (F5), tentar carregar dados do servidor. Se falhar, mostrar erro mas NÃO redirecionar para `/login` automaticamente. Apenas redirecionar quando realmente não houver cookie válido (401 real do backend).
-- **Redirecionamento automático**: o `lib/api.ts` faz redirecionamento automático para `/login` em 401. Páginas que usam `fetch()` diretamente devem ter exceção adicionada em `lib/api.ts` se usarem `api.get()` em algum lugar (ver `/dashboard` como exceção).
-- **Exemplo de padrão** (como `/select-tenant` e `/dashboard`):
-  ```tsx
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      try {
-        const res = await fetch('/api/endpoint', { credentials: 'include' })
-        if (res.ok) {
-          const data = await res.json()
-          setData(data)
-          setLoading(false)
-          return
-        }
-      } catch (err) {
-        // Se API falhar, continuar (não redirecionar)
-      }
-      setError('Não foi possível carregar dados. Tente recarregar a página.')
-    } catch (err) {
-      setError('Erro ao carregar dados')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-  ```
+## Padrão de carregamento em páginas protegidas
+
+- **Use `fetch()` diretamente**.
+  Não use `api.get()` do `lib/api.ts` nem hooks de autenticação.
+- **Seguir o padrão de `/dashboard`.**
+- **Estrutura obrigatória**:
+  - `try` externo para controle geral
+  - `try` interno para chamada da API
+  - `catch` interno **ignora erro** (rede/servidor)
+- **Nunca redirecionar para `/login`** em erro de API.
+- **Motivo**: evitar logout indevido ao pressionar F5 em falhas temporárias.
+
+## F5 / Refresh
+
+- Ao recarregar a página, **sempre tentar carregar os dados**.
+- Se falhar:
+  - Mostrar mensagem de erro
+  - **Não redirecionar automaticamente para `/login`**
+- Redirecionar para `/login` **somente em 401 real** (cookie inválido).
+
+## Redirecionamento automático (`lib/api.ts`)
+
+- `lib/api.ts` redireciona automaticamente para `/login` em respostas 401.
+- Páginas que usam `fetch()` direto **não devem sofrer esse redirecionamento**.
+- Se uma página precisar usar `api.get()`:
+  - Adicionar **exceção explícita** no `lib/api.ts`
+  - Usar `/dashboard` como referência.
+
+## Referência
+
+- Padrão implementado em:
+  - `/select-tenant`
+  - `/dashboard`
 
 ## Execução (Dev): Docker vs Local
 
