@@ -713,10 +713,60 @@ export default function FilesPage() {
             return // Não há jobs em andamento, não precisa fazer polling
         }
 
+        // Função para atualizar status dos arquivos sem recarregar toda a lista
+        const updateFileStatuses = async () => {
+            try {
+                // Buscar TODOS os jobs EXTRACT_DEMAND recentes (para pegar PENDING, RUNNING, COMPLETED e FAILED)
+                // Buscamos apenas os mais recentes (limit=100) para não sobrecarregar
+                const response = await fetch('/api/job/list?job_type=EXTRACT_DEMAND&limit=100', {
+                    credentials: 'include',
+                })
+
+                if (response.ok) {
+                    const data = await response.json()
+                    const allJobs = data.items || []
+
+                    // Criar map de file_id -> job_status (usando o job mais recente para cada file_id)
+                    const fileIdToJobStatus = new Map<number, string>()
+                    for (const job of allJobs) {
+                        if (job.input_data && job.input_data.file_id) {
+                            const fileId = typeof job.input_data.file_id === 'string'
+                                ? parseInt(job.input_data.file_id, 10)
+                                : job.input_data.file_id
+                            if (!isNaN(fileId)) {
+                                // Só atualizar se ainda não tiver um status para este file_id
+                                // (jobs estão ordenados por created_at desc, então o primeiro é o mais recente)
+                                if (!fileIdToJobStatus.has(fileId)) {
+                                    fileIdToJobStatus.set(fileId, job.status)
+                                }
+                            }
+                        }
+                    }
+
+                    // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
+                    setFiles((prevFiles) => {
+                        return prevFiles.map((file) => {
+                            const newStatus = fileIdToJobStatus.get(file.id)
+                            // Atualizar se:
+                            // 1. Há um novo status e é diferente do atual
+                            // 2. O arquivo estava em processamento mas agora não tem mais status (raro, mas possível)
+                            if (newStatus && file.job_status !== newStatus) {
+                                return { ...file, job_status: newStatus }
+                            }
+                            // Se o arquivo estava em processamento mas não há mais job, manter o status atual
+                            // (não limpar para evitar perder informação)
+                            return file
+                        })
+                    })
+                }
+            } catch (err) {
+                // Ignorar erros no polling - não queremos interromper a UI
+                console.error('Erro ao atualizar status dos jobs:', err)
+            }
+        }
+
         // Polling a cada 2 segundos
-        const interval = setInterval(() => {
-            setRefreshKey((prev) => prev + 1)
-        }, 2000)
+        const interval = setInterval(updateFileStatuses, 2000)
 
         return () => {
             clearInterval(interval)
