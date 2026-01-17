@@ -1,11 +1,14 @@
 'use client'
 
 import { Header } from '@/components/Header'
+import { Sidebar } from '@/components/Sidebar'
 
 /**
  * Layout para páginas protegidas (autenticadas)
  *
- * Inclui Header com nome do tenant, seletor de tenant e menu do usuário.
+ * Inclui Header com nome do tenant e menu do usuário no topo,
+ * Sidebar fixa à esquerda para navegação,
+ * e área de conteúdo principal à direita.
  * NÃO faz proteção via middleware - cada página deve usar fetch() direto
  * seguindo o padrão de /dashboard.
  */
@@ -17,7 +20,10 @@ export default function ProtectedLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main>{children}</main>
+      <Sidebar />
+      <main className="ml-64 pt-16">
+        {children}
+      </main>
     </div>
   )
 }

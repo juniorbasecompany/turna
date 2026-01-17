@@ -7,7 +7,6 @@ from sqlmodel import Session
 from app.storage.client import S3Client
 from app.storage.config import S3Config
 from app.model.file import File
-from app.model.base import utc_now
 
 
 class StorageService:
@@ -83,7 +82,6 @@ class StorageService:
             s3_key=s3_key,
             s3_url=s3_url,
             file_size=file_size,
-            uploaded_at=utc_now(),
         )
 
         try:
@@ -140,7 +138,6 @@ class StorageService:
             s3_key=s3_key,
             s3_url=s3_url,
             file_size=file_size,
-            uploaded_at=utc_now(),
         )
 
         try:
@@ -172,3 +169,12 @@ class StorageService:
             URL presignada
         """
         return self.client.get_presigned_url(s3_key, expiration=expiration)
+
+    def delete_file(self, s3_key: str) -> None:
+        """
+        Deleta arquivo do S3/MinIO.
+
+        Args:
+            s3_key: Chave S3 do arquivo a ser deletado
+        """
+        self.client.delete_file(s3_key)

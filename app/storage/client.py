@@ -155,3 +155,18 @@ class S3Client:
             return url
         except ClientError as e:
             raise Exception(f"Erro ao gerar URL presignada: {e}")
+
+    def delete_file(self, s3_key: str) -> None:
+        """
+        Deleta arquivo do S3/MinIO.
+
+        Args:
+            s3_key: Chave S3 do arquivo a ser deletado
+        """
+        try:
+            self._client.delete_object(
+                Bucket=self.config.bucket_name,
+                Key=s3_key,
+            )
+        except ClientError as e:
+            raise Exception(f"Erro ao deletar arquivo do S3: {e}")

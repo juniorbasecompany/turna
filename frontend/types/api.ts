@@ -83,6 +83,20 @@ export interface FileUploadResponse {
   presigned_url: string
 }
 
+export interface FileResponse {
+  id: number
+  filename: string
+  content_type: string
+  file_size: number
+  created_at: string
+  can_delete: boolean
+}
+
+export interface FileListResponse {
+  items: FileResponse[]
+  total: number
+}
+
 export interface ScheduleVersionResponse {
   id: number
   tenant_id: number

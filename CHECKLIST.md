@@ -340,7 +340,22 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] `GET /job/list` (listar jobs do tenant, com paginação e filtros por tipo/status)
   - [x] `GET /job/{job_id}` (detalhes - validar tenant)
 
-### 5.4 Validações e Segurança
+### 5.4 Endpoints de File
+- [x] `POST /file/upload` (upload de arquivo - já implementado em `app/api/route.py`)
+- [x] `GET /file/list` (listar arquivos do tenant com paginação e filtros):
+  - [x] Parâmetros de query:
+    - [x] `start_at` (opcional, timestamptz em ISO 8601) - filtro por `created_at >= start_at`
+    - [x] `end_at` (opcional, timestamptz em ISO 8601) - filtro por `created_at <= end_at`
+    - [x] `limit` (padrão: 20, ge=1, le=100) - número máximo de itens
+    - [x] `offset` (padrão: 0, ge=0) - offset para paginação
+  - [x] Filtrar exclusivamente pelo campo `created_at` (não usar `uploaded_at` ou `updated_at`)
+  - [x] Sempre filtrar por `tenant_id` do JWT (via `get_current_membership()`)
+  - [x] Não aceitar `tenant_id` via request (usar contexto do JWT)
+  - [x] Ordenar por `created_at` (decrescente)
+  - [x] Retornar total de registros para suporte à paginação
+  - [x] Response: `{items: FileResponse[], total: int}` (seguindo padrão de `/job/list`)
+
+### 5.5 Validações e Segurança
 - [x] Garantir que TODOS os endpoints validam tenant_id:
   - [x] Extrair de JWT via `get_current_membership()` (implementado em todos os endpoints)
   - [x] Validar que tenant existe (validação implícita em `get_current_membership()`)
@@ -538,7 +553,39 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
     - Download PDF (PUBLISHED)
   - [ ] Loading e tratamento de erros
 
-### 8.10 UX Essencial e Tratamento de Erros
+### 8.10 Página de Arquivos
+- [x] Navegação:
+  - [x] Adicionar opção **Arquivos** no menu principal (Sidebar)
+  - [x] Ao clicar, redirecionar para `/files`
+- [x] Listagem de arquivos (`app/(protected)/files/page.tsx`):
+  - [x] Chamar `GET /file/list` (via handler `/api/file/list`)
+  - [x] Listar apenas arquivos do tenant atual (filtrado automaticamente pelo backend)
+  - [x] Ordenar por `created_at` (decrescente) - aplicado no backend
+  - [x] Exibir cada arquivo como um **card**
+  - [x] Cada card deve mostrar:
+    - [x] Nome do arquivo (`filename`)
+    - [x] Tipo de conteúdo (`content_type`)
+    - [x] Tamanho do arquivo (`file_size`) - formatado (ex: "1.5 MB")
+    - [x] Data/hora de criação (`created_at`) - formatada no timezone do tenant
+  - [x] Layout responsivo e consistente com outras páginas
+- [x] Filtro por período:
+  - [x] Criar filtro com campos de data (data de início e data de fim)
+  - [x] Filtrar exclusivamente pelo campo `created_at`
+  - [x] Por padrão, exibir apenas arquivos **criados no dia atual** (definir `start_at` e `end_at` no frontend)
+  - [x] Validar intervalo (data inicial ≤ data final) no frontend
+  - [x] Enviar filtros como query params (`start_at`, `end_at`) na chamada da API
+- [x] Paginação:
+  - [x] Implementar paginação usando `limit` e `offset`
+  - [x] Definir limite padrão de 20 itens por página
+  - [x] Exibir controles de navegação (próxima / anterior)
+  - [x] Mostrar total de registros e página atual
+  - [x] Usar padrão similar a `/job/list` e `/schedule/list`
+- [x] Regras gerais:
+  - [x] Não expor arquivos de outros tenants (garantido pelo backend)
+  - [x] Usar `fetch()` direto seguindo padrão de `/dashboard` (não usar `api.get()`)
+  - [x] Datas sempre em `timestamptz` e armazenadas em UTC (conversão de timezone apenas para exibição)
+
+### 8.11 UX Essencial e Tratamento de Erros
 - [ ] Loading states:
   - [ ] Login OAuth
   - [ ] Seleção de tenant
@@ -551,7 +598,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Toasts de sucesso/erro
   - [ ] Indicadores de status
 
-### 8.11 Integração com Docker Compose (pós-MVP)
+### 8.12 Integração com Docker Compose (pós-MVP)
 - [ ] Rodar frontend local sem Docker durante desenvolvimento inicial
 - [ ] Criar Dockerfile para frontend
 - [ ] Adicionar serviço frontend no `docker-compose.yml`:
@@ -563,7 +610,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Habilitar credentials
   - [ ] Origin configurável via variável de ambiente
 
-### 8.12 Testes e Validação
+### 8.13 Testes e Validação
 - [ ] Fluxos principais:
   - [ ] Login com token direto
   - [ ] Login com seleção de tenant
@@ -575,7 +622,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Refresh em `/select-tenant` não quebra o fluxo
 - [ ] Cookies e CORS funcionando corretamente
 
-### 8.13 Mobile (React Native) - Futuro
+### 8.14 Mobile (React Native) - Futuro
 - [ ] Criar projeto React Native
 - [ ] Configurar autenticação (OAuth Google)
 - [ ] Telas: Login, Lista de Escalas, Detalhes de Escala
@@ -596,7 +643,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 2. **Importante**: Fase 5 (API endpoints)
 3. **Necessário**: Fase 6 (integração)
 4. **Desejável**: Fase 7 (testes)
-5. **Em Andamento**: Fase 8.1-8.12 (frontend web)
+5. **Em Andamento**: Fase 8.1-8.14 (frontend web)
 6. **Futuro**: Fase 8.13 (mobile)
 
 ### Boas Práticas

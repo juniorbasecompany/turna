@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from arq import create_pool
 from arq.connections import RedisSettings
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File as FastAPIFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File as FastAPIFile, Response
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import func
@@ -673,6 +673,24 @@ class FileUploadResponse(PydanticBaseModel):
         from_attributes = True
 
 
+class FileResponse(PydanticBaseModel):
+    """Resposta de arquivo para listagem (sem presigned_url)."""
+    id: int
+    filename: str
+    content_type: str
+    file_size: int
+    created_at: datetime
+    can_delete: bool  # True se não possui job EXTRACT_DEMAND COMPLETED
+
+    class Config:
+        from_attributes = True
+
+
+class FileListResponse(PydanticBaseModel):
+    items: list[FileResponse]
+    total: int
+
+
 class ScheduleGenerateRequest(PydanticBaseModel):
     extract_job_id: int
     period_start_at: datetime
@@ -734,6 +752,172 @@ def upload_file(
             status_code=500,
             detail=error_detail
         )
+
+
+@router.get("/file/list", response_model=FileListResponse, tags=["File"])
+def list_files(
+    start_at: Optional[datetime] = Query(None, description="Filtrar por created_at >= start_at (timestamptz em ISO 8601)"),
+    end_at: Optional[datetime] = Query(None, description="Filtrar por created_at <= end_at (timestamptz em ISO 8601)"),
+    limit: int = Query(21, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista arquivos do tenant atual, com filtros opcionais por período e paginação.
+
+    Filtra exclusivamente pelo campo created_at (não usa uploaded_at ou updated_at).
+    Sempre filtra por tenant_id do JWT (via membership).
+    Ordena por created_at decrescente.
+    """
+    # Query base - sempre filtrar por tenant_id
+    query = select(File).where(File.tenant_id == membership.tenant_id)
+
+    # Aplicar filtros de período (created_at)
+    if start_at is not None:
+        if start_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
+        query = query.where(File.created_at >= start_at)
+
+    if end_at is not None:
+        if end_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
+        query = query.where(File.created_at <= end_at)
+
+    # Validar intervalo
+    if start_at is not None and end_at is not None:
+        if start_at > end_at:
+            raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
+
+    # Contar total antes de aplicar paginação
+    count_query = select(func.count(File.id)).where(File.tenant_id == membership.tenant_id)
+    if start_at is not None:
+        count_query = count_query.where(File.created_at >= start_at)
+    if end_at is not None:
+        count_query = count_query.where(File.created_at <= end_at)
+    total = session.exec(count_query).one()
+
+    # Aplicar ordenação e paginação (created_at decrescente)
+    query = query.order_by(File.created_at.desc()).limit(limit).offset(offset)
+
+    items = session.exec(query).all()
+
+    # Buscar todos os jobs EXTRACT_DEMAND COMPLETED do tenant para verificar quais arquivos podem ser deletados
+    completed_jobs_query = select(Job).where(
+        Job.tenant_id == membership.tenant_id,
+        Job.job_type == JobType.EXTRACT_DEMAND,
+        Job.status == JobStatus.COMPLETED,
+    )
+    completed_jobs = session.exec(completed_jobs_query).all()
+
+    # Criar set com file_ids que têm job COMPLETED
+    file_ids_with_completed_job = set()
+    for job in completed_jobs:
+        if job.input_data and "file_id" in job.input_data:
+            job_file_id = job.input_data["file_id"]
+            # Converter para int para garantir comparação correta (pode vir como string do JSON)
+            if isinstance(job_file_id, str):
+                try:
+                    job_file_id = int(job_file_id)
+                except (ValueError, TypeError):
+                    continue
+            file_ids_with_completed_job.add(job_file_id)
+
+    # Construir resposta com can_delete
+    file_responses = []
+    for item in items:
+        can_delete = item.id not in file_ids_with_completed_job
+        # Criar FileResponse manualmente incluindo can_delete (não usar model_validate)
+        file_response = FileResponse(
+            id=item.id,
+            filename=item.filename,
+            content_type=item.content_type,
+            file_size=item.file_size,
+            created_at=item.created_at,
+            can_delete=can_delete,
+        )
+        file_responses.append(file_response)
+
+    return FileListResponse(
+        items=file_responses,
+        total=total,
+    )
+
+
+@router.delete("/file/{file_id}", status_code=204, tags=["File"])
+def delete_file(
+    file_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Deleta arquivo do banco e do S3/MinIO.
+
+    Apenas permite exclusão se o arquivo ainda não foi processado com sucesso
+    (não possui job EXTRACT_DEMAND com status COMPLETED).
+    """
+    # Buscar arquivo
+    file_model = session.get(File, file_id)
+    if not file_model:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
+    # Validar tenant_id
+    if file_model.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Verificar se existe job EXTRACT_DEMAND COMPLETED para esse arquivo
+    query = select(Job).where(
+        Job.tenant_id == membership.tenant_id,
+        Job.job_type == JobType.EXTRACT_DEMAND,
+        Job.status == JobStatus.COMPLETED,
+    )
+    jobs = session.exec(query).all()
+
+    # Verificar se algum job COMPLETED usa esse file_id
+    for job in jobs:
+        if job.input_data and "file_id" in job.input_data:
+            # Converter para int para garantir comparação correta (pode vir como string do JSON)
+            job_file_id = job.input_data.get("file_id")
+            if isinstance(job_file_id, str):
+                try:
+                    job_file_id = int(job_file_id)
+                except (ValueError, TypeError):
+                    continue
+            if job_file_id == file_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Não é possível excluir arquivo que já foi processado com sucesso (job EXTRACT_DEMAND COMPLETED)"
+                )
+
+    # Deletar arquivo do S3/MinIO
+    storage_service = StorageService()
+    try:
+        storage_service.delete_file(file_model.s3_key)
+    except Exception as e:
+        # Log erro mas continua com exclusão do banco (arquivo pode já ter sido deletado)
+        import logging
+        logging.warning(f"Erro ao deletar arquivo do S3 (continuando com exclusão do banco): {e}")
+        # Em desenvolvimento, log mais detalhado
+        if os.getenv("APP_ENV", "dev") == "dev":
+            import traceback
+            logging.warning(f"Traceback ao deletar do S3:\n{traceback.format_exc()}")
+
+    # Deletar registro do banco
+    try:
+        session.delete(file_model)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        import logging
+        import traceback
+        error_detail = f"Erro ao deletar arquivo do banco: {str(e)}"
+        if os.getenv("APP_ENV", "dev") == "dev":
+            error_detail += f"\n\nTraceback:\n{traceback.format_exc()}"
+        logging.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+    # Retornar 204 No Content
+    return Response(status_code=204)
 
 
 @router.post("/schedule/generate", response_model=ScheduleGenerateResponse, status_code=201, tags=["Schedule"])

@@ -73,13 +73,62 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
   - **Não redirecionar automaticamente para `/login`**
 - Redirecionar para `/login` **somente em 401 real** (cookie inválido).
 
-## Redirecionamento automático (`lib/api.ts`)
+## Redirecionamento automático (`lib/api.ts`) - ⚠️ ATENÇÃO CRÍTICA
 
-- `lib/api.ts` redireciona automaticamente para `/login` em respostas 401.
-- Páginas que usam `fetch()` direto **não devem sofrer esse redirecionamento**.
-- Se uma página precisar usar `api.get()`:
-  - Adicionar **exceção explícita** no `lib/api.ts`
-  - Usar `/dashboard` como referência.
+### Problema Identificado
+
+O `AuthProvider` (usado no `RootLayout` via `Providers`) utiliza `api.get()` do `lib/api.ts` para verificar autenticação ao montar a aplicação. O `lib/api.ts` possui lógica que redireciona automaticamente para `/login` quando recebe 401, **exceto para páginas específicas listadas em exceções**.
+
+### Quando o Problema Ocorre
+
+- Ao criar uma **nova página protegida** que usa `fetch()` direto (correto)
+- O `AuthProvider` tenta carregar autenticação usando `api.get()` (que usa `lib/api.ts`)
+- Se houver 401 durante essa verificação, `lib/api.ts` redireciona para `/login` **mesmo que a página use `fetch()` direto**
+- **Resultado**: Ao pressionar F5 na nova página, o usuário é redirecionado para `/login` indevidamente
+
+### Solução OBRIGATÓRIA
+
+**Ao criar uma nova página protegida que segue o padrão (usa `fetch()` direto e NÃO redireciona em 401):**
+
+1. **Adicionar o caminho da página à lista de exceções no `lib/api.ts`**
+2. Localizar a verificação de 401 no `lib/api.ts` (função `apiRequest`)
+3. Adicionar a exceção: `!path.startsWith('/sua-pagina')` na condição de redirecionamento
+4. **Páginas atualmente na lista de exceções:**
+   - `/login`
+   - `/select-tenant`
+   - `/dashboard`
+   - `/files`
+
+### Exemplo de Correção
+
+```typescript
+// Em frontend/lib/api.ts, função apiRequest, após linha ~67
+if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+        const path = window.location.pathname
+        if (!path.startsWith('/login') &&
+            !path.startsWith('/select-tenant') &&
+            !path.startsWith('/dashboard') &&
+            !path.startsWith('/files') &&
+            !path.startsWith('/sua-nova-pagina')) {  // ← ADICIONAR AQUI
+            window.location.href = '/login'
+        }
+    }
+    throw new ApiError('Não autenticado', 401)
+}
+```
+
+### Checklist ao Criar Nova Página Protegida
+
+- [ ] Página usa `fetch()` direto (não `api.get()`)
+- [ ] Página segue padrão try/catch interno/externo (catch interno ignora erro)
+- [ ] Página NÃO redireciona para `/login` em 401
+- [ ] **Página adicionada à lista de exceções no `lib/api.ts`** ← CRÍTICO
+- [ ] Testado pressionando F5 - não deve redirecionar para `/login`
+
+### Motivo Técnico
+
+O `AuthProvider` é montado no `RootLayout` e executa em **todas as páginas**, incluindo páginas protegidas. Ele usa `api.get()` que por sua vez usa `lib/api.ts`. Mesmo que sua página use `fetch()` direto e trate 401 corretamente, o `AuthProvider` pode causar redirecionamento se não estiver na lista de exceções.
 
 ## Referência
 
