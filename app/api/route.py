@@ -911,14 +911,14 @@ def download_file(
     # Obter arquivo do MinIO
     storage_service = StorageService()
     s3_client = storage_service.client
-    
+
     try:
         # Obter objeto do S3/MinIO
         response = s3_client._client.get_object(
             Bucket=storage_service.config.bucket_name,
             Key=file_model.s3_key,
         )
-        
+
         # Retornar como stream
         return StreamingResponse(
             response['Body'].iter_chunks(chunk_size=8192),

@@ -55,18 +55,18 @@ function isImage(contentType: string): boolean {
 async function handleFileDownload(fileId: number, filename: string) {
     try {
         const url = `/api/file/${fileId}/proxy`
-        
+
         const response = await fetch(url, {
             credentials: 'include',
         })
-        
+
         if (!response.ok) {
             throw new Error('Erro ao baixar arquivo')
         }
-        
+
         const blob = await response.blob()
         const blobUrl = window.URL.createObjectURL(blob)
-        
+
         // Criar link temporário e clicar para fazer download
         const link = document.createElement('a')
         link.href = blobUrl
@@ -74,7 +74,7 @@ async function handleFileDownload(fileId: number, filename: string) {
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
-        
+
         // Limpar o blob URL após um tempo
         setTimeout(() => {
             window.URL.revokeObjectURL(blobUrl)
@@ -466,11 +466,15 @@ export default function FilesPage() {
                                         >
                                             {file.filename}
                                         </h3>
-                                        <div className="flex gap-1 shrink-0">
+                                        {file.can_delete && (
                                             <button
-                                                onClick={() => handleFileDownload(file.id, file.filename)}
-                                                className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
-                                                title="Baixar arquivo"
+                                                onClick={() => toggleFileSelection(file.id)}
+                                                disabled={deleting}
+                                                className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${selectedFiles.has(file.id)
+                                                    ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                                    : 'text-gray-400 hover:bg-gray-100'
+                                                    }`}
+                                                title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                             >
                                                 <svg
                                                     className="w-5 h-5"
@@ -483,37 +487,11 @@ export default function FilesPage() {
                                                         strokeLinecap="round"
                                                         strokeLinejoin="round"
                                                         strokeWidth={2}
-                                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                                     />
                                                 </svg>
                                             </button>
-                                            {file.can_delete && (
-                                                <button
-                                                    onClick={() => toggleFileSelection(file.id)}
-                                                    disabled={deleting}
-                                                    className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selectedFiles.has(file.id)
-                                                            ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                                                            : 'text-gray-400 hover:bg-gray-100'
-                                                        }`}
-                                                    title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                >
-                                                    <svg
-                                                        className="w-5 h-5"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            )}
-                                        </div>
+                                        )}
                                     </div>
                                     {/* Thumbnail ou ícone do arquivo */}
                                     <div className="mb-3 sm:mb-4">
