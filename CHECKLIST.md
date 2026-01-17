@@ -513,16 +513,16 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Cards informativos (opcional - não implementado)
 
 ### 8.8 Página de Importação
-- [ ] Implementar página de importação (`app/(protected)/import/page.tsx`):
-  - [ ] Upload de arquivo (PDF, JPEG, PNG, XLSX, XLS, CSV)
-  - [ ] Validação de tipo
-  - [ ] Chamar `POST /file/upload`
-  - [ ] Receber `file_id`
-  - [ ] Criar job (`POST /job/extract`)
-  - [ ] Polling de status (`GET /job/{id}`)
-  - [ ] Estados: PENDING, RUNNING, COMPLETED, FAILED
-  - [ ] Feedback visual claro
-  - [ ] Tratamento de erro de job
+- [x] Implementar página de importação (`app/(protected)/import/page.tsx`):
+  - [x] Upload de arquivo (PDF, JPEG, PNG, XLSX, XLS, CSV)
+  - [x] Validação de tipo (extensão e MIME type)
+  - [x] Chamar `POST /file/upload` (via `/api/file/upload`)
+  - [x] Receber `file_id`
+  - [x] Criar job (`POST /job/extract` via `/api/job/extract`)
+  - [x] Polling de status (`GET /job/{id}` via `/api/job/[id]`)
+  - [x] Estados: PENDING, RUNNING, COMPLETED, FAILED
+  - [x] Feedback visual claro (spinners, mensagens de progresso, ícones de status)
+  - [x] Tratamento de erro de job (exibe mensagem de erro e permite novo upload)
 
 ### 8.9 Página de Escalas
 - [ ] Listagem de escalas (`app/(protected)/schedules/page.tsx`):

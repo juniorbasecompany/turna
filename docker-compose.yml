@@ -90,6 +90,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       APP_ENV: dev
       DATABASE_URL: postgresql+psycopg://turna:turna@postgres:5432/turna
