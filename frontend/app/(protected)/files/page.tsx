@@ -425,7 +425,6 @@ export default function FilesPage() {
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                show={true}
                 buttons={
                     selectedFiles.size > 0
                         ? [

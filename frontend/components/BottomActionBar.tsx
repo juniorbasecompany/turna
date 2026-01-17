@@ -39,8 +39,9 @@ interface BottomActionBarProps {
      */
     buttons?: BottomActionBarButton[]
     /**
-     * Se true, mostra a barra. Se false, a barra não é renderizada.
-     * Se não especificado, a barra aparece quando há mensagem ou botões.
+     * Se false, esconde a barra. Por padrão, a barra sempre aparece
+     * (mesmo sem botões ou mensagem). Os botões aparecem/desaparecem
+     * conforme o array de buttons.
      */
     show?: boolean
 }
@@ -48,25 +49,18 @@ interface BottomActionBarProps {
 /**
  * Barra inferior fixa para exibir mensagens e ações ao usuário.
  *
- * Usada para manter ações importantes (como botão Salvar) e mensagens
- * sempre visíveis enquanto o usuário rola a página.
+ * A barra sempre aparece por padrão (mesmo sem botões ou mensagem).
+ * Os botões aparecem/desaparecem conforme o array de buttons.
+ * Use show={false} para esconder completamente a barra.
  *
  * IMPORTANTE: Use também <BottomActionBarSpacer /> ou adicione padding-bottom
  * no conteúdo da página para evitar que o conteúdo fique escondido atrás da barra.
  *
  * @example
  * ```tsx
+ * // Barra sempre visível, botões aparecem quando há seleção
  * <BottomActionBar
- *   message="3 itens marcados para exclusão"
- *   messageType="info"
- *   buttons={[
- *     {
- *       label: "Salvar",
- *       onClick: handleSave,
- *       variant: "primary",
- *       loading: saving
- *     }
- *   ]}
+ *   buttons={selectedItems.length > 0 ? [{ label: "Salvar", onClick: handleSave }] : []}
  * />
  * <BottomActionBarSpacer />
  * ```
@@ -77,12 +71,9 @@ export function BottomActionBar({
     buttons = [],
     show,
 }: BottomActionBarProps) {
-    // Determinar se deve mostrar: se show não especificado, mostrar quando há conteúdo
-    const hasContent = message || (buttons && buttons.length > 0)
-    const shouldShow = show !== undefined ? show : hasContent
-
-    // Se show for true, sempre renderizar (mesmo sem conteúdo). Caso contrário, só renderizar se houver conteúdo
-    if (!shouldShow || (show === undefined && !hasContent)) {
+    // Se show for explicitamente false, não renderizar
+    // Caso contrário, sempre renderizar (mesmo sem botões/mensagem)
+    if (show === false) {
         return null
     }
 
@@ -120,9 +111,9 @@ export function BottomActionBar({
     }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-lg h-20 pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
             {message ? (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-20 flex items-center">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4 w-full">
                         {/* Mensagem */}
                         <div
@@ -142,7 +133,7 @@ export function BottomActionBar({
                     </div>
                 </div>
             ) : (
-                <div className="h-full flex items-center justify-end px-4 sm:px-6 lg:px-8">
+                <div className="min-h-20 flex items-center justify-end px-4 sm:px-6 lg:px-8">
                     {/* Botões de ação - alinhados à direita da tela */}
                     <div className="flex items-center gap-2 sm:gap-3">
                         {renderButtons()}
@@ -169,6 +160,6 @@ export function BottomActionBar({
  * ```
  */
 export function BottomActionBarSpacer() {
-    // Altura da barra (80px) + safe-area (env(safe-area-inset-bottom))
-    return <div className="h-20 pb-[env(safe-area-inset-bottom,0px)]" />
+    // Altura mínima da barra (80px) + safe-area (env(safe-area-inset-bottom))
+    return <div className="min-h-20 pb-[env(safe-area-inset-bottom,0px)]" />
 }
