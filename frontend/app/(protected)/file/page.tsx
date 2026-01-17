@@ -4,7 +4,7 @@ import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActio
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 
 interface FileResponse {
     id: number
@@ -18,6 +18,44 @@ interface FileResponse {
 interface FileListResponse {
     items: FileResponse[]
     total: number
+}
+
+type JobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+
+interface PendingFile {
+    file: File
+    fileId?: number
+    jobId?: number
+    jobStatus?: JobStatus
+    error?: string
+    uploading?: boolean
+}
+
+interface FileUploadResponse {
+    file_id: number
+    filename: string
+    content_type: string
+    file_size: number
+    s3_url: string
+    presigned_url: string
+}
+
+interface JobExtractResponse {
+    job_id: number
+}
+
+interface JobResponse {
+    id: number
+    tenant_id: number
+    job_type: string
+    status: JobStatus
+    input_data: Record<string, unknown> | null
+    result_data: Record<string, unknown> | null
+    error_message: string | null
+    created_at: string
+    updated_at: string
+    started_at: string | null
+    completed_at: string | null
 }
 
 /**
@@ -174,12 +212,16 @@ function FileThumbnail({ file }: { file: FileResponse }) {
 
 export default function FilesPage() {
     const { settings } = useTenantSettings()
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [files, setFiles] = useState<FileResponse[]>([])
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
+    const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+    const [uploading, setUploading] = useState(false)
+    const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
 
     // Filtros de período usando TenantDatePicker (Date objects)
     // Inicializar com data de hoje
@@ -303,6 +345,221 @@ export default function FilesPage() {
         })
     }
 
+    // Seleção de arquivos para upload
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = Array.from(e.target.files || [])
+        if (selected.length === 0) return
+
+        setError(null)
+
+        // Adicionar arquivos à lista de pendentes
+        const newPendingFiles: PendingFile[] = selected.map((file) => ({
+            file,
+            uploading: false,
+        }))
+        setPendingFiles((prev) => [...prev, ...newPendingFiles])
+
+        // Limpar input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+        }
+    }, [])
+
+    // Remover arquivo pendente
+    const removePendingFile = useCallback((index: number) => {
+        setPendingFiles((prev) => {
+            const newPending = [...prev]
+            const removed = newPending.splice(index, 1)[0]
+            
+            // Limpar polling se existir
+            if (removed.jobId) {
+                const interval = pollingIntervals.current.get(removed.jobId)
+                if (interval) {
+                    clearInterval(interval)
+                    pollingIntervals.current.delete(removed.jobId)
+                }
+            }
+            
+            return newPending
+        })
+    }, [])
+
+    // Polling do status do job
+    const pollJobStatus = useCallback(async (jobId: number, fileIndex: number) => {
+        try {
+            const response = await fetch(`/api/job/${jobId}`, {
+                credentials: 'include',
+            })
+
+            if (!response.ok) {
+                throw new Error(`Erro ao verificar status do job: ${response.status}`)
+            }
+
+            const job: JobResponse = await response.json()
+            
+            setPendingFiles((prev) => {
+                const newPending = [...prev]
+                if (newPending[fileIndex]) {
+                    newPending[fileIndex] = {
+                        ...newPending[fileIndex],
+                        jobStatus: job.status,
+                        error: job.error_message || undefined,
+                    }
+                }
+                return newPending
+            })
+
+            // Se ainda está processando, continuar polling
+            if (job.status === 'PENDING' || job.status === 'RUNNING') {
+                const interval = setTimeout(() => pollJobStatus(jobId, fileIndex), 2000)
+                pollingIntervals.current.set(jobId, interval)
+            } else {
+                // Limpar intervalo quando terminar
+                const interval = pollingIntervals.current.get(jobId)
+                if (interval) {
+                    clearInterval(interval)
+                    pollingIntervals.current.delete(jobId)
+                }
+            }
+        } catch (err) {
+            setPendingFiles((prev) => {
+                const newPending = [...prev]
+                if (newPending[fileIndex]) {
+                    newPending[fileIndex] = {
+                        ...newPending[fileIndex],
+                        jobStatus: 'FAILED',
+                        error: err instanceof Error ? err.message : 'Erro ao verificar status do job',
+                    }
+                }
+                return newPending
+            })
+            
+            // Limpar intervalo em caso de erro
+            const interval = pollingIntervals.current.get(jobId)
+            if (interval) {
+                clearInterval(interval)
+                pollingIntervals.current.delete(jobId)
+            }
+        }
+    }, [])
+
+    // Upload e criação de jobs
+    const handleUpload = useCallback(async () => {
+        if (pendingFiles.length === 0) return
+
+        setUploading(true)
+        setError(null)
+
+        try {
+            // Processar cada arquivo sequencialmente para evitar sobrecarga
+            for (let index = 0; index < pendingFiles.length; index++) {
+                const pendingFile = pendingFiles[index]
+                
+                // Marcar como fazendo upload
+                setPendingFiles((prev) => {
+                    const newPending = [...prev]
+                    if (newPending[index]) {
+                        newPending[index] = { ...newPending[index], uploading: true }
+                    }
+                    return newPending
+                })
+
+                try {
+                    // 1. Upload do arquivo
+                    const formData = new FormData()
+                    formData.append('file', pendingFile.file)
+
+                    const uploadResponse = await fetch('/api/file/upload', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include',
+                    })
+
+                    if (!uploadResponse.ok) {
+                        if (uploadResponse.status === 401) {
+                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
+                        }
+                        const errorData = await uploadResponse.json().catch(() => ({}))
+                        throw new Error(errorData.detail || `Erro ao fazer upload: ${uploadResponse.status}`)
+                    }
+
+                    const uploadData: FileUploadResponse = await uploadResponse.json()
+
+                    // 2. Criar job de extração
+                    const jobResponse = await fetch('/api/job/extract', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ file_id: uploadData.file_id }),
+                        credentials: 'include',
+                    })
+
+                    if (!jobResponse.ok) {
+                        if (jobResponse.status === 401) {
+                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
+                        }
+                        const errorData = await jobResponse.json().catch(() => ({}))
+                        throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
+                    }
+
+                    const jobData: JobExtractResponse = await jobResponse.json()
+
+                    // Atualizar estado do arquivo
+                    setPendingFiles((prev) => {
+                        const newPending = [...prev]
+                        if (newPending[index]) {
+                            newPending[index] = {
+                                ...newPending[index],
+                                fileId: uploadData.file_id,
+                                jobId: jobData.job_id,
+                                jobStatus: 'PENDING',
+                                uploading: false,
+                            }
+                        }
+                        return newPending
+                    })
+
+                    // 3. Iniciar polling do status
+                    pollJobStatus(jobData.job_id, index)
+                } catch (err) {
+                    setPendingFiles((prev) => {
+                        const newPending = [...prev]
+                        if (newPending[index]) {
+                            newPending[index] = {
+                                ...newPending[index],
+                                uploading: false,
+                                error: err instanceof Error ? err.message : 'Erro desconhecido ao processar arquivo',
+                                jobStatus: 'FAILED',
+                            }
+                        }
+                        return newPending
+                    })
+                }
+            }
+
+            // Recarregar lista de arquivos após upload
+            setStartDate(startDate)
+            setEndDate(endDate)
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : 'Erro ao fazer upload dos arquivos. Tente novamente.'
+            )
+        } finally {
+            setUploading(false)
+        }
+    }, [pendingFiles, pollJobStatus, startDate, endDate])
+
+    // Limpar polling ao desmontar
+    useEffect(() => {
+        return () => {
+            pollingIntervals.current.forEach((interval) => clearInterval(interval))
+            pollingIntervals.current.clear()
+        }
+    }, [])
+
     // Deletar arquivos selecionados
     const handleDeleteSelected = async () => {
         if (selectedFiles.size === 0) return
@@ -360,21 +617,40 @@ export default function FilesPage() {
             {/* Filtro por período */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
                 <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Filtro por Período</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <TenantDatePicker
-                        label="Data de Início"
-                        value={startDate}
-                        onChange={handleStartDateChange}
-                        id="start_at"
-                        name="start_at"
-                    />
-                    <TenantDatePicker
-                        label="Data de Fim"
-                        value={endDate}
-                        onChange={handleEndDateChange}
-                        id="end_at"
-                        name="end_at"
-                    />
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
+                        <TenantDatePicker
+                            label="Data de Início"
+                            value={startDate}
+                            onChange={handleStartDateChange}
+                            id="start_at"
+                            name="start_at"
+                        />
+                        <TenantDatePicker
+                            label="Data de Fim"
+                            value={endDate}
+                            onChange={handleEndDateChange}
+                            id="end_at"
+                            name="end_at"
+                        />
+                    </div>
+                    <div className="flex items-end">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                            id="file-upload"
+                        />
+                        <label
+                            htmlFor="file-upload"
+                            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 cursor-pointer transition-colors duration-200 text-center"
+                        >
+                            Selecionar Arquivos
+                        </label>
+                    </div>
                 </div>
                 {startDate && endDate && startDate > endDate && (
                     <p className="mt-2 text-sm text-red-600">
@@ -382,6 +658,111 @@ export default function FilesPage() {
                     </p>
                 )}
             </div>
+
+            {/* Cards de arquivos pendentes */}
+            {pendingFiles.length > 0 && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+                    <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Arquivos para Upload</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {pendingFiles.map((pendingFile, index) => {
+                            const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
+                            const getStatusIcon = () => {
+                                if (pendingFile.uploading) {
+                                    return (
+                                        <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )
+                                }
+                                if (pendingFile.jobStatus === 'PENDING') {
+                                    return (
+                                        <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )
+                                }
+                                if (pendingFile.jobStatus === 'RUNNING') {
+                                    return (
+                                        <svg className="animate-spin h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )
+                                }
+                                if (pendingFile.jobStatus === 'COMPLETED') {
+                                    return (
+                                        <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    )
+                                }
+                                if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) {
+                                    return (
+                                        <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    )
+                                }
+                                return null
+                            }
+
+                            const getStatusText = () => {
+                                if (pendingFile.uploading) return 'Enviando...'
+                                if (pendingFile.jobStatus === 'PENDING') return 'Aguardando processamento'
+                                if (pendingFile.jobStatus === 'RUNNING') return 'Processando...'
+                                if (pendingFile.jobStatus === 'COMPLETED') return 'Concluído'
+                                if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) return 'Falha'
+                                return 'Pendente'
+                            }
+
+                            return (
+                                <div key={index} className="rounded-xl border border-gray-200 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                {fileTypeInfo.icon}
+                                            </div>
+                                            <h3 className="text-sm font-semibold text-gray-900 truncate" title={pendingFile.file.name}>
+                                                {pendingFile.file.name}
+                                            </h3>
+                                        </div>
+                                        <button
+                                            onClick={() => removePendingFile(index)}
+                                            className="shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                            title="Remover arquivo"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        {getStatusIcon()}
+                                        <span className={
+                                            pendingFile.jobStatus === 'COMPLETED' ? 'text-green-600' :
+                                            pendingFile.jobStatus === 'FAILED' || pendingFile.error ? 'text-red-600' :
+                                            'text-blue-600'
+                                        }>
+                                            {getStatusText()}
+                                        </span>
+                                    </div>
+                                    {pendingFile.error && (
+                                        <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
+                                            {pendingFile.error}
+                                        </p>
+                                    )}
+                                    {pendingFile.jobId && (
+                                        <p className="mt-1 text-xs text-gray-500">Job ID: {pendingFile.jobId}</p>
+                                    )}
+                                    <p className="mt-1 text-xs text-gray-500">{formatFileSize(pendingFile.file.size)}</p>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Mensagem de erro */}
             {error && (
@@ -528,12 +909,22 @@ export default function FilesPage() {
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
                 buttons={
-                    selectedFiles.size > 0
+                    pendingFiles.length > 0
                         ? [
                             {
                                 label: 'Salvar',
-                                onClick: handleDeleteSelected,
+                                onClick: handleUpload,
                                 variant: 'primary',
+                                disabled: uploading || pendingFiles.some((f) => f.uploading),
+                                loading: uploading || pendingFiles.some((f) => f.uploading),
+                            },
+                        ]
+                        : selectedFiles.size > 0
+                        ? [
+                            {
+                                label: 'Deletar',
+                                onClick: handleDeleteSelected,
+                                variant: 'danger',
                                 disabled: deleting,
                                 loading: deleting,
                             },
