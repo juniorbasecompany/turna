@@ -50,39 +50,12 @@ function isImage(contentType: string): boolean {
 }
 
 /**
- * Faz download do arquivo via proxy
+ * Abre o arquivo em nova aba (visualização ou download se necessário)
  */
-async function handleFileDownload(fileId: number, filename: string) {
-    try {
-        const url = `/api/file/${fileId}/proxy`
-
-        const response = await fetch(url, {
-            credentials: 'include',
-        })
-
-        if (!response.ok) {
-            throw new Error('Erro ao baixar arquivo')
-        }
-
-        const blob = await response.blob()
-        const blobUrl = window.URL.createObjectURL(blob)
-
-        // Criar link temporário e clicar para fazer download
-        const link = document.createElement('a')
-        link.href = blobUrl
-        link.download = filename
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-
-        // Limpar o blob URL após um tempo
-        setTimeout(() => {
-            window.URL.revokeObjectURL(blobUrl)
-        }, 100)
-    } catch (error) {
-        console.error('Erro ao fazer download:', error)
-        alert('Não foi possível fazer download do arquivo.')
-    }
+function handleFileDownload(fileId: number, filename: string) {
+    const url = `/api/file/${fileId}/proxy`
+    // Abrir em nova aba - o navegador decide se mostra ou faz download
+    window.open(url, '_blank')
 }
 
 /**

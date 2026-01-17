@@ -919,12 +919,12 @@ def download_file(
             Key=file_model.s3_key,
         )
 
-        # Retornar como stream
+        # Retornar como stream com inline para permitir visualização no navegador
         return StreamingResponse(
             response['Body'].iter_chunks(chunk_size=8192),
             media_type=file_model.content_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{file_model.filename}"',
+                "Content-Disposition": f'inline; filename="{file_model.filename}"',
             },
         )
     except Exception as e:

@@ -51,10 +51,13 @@ export async function GET(
     const contentType = downloadResponse.headers.get('content-type') || 'application/octet-stream'
 
     // Retornar o arquivo com headers apropriados
+    // Usar inline para permitir visualização no navegador quando possível
+    const contentDisposition = downloadResponse.headers.get('content-disposition') || `inline; filename="file"`
+    
     return new NextResponse(blob, {
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': downloadResponse.headers.get('content-disposition') || `attachment; filename="file"`,
+        'Content-Disposition': contentDisposition,
         'Cache-Control': 'private, max-age=3600',
       },
     })
