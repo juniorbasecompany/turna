@@ -274,7 +274,7 @@ export default function FilesPage() {
     })
 
     // Paginação
-    const [limit] = useState(20) // Limite padrão
+    const [limit] = useState(19) // Limite padrão
     const [offset, setOffset] = useState(0)
 
     // Carregar arquivos
@@ -527,10 +527,9 @@ export default function FilesPage() {
         }
     }, [pollJobStatus])
 
-    // Seleção de arquivos para upload
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const selected = Array.from(e.target.files || [])
-        if (selected.length === 0) return
+    // Função para adicionar arquivos à lista (usada tanto pelo input quanto pelo drag&drop)
+    const addFilesToList = useCallback((files: File[]) => {
+        if (files.length === 0) return
 
         setError(null)
 
@@ -543,13 +542,9 @@ export default function FilesPage() {
             const existingKeys = new Set(prev.map((pf) => getFileKey(pf.file)))
 
             // Filtrar arquivos que ainda não estão na lista
-            const newFiles = selected.filter((file) => !existingKeys.has(getFileKey(file)))
+            const newFiles = files.filter((file) => !existingKeys.has(getFileKey(file)))
 
             if (newFiles.length === 0) {
-                // Limpar input se não houver arquivos novos
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = ''
-                }
                 return prev // Retornar estado anterior se não houver novos arquivos
             }
 
@@ -561,11 +556,53 @@ export default function FilesPage() {
 
             return [...prev, ...newPendingFiles]
         })
+    }, [])
+
+    // Seleção de arquivos para upload (via input)
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = Array.from(e.target.files || [])
+        addFilesToList(selected)
 
         // Limpar input
         if (fileInputRef.current) {
             fileInputRef.current.value = ''
         }
+    }, [addFilesToList])
+
+    // Handlers para drag & drop
+    const [isDragging, setIsDragging] = useState(false)
+
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+    }, [])
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+    }, [])
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+    }, [])
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+
+        const files = Array.from(e.dataTransfer.files || [])
+        if (files.length > 0) {
+            addFilesToList(files)
+        }
+    }, [addFilesToList])
+
+    // Abrir seletor de arquivos ao clicar no card
+    const handleUploadCardClick = useCallback(() => {
+        fileInputRef.current?.click()
     }, [])
 
 
@@ -698,7 +735,13 @@ export default function FilesPage() {
     }
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 min-w-0">
+        <div
+            className="p-4 sm:p-6 lg:p-8 min-w-0"
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
             <div className="mb-4 sm:mb-6">
                 <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Arquivos</h1>
                 <p className="mt-1 text-sm text-gray-600">
@@ -725,23 +768,6 @@ export default function FilesPage() {
                             id="end_at"
                             name="end_at"
                         />
-                    </div>
-                    <div className="flex items-end">
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
-                            onChange={handleFileSelect}
-                            className="hidden"
-                            id="file-upload"
-                        />
-                        <label
-                            htmlFor="file-upload"
-                            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 cursor-pointer transition-colors duration-200 text-center"
-                        >
-                            Selecionar Arquivos
-                        </label>
                     </div>
                 </div>
                 {startDate && endDate && startDate > endDate && (
@@ -793,6 +819,62 @@ export default function FilesPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                            {/* Card de upload - sempre o primeiro */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                id="file-upload"
+                            />
+                            <div
+                                onClick={handleUploadCardClick}
+                                onDragEnter={handleDragEnter}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col items-center justify-center min-h-[200px] ${isDragging
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-slate-300 hover:border-blue-400'
+                                    }`}
+                            >
+                                <div className="flex flex-col items-center justify-center text-center px-2">
+                                    <svg
+                                        className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                                        />
+                                    </svg>
+                                    <p className={`text-sm font-medium mb-1 ${isDragging ? 'text-blue-600' : 'text-slate-700'}`}>
+                                        {isDragging ? 'Solte os arquivos aqui' : 'Adicionar um ou mais arquivos'}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mb-2">
+                                        Clique ou arraste e solte
+                                    </p>
+                                    <p className="text-xs text-slate-400 leading-tight">
+                                        Documentos PDF
+                                    </p>
+                                    <p className="text-xs text-slate-400 leading-tight">
+                                        Planilhas XLSX ou XLS
+                                    </p>
+                                    <p className="text-xs text-slate-400 leading-tight">
+                                        Imagens JPG ou PNG
+                                    </p>
+                                    <p className="text-xs text-slate-400 leading-tight">
+                                        Texto CSV
+                                    </p>
+                                </div>
+                            </div>
+
                             {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
                             {pendingFiles
                                 .filter((pendingFile) => {
@@ -1073,7 +1155,7 @@ export default function FilesPage() {
                             {
                                 label: 'Excluir',
                                 onClick: handleDeleteSelected,
-                                variant: 'secondary',
+                                variant: 'primary',
                                 disabled: deleting,
                                 loading: deleting,
                             },
