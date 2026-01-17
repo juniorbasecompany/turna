@@ -170,7 +170,7 @@ function PendingFileImageThumbnail({ file }: { file: File }) {
 /**
  * Componente de thumbnail do arquivo (preview no corpo do card)
  */
-function FileThumbnail({ file }: { file: FileResponse }) {
+function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => void }) {
     const [imageUrl, setImageUrl] = useState<string | null>(null)
     const [loadingImage, setLoadingImage] = useState(false)
 
@@ -188,61 +188,86 @@ function FileThumbnail({ file }: { file: FileResponse }) {
     const fileTypeInfo = getFileTypeInfo(file.content_type)
 
     return (
-        <button
-            onClick={() => handleFileDownload(file.id, file.filename)}
-            className="w-full h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer group transition-all duration-200 hover:bg-slate-100"
-            title="Clique para baixar o arquivo"
-        >
-            {isImage(file.content_type) && imageUrl ? (
-                <img
-                    src={imageUrl}
-                    alt={file.filename}
-                    className="w-full h-full object-cover rounded-lg"
-                    onError={() => {
-                        setImageUrl(null)
-                    }}
-                />
-            ) : (
-                <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                        {file.content_type === 'application/pdf' ? (
-                            <svg
-                                className="w-full h-full"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                                />
-                            </svg>
-                        ) : (
-                            <svg
-                                className="w-full h-full"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                />
-                            </svg>
-                        )}
+        <div className="relative w-full h-40 sm:h-48 bg-slate-50 rounded-lg overflow-hidden group">
+            <button
+                onClick={onClick}
+                className="w-full h-full flex items-center justify-center cursor-pointer transition-all duration-200"
+                title="Clique para marcar para leitura"
+            >
+                {isImage(file.content_type) && imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt={file.filename}
+                        className="w-full h-full object-cover rounded-lg"
+                        onError={() => {
+                            setImageUrl(null)
+                        }}
+                    />
+                ) : (
+                    <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                            {file.content_type === 'application/pdf' ? (
+                                <svg
+                                    className="w-full h-full"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                    />
+                                </svg>
+                            ) : (
+                                <svg
+                                    className="w-full h-full"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
+                                </svg>
+                            )}
+                        </div>
+                        <span className="text-xs font-medium">
+                            {file.content_type === 'application/pdf'
+                                ? 'PDF'
+                                : file.content_type.split('/')[1]?.toUpperCase() || 'DOCUMENTO'}
+                        </span>
                     </div>
-                    <span className="text-xs font-medium">
-                        {file.content_type === 'application/pdf'
-                            ? 'PDF'
-                            : file.content_type.split('/')[1]?.toUpperCase() || 'DOCUMENTO'}
-                    </span>
-                </div>
-            )}
-        </button>
+                )}
+            </button>
+            {/* Botão de lupa no canto superior direito */}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation()
+                    handleFileDownload(file.id, file.filename)
+                }}
+                className="absolute top-2 right-2 p-2 bg-white/90 rounded-md shadow-md transition-all duration-200 cursor-pointer"
+                title="Abrir arquivo em nova janela"
+            >
+                <svg
+                    className="w-5 h-5 text-gray-700"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                </svg>
+            </button>
+        </div>
     )
 }
 
@@ -256,7 +281,9 @@ export default function FilesPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
+    const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
+    const [reading, setReading] = useState(false)
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [uploading, setUploading] = useState(false)
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
@@ -370,7 +397,7 @@ export default function FilesPage() {
         setOffset(0) // Resetar paginação ao mudar filtro
     }
 
-    // Toggle seleção de arquivo
+    // Toggle seleção de arquivo para exclusão
     const toggleFileSelection = (fileId: number) => {
         setSelectedFiles((prev) => {
             const newSet = new Set(prev)
@@ -379,6 +406,31 @@ export default function FilesPage() {
             } else {
                 newSet.add(fileId)
             }
+            return newSet
+        })
+        // Ao selecionar para exclusão, remover da seleção de leitura
+        setSelectedFilesForReading((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(fileId)
+            return newSet
+        })
+    }
+
+    // Toggle seleção de arquivo para leitura
+    const toggleFileSelectionForReading = (fileId: number) => {
+        setSelectedFilesForReading((prev) => {
+            const newSet = new Set(prev)
+            if (newSet.has(fileId)) {
+                newSet.delete(fileId)
+            } else {
+                newSet.add(fileId)
+            }
+            return newSet
+        })
+        // Ao selecionar para leitura, remover da seleção de exclusão
+        setSelectedFiles((prev) => {
+            const newSet = new Set(prev)
+            newSet.delete(fileId)
             return newSet
         })
     }
@@ -689,6 +741,58 @@ export default function FilesPage() {
         }
     }, [])
 
+    // Ler conteúdo dos arquivos selecionados
+    const handleReadSelected = async () => {
+        if (selectedFilesForReading.size === 0) return
+
+        setReading(true)
+        setError(null)
+
+        try {
+            // Processar cada arquivo selecionado para leitura
+            const fileIds = Array.from(selectedFilesForReading)
+
+            for (const fileId of fileIds) {
+                try {
+                    // Criar job de extração
+                    const jobResponse = await fetch('/api/job/extract', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ file_id: fileId }),
+                        credentials: 'include',
+                    })
+
+                    if (!jobResponse.ok) {
+                        if (jobResponse.status === 401) {
+                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
+                        }
+                        const errorData = await jobResponse.json().catch(() => ({}))
+                        throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
+                    }
+
+                    // Job criado com sucesso - o worker processará em background
+                    // Não precisamos fazer polling aqui pois o arquivo já está na lista de arquivos
+                } catch (err) {
+                    // Se um arquivo falhar, continuar com os outros
+                    console.error(`Erro ao processar arquivo ${fileId}:`, err)
+                }
+            }
+
+            // Limpar seleção após iniciar leitura
+            setSelectedFilesForReading(new Set())
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : 'Erro ao iniciar leitura dos arquivos. Tente novamente.'
+            )
+        } finally {
+            setReading(false)
+        }
+    }
+
     // Deletar arquivos selecionados
     const handleDeleteSelected = async () => {
         if (selectedFiles.size === 0) return
@@ -804,6 +908,11 @@ export default function FilesPage() {
                                     {pendingFiles.length} arquivo{pendingFiles.length > 1 ? 's' : ''} pendente{pendingFiles.length > 1 ? 's' : ''}
                                 </span>
                             )}
+                            {selectedFilesForReading.size > 0 && (
+                                <span className="ml-2 sm:ml-4 text-blue-600">
+                                    {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
+                                </span>
+                            )}
                             {selectedFiles.size > 0 && (
                                 <span className="ml-2 sm:ml-4 text-red-600">
                                     {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
@@ -835,14 +944,14 @@ export default function FilesPage() {
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
-                                className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 flex flex-col items-center justify-center min-h-[200px] ${isDragging
+                                className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center min-h-[200px] ${isDragging
                                     ? 'border-blue-500 bg-blue-50'
-                                    : 'border-slate-300 hover:border-blue-400'
+                                    : 'border-slate-300'
                                     }`}
                             >
                                 <div className="flex flex-col items-center justify-center text-center px-2">
                                     <svg
-                                        className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'}`}
+                                        className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400'}`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -947,7 +1056,7 @@ export default function FilesPage() {
                                     return (
                                         <div
                                             key={`pending-${originalIndex}-${pendingFile.file.name}`}
-                                            className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-blue-200 hover:border-blue-300"
+                                            className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 border-blue-200"
                                         >
                                             {/* 1. Topo - Identidade do arquivo */}
                                             <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
@@ -967,7 +1076,7 @@ export default function FilesPage() {
                                                         e.stopPropagation()
                                                         removePendingFile(originalIndex)
                                                     }}
-                                                    className="shrink-0 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 hover:bg-gray-100"
+                                                    className="shrink-0 p-1.5 rounded-md transition-all duration-200 text-gray-400"
                                                     title="Remover arquivo"
                                                 >
                                                     <svg
@@ -1047,69 +1156,78 @@ export default function FilesPage() {
                                 return (
                                     <div
                                         key={file.id}
-                                        className={`group rounded-xl border bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${isSelected
+                                        className={`group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 ${isSelected
                                             ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                            : 'border-slate-200 hover:border-slate-300'
+                                            : selectedFilesForReading.has(file.id)
+                                                ? 'border-blue-300 ring-2 ring-blue-200 bg-blue-50'
+                                                : 'border-slate-200'
                                             }`}
                                     >
                                         {/* 1. Topo - Identidade do arquivo */}
-                                        <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
-                                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                    {fileTypeInfo.icon}
-                                                </div>
-                                                <h3
-                                                    className={`text-sm font-semibold truncate min-w-0 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                        }`}
-                                                    title={file.filename}
-                                                >
-                                                    {file.filename}
-                                                </h3>
+                                        <div className="mb-3 flex items-start gap-2 min-w-0">
+                                            <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                {fileTypeInfo.icon}
                                             </div>
-                                            {file.can_delete && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        toggleFileSelection(file.id)
-                                                    }}
-                                                    disabled={deleting}
-                                                    className={`shrink-0 p-1.5 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100 ${isSelected
-                                                        ? 'text-red-700 bg-red-100 hover:bg-red-200 opacity-100'
-                                                        : 'text-gray-400 hover:bg-gray-100'
-                                                        }`}
-                                                    title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            )}
+                                            <h3
+                                                className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
+                                                    }`}
+                                                title={file.filename}
+                                            >
+                                                {file.filename}
+                                            </h3>
                                         </div>
 
                                         {/* 2. Corpo - Preview */}
                                         <div className="mb-3">
-                                            <FileThumbnail file={file} />
+                                            <FileThumbnail
+                                                file={file}
+                                                onClick={() => toggleFileSelectionForReading(file.id)}
+                                            />
                                         </div>
 
-                                        {/* 3. Rodapé - Metadados */}
-                                        <div className="flex items-center justify-between gap-2 text-sm text-slate-500">
-                                            <span className="truncate">{formatFileSize(file.file_size)}</span>
-                                            <span className="shrink-0">•</span>
-                                            <span className="truncate">
-                                                {settings
-                                                    ? formatDateTime(file.created_at, settings)
-                                                    : new Date(file.created_at).toLocaleString()}
-                                            </span>
+                                        {/* 3. Rodapé - Metadados à esquerda, ações à direita */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            {/* Metadados à esquerda */}
+                                            <div className="flex flex-col min-w-0 flex-1">
+                                                <span className="text-sm text-slate-500 truncate">
+                                                    {settings
+                                                        ? formatDateTime(file.created_at, settings)
+                                                        : new Date(file.created_at).toLocaleString()}
+                                                </span>
+                                                <span className="text-xs text-slate-400 truncate">{formatFileSize(file.file_size)}</span>
+                                            </div>
+                                            {/* Ações à direita */}
+                                            {file.can_delete && (
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {/* Ícone para exclusão */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            toggleFileSelection(file.id)
+                                                        }}
+                                                        disabled={deleting}
+                                                        className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                                            ? 'text-red-700 bg-red-100 opacity-100'
+                                                            : 'text-gray-400'
+                                                            }`}
+                                                        title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                    >
+                                                        <svg
+                                                            className="w-4 h-4"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                            />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )
@@ -1127,14 +1245,14 @@ export default function FilesPage() {
                                 <button
                                     onClick={goToPreviousPage}
                                     disabled={offset === 0}
-                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Anterior
                                 </button>
                                 <button
                                     onClick={goToNextPage}
                                     disabled={offset + limit >= total}
-                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Próxima
                                 </button>
@@ -1150,17 +1268,27 @@ export default function FilesPage() {
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
                 buttons={
-                    selectedFiles.size > 0
+                    selectedFilesForReading.size > 0
                         ? [
                             {
-                                label: 'Excluir',
-                                onClick: handleDeleteSelected,
+                                label: 'Ler conteúdo',
+                                onClick: handleReadSelected,
                                 variant: 'primary',
-                                disabled: deleting,
-                                loading: deleting,
+                                disabled: reading,
+                                loading: reading,
                             },
                         ]
-                        : []
+                        : selectedFiles.size > 0
+                            ? [
+                                {
+                                    label: 'Excluir',
+                                    onClick: handleDeleteSelected,
+                                    variant: 'primary',
+                                    disabled: deleting,
+                                    loading: deleting,
+                                },
+                            ]
+                            : []
                 }
             />
         </div>

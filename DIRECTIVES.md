@@ -159,6 +159,12 @@ O `AuthProvider` é montado no `RootLayout` e executa em **todas as páginas**, 
 - **Consistência**: priorize consistência com o código existente (imports, nomes, organização de módulos).
 - **Legibilidade**: prefira código simples e explícito a "mágica".
 
+## Efeitos de Hover / Mobile
+
+- **Proibição**: **não usar** efeitos de hover (classes `hover:`, `group-hover:`) no projeto.
+- **Motivo**: experiência deve ser consistente entre desktop e mobile; usuários vão usar muito no telefone.
+- **Regra**: todos os elementos interativos devem estar sempre visíveis e funcionais, sem depender de hover para aparecer ou mudar de estado.
+
 ## Scripts
 
 - **Nome**: quando criar um script Python, use o prefixo **`script_`** no nome do arquivo.
