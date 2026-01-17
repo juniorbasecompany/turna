@@ -421,10 +421,11 @@ export default function FilesPage() {
             )}
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
-            {selectedFiles.size > 0 && <BottomActionBarSpacer />}
+            <BottomActionBarSpacer />
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
+                show={true}
                 buttons={
                     selectedFiles.size > 0
                         ? [
