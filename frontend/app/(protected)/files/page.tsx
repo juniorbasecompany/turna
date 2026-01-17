@@ -248,18 +248,18 @@ export default function FilesPage() {
     }
 
     return (
-        <div className="p-8">
-            <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-gray-900">Arquivos</h1>
+        <div className="p-4 sm:p-6 lg:p-8 min-w-0">
+            <div className="mb-4 sm:mb-6">
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Arquivos</h1>
                 <p className="mt-1 text-sm text-gray-600">
                     Gerencie e visualize seus arquivos importados
                 </p>
             </div>
 
             {/* Filtro por período */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Filtro por Período</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+                <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Filtro por Período</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                         <label htmlFor="start_at" className="block text-sm font-medium text-gray-700 mb-2">
                             Data de Início
@@ -294,7 +294,7 @@ export default function FilesPage() {
 
             {/* Mensagem de erro */}
             {error && (
-                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="mb-4 sm:mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
                     <p className="text-sm text-red-800">{error}</p>
                 </div>
             )}
@@ -310,11 +310,11 @@ export default function FilesPage() {
             {!loading && !error && (
                 <>
                     {/* Barra de informações */}
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div className="text-sm text-gray-600">
                             Total de arquivos: <span className="font-medium">{total}</span>
                             {selectedFiles.size > 0 && (
-                                <span className="ml-4 text-red-600">
+                                <span className="ml-2 sm:ml-4 text-red-600">
                                     {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
                                 </span>
                             )}
@@ -323,22 +323,22 @@ export default function FilesPage() {
 
                     {/* Cards de arquivos */}
                     {files.length === 0 ? (
-                        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                        <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
                             <p className="text-gray-600">Nenhum arquivo encontrado no período selecionado.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
                             {files.map((file) => (
                                 <div
                                     key={file.id}
-                                    className={`rounded-lg border p-6 hover:shadow-md transition-shadow ${selectedFiles.has(file.id)
+                                    className={`rounded-lg border p-4 sm:p-6 hover:shadow-md transition-shadow min-w-0 ${selectedFiles.has(file.id)
                                         ? 'bg-red-50 border-red-300 ring-2 ring-red-200'
                                         : 'bg-white border-gray-200'
                                         }`}
                                 >
-                                    <div className="mb-4 flex items-start justify-between">
+                                    <div className="mb-3 sm:mb-4 flex items-start justify-between gap-2 min-w-0">
                                         <h3
-                                            className={`text-lg font-medium truncate flex-1 ${selectedFiles.has(file.id) ? 'text-red-900' : 'text-gray-900'}`}
+                                            className={`text-base sm:text-lg font-medium truncate flex-1 min-w-0 ${selectedFiles.has(file.id) ? 'text-red-900' : 'text-gray-900'}`}
                                             title={file.filename}
                                         >
                                             {file.filename}
@@ -347,7 +347,7 @@ export default function FilesPage() {
                                             <button
                                                 onClick={() => toggleFileSelection(file.id)}
                                                 disabled={deleting}
-                                                className={`ml-2 p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selectedFiles.has(file.id)
+                                                className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${selectedFiles.has(file.id)
                                                         ? 'text-red-700 bg-red-100 hover:bg-red-200'
                                                         : 'text-gray-400 hover:bg-gray-100'
                                                     }`}
@@ -371,19 +371,19 @@ export default function FilesPage() {
                                         )}
                                     </div>
                                     <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Tipo:</span>
-                                            <span className="text-gray-900 font-medium">{file.content_type}</span>
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-gray-600 shrink-0">Tipo:</span>
+                                            <span className="text-gray-900 font-medium truncate text-right">{file.content_type}</span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Tamanho:</span>
-                                            <span className="text-gray-900 font-medium">
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-gray-600 shrink-0">Tamanho:</span>
+                                            <span className="text-gray-900 font-medium text-right">
                                                 {formatFileSize(file.file_size)}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Criado em:</span>
-                                            <span className="text-gray-900 font-medium">
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-gray-600 shrink-0">Criado em:</span>
+                                            <span className="text-gray-900 font-medium text-right">
                                                 {formatDate(file.created_at)}
                                             </span>
                                         </div>
@@ -395,22 +395,22 @@ export default function FilesPage() {
 
                     {/* Paginação */}
                     {total > limit && (
-                        <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-6 py-4">
-                            <div className="text-sm text-gray-700">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0 bg-white rounded-lg border border-gray-200 px-4 sm:px-6 py-4">
+                            <div className="text-sm text-gray-700 text-center sm:text-left">
                                 Página {currentPage} de {totalPages} ({total} arquivos)
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 justify-center sm:justify-end">
                                 <button
                                     onClick={goToPreviousPage}
                                     disabled={offset === 0}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Anterior
                                 </button>
                                 <button
                                     onClick={goToNextPage}
                                     disabled={offset + limit >= total}
-                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Próxima
                                 </button>

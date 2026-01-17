@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TenantResponse, TenantListResponse, AccountResponse } from '@/types/api'
+import { useDrawer } from '@/app/(protected)/layout'
 
 // TenantListResponse ainda é usado no handleLogout para verificar múltiplos tenants
 
 export function Header() {
   const router = useRouter()
+  const { openDrawer } = useDrawer()
   const [tenant, setTenant] = useState<TenantResponse | null>(null)
   const [account, setAccount] = useState<AccountResponse | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -105,11 +107,31 @@ export function Header() {
   }, [router])
 
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo / Nome do tenant */}
           <div className="flex items-center">
+            {/* Botão hambúrguer para mobile/tablet */}
+            <button
+              onClick={openDrawer}
+              className="mr-3 lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              aria-label="Abrir menu"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
             <h1 className="text-xl font-bold text-gray-900">Turna</h1>
             {tenant && (
               <>
@@ -133,7 +155,7 @@ export function Header() {
 
                 {/* Dropdown do menu do usuário */}
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                     <div className="py-1" role="menu">
                       <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
                         {account.name}
@@ -157,7 +179,7 @@ export function Header() {
       {/* Overlay para fechar dropdown do menu ao clicar fora */}
       {showUserMenu && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-[55]"
           onClick={() => {
             setShowUserMenu(false)
           }}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useDrawer } from '@/app/(protected)/layout'
 
 interface NavItem {
   href: string
@@ -50,31 +51,57 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { isDrawerOpen, closeDrawer } = useDrawer()
+
+  // Handler para fechar drawer ao clicar em um item
+  const handleLinkClick = () => {
+    closeDrawer()
+  }
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 fixed left-0 top-0 h-screen pt-16">
-      <nav className="p-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`
-                flex items-center px-4 py-3 text-sm font-medium rounded-md transition-colors
-                ${
-                  isActive
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }
-              `}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
-    </aside>
+    <>
+      {/* Overlay para fechar drawer ao clicar fora (mobile/tablet) */}
+      {isDrawerOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+          onClick={closeDrawer}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar: fixa em desktop, drawer em mobile/tablet */}
+      <aside
+        className={`
+          w-64 bg-white border-r border-gray-200 fixed left-0 top-0 h-screen pt-16 z-50
+          transform transition-transform duration-300 ease-in-out
+          lg:translate-x-0
+          ${isDrawerOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+      >
+        <nav className="p-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={handleLinkClick}
+                className={`
+                  flex items-center px-4 py-3 text-sm font-medium rounded-md transition-colors
+                  ${
+                    isActive
+                      ? 'bg-gray-100 text-gray-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }
+                `}
+              >
+                <span className="mr-3">{item.icon}</span>
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+      </aside>
+    </>
   )
 }

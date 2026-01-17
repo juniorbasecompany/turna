@@ -102,47 +102,51 @@ export function BottomActionBar({
     const renderButtons = () => {
         if (!buttons || buttons.length === 0) return null
         return (
-            <div className="flex items-center gap-3">
+            <>
                 {buttons.map((button, index) => (
                     <button
                         key={index}
                         onClick={button.onClick}
                         disabled={button.disabled || button.loading}
-                        className={`px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`px-3 sm:px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${
                             buttonClasses[button.variant || 'primary']
                         }`}
                     >
                         {button.loading ? 'Processando...' : button.label}
                     </button>
                 ))}
-            </div>
+            </>
         )
     }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg h-20">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-lg h-20 pb-[env(safe-area-inset-bottom)]">
             {message ? (
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
-                    <div className="flex items-center justify-between gap-4 w-full">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4 w-full">
                         {/* Mensagem */}
                         <div
-                            className={`flex-1 px-4 py-2 rounded-md border ${messageColorClasses[messageType]}`}
+                            className={`flex-1 px-4 py-2 rounded-md border ${messageColorClasses[messageType]} min-w-0`}
                         >
                             {typeof message === 'string' ? (
-                                <p className="text-sm font-medium">{message}</p>
+                                <p className="text-sm font-medium truncate">{message}</p>
                             ) : (
                                 message
                             )}
                         </div>
 
                         {/* Botões de ação - alinhados à direita */}
-                        {renderButtons()}
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            {renderButtons()}
+                        </div>
                     </div>
                 </div>
             ) : (
                 <div className="h-full flex items-center justify-end px-4 sm:px-6 lg:px-8">
                     {/* Botões de ação - alinhados à direita da tela */}
-                    {renderButtons()}
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        {renderButtons()}
+                    </div>
                 </div>
             )}
         </div>
@@ -154,6 +158,7 @@ export function BottomActionBar({
  *
  * Use este componente no final do conteúdo da página para evitar
  * que o conteúdo fique escondido atrás da barra inferior.
+ * Já considera a safe-area do iOS.
  *
  * @example
  * ```tsx
@@ -164,6 +169,6 @@ export function BottomActionBar({
  * ```
  */
 export function BottomActionBarSpacer() {
-    // Altura da barra: py-4 (16px top + 16px bottom) + conteúdo (~40px) = ~72px
-    return <div className="h-20" />
+    // Altura da barra (80px) + safe-area (env(safe-area-inset-bottom))
+    return <div className="h-20 pb-[env(safe-area-inset-bottom,0px)]" />
 }
