@@ -26,6 +26,7 @@ from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleVersion, ScheduleStatus
 from app.model.hospital import Hospital
+from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
 
@@ -154,6 +155,9 @@ def create_tenant(
     )
     session.add(membership)
     session.commit()
+
+    # Criar hospital default para o tenant
+    create_default_hospital_for_tenant(session, tenant.id)
 
     return tenant
 

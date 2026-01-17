@@ -8,6 +8,7 @@ from app.model.membership import Membership, MembershipRole, MembershipStatus
 from app.model.audit_log import AuditLog
 from app.model.account import Account
 from app.model.tenant import Tenant
+from app.services.hospital_service import create_default_hospital_for_tenant
 from app.auth.jwt import create_access_token
 from app.auth.oauth import verify_google_token
 from app.auth.dependencies import get_current_account, get_current_membership
@@ -108,6 +109,11 @@ def _get_or_create_default_tenant(session: Session) -> Tenant:
         session.add(default_tenant)
         session.commit()
         session.refresh(default_tenant)
+        # Criar hospital default para o tenant recém-criado
+        create_default_hospital_for_tenant(session, default_tenant.id)
+    else:
+        # Garantir que tenant existente também tenha hospital default
+        create_default_hospital_for_tenant(session, default_tenant.id)
 
     return default_tenant
 

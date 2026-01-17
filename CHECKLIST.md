@@ -812,6 +812,141 @@ Antes de considerar completo, verificar:
   - [ ] Processar arquivo usando prompt do hospital
   - [ ] Filtrar arquivos por hospital
 
+## FASE 10: CRUD de Hospitais + Hospital Default por Tenant
+
+### 10.1 Menu / Navegação
+
+- [ ] Adicionar nova opção no menu lateral
+  - [ ] Posição: abaixo de **Dashboard**
+  - [ ] Label: **Hospitais**
+  - [ ] Ícone coerente com cadastro/configuração
+  - [ ] Rota: `/hospital`
+
+- [ ] Garantir visibilidade apenas para usuários com permissão administrativa do tenant
+
+---
+
+### 10.2 Backend – Modelo e Regras de Negócio
+
+- [x] Confirmar modelo `hospital`
+  - [x] `id`
+  - [x] `tenant_id` (FK, obrigatório)
+  - [x] `name` (obrigatório)
+  - [x] `prompt` (obrigatório)
+  - [x] `created_at` (`timestamptz`)
+  - [x] `updated_at` (`timestamptz`)
+  - [x] `unique (tenant_id, name)`
+
+- [x] Garantir isolamento por tenant em todas as operações (CRUD)
+
+---
+
+### 10.3 Backend – CRUD de Hospitais
+
+- [x] Endpoints
+  - [x] `POST /hospital` (criar)
+  - [x] `GET /hospital/list` (listar)
+  - [x] `GET /hospital/{id}` (detalhe)
+  - [x] `PUT /hospital/{id}` (editar)
+  - [x] (Opcional) bloquear delete por enquanto
+
+- [x] Validações
+  - [x] `name` obrigatório e único por tenant
+  - [x] `prompt` obrigatório
+  - [x] Hospital sempre pertence ao tenant do usuário logado
+
+---
+
+### 10.4 Tenant – Criação de Hospital Default
+
+- [x] Ajustar fluxo de criação de tenant
+  - [x] Após criar o tenant, criar automaticamente um hospital default
+
+- [x] Hospital default
+  - [x] `name`: **Hospital**
+  - [x] `prompt`:
+
+    ```
+    Extraia as demandas cirúrgicas do documento.
+    Regras:
+    - Responda APENAS JSON.
+    - O JSON DEVE conter as chaves: meta, demands.
+    - demands é uma lista de objetos com:
+      - room (string ou null)
+      - start_time (ISO datetime com timezone, ex: "2026-01-12T09:30:00-03:00")
+      - end_time (ISO datetime com timezone, ex: "2026-01-12T12:00:00-03:00")
+      - procedure (string)
+      - anesthesia_type (string ou null)
+      - skills (lista; se não houver, [])
+      - priority ("Urgente" | "Emergência" | null)  # extrair de notes quando houver "Prioridade: ..."
+      - complexity (string ou null)  # se existir como complexidade do caso (Baixa/Média/Alta)
+      - professionals (lista; se não houver, [])
+      - notes (string ou null)
+      - source (objeto livre; inclua page e qualquer raw útil)
+    - Não invente dados que não estejam no documento.
+    ```
+
+- [x] Garantias
+  - [x] Todo tenant nasce com exatamente 1 hospital default
+  - [x] Upload de arquivos sempre pode usar esse hospital sem configuração adicional
+
+---
+
+### 10.5 Frontend – Tela de Hospitais (CRUD)
+
+- [ ] Página `/hospital`
+  - [ ] Lista de hospitais do tenant
+  - [ ] Mostrar: nome, data de criação
+  - [ ] Ação: editar
+
+- [ ] Criar hospital
+  - [ ] Campo **Nome**
+  - [ ] Campo **Prompt** (textarea grande, monoespaçado)
+  - [ ] Validação de obrigatoriedade
+
+- [ ] Editar hospital
+  - [ ] Permitir alterar nome e prompt
+  - [ ] Bloquear edição do tenant
+
+- [ ] UX
+  - [ ] Aviso claro de que o prompt influencia a leitura dos arquivos
+  - [ ] Evitar delete (ou exigir confirmação forte, se existir)
+
+---
+
+### 10.6 Integração com Arquivos
+
+- [x] Confirmar que:
+  - [x] Todo `file` referencia um `hospital_id`
+  - [ ] O hospital default pode ser usado no upload sem ajustes
+  - [x] O filtro por hospital no painel de arquivos lista este hospital
+
+---
+
+### 10.7 Testes Essenciais
+
+- [ ] Criar tenant novo
+  - [ ] Confirmar hospital "Hospital" criado automaticamente
+- [ ] Acessar menu **Hospitais**
+  - [ ] Hospital default aparece na lista
+- [ ] Criar hospital adicional
+- [ ] Editar prompt de um hospital
+- [ ] Upload de arquivo usando hospital default
+- [ ] Upload usando hospital customizado
+- [ ] Processamento usa o prompt correto do hospital
+
+---
+
+### 10.8 Documentação
+
+- [x] Atualizar `CHECKLIST.md`
+- [ ] Atualizar documentação de domínio:
+  - [ ] Conceito de hospital
+  - [ ] Hospital como origem semântica das demandas
+  - [ ] Prompt como contrato de extração
+
+---
+
 ## Scripts de Teste
 
 ### `script_validate_docker_compose.py`

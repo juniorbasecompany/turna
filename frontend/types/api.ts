@@ -157,3 +157,27 @@ export interface TenantCreateRequest {
   locale?: string
   currency?: string
 }
+
+export interface HospitalResponse {
+  id: number
+  tenant_id: number
+  name: string
+  prompt: string
+  created_at: string
+  updated_at: string
+}
+
+export interface HospitalListResponse {
+  items: HospitalResponse[]
+  total: number
+}
+
+export interface HospitalCreateRequest {
+  name: string
+  prompt: string
+}
+
+export interface HospitalUpdateRequest {
+  name?: string
+  prompt?: string
+}

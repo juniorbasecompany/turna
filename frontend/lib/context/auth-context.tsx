@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { AccountResponse, TenantResponse } from '@/types/api'
-import { api } from '@/lib/api'
 
 interface AuthContextType {
   account: AccountResponse | null
@@ -21,22 +20,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAccount = async () => {
     try {
-      const data = await api.get<AccountResponse>('/me')
+      // Usar fetch() direto seguindo padrão de outras páginas
+      const response = await fetch('/api/me', {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        // Se 401, limpar estado mas não redirecionar (páginas protegidas gerenciam isso)
+        if (response.status === 401) {
+          setAccount(null)
+          setTenant(null)
+          return
+        }
+        throw new Error(`Erro HTTP ${response.status}`)
+      }
+
+      const data: AccountResponse = await response.json()
       setAccount(data)
     } catch (error) {
-      // Se não autenticado, limpa o estado
-      if (error instanceof Error && error.message.includes('401')) {
-        setAccount(null)
-        setTenant(null)
-      }
+      // Silenciosamente falha se não autenticado
+      console.debug('Erro ao carregar account:', error)
+      setAccount(null)
     }
   }
 
   const refreshTenant = async () => {
     try {
-      const data = await api.get<TenantResponse>('/tenant/me')
+      // Usar fetch() direto seguindo padrão de outras páginas
+      const response = await fetch('/api/tenant/me', {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        setTenant(null)
+        return
+      }
+
+      const data: TenantResponse = await response.json()
       setTenant(data)
     } catch (error) {
+      console.debug('Erro ao carregar tenant:', error)
       setTenant(null)
     }
   }

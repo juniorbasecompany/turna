@@ -339,6 +339,12 @@ export default function FilesPage() {
                 if (response.ok) {
                     const data: HospitalListResponse = await response.json()
                     setHospitalList(data.items)
+
+                    // Selecionar automaticamente o hospital default (nome "Hospital") ou o primeiro da lista
+                    if (data.items.length > 0 && !selectedHospitalId) {
+                        const defaultHospital = data.items.find(h => h.name === 'Hospital') || data.items[0]
+                        setSelectedHospitalId(defaultHospital.id)
+                    }
                 }
             } catch (err) {
                 console.error('Erro ao carregar hospitais:', err)
@@ -952,22 +958,6 @@ export default function FilesPage() {
             {/* Filtro por período e hospital */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
-                        <TenantDatePicker
-                            label="Cadastrados deste"
-                            value={startDate}
-                            onChange={handleStartDateChange}
-                            id="start_at"
-                            name="start_at"
-                        />
-                        <TenantDatePicker
-                            label="Cadastrados até"
-                            value={endDate}
-                            onChange={handleEndDateChange}
-                            id="end_at"
-                            name="end_at"
-                        />
-                    </div>
                     <div className="flex-1 sm:flex-initial sm:w-64">
                         <label htmlFor="hospital-filter" className="block text-sm font-medium text-gray-700 mb-2">
                             Hospital
@@ -989,6 +979,22 @@ export default function FilesPage() {
                                 ))}
                             </select>
                         )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
+                        <TenantDatePicker
+                            label="Cadastrados deste"
+                            value={startDate}
+                            onChange={handleStartDateChange}
+                            id="start_at"
+                            name="start_at"
+                        />
+                        <TenantDatePicker
+                            label="Cadastrados até"
+                            value={endDate}
+                            onChange={handleEndDateChange}
+                            id="end_at"
+                            name="end_at"
+                        />
                     </div>
                 </div>
                 {startDate && endDate && startDate > endDate && (
@@ -1017,268 +1023,262 @@ export default function FilesPage() {
             {!loading && !error && (
                 <>
                     {/* Cards de arquivos */}
-                    {files.length === 0 && pendingFiles.length === 0 ? (
-                        <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
-                            <p className="text-gray-600">Nenhum arquivo encontrado no período selecionado.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
-                            {/* Card de upload - sempre o primeiro */}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
-                                onChange={handleFileSelect}
-                                className="hidden"
-                                id="file-upload"
-                            />
-                            <div
-                                onClick={handleUploadCardClick}
-                                onDragEnter={handleDragEnter}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center min-h-[200px] ${isDragging
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : 'border-slate-300'
-                                    }`}
-                            >
-                                <div className="flex flex-col items-center justify-center text-center px-2">
-                                    <svg
-                                        className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400'}`}
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                                        />
-                                    </svg>
-                                    <p className={`text-sm font-medium mb-1 ${isDragging ? 'text-blue-600' : 'text-slate-700'}`}>
-                                        {isDragging ? 'Solte os arquivos aqui' : 'Adicionar um ou mais arquivos'}
-                                    </p>
-                                    <p className="text-xs text-slate-500 mb-2">
-                                        Clique ou arraste e solte
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Documentos PDF
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Planilhas XLSX ou XLS
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Imagens JPG ou PNG
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Texto CSV
-                                    </p>
-                                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                        {/* Card de upload - sempre o primeiro */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                            id="file-upload"
+                        />
+                        <div
+                            onClick={handleUploadCardClick}
+                            onDragEnter={handleDragEnter}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center min-h-[200px] ${isDragging
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-slate-300'
+                                }`}
+                        >
+                            <div className="flex flex-col items-center justify-center text-center px-2">
+                                <svg
+                                    className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400'}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                                    />
+                                </svg>
+                                <p className={`text-sm font-medium mb-1 ${isDragging ? 'text-blue-600' : 'text-slate-700'}`}>
+                                    {isDragging ? 'Solte os arquivos aqui' : 'Adicionar um ou mais arquivos'}
+                                </p>
+                                <p className="text-xs text-slate-500 mb-2">
+                                    Clique ou arraste e solte
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Documentos PDF
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Planilhas XLSX ou XLS
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Imagens JPG ou PNG
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Texto CSV
+                                </p>
                             </div>
+                        </div>
 
-                            {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
-                            {pendingFiles
-                                .filter((pendingFile) => {
-                                    // Se o arquivo já tem fileId e está na lista de files, não mostrar
-                                    if (pendingFile.fileId) {
-                                        return !files.some((f) => f.id === pendingFile.fileId)
-                                    }
-                                    // Verificar se já está na lista de files comparando nome e tamanho
-                                    const fileName = pendingFile.file.name
-                                    const fileSize = pendingFile.file.size
-                                    const alreadyInFiles = files.some(
-                                        (f) => f.filename === fileName && f.file_size === fileSize
-                                    )
-                                    // Se já está em files, não mostrar como pendente
-                                    return !alreadyInFiles
-                                })
-                                .map((pendingFile, filteredIndex) => {
-                                    // Usar índice original de pendingFiles para remover corretamente
-                                    const originalIndex = pendingFiles.findIndex((pf) => pf === pendingFile)
-                                    const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
+                        {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
+                        {pendingFiles
+                            .filter((pendingFile) => {
+                                // Se o arquivo já tem fileId e está na lista de files, não mostrar
+                                if (pendingFile.fileId) {
+                                    return !files.some((f) => f.id === pendingFile.fileId)
+                                }
+                                // Verificar se já está na lista de files comparando nome e tamanho
+                                const fileName = pendingFile.file.name
+                                const fileSize = pendingFile.file.size
+                                const alreadyInFiles = files.some(
+                                    (f) => f.filename === fileName && f.file_size === fileSize
+                                )
+                                // Se já está em files, não mostrar como pendente
+                                return !alreadyInFiles
+                            })
+                            .map((pendingFile, filteredIndex) => {
+                                // Usar índice original de pendingFiles para remover corretamente
+                                const originalIndex = pendingFiles.findIndex((pf) => pf === pendingFile)
+                                const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
 
-                                    return (
-                                        <div
-                                            key={`pending-${originalIndex}-${pendingFile.file.name}`}
-                                            className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 border-blue-200"
-                                        >
-                                            {/* 1. Topo - Identidade do arquivo */}
-                                            <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
-                                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                    <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                        {fileTypeInfo.icon}
-                                                    </div>
-                                                    <h3
-                                                        className="text-sm font-semibold truncate min-w-0 text-gray-900"
-                                                        title={pendingFile.file.name}
-                                                    >
-                                                        {pendingFile.file.name}
-                                                    </h3>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        removePendingFile(originalIndex)
-                                                    }}
-                                                    className="shrink-0 p-1.5 rounded-md transition-all duration-200 text-gray-400"
-                                                    title="Remover arquivo"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M6 18L18 6M6 6l12 12"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            </div>
-
-                                            {/* 2. Corpo - Preview */}
-                                            <div className="mb-3">
-                                                {isImage(pendingFile.file.type || '') ? (
-                                                    <PendingFileImageThumbnail file={pendingFile.file} />
-                                                ) : (
-                                                    // Para outros tipos, mostrar ícone
-                                                    <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
-                                                        <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
-                                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                                {fileTypeInfo.icon}
-                                                            </div>
-                                                            <span className="text-xs font-medium">
-                                                                {pendingFile.file.type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* 3. Rodapé - Status */}
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
-                                                {pendingFile.uploading && (
-                                                    <>
-                                                        <span className="shrink-0 text-slate-500">•</span>
-                                                        <span className="truncate text-slate-400">Enviando...</span>
-                                                    </>
-                                                )}
-                                                {pendingFile.error && (
-                                                    <>
-                                                        <span className="shrink-0 text-slate-500">•</span>
-                                                        <span className="truncate text-red-600">Erro</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {pendingFile.error && (
-                                                <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
-                                                    {pendingFile.error}
-                                                </p>
-                                            )}
-                                        </div>
-                                    )
-                                })}
-
-                            {/* Renderizar arquivos existentes */}
-                            {files.map((file) => {
-                                const fileTypeInfo = getFileTypeInfo(file.content_type)
-                                const isSelected = selectedFiles.has(file.id)
                                 return (
                                     <div
-                                        key={file.id}
-                                        className={`group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 ${isSelected
-                                            ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                            : selectedFilesForReading.has(file.id)
-                                                ? 'border-blue-300 ring-2 ring-blue-200 bg-blue-50'
-                                                : 'border-slate-200'
-                                            }`}
+                                        key={`pending-${originalIndex}-${pendingFile.file.name}`}
+                                        className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 border-blue-200"
                                     >
                                         {/* 1. Topo - Identidade do arquivo */}
-                                        <div className="mb-3 flex items-start gap-2 min-w-0">
-                                            <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                {fileTypeInfo.icon}
+                                        <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                    {fileTypeInfo.icon}
+                                                </div>
+                                                <h3
+                                                    className="text-sm font-semibold truncate min-w-0 text-gray-900"
+                                                    title={pendingFile.file.name}
+                                                >
+                                                    {pendingFile.file.name}
+                                                </h3>
                                             </div>
-                                            <h3
-                                                className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
-                                                    }`}
-                                                title={file.filename}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    removePendingFile(originalIndex)
+                                                }}
+                                                className="shrink-0 p-1.5 rounded-md transition-all duration-200 text-gray-400"
+                                                title="Remover arquivo"
                                             >
-                                                {file.filename}
-                                            </h3>
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
                                         </div>
 
                                         {/* 2. Corpo - Preview */}
                                         <div className="mb-3">
-                                            <FileThumbnail
-                                                file={file}
-                                                onClick={() => toggleFileSelectionForReading(file.id)}
-                                            />
+                                            {isImage(pendingFile.file.type || '') ? (
+                                                <PendingFileImageThumbnail file={pendingFile.file} />
+                                            ) : (
+                                                // Para outros tipos, mostrar ícone
+                                                <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+                                                    <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
+                                                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                            {fileTypeInfo.icon}
+                                                        </div>
+                                                        <span className="text-xs font-medium">
+                                                            {pendingFile.file.type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {/* 3. Rodapé - Metadados à esquerda, ações à direita */}
-                                        <div className="flex items-center justify-between gap-2">
-                                            {/* Metadados à esquerda */}
-                                            <div className="flex flex-col min-w-0 flex-1">
-                                                <span className="text-xs text-slate-400 truncate mb-0.5">
-                                                    {file.job_status === 'PENDING' ? 'Na fila para ser lido' :
-                                                        file.job_status === 'RUNNING' ? 'Lendo o conteúdo do arquivo' :
-                                                            file.job_status === 'COMPLETED' ? 'Conteúdo lido' :
-                                                                file.job_status === 'FAILED' ? 'Não foi possível ler o conteúdo' :
-                                                                    'Pronto para ser lido'}
-                                                </span>
-                                                <span className="text-xs text-slate-500 truncate mb-0.5">
-                                                    {file.hospital_name}
-                                                </span>
-                                                <span className="text-sm text-slate-500 truncate">
-                                                    {settings
-                                                        ? formatDateTime(file.created_at, settings)
-                                                        : new Date(file.created_at).toLocaleString()}
-                                                </span>
-                                                <span className="text-xs text-slate-400 truncate">{formatFileSize(file.file_size)}</span>
-                                            </div>
-                                            {/* Ações à direita */}
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                {/* Ícone para exclusão */}
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        toggleFileSelection(file.id)
-                                                    }}
-                                                    disabled={deleting}
-                                                    className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
-                                                        ? 'text-red-700 bg-red-100 opacity-100'
-                                                        : 'text-gray-400'
-                                                        }`}
-                                                    title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            </div>
+                                        {/* 3. Rodapé - Status */}
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
+                                            {pendingFile.uploading && (
+                                                <>
+                                                    <span className="shrink-0 text-slate-500">•</span>
+                                                    <span className="truncate text-slate-400">Enviando...</span>
+                                                </>
+                                            )}
+                                            {pendingFile.error && (
+                                                <>
+                                                    <span className="shrink-0 text-slate-500">•</span>
+                                                    <span className="truncate text-red-600">Erro</span>
+                                                </>
+                                            )}
                                         </div>
+                                        {pendingFile.error && (
+                                            <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
+                                                {pendingFile.error}
+                                            </p>
+                                        )}
                                     </div>
                                 )
                             })}
-                        </div>
-                    )}
+
+                        {/* Renderizar arquivos existentes */}
+                        {files.map((file) => {
+                            const fileTypeInfo = getFileTypeInfo(file.content_type)
+                            const isSelected = selectedFiles.has(file.id)
+                            return (
+                                <div
+                                    key={file.id}
+                                    className={`group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 ${isSelected
+                                        ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
+                                        : selectedFilesForReading.has(file.id)
+                                            ? 'border-blue-300 ring-2 ring-blue-200 bg-blue-50'
+                                            : 'border-slate-200'
+                                        }`}
+                                >
+                                    {/* 1. Topo - Identidade do arquivo */}
+                                    <div className="mb-3 flex items-start gap-2 min-w-0">
+                                        <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                            {fileTypeInfo.icon}
+                                        </div>
+                                        <h3
+                                            className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
+                                                }`}
+                                            title={file.filename}
+                                        >
+                                            {file.filename}
+                                        </h3>
+                                    </div>
+
+                                    {/* 2. Corpo - Preview */}
+                                    <div className="mb-3">
+                                        <FileThumbnail
+                                            file={file}
+                                            onClick={() => toggleFileSelectionForReading(file.id)}
+                                        />
+                                    </div>
+
+                                    {/* 3. Rodapé - Metadados à esquerda, ações à direita */}
+                                    <div className="flex items-center justify-between gap-2">
+                                        {/* Metadados à esquerda */}
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <span className="text-xs text-slate-400 truncate mb-0.5">
+                                                {file.job_status === 'PENDING' ? 'Na fila para ser lido' :
+                                                    file.job_status === 'RUNNING' ? 'Lendo o conteúdo do arquivo' :
+                                                        file.job_status === 'COMPLETED' ? 'Conteúdo lido' :
+                                                            file.job_status === 'FAILED' ? 'Não foi possível ler o conteúdo' :
+                                                                'Pronto para ser lido'}
+                                            </span>
+                                            <span className="text-xs text-slate-500 truncate mb-0.5">
+                                                {file.hospital_name}
+                                            </span>
+                                            <span className="text-sm text-slate-500 truncate">
+                                                {settings
+                                                    ? formatDateTime(file.created_at, settings)
+                                                    : new Date(file.created_at).toLocaleString()}
+                                            </span>
+                                            <span className="text-xs text-slate-400 truncate">{formatFileSize(file.file_size)}</span>
+                                        </div>
+                                        {/* Ações à direita */}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {/* Ícone para exclusão */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    toggleFileSelection(file.id)
+                                                }}
+                                                disabled={deleting}
+                                                className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                                    ? 'text-red-700 bg-red-100 opacity-100'
+                                                    : 'text-gray-400'
+                                                    }`}
+                                                title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                            >
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
 
                     {/* Paginação */}
                     {total > limit && (
