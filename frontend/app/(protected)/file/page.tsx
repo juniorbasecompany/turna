@@ -132,6 +132,42 @@ function handleFileDownload(fileId: number, filename: string) {
 }
 
 /**
+ * Componente de thumbnail para arquivo pendente (imagem local)
+ */
+function PendingFileImageThumbnail({ file }: { file: File }) {
+    const [objectUrl, setObjectUrl] = useState<string | null>(null)
+
+    useEffect(() => {
+        // Criar URL do objeto apenas uma vez
+        const url = URL.createObjectURL(file)
+        setObjectUrl(url)
+
+        // Limpar URL quando componente desmontar
+        return () => {
+            URL.revokeObjectURL(url)
+        }
+    }, [file])
+
+    if (!objectUrl) {
+        return (
+            <div className="w-full h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="w-full h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center overflow-hidden">
+            <img
+                src={objectUrl}
+                alt={file.name}
+                className="w-full h-full object-cover rounded-lg"
+            />
+        </div>
+    )
+}
+
+/**
  * Componente de thumbnail do arquivo (preview no corpo do card)
  */
 function FileThumbnail({ file }: { file: FileResponse }) {
@@ -236,7 +272,7 @@ export default function FilesPage() {
     })
 
     // Paginação
-    const [limit] = useState(21) // Limite padrão
+    const [limit] = useState(20) // Limite padrão
     const [offset, setOffset] = useState(0)
 
     // Carregar arquivos
@@ -345,45 +381,6 @@ export default function FilesPage() {
         })
     }
 
-    // Seleção de arquivos para upload
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const selected = Array.from(e.target.files || [])
-        if (selected.length === 0) return
-
-        setError(null)
-
-        // Adicionar arquivos à lista de pendentes
-        const newPendingFiles: PendingFile[] = selected.map((file) => ({
-            file,
-            uploading: false,
-        }))
-        setPendingFiles((prev) => [...prev, ...newPendingFiles])
-
-        // Limpar input
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-        }
-    }, [])
-
-    // Remover arquivo pendente
-    const removePendingFile = useCallback((index: number) => {
-        setPendingFiles((prev) => {
-            const newPending = [...prev]
-            const removed = newPending.splice(index, 1)[0]
-
-            // Limpar polling se existir
-            if (removed.jobId) {
-                const interval = pollingIntervals.current.get(removed.jobId)
-                if (interval) {
-                    clearInterval(interval)
-                    pollingIntervals.current.delete(removed.jobId)
-                }
-            }
-
-            return newPending
-        })
-    }, [])
-
     // Polling do status do job
     const pollJobStatus = useCallback(async (jobId: number, fileIndex: number) => {
         try {
@@ -443,6 +440,132 @@ export default function FilesPage() {
         }
     }, [])
 
+    // Upload individual de arquivo
+    const uploadSingleFile = useCallback(async (pendingFile: PendingFile, index: number) => {
+        // Marcar como fazendo upload
+        setPendingFiles((prev) => {
+            const newPending = [...prev]
+            if (newPending[index]) {
+                newPending[index] = { ...newPending[index], uploading: true }
+            }
+            return newPending
+        })
+
+        try {
+            // 1. Upload do arquivo
+            const formData = new FormData()
+            formData.append('file', pendingFile.file)
+
+            const uploadResponse = await fetch('/api/file/upload', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include',
+            })
+
+            if (!uploadResponse.ok) {
+                if (uploadResponse.status === 401) {
+                    throw new Error('Sessão expirada. Por favor, faça login novamente.')
+                }
+                const errorData = await uploadResponse.json().catch(() => ({}))
+                throw new Error(errorData.detail || `Erro ao fazer upload: ${uploadResponse.status}`)
+            }
+
+            const uploadData: FileUploadResponse = await uploadResponse.json()
+
+            // 2. Criar job de extração
+            const jobResponse = await fetch('/api/job/extract', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ file_id: uploadData.file_id }),
+                credentials: 'include',
+            })
+
+            if (!jobResponse.ok) {
+                if (jobResponse.status === 401) {
+                    throw new Error('Sessão expirada. Por favor, faça login novamente.')
+                }
+                const errorData = await jobResponse.json().catch(() => ({}))
+                throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
+            }
+
+            const jobData: JobExtractResponse = await jobResponse.json()
+
+            // Atualizar estado do arquivo
+            setPendingFiles((prev) => {
+                const newPending = [...prev]
+                if (newPending[index]) {
+                    newPending[index] = {
+                        ...newPending[index],
+                        fileId: uploadData.file_id,
+                        jobId: jobData.job_id,
+                        jobStatus: 'PENDING',
+                        uploading: false,
+                    }
+                }
+                return newPending
+            })
+
+            // 3. Iniciar polling do status
+            pollJobStatus(jobData.job_id, index)
+        } catch (err) {
+            setPendingFiles((prev) => {
+                const newPending = [...prev]
+                if (newPending[index]) {
+                    newPending[index] = {
+                        ...newPending[index],
+                        uploading: false,
+                        error: err instanceof Error ? err.message : 'Erro desconhecido ao processar arquivo',
+                        jobStatus: 'FAILED',
+                    }
+                }
+                return newPending
+            })
+        }
+    }, [pollJobStatus])
+
+    // Seleção de arquivos para upload
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = Array.from(e.target.files || [])
+        if (selected.length === 0) return
+
+        setError(null)
+
+        // Criar função para gerar chave única do arquivo
+        const getFileKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`
+
+        // Adicionar arquivos à lista de pendentes, filtrando duplicados
+        setPendingFiles((prev) => {
+            // Criar conjunto de chaves dos arquivos já pendentes
+            const existingKeys = new Set(prev.map((pf) => getFileKey(pf.file)))
+
+            // Filtrar arquivos que ainda não estão na lista
+            const newFiles = selected.filter((file) => !existingKeys.has(getFileKey(file)))
+
+            if (newFiles.length === 0) {
+                // Limpar input se não houver arquivos novos
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = ''
+                }
+                return prev // Retornar estado anterior se não houver novos arquivos
+            }
+
+            // Criar novos pendentes apenas dos arquivos novos
+            const newPendingFiles: PendingFile[] = newFiles.map((file) => ({
+                file,
+                uploading: false,
+            }))
+
+            return [...prev, ...newPendingFiles]
+        })
+
+        // Limpar input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+        }
+    }, [])
+
     // Upload e criação de jobs
     const handleUpload = useCallback(async () => {
         if (pendingFiles.length === 0) return
@@ -453,89 +576,7 @@ export default function FilesPage() {
         try {
             // Processar cada arquivo sequencialmente para evitar sobrecarga
             for (let index = 0; index < pendingFiles.length; index++) {
-                const pendingFile = pendingFiles[index]
-
-                // Marcar como fazendo upload
-                setPendingFiles((prev) => {
-                    const newPending = [...prev]
-                    if (newPending[index]) {
-                        newPending[index] = { ...newPending[index], uploading: true }
-                    }
-                    return newPending
-                })
-
-                try {
-                    // 1. Upload do arquivo
-                    const formData = new FormData()
-                    formData.append('file', pendingFile.file)
-
-                    const uploadResponse = await fetch('/api/file/upload', {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'include',
-                    })
-
-                    if (!uploadResponse.ok) {
-                        if (uploadResponse.status === 401) {
-                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                        }
-                        const errorData = await uploadResponse.json().catch(() => ({}))
-                        throw new Error(errorData.detail || `Erro ao fazer upload: ${uploadResponse.status}`)
-                    }
-
-                    const uploadData: FileUploadResponse = await uploadResponse.json()
-
-                    // 2. Criar job de extração
-                    const jobResponse = await fetch('/api/job/extract', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ file_id: uploadData.file_id }),
-                        credentials: 'include',
-                    })
-
-                    if (!jobResponse.ok) {
-                        if (jobResponse.status === 401) {
-                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                        }
-                        const errorData = await jobResponse.json().catch(() => ({}))
-                        throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
-                    }
-
-                    const jobData: JobExtractResponse = await jobResponse.json()
-
-                    // Atualizar estado do arquivo
-                    setPendingFiles((prev) => {
-                        const newPending = [...prev]
-                        if (newPending[index]) {
-                            newPending[index] = {
-                                ...newPending[index],
-                                fileId: uploadData.file_id,
-                                jobId: jobData.job_id,
-                                jobStatus: 'PENDING',
-                                uploading: false,
-                            }
-                        }
-                        return newPending
-                    })
-
-                    // 3. Iniciar polling do status
-                    pollJobStatus(jobData.job_id, index)
-                } catch (err) {
-                    setPendingFiles((prev) => {
-                        const newPending = [...prev]
-                        if (newPending[index]) {
-                            newPending[index] = {
-                                ...newPending[index],
-                                uploading: false,
-                                error: err instanceof Error ? err.message : 'Erro desconhecido ao processar arquivo',
-                                jobStatus: 'FAILED',
-                            }
-                        }
-                        return newPending
-                    })
-                }
+                await uploadSingleFile(pendingFiles[index], index)
             }
 
             // Recarregar lista de arquivos após upload
@@ -550,7 +591,26 @@ export default function FilesPage() {
         } finally {
             setUploading(false)
         }
-    }, [pendingFiles, pollJobStatus, startDate, endDate])
+    }, [pendingFiles, uploadSingleFile, startDate, endDate])
+
+    // Remover arquivo pendente
+    const removePendingFile = useCallback((index: number) => {
+        setPendingFiles((prev) => {
+            const newPending = [...prev]
+            const removed = newPending.splice(index, 1)[0]
+
+            // Limpar polling se existir
+            if (removed.jobId) {
+                const interval = pollingIntervals.current.get(removed.jobId)
+                if (interval) {
+                    clearInterval(interval)
+                    pollingIntervals.current.delete(removed.jobId)
+                }
+            }
+
+            return newPending
+        })
+    }, [])
 
     // Limpar polling ao desmontar
     useEffect(() => {
@@ -659,110 +719,6 @@ export default function FilesPage() {
                 )}
             </div>
 
-            {/* Cards de arquivos pendentes */}
-            {pendingFiles.length > 0 && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                    <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Arquivos para Upload</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {pendingFiles.map((pendingFile, index) => {
-                            const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
-                            const getStatusIcon = () => {
-                                if (pendingFile.uploading) {
-                                    return (
-                                        <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                    )
-                                }
-                                if (pendingFile.jobStatus === 'PENDING') {
-                                    return (
-                                        <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                    )
-                                }
-                                if (pendingFile.jobStatus === 'RUNNING') {
-                                    return (
-                                        <svg className="animate-spin h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                    )
-                                }
-                                if (pendingFile.jobStatus === 'COMPLETED') {
-                                    return (
-                                        <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    )
-                                }
-                                if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) {
-                                    return (
-                                        <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    )
-                                }
-                                return null
-                            }
-
-                            const getStatusText = () => {
-                                if (pendingFile.uploading) return 'Enviando...'
-                                if (pendingFile.jobStatus === 'PENDING') return 'Aguardando processamento'
-                                if (pendingFile.jobStatus === 'RUNNING') return 'Processando...'
-                                if (pendingFile.jobStatus === 'COMPLETED') return 'Concluído'
-                                if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) return 'Falha'
-                                return 'Pendente'
-                            }
-
-                            return (
-                                <div key={index} className="rounded-xl border border-gray-200 bg-white p-4">
-                                    <div className="flex items-start justify-between gap-2 mb-2">
-                                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                                            <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                {fileTypeInfo.icon}
-                                            </div>
-                                            <h3 className="text-sm font-semibold text-gray-900 truncate" title={pendingFile.file.name}>
-                                                {pendingFile.file.name}
-                                            </h3>
-                                        </div>
-                                        <button
-                                            onClick={() => removePendingFile(index)}
-                                            className="shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                            title="Remover arquivo"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm">
-                                        {getStatusIcon()}
-                                        <span className={
-                                            pendingFile.jobStatus === 'COMPLETED' ? 'text-green-600' :
-                                                pendingFile.jobStatus === 'FAILED' || pendingFile.error ? 'text-red-600' :
-                                                    'text-blue-600'
-                                        }>
-                                            {getStatusText()}
-                                        </span>
-                                    </div>
-                                    {pendingFile.error && (
-                                        <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
-                                            {pendingFile.error}
-                                        </p>
-                                    )}
-                                    {pendingFile.jobId && (
-                                        <p className="mt-1 text-xs text-gray-500">Job ID: {pendingFile.jobId}</p>
-                                    )}
-                                    <p className="mt-1 text-xs text-gray-500">{formatFileSize(pendingFile.file.size)}</p>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
 
             {/* Mensagem de erro */}
             {error && (
@@ -785,6 +741,11 @@ export default function FilesPage() {
                     <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div className="text-sm text-gray-600">
                             Total de arquivos: <span className="font-medium">{total}</span>
+                            {pendingFiles.length > 0 && (
+                                <span className="ml-2 sm:ml-4 text-blue-600">
+                                    {pendingFiles.length} arquivo{pendingFiles.length > 1 ? 's' : ''} pendente{pendingFiles.length > 1 ? 's' : ''}
+                                </span>
+                            )}
                             {selectedFiles.size > 0 && (
                                 <span className="ml-2 sm:ml-4 text-red-600">
                                     {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
@@ -794,12 +755,178 @@ export default function FilesPage() {
                     </div>
 
                     {/* Cards de arquivos */}
-                    {files.length === 0 ? (
+                    {files.length === 0 && pendingFiles.length === 0 ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
                             <p className="text-gray-600">Nenhum arquivo encontrado no período selecionado.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                            {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
+                            {pendingFiles
+                                .filter((pendingFile) => {
+                                    // Se o arquivo já tem fileId e está na lista de files, não mostrar
+                                    if (pendingFile.fileId) {
+                                        return !files.some((f) => f.id === pendingFile.fileId)
+                                    }
+                                    // Se ainda não tem fileId, mostrar normalmente
+                                    return true
+                                })
+                                .map((pendingFile, filteredIndex) => {
+                                    // Usar índice original de pendingFiles para remover corretamente
+                                    const originalIndex = pendingFiles.findIndex((pf) => pf === pendingFile)
+                                const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
+                                const getStatusIcon = () => {
+                                    if (pendingFile.uploading) {
+                                        return (
+                                            <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        )
+                                    }
+                                    if (pendingFile.jobStatus === 'PENDING') {
+                                        return (
+                                            <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        )
+                                    }
+                                    if (pendingFile.jobStatus === 'RUNNING') {
+                                        return (
+                                            <svg className="animate-spin h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        )
+                                    }
+                                    if (pendingFile.jobStatus === 'COMPLETED') {
+                                        return (
+                                            <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )
+                                    }
+                                    if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) {
+                                        return (
+                                            <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        )
+                                    }
+                                    return null
+                                }
+
+                                const getStatusText = () => {
+                                    if (pendingFile.uploading) return 'Enviando...'
+                                    if (pendingFile.jobStatus === 'PENDING') return 'Aguardando'
+                                    if (pendingFile.jobStatus === 'RUNNING') return 'Processando'
+                                    if (pendingFile.jobStatus === 'COMPLETED') return 'Concluído'
+                                    if (pendingFile.jobStatus === 'FAILED' || pendingFile.error) return 'Falha'
+                                    return 'Pendente'
+                                }
+
+                                const statusColor = pendingFile.jobStatus === 'COMPLETED' ? 'text-green-600' :
+                                    pendingFile.jobStatus === 'FAILED' || pendingFile.error ? 'text-red-600' :
+                                        'text-blue-600'
+
+                                return (
+                                    <div
+                                        key={`pending-${originalIndex}-${pendingFile.file.name}`}
+                                        className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-blue-200 hover:border-blue-300"
+                                    >
+                                        {/* 1. Topo - Identidade do arquivo */}
+                                        <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                    {fileTypeInfo.icon}
+                                                </div>
+                                                <h3
+                                                    className="text-sm font-semibold truncate min-w-0 text-gray-900"
+                                                    title={pendingFile.file.name}
+                                                >
+                                                    {pendingFile.file.name}
+                                                </h3>
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    removePendingFile(originalIndex)
+                                                }}
+                                                className="shrink-0 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 hover:bg-gray-100"
+                                                title="Remover arquivo"
+                                            >
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        {/* 2. Corpo - Preview */}
+                                        <div className="mb-3">
+                                            {pendingFile.fileId ? (
+                                                // Quando tem fileId, usar FileThumbnail como arquivos existentes
+                                                <FileThumbnail 
+                                                    file={{
+                                                        id: pendingFile.fileId,
+                                                        filename: pendingFile.file.name,
+                                                        content_type: pendingFile.file.type || 'application/octet-stream',
+                                                        file_size: pendingFile.file.size,
+                                                        created_at: new Date().toISOString(),
+                                                        can_delete: false,
+                                                    }}
+                                                />
+                                            ) : (
+                                                // Antes do upload, mostrar preview local se for imagem
+                                                isImage(pendingFile.file.type || '') ? (
+                                                    <PendingFileImageThumbnail file={pendingFile.file} />
+                                                ) : (
+                                                    // Para outros tipos, mostrar ícone
+                                                    <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+                                                        <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
+                                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                                {fileTypeInfo.icon}
+                                                            </div>
+                                                            <span className="text-xs font-medium">
+                                                                {pendingFile.file.type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+
+                                        {/* 3. Rodapé - Status do job */}
+                                        <div className="flex items-center justify-between gap-2 text-sm">
+                                            <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
+                                            <span className="shrink-0 text-slate-500">•</span>
+                                            <div className="flex items-center gap-1 truncate">
+                                                {getStatusIcon()}
+                                                <span className={`truncate font-medium ${statusColor}`}>
+                                                    {getStatusText()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {pendingFile.error && (
+                                            <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
+                                                {pendingFile.error}
+                                            </p>
+                                        )}
+                                    </div>
+                                )
+                            })}
+
+                            {/* Renderizar arquivos existentes */}
                             {files.map((file) => {
                                 const fileTypeInfo = getFileTypeInfo(file.content_type)
                                 const isSelected = selectedFiles.has(file.id)
@@ -922,9 +1049,9 @@ export default function FilesPage() {
                         : selectedFiles.size > 0
                             ? [
                                 {
-                                    label: 'Deletar',
+                                    label: 'Excluir',
                                     onClick: handleDeleteSelected,
-                                    variant: 'danger',
+                                    variant: 'secondary',
                                     disabled: deleting,
                                     loading: deleting,
                                 },
