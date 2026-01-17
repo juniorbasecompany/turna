@@ -4,7 +4,7 @@ import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActio
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface FileResponse {
     id: number
@@ -370,7 +370,7 @@ export default function FilesPage() {
         setPendingFiles((prev) => {
             const newPending = [...prev]
             const removed = newPending.splice(index, 1)[0]
-            
+
             // Limpar polling se existir
             if (removed.jobId) {
                 const interval = pollingIntervals.current.get(removed.jobId)
@@ -379,7 +379,7 @@ export default function FilesPage() {
                     pollingIntervals.current.delete(removed.jobId)
                 }
             }
-            
+
             return newPending
         })
     }, [])
@@ -396,7 +396,7 @@ export default function FilesPage() {
             }
 
             const job: JobResponse = await response.json()
-            
+
             setPendingFiles((prev) => {
                 const newPending = [...prev]
                 if (newPending[fileIndex]) {
@@ -433,7 +433,7 @@ export default function FilesPage() {
                 }
                 return newPending
             })
-            
+
             // Limpar intervalo em caso de erro
             const interval = pollingIntervals.current.get(jobId)
             if (interval) {
@@ -454,7 +454,7 @@ export default function FilesPage() {
             // Processar cada arquivo sequencialmente para evitar sobrecarga
             for (let index = 0; index < pendingFiles.length; index++) {
                 const pendingFile = pendingFiles[index]
-                
+
                 // Marcar como fazendo upload
                 setPendingFiles((prev) => {
                     const newPending = [...prev]
@@ -742,8 +742,8 @@ export default function FilesPage() {
                                         {getStatusIcon()}
                                         <span className={
                                             pendingFile.jobStatus === 'COMPLETED' ? 'text-green-600' :
-                                            pendingFile.jobStatus === 'FAILED' || pendingFile.error ? 'text-red-600' :
-                                            'text-blue-600'
+                                                pendingFile.jobStatus === 'FAILED' || pendingFile.error ? 'text-red-600' :
+                                                    'text-blue-600'
                                         }>
                                             {getStatusText()}
                                         </span>
@@ -920,16 +920,16 @@ export default function FilesPage() {
                             },
                         ]
                         : selectedFiles.size > 0
-                        ? [
-                            {
-                                label: 'Deletar',
-                                onClick: handleDeleteSelected,
-                                variant: 'danger',
-                                disabled: deleting,
-                                loading: deleting,
-                            },
-                        ]
-                        : []
+                            ? [
+                                {
+                                    label: 'Deletar',
+                                    onClick: handleDeleteSelected,
+                                    variant: 'danger',
+                                    disabled: deleting,
+                                    loading: deleting,
+                                },
+                            ]
+                            : []
                 }
             />
         </div>
