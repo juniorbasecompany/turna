@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { SaveButton } from '@/components/SaveButton'
+import { useEffect, useState } from 'react'
 
 interface FileResponse {
     id: number
@@ -75,12 +76,6 @@ export default function FilesPage() {
     const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
 
-    // Estados e refs para docking do botão Salvar
-    const [isButtonDocked, setIsButtonDocked] = useState(false)
-    const [dockedButtonRight, setDockedButtonRight] = useState<number>(0)
-    const actionBarRef = useRef<HTMLDivElement>(null)
-    const buttonRef = useRef<HTMLButtonElement>(null)
-
     // Filtros de período (padrão: dia atual)
     const [startAt, setStartAt] = useState<string>(() => getStartOfTodayUTC())
     const [endAt, setEndAt] = useState<string>(() => getEndOfTodayUTC())
@@ -143,69 +138,6 @@ export default function FilesPage() {
 
         loadFiles()
     }, [startAt, endAt, limit, offset])
-
-    // IntersectionObserver para detectar quando a barra de ações sai do topo
-    useEffect(() => {
-        if (!actionBarRef.current || selectedFiles.size === 0) {
-            setIsButtonDocked(false)
-            return
-        }
-
-        const calculateDockedPosition = () => {
-            if (!actionBarRef.current) return
-
-            const actionBarRect = actionBarRef.current.getBoundingClientRect()
-            // Encontrar o container principal (div com p-8)
-            const pageContainer = actionBarRef.current.closest('.p-8')
-
-            if (pageContainer) {
-                const containerRect = pageContainer.getBoundingClientRect()
-                const viewportWidth = window.innerWidth
-
-                // Calcular a distância da borda direita do container até a borda direita da viewport
-                const rightOffset = viewportWidth - containerRect.right
-                setDockedButtonRight(rightOffset)
-            } else {
-                // Fallback: usar a posição atual do botão na barra
-                const viewportWidth = window.innerWidth
-                setDockedButtonRight(viewportWidth - actionBarRect.right)
-            }
-        }
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                const entry = entries[0]
-                // Quando a barra deixa de intersectar o topo (isIntersecting = false e boundingClientRect.top < 0)
-                if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
-                    setIsButtonDocked(true)
-                    calculateDockedPosition()
-                } else {
-                    setIsButtonDocked(false)
-                }
-            },
-            {
-                root: null,
-                rootMargin: '0px',
-                threshold: 0,
-            }
-        )
-
-        observer.observe(actionBarRef.current)
-
-        // Recalcular posição em resize
-        const handleResize = () => {
-            if (isButtonDocked) {
-                calculateDockedPosition()
-            }
-        }
-
-        window.addEventListener('resize', handleResize)
-
-        return () => {
-            observer.disconnect()
-            window.removeEventListener('resize', handleResize)
-        }
-    }, [selectedFiles.size, isButtonDocked])
 
     // Calcular página atual e total de páginas
     const currentPage = Math.floor(offset / limit) + 1
@@ -377,8 +309,8 @@ export default function FilesPage() {
             {/* Lista de arquivos */}
             {!loading && !error && (
                 <>
-                    {/* Barra de ações com botão Salvar */}
-                    <div ref={actionBarRef} className="mb-4 flex items-center justify-between">
+                    {/* Barra de ações */}
+                    <div className="mb-4 flex items-center justify-between">
                         <div className="text-sm text-gray-600">
                             Total de arquivos: <span className="font-medium">{total}</span>
                             {selectedFiles.size > 0 && (
@@ -387,33 +319,7 @@ export default function FilesPage() {
                                 </span>
                             )}
                         </div>
-                        {selectedFiles.size > 0 && !isButtonDocked && (
-                            <button
-                                ref={buttonRef}
-                                onClick={handleDeleteSelected}
-                                disabled={deleting}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-700 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
-                            >
-                                {deleting ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        )}
                     </div>
-
-                    {/* Botão Salvar dockado (fixo no topo) */}
-                    {selectedFiles.size > 0 && isButtonDocked && (
-                        <div
-                            className="fixed top-4 z-50"
-                            style={{ right: `${dockedButtonRight}px` }}
-                        >
-                            <button
-                                onClick={handleDeleteSelected}
-                                disabled={deleting}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-700 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
-                            >
-                                {deleting ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        </div>
-                    )}
 
                     {/* Cards de arquivos */}
                     {files.length === 0 ? (
@@ -514,6 +420,14 @@ export default function FilesPage() {
                     )}
                 </>
             )}
+
+            {/* Botão Salvar fixo no canto inferior direito */}
+            <SaveButton
+                show={selectedFiles.size > 0}
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+                processing={deleting}
+            />
         </div>
     )
 }
