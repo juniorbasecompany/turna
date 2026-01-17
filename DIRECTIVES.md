@@ -97,7 +97,7 @@ O `AuthProvider` (usado no `RootLayout` via `Providers`) utiliza `api.get()` do 
    - `/login`
    - `/select-tenant`
    - `/dashboard`
-   - `/files`
+   - `/file`
 
 ### Exemplo de Correção
 
@@ -109,7 +109,7 @@ if (response.status === 401) {
         if (!path.startsWith('/login') &&
             !path.startsWith('/select-tenant') &&
             !path.startsWith('/dashboard') &&
-            !path.startsWith('/files') &&
+            !path.startsWith('/file') &&
             !path.startsWith('/sua-nova-pagina')) {  // ← ADICIONAR AQUI
             window.location.href = '/login'
         }

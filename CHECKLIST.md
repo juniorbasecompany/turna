@@ -556,8 +556,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### 8.10 Página de Arquivos
 - [x] Navegação:
   - [x] Adicionar opção **Arquivos** no menu principal (Sidebar)
-  - [x] Ao clicar, redirecionar para `/files`
-- [x] Listagem de arquivos (`app/(protected)/files/page.tsx`):
+  - [x] Ao clicar, redirecionar para `/file`
+- [x] Listagem de arquivos (`app/(protected)/file/page.tsx`):
   - [x] Chamar `GET /file/list` (via handler `/api/file/list`)
   - [x] Listar apenas arquivos do tenant atual (filtrado automaticamente pelo backend)
   - [x] Ordenar por `created_at` (decrescente) - aplicado no backend
