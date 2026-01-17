@@ -35,6 +35,10 @@ interface BottomActionBarProps {
      */
     messageType?: 'info' | 'success' | 'warning' | 'error'
     /**
+     * Conteúdo simples à esquerda, sem bordas ou estilos de mensagem
+     */
+    leftContent?: ReactNode
+    /**
      * Botões de ação (array de botões)
      */
     buttons?: BottomActionBarButton[]
@@ -68,6 +72,7 @@ interface BottomActionBarProps {
 export function BottomActionBar({
     message,
     messageType = 'info',
+    leftContent,
     buttons = [],
     show,
 }: BottomActionBarProps) {
@@ -111,7 +116,7 @@ export function BottomActionBar({
     }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
             {message ? (
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-20 flex items-center">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4 w-full">
@@ -130,6 +135,24 @@ export function BottomActionBar({
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             {renderButtons()}
                         </div>
+                    </div>
+                </div>
+            ) : leftContent ? (
+                <div className="min-h-20 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+                    {/* Conteúdo à esquerda - sem bordas */}
+                    <div className="flex-1 min-w-0">
+                        {leftContent}
+                    </div>
+                    {/* Botões de ação - alinhados à direita */}
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        {renderButtons()}
+                    </div>
+                </div>
+            ) : buttons.length > 0 ? (
+                <div className="min-h-20 flex items-center justify-end px-4 sm:px-6 lg:px-8">
+                    {/* Botões de ação - alinhados à direita da tela */}
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        {renderButtons()}
                     </div>
                 </div>
             ) : (

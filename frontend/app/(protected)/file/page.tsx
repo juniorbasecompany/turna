@@ -855,18 +855,17 @@ export default function FilesPage() {
 
             {/* Filtro por período */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Filtro por Período</h2>
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
                         <TenantDatePicker
-                            label="Data de Início"
+                            label="Cadastrados deste"
                             value={startDate}
                             onChange={handleStartDateChange}
                             id="start_at"
                             name="start_at"
                         />
                         <TenantDatePicker
-                            label="Data de Fim"
+                            label="Cadastrados até"
                             value={endDate}
                             onChange={handleEndDateChange}
                             id="end_at"
@@ -899,28 +898,6 @@ export default function FilesPage() {
             {/* Lista de arquivos */}
             {!loading && !error && (
                 <>
-                    {/* Barra de informações */}
-                    <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="text-sm text-gray-600">
-                            Total de arquivos: <span className="font-medium">{total}</span>
-                            {pendingFiles.length > 0 && (
-                                <span className="ml-2 sm:ml-4 text-blue-600">
-                                    {pendingFiles.length} arquivo{pendingFiles.length > 1 ? 's' : ''} pendente{pendingFiles.length > 1 ? 's' : ''}
-                                </span>
-                            )}
-                            {selectedFilesForReading.size > 0 && (
-                                <span className="ml-2 sm:ml-4 text-blue-600">
-                                    {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
-                                </span>
-                            )}
-                            {selectedFiles.size > 0 && (
-                                <span className="ml-2 sm:ml-4 text-red-600">
-                                    {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
                     {/* Cards de arquivos */}
                     {files.length === 0 && pendingFiles.length === 0 ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-8 sm:p-12 text-center">
@@ -1267,29 +1244,45 @@ export default function FilesPage() {
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                buttons={
-                    selectedFilesForReading.size > 0
-                        ? [
-                            {
-                                label: 'Ler conteúdo',
-                                onClick: handleReadSelected,
-                                variant: 'primary',
-                                disabled: reading,
-                                loading: reading,
-                            },
-                        ]
-                        : selectedFiles.size > 0
-                            ? [
-                                {
-                                    label: 'Excluir',
-                                    onClick: handleDeleteSelected,
-                                    variant: 'primary',
-                                    disabled: deleting,
-                                    loading: deleting,
-                                },
-                            ]
-                            : []
+                leftContent={
+                    <div className="text-sm text-gray-600">
+                        Total de arquivos: <span className="font-medium">{total}</span>
+                        {selectedFilesForReading.size > 0 && (
+                            <span className="ml-2 sm:ml-4 text-blue-600">
+                                {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
+                            </span>
+                        )}
+                        {selectedFiles.size > 0 && (
+                            <span className="ml-2 sm:ml-4 text-red-600">
+                                {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
+                            </span>
+                        )}
+                    </div>
                 }
+                buttons={(() => {
+                    const buttons = []
+                    // Adicionar botão "Excluir" se houver arquivos marcados para exclusão
+                    if (selectedFiles.size > 0) {
+                        buttons.push({
+                            label: 'Excluir',
+                            onClick: handleDeleteSelected,
+                            variant: 'primary' as const,
+                            disabled: deleting,
+                            loading: deleting,
+                        })
+                    }
+                    // Adicionar botão "Ler conteúdo" se houver arquivos marcados para leitura
+                    if (selectedFilesForReading.size > 0) {
+                        buttons.push({
+                            label: 'Ler conteúdo',
+                            onClick: handleReadSelected,
+                            variant: 'primary' as const,
+                            disabled: reading,
+                            loading: reading,
+                        })
+                    }
+                    return buttons
+                })()}
             />
         </div>
     )
