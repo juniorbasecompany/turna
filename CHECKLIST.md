@@ -493,36 +493,26 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Redirect para dashboard
 
 ### 8.6 Layout Autenticado e Header
-- [ ] Criar layout autenticado (`app/(protected)/layout.tsx`):
-  - [ ] Considerar `(protected)` ou `(app)` como grupo de rotas
-  - [ ] Proteção via middleware (verificação de cookie)
-  - [ ] Carregar tenant atual (`GET /tenant/me`)
-- [ ] Criar componente Header:
-  - [ ] Nome do tenant atual
-  - [ ] Seletor para troca de tenant
-  - [ ] Menu do usuário (email, logout)
-- [ ] Troca de tenant:
-  - [ ] Chamar `GET /auth/tenant/list`
-  - [ ] Chamar `POST /auth/switch-tenant`
-  - [ ] Atualizar cookie
-  - [ ] Recarregar dados dependentes do tenant
+- [x] Criar layout autenticado (`app/(protected)/layout.tsx` ou similar):
+  - [x] Considerar `(protected)` ou `(app)` como grupo de rotas
+  - [x] **NÃO usar middleware de proteção** que redirecione automaticamente
+  - [x] Cada página do layout deve usar `fetch()` direto seguindo padrão de `/dashboard`
+  - [x] Carregar tenant atual (`GET /tenant/me`) usando padrão `try { try { fetch() } catch {} } catch {}`
+- [x] Criar componente Header:
+  - [x] Nome do tenant atual (apenas exibição, não clicável)
+  - [x] Menu do usuário (email, logout)
+  - [x] Header deve funcionar mesmo se carregar tenant falhar (não quebrar layout)
+  - [x] **NOTA**: Troca de tenant deve ser feita saindo do Dashboard (via botão "Sair" → `/select-tenant`), não diretamente no Header
 
-### 8.7 Middleware de Proteção de Rotas
-- [ ] Criar `middleware.ts` no Next.js:
-  - [ ] Verificar **apenas** a presença do cookie
-  - [ ] Não validar JWT no frontend
-  - [ ] Redirecionar para `/login` se não autenticado
-  - [ ] Permitir acesso a rotas públicas (`/login`, `/select-tenant`, `/api/auth/*`)
+### 8.7 Dashboard
+- [x] Implementar página Dashboard (`app/(protected)/dashboard/page.tsx`):
+  - [x] Layout simples e direto
+  - [x] Links rápidos:
+    - [x] Nova Importação (link para `/import`)
+    - [x] Ver Escalas (link para `/schedules`)
+  - [ ] Cards informativos (opcional - não implementado)
 
-### 8.8 Dashboard
-- [ ] Implementar página Dashboard (`app/(protected)/page.tsx`):
-  - [ ] Layout simples e direto
-  - [ ] Links rápidos:
-    - Nova Importação
-    - Ver Escalas
-  - [ ] Cards informativos (opcional)
-
-### 8.9 Página de Importação
+### 8.8 Página de Importação
 - [ ] Implementar página de importação (`app/(protected)/import/page.tsx`):
   - [ ] Upload de arquivo (PDF, JPEG, PNG, XLSX, XLS, CSV)
   - [ ] Validação de tipo
@@ -534,7 +524,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Feedback visual claro
   - [ ] Tratamento de erro de job
 
-### 8.10 Página de Escalas
+### 8.9 Página de Escalas
 - [ ] Listagem de escalas (`app/(protected)/schedules/page.tsx`):
   - [ ] `GET /schedule/list`
   - [ ] Paginação
@@ -548,7 +538,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
     - Download PDF (PUBLISHED)
   - [ ] Loading e tratamento de erros
 
-### 8.11 UX Essencial e Tratamento de Erros
+### 8.10 UX Essencial e Tratamento de Erros
 - [ ] Loading states:
   - [ ] Login OAuth
   - [ ] Seleção de tenant
@@ -561,7 +551,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Toasts de sucesso/erro
   - [ ] Indicadores de status
 
-### 8.12 Integração com Docker Compose (pós-MVP)
+### 8.11 Integração com Docker Compose (pós-MVP)
 - [ ] Rodar frontend local sem Docker durante desenvolvimento inicial
 - [ ] Criar Dockerfile para frontend
 - [ ] Adicionar serviço frontend no `docker-compose.yml`:
@@ -573,7 +563,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Habilitar credentials
   - [ ] Origin configurável via variável de ambiente
 
-### 8.13 Testes e Validação
+### 8.12 Testes e Validação
 - [ ] Fluxos principais:
   - [ ] Login com token direto
   - [ ] Login com seleção de tenant
