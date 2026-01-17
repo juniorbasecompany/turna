@@ -92,6 +92,7 @@ export interface FileResponse {
   file_size: number
   created_at: string
   can_delete: boolean
+  job_status: string | null
 }
 
 export interface FileListResponse {

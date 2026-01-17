@@ -699,6 +699,7 @@ class FileResponse(PydanticBaseModel):
     file_size: int
     created_at: datetime
     can_delete: bool  # True se não possui job EXTRACT_DEMAND COMPLETED
+    job_status: Optional[str] = None  # Status do job mais recente EXTRACT_DEMAND (PENDING, RUNNING, COMPLETED, FAILED) ou None se não houver job
 
     class Config:
         from_attributes = True
@@ -852,11 +853,34 @@ def list_files(
                     continue
             file_ids_with_completed_job.add(job_file_id)
 
-    # Construir resposta com can_delete
+    # Buscar todos os jobs EXTRACT_DEMAND do tenant para obter o status mais recente de cada arquivo
+    all_jobs_query = select(Job).where(
+        Job.tenant_id == membership.tenant_id,
+        Job.job_type == JobType.EXTRACT_DEMAND,
+    ).order_by(Job.created_at.desc())
+    all_jobs = session.exec(all_jobs_query).all()
+
+    # Criar dict com file_id -> job_status do job mais recente
+    file_id_to_latest_job_status = {}
+    for job in all_jobs:
+        if job.input_data and "file_id" in job.input_data:
+            job_file_id = job.input_data["file_id"]
+            # Converter para int para garantir comparação correta (pode vir como string do JSON)
+            if isinstance(job_file_id, str):
+                try:
+                    job_file_id = int(job_file_id)
+                except (ValueError, TypeError):
+                    continue
+            # Usar o primeiro job encontrado (mais recente devido ao order_by)
+            if job_file_id not in file_id_to_latest_job_status:
+                file_id_to_latest_job_status[job_file_id] = job.status.value
+
+    # Construir resposta com can_delete e job_status
     file_responses = []
     for item in items:
         can_delete = item.id not in file_ids_with_completed_job
-        # Criar FileResponse manualmente incluindo can_delete (não usar model_validate)
+        job_status = file_id_to_latest_job_status.get(item.id)
+        # Criar FileResponse manualmente incluindo can_delete e job_status (não usar model_validate)
         file_response = FileResponse(
             id=item.id,
             filename=item.filename,
@@ -864,6 +888,7 @@ def list_files(
             file_size=item.file_size,
             created_at=item.created_at,
             can_delete=can_delete,
+            job_status=job_status,
         )
         file_responses.append(file_response)
 
@@ -958,9 +983,6 @@ def delete_file(
 ):
     """
     Deleta arquivo do banco e do S3/MinIO.
-
-    Apenas permite exclusão se o arquivo ainda não foi processado com sucesso
-    (não possui job EXTRACT_DEMAND com status COMPLETED).
     """
     # Buscar arquivo
     file_model = session.get(File, file_id)
@@ -970,30 +992,6 @@ def delete_file(
     # Validar tenant_id
     if file_model.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-
-    # Verificar se existe job EXTRACT_DEMAND COMPLETED para esse arquivo
-    query = select(Job).where(
-        Job.tenant_id == membership.tenant_id,
-        Job.job_type == JobType.EXTRACT_DEMAND,
-        Job.status == JobStatus.COMPLETED,
-    )
-    jobs = session.exec(query).all()
-
-    # Verificar se algum job COMPLETED usa esse file_id
-    for job in jobs:
-        if job.input_data and "file_id" in job.input_data:
-            # Converter para int para garantir comparação correta (pode vir como string do JSON)
-            job_file_id = job.input_data.get("file_id")
-            if isinstance(job_file_id, str):
-                try:
-                    job_file_id = int(job_file_id)
-                except (ValueError, TypeError):
-                    continue
-            if job_file_id == file_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Não é possível excluir arquivo que já foi processado com sucesso (job EXTRACT_DEMAND COMPLETED)"
-                )
 
     # Deletar arquivo do S3/MinIO
     storage_service = StorageService()

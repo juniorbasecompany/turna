@@ -10,10 +10,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const fileId = params.id
+    // Lidar com params síncrono (Next.js 13/14) ou assíncrono (Next.js 15+)
+    const resolvedParams = params instanceof Promise ? await params : params
+    const fileId = resolvedParams.id
 
     if (!fileId) {
       return NextResponse.json(
@@ -61,14 +63,15 @@ export async function GET(
  * DELETE /api/file/[id]
  *
  * Deleta arquivo do backend e do S3/MinIO.
- * Apenas permite exclusão se o arquivo ainda não foi processado com sucesso.
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const fileId = params.id
+    // Lidar com params síncrono (Next.js 13/14) ou assíncrono (Next.js 15+)
+    const resolvedParams = params instanceof Promise ? await params : params
+    const fileId = resolvedParams.id
 
     if (!fileId) {
       return NextResponse.json(
@@ -77,11 +80,20 @@ export async function DELETE(
       )
     }
 
+    // Validar se fileId é um número válido
+    const fileIdNum = parseInt(fileId, 10)
+    if (isNaN(fileIdNum)) {
+      return NextResponse.json(
+        { detail: 'ID do arquivo deve ser um número válido' },
+        { status: 400 }
+      )
+    }
+
     // Obter access_token do cookie
     const accessToken = request.cookies.get('access_token')?.value
 
     // Chamar backend
-    const response = await fetch(`${API_URL}/file/${fileId}`, {
+    const response = await fetch(`${API_URL}/file/${fileIdNum}`, {
       method: 'DELETE',
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
