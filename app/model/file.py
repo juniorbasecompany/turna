@@ -23,6 +23,7 @@ class File(FileBase, table=True):
     __tablename__ = "file"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    hospital_id: int = Field(foreign_key="hospital.id", index=True, nullable=False)
     filename: str = Field(index=True)
     content_type: str
     s3_key: str = Field(unique=True, index=True)

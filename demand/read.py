@@ -250,7 +250,7 @@ def _should_use_text_only(pages_text: List[Tuple[int, str]], min_chars: int = No
 # -----------------------------
 # Importa prompts de prompt.py
 
-def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tuple[int, str]]) -> dict:
+def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tuple[int, str]], custom_user_prompt: Optional[str] = None) -> dict:
     client = _openai_client()
 
     # Monta input somente texto (sem imagens)
@@ -265,8 +265,11 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
         # sem texto útil -> caller deve cair para visão
         raise RuntimeError("PDF sem text layer útil para modo text-only")
 
+    # Usa prompt customizado do hospital se fornecido, senão usa o padrão
+    user_prompt = custom_user_prompt if custom_user_prompt else prompt.USER_PROMPT
+
     content = [
-        {"type": "input_text", "text": prompt.USER_PROMPT},
+        {"type": "input_text", "text": user_prompt},
         {"type": "input_text", "text": "Conteúdo extraído (text layer) por página:\n" + joined},
     ]
 
@@ -301,7 +304,7 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
 
     return validate_and_normalize_result(obj)
 
-def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Optional[int]) -> dict:
+def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Optional[int], custom_user_prompt: Optional[str] = None) -> dict:
     client = _openai_client()
 
     # render -> imagens base64
@@ -309,9 +312,12 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     images_b64 = _render_file_to_png_b64(pdf_path, dpi=dpi, max_pages=max_pages)
     _progress(f"renderização concluída: {len(images_b64)} imagem(ns)")
 
+    # Usa prompt customizado do hospital se fornecido, senão usa o padrão
+    user_prompt = custom_user_prompt if custom_user_prompt else prompt.USER_PROMPT
+
     # Monta input multimodal
     # OBS: API Responses (openai python) aceita input_text + input_image
-    content = [{"type": "input_text", "text": prompt.USER_PROMPT}]
+    content = [{"type": "input_text", "text": user_prompt}]
     for b64 in images_b64:
         content.append({"type": "input_image", "image_url": f"data:image/png;base64,{b64}"})
 
@@ -380,7 +386,7 @@ def _parse_json_strict(txt: str) -> dict:
 # Orquestração híbrida (cache removido)
 # -----------------------------
 def extract_demand(pdf_path: str, model: str = None, dpi: int = None, max_pages: Optional[int] = None,
-                    ) -> dict:
+                    custom_user_prompt: Optional[str] = None) -> dict:
     if model is None:
         model = config.DEFAULT_MODEL
     if dpi is None:
@@ -393,7 +399,7 @@ def extract_demand(pdf_path: str, model: str = None, dpi: int = None, max_pages:
 
     # Se for imagem, usa visão diretamente (sem text layer)
     if suffix_lower in (".jpg", ".jpeg", ".png"):
-        return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages)
+        return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages, custom_user_prompt=custom_user_prompt)
 
     # Para PDFs: Decide: text-only (text layer) vs visão (imagens)
     pages_text: List[Tuple[int, str]] = []
@@ -410,12 +416,12 @@ def extract_demand(pdf_path: str, model: str = None, dpi: int = None, max_pages:
     if use_text_only:
         _progress("text layer detectado; enviando somente texto para a IA...")
         try:
-            return _call_ai_extract_text_only(file_path, model=model, pages_text=pages_text)
+            return _call_ai_extract_text_only(file_path, model=model, pages_text=pages_text, custom_user_prompt=custom_user_prompt)
         except Exception as e:
             _progress(f"modo text-only falhou ({e}); usando visão...")
 
     # fallback: visão
-    return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages)
+    return _call_ai_extract_vision(file_path, model=model, dpi=dpi, max_pages=max_pages, custom_user_prompt=custom_user_prompt)
 
 # -----------------------------
 # CLI

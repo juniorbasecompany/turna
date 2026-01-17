@@ -6,5 +6,6 @@ from app.model.audit_log import AuditLog
 from app.model.job import Job
 from app.model.file import File
 from app.model.schedule_version import ScheduleVersion
+from app.model.hospital import Hospital
 
-__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion"]
+__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion", "Hospital"]

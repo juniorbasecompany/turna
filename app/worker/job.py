@@ -303,6 +303,17 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
             if file_model.tenant_id != job.tenant_id:
                 raise RuntimeError("Acesso negado (tenant mismatch)")
 
+            # Carregar hospital via file.hospital_id
+            from app.model.hospital import Hospital
+            hospital = session.get(Hospital, file_model.hospital_id)
+            if not hospital:
+                raise RuntimeError(f"Hospital não encontrado (hospital_id={file_model.hospital_id})")
+            if hospital.tenant_id != job.tenant_id:
+                raise RuntimeError("Acesso negado (hospital tenant mismatch)")
+
+            # Usar prompt do hospital
+            hospital_prompt = hospital.prompt
+
             filename = file_model.filename or "file"
             _, ext = os.path.splitext(filename)
             ext = (ext or "").lower()
@@ -317,13 +328,15 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
             s3 = S3Client()
             s3.download_file(file_model.s3_key, tmp_path)
 
-            # Executa extração (retorna dict JSON-serializável)
-            result = extract_demand(tmp_path)
+            # Executa extração usando prompt do hospital (retorna dict JSON-serializável)
+            result = extract_demand(tmp_path, custom_user_prompt=hospital_prompt)
             if isinstance(result, dict):
                 meta = result.setdefault("meta", {})
                 meta.pop("pdf_path", None)
                 meta["file_id"] = file_id
                 meta["filename"] = filename
+                meta["hospital_id"] = hospital.id
+                meta["hospital_name"] = hospital.name
 
             job.result_data = result
             job.status = JobStatus.COMPLETED

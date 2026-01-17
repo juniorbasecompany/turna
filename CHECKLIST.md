@@ -354,6 +354,10 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Ordenar por `created_at` (decrescente)
   - [x] Retornar total de registros para suporte à paginação
   - [x] Response: `{items: FileResponse[], total: int}` (seguindo padrão de `/job/list`)
+  - [x] Retornar `job_status` (status do job EXTRACT_DEMAND mais recente do arquivo)
+- [x] `GET /file/{file_id}` (obter informações do arquivo e URL presignada)
+- [x] `GET /file/{file_id}/download` (download direto do arquivo)
+- [x] `DELETE /file/{file_id}` (deletar arquivo do banco e S3/MinIO - sem restrições)
 
 ### 5.5 Validações e Segurança
 - [x] Garantir que TODOS os endpoints validam tenant_id:
@@ -565,18 +569,55 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Cada card deve mostrar:
     - [x] Nome do arquivo (`filename`)
     - [x] Tipo de conteúdo (`content_type`)
+    - [x] Ícone visual baseado no tipo de arquivo (PDF, imagem, planilha, etc.)
+    - [x] Preview de imagem quando aplicável
     - [x] Tamanho do arquivo (`file_size`) - formatado (ex: "1.5 MB")
     - [x] Data/hora de criação (`created_at`) - formatada no timezone do tenant
+    - [x] Status do job (acima da data, em letras pequenas):
+      - [x] 'pronto para ser lido' (quando não tem job)
+      - [x] 'na fila para ser lido' (PENDING)
+      - [x] 'lendo o conteúdo do arquivo' (RUNNING)
+      - [x] 'conteúdo lido' (COMPLETED)
+      - [x] 'não foi possível ler o conteúdo' (FAILED)
+    - [x] Botão para visualizar arquivo (lupa)
+    - [x] Botão para marcar para exclusão (ícone de lixeira)
   - [x] Layout responsivo e consistente com outras páginas
+- [x] Upload de arquivos:
+  - [x] Drag & drop de arquivos
+  - [x] Seleção de arquivos via input
+  - [x] Suporte a múltiplos arquivos simultâneos
+  - [x] Upload automático ao adicionar arquivos
+  - [x] Cards de arquivos pendentes durante upload
+  - [x] Feedback visual de progresso (texto "Enviando...")
+  - [x] Remoção automática de arquivos pendentes após upload bem-sucedido
+  - [x] Recarregamento automático da lista após upload
+- [x] Visualização de arquivos:
+  - [x] Botão de visualizar (lupa) em cada card
+  - [x] Abre arquivo em nova aba via `/api/file/{id}/proxy`
+  - [x] Preview de imagens no card
+- [x] Exclusão de arquivos:
+  - [x] Seleção múltipla de arquivos para exclusão
+  - [x] Botão de exclusão sempre visível (sem restrições)
+  - [x] Exclusão em lote via botão na barra inferior
+  - [x] Feedback visual de arquivos selecionados
+- [x] Processamento de arquivos (Ler conteúdo):
+  - [x] Seleção múltipla de arquivos para leitura
+  - [x] Botão "Ler conteúdo" na barra inferior
+  - [x] Criação de job EXTRACT_DEMAND para cada arquivo selecionado
+  - [x] Atualização automática do status após criar jobs
+  - [x] Polling inteligente que atualiza apenas cards afetados (sem recarregar toda a lista)
+  - [x] Polling para arquivos com jobs PENDING ou RUNNING
+  - [x] Parada automática do polling quando não há mais jobs em andamento
 - [x] Filtro por período:
   - [x] Criar filtro com campos de data (data de início e data de fim)
   - [x] Filtrar exclusivamente pelo campo `created_at`
   - [x] Por padrão, exibir apenas arquivos **criados no dia atual** (definir `start_at` e `end_at` no frontend)
   - [x] Validar intervalo (data inicial ≤ data final) no frontend
   - [x] Enviar filtros como query params (`start_at`, `end_at`) na chamada da API
+  - [x] Resetar paginação ao mudar filtros
 - [x] Paginação:
   - [x] Implementar paginação usando `limit` e `offset`
-  - [x] Definir limite padrão de 20 itens por página
+  - [x] Definir limite padrão de 19 itens por página
   - [x] Exibir controles de navegação (próxima / anterior)
   - [x] Mostrar total de registros e página atual
   - [x] Usar padrão similar a `/job/list` e `/schedule/list`
@@ -584,6 +625,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Não expor arquivos de outros tenants (garantido pelo backend)
   - [x] Usar `fetch()` direto seguindo padrão de `/dashboard` (não usar `api.get()`)
   - [x] Datas sempre em `timestamptz` e armazenadas em UTC (conversão de timezone apenas para exibição)
+  - [x] Upload não cria job automaticamente (apenas faz upload)
+  - [x] Job é criado apenas ao clicar em "Ler conteúdo"
 
 ### 8.11 UX Essencial e Tratamento de Erros
 - [ ] Loading states:
@@ -691,6 +734,83 @@ Antes de considerar completo, verificar:
 ---
 
 **Última atualização**: Refatorado para abordagem incremental e testável.
+
+## FASE 9: Hospital como Origem das Demandas
+
+### 9.1 Banco de Dados / Modelos
+- [ ] Criar tabela `hospital`
+  - [ ] `id` (PK)
+  - [ ] `tenant_id` (FK, obrigatório)
+  - [ ] `name` (obrigatório)
+  - [ ] `prompt` (obrigatório)
+  - [ ] `created_at` (`timestamptz`)
+  - [ ] `updated_at` (`timestamptz`)
+  - [ ] Índice por `tenant_id`
+  - [ ] Constraint `unique (tenant_id, name)`
+
+- [ ] Alterar tabela `file`
+  - [ ] Adicionar coluna `hospital_id` (FK para `hospital.id`)
+  - [ ] Definir `hospital_id` como `NOT NULL`
+  - [ ] Criar índice `(tenant_id, hospital_id)`
+
+- [ ] Criar migration Alembic
+  - [ ] Revisar FKs, `NOT NULL` e índices
+  - [ ] Aplicar migration (`alembic upgrade head`)
+
+### 9.2 API – Hospital
+- [ ] Criar endpoints de Hospital (escopo do tenant)
+  - [ ] `POST /hospital` (admin)
+  - [ ] `GET /hospital/list`
+  - [ ] `GET /hospital/{id}`
+  - [ ] `PUT /hospital/{id}` (admin)
+
+- [ ] Validações obrigatórias
+  - [ ] Hospital sempre pertence ao tenant atual
+  - [ ] Nome e prompt obrigatórios
+
+### 9.3 Upload de Arquivos
+- [ ] Ajustar endpoint de upload
+  - [ ] Exigir `hospital_id`
+  - [ ] Validar existência do hospital
+  - [ ] Validar que o hospital pertence ao tenant
+  - [ ] Criar `file` sempre com `hospital_id`
+
+- [ ] Garantir erro claro
+  - [ ] Upload sem hospital → erro
+  - [ ] Hospital de outro tenant → erro
+
+### 9.4 Processamento / IA
+- [ ] Ao processar arquivo
+  - [ ] Carregar hospital via `file.hospital_id`
+  - [ ] Usar `hospital.prompt` como prompt base da leitura
+  - [ ] Registrar `hospital_id` no job (input/meta)
+
+### 9.5 Painel de Arquivos – Filtro por Hospital
+- [ ] Backend
+  - [ ] Listagem de arquivos aceita filtro opcional `hospital_id`
+  - [ ] Validar hospital pertence ao tenant
+  - [ ] Retornar `hospital_id` e `hospital_name`
+
+- [ ] Frontend
+  - [ ] Dropdown de hospital (opção vazia = todos)
+  - [ ] Aplicar filtro ao listar arquivos
+  - [ ] Mostrar hospital em cada card de arquivo
+
+### 9.6 Tela de Upload – Hospital Obrigatório
+- [ ] Dropdown de hospital obrigatório
+- [ ] Botão de upload desabilitado sem hospital selecionado
+- [ ] Enviar `hospital_id` junto com o arquivo
+- [ ] Mensagem clara ao usuário quando não selecionado
+
+### 9.7 Consistência e Revisão Final
+- [ ] Confirmar uso de `timestamptz` em todos os campos de data
+- [ ] Confirmar padrão multi-tenant em todas as queries
+- [ ] Atualizar documentação / checklist do projeto
+- [ ] Testar fluxo completo:
+  - [ ] Criar hospital
+  - [ ] Upload com hospital
+  - [ ] Processar arquivo usando prompt do hospital
+  - [ ] Filtrar arquivos por hospital
 
 ## Scripts de Teste
 

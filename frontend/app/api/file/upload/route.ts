@@ -21,6 +21,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Obter hospital_id da query string
+    const { searchParams } = new URL(request.url)
+    const hospitalId = searchParams.get('hospital_id')
+
+    if (!hospitalId) {
+      return NextResponse.json(
+        { detail: 'hospital_id é obrigatório' },
+        { status: 400 }
+      )
+    }
+
     // Criar FormData para enviar ao backend
     const backendFormData = new FormData()
     backendFormData.append('file', file)
@@ -28,8 +39,8 @@ export async function POST(request: NextRequest) {
     // Obter access_token do cookie
     const accessToken = request.cookies.get('access_token')?.value
 
-    // Chamar backend
-    const response = await fetch(`${API_URL}/file/upload`, {
+    // Chamar backend com hospital_id na query string
+    const response = await fetch(`${API_URL}/file/upload?hospital_id=${hospitalId}`, {
       method: 'POST',
       headers: accessToken
         ? {

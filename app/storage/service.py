@@ -39,7 +39,7 @@ class StorageService:
         return f"{tenant_id}/{file_type}/{unique_filename}"
 
     def upload_imported_file(
-        self, session: Session, tenant_id: int, file: UploadFile, filename: Optional[str] = None
+        self, session: Session, tenant_id: int, hospital_id: int, file: UploadFile, filename: Optional[str] = None
     ) -> File:
         """
         Faz upload de arquivo importado (PDF, XLSX, etc) e cria registro File.
@@ -47,6 +47,7 @@ class StorageService:
         Args:
             session: Sessão do banco
             tenant_id: ID do tenant
+            hospital_id: ID do hospital (obrigatório)
             file: Arquivo do FastAPI UploadFile
             filename: Nome do arquivo (opcional, usa file.filename se não fornecido)
 
@@ -77,6 +78,7 @@ class StorageService:
         # Criar registro no banco
         file_model = File(
             tenant_id=tenant_id,
+            hospital_id=hospital_id,
             filename=filename,
             content_type=content_type,
             s3_key=s3_key,

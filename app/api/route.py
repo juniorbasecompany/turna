@@ -25,6 +25,7 @@ from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleVersion, ScheduleStatus
+from app.model.hospital import Hospital
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
 
@@ -698,6 +699,8 @@ class FileResponse(PydanticBaseModel):
     content_type: str
     file_size: int
     created_at: datetime
+    hospital_id: int
+    hospital_name: str
     can_delete: bool  # True se não possui job EXTRACT_DEMAND COMPLETED
     job_status: Optional[str] = None  # Status do job mais recente EXTRACT_DEMAND (PENDING, RUNNING, COMPLETED, FAILED) ou None se não houver job
 
@@ -738,14 +741,23 @@ class ScheduleGenerateResponse(PydanticBaseModel):
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
 def upload_file(
     file: UploadFile = FastAPIFile(...),
+    hospital_id: int = Query(..., description="ID do hospital (obrigatório)"),
     membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
     """
     Faz upload de arquivo para MinIO/S3 e cria registro File no banco.
+    Requer hospital_id obrigatório.
 
     Retorna file_id, s3_url e presigned_url para acesso ao arquivo.
     """
+    # Validar que o hospital existe e pertence ao tenant
+    hospital = session.get(Hospital, hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital não encontrado")
+    if hospital.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
     storage_service = StorageService()
 
     try:
@@ -753,6 +765,7 @@ def upload_file(
         file_model = storage_service.upload_imported_file(
             session=session,
             tenant_id=membership.tenant_id,
+            hospital_id=hospital_id,
             file=file,
         )
 
@@ -788,18 +801,28 @@ def upload_file(
 def list_files(
     start_at: Optional[datetime] = Query(None, description="Filtrar por created_at >= start_at (timestamptz em ISO 8601)"),
     end_at: Optional[datetime] = Query(None, description="Filtrar por created_at <= end_at (timestamptz em ISO 8601)"),
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id (opcional)"),
     limit: int = Query(21, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
     membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
 ):
     """
-    Lista arquivos do tenant atual, com filtros opcionais por período e paginação.
+    Lista arquivos do tenant atual, com filtros opcionais por período, hospital e paginação.
 
     Filtra exclusivamente pelo campo created_at (não usa uploaded_at ou updated_at).
     Sempre filtra por tenant_id do JWT (via membership).
     Ordena por created_at decrescente.
+    Retorna hospital_id e hospital_name para cada arquivo.
     """
+    # Validar hospital_id se fornecido
+    if hospital_id is not None:
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital:
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if hospital.tenant_id != membership.tenant_id:
+            raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
     # Query base - sempre filtrar por tenant_id
     query = select(File).where(File.tenant_id == membership.tenant_id)
 
@@ -814,6 +837,10 @@ def list_files(
             raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
         query = query.where(File.created_at <= end_at)
 
+    # Aplicar filtro por hospital_id se fornecido
+    if hospital_id is not None:
+        query = query.where(File.hospital_id == hospital_id)
+
     # Validar intervalo
     if start_at is not None and end_at is not None:
         if start_at > end_at:
@@ -825,6 +852,8 @@ def list_files(
         count_query = count_query.where(File.created_at >= start_at)
     if end_at is not None:
         count_query = count_query.where(File.created_at <= end_at)
+    if hospital_id is not None:
+        count_query = count_query.where(File.hospital_id == hospital_id)
     total = session.exec(count_query).one()
 
     # Aplicar ordenação e paginação (created_at decrescente)
@@ -875,18 +904,33 @@ def list_files(
             if job_file_id not in file_id_to_latest_job_status:
                 file_id_to_latest_job_status[job_file_id] = job.status.value
 
-    # Construir resposta com can_delete e job_status
+    # Buscar hospitais dos arquivos para incluir hospital_name
+    hospital_ids = {item.hospital_id for item in items}
+    hospital_dict = {}
+    if hospital_ids:
+        hospital_query = select(Hospital).where(
+            Hospital.tenant_id == membership.tenant_id,
+            Hospital.id.in_(hospital_ids),
+        )
+        hospital_list = session.exec(hospital_query).all()
+        hospital_dict = {h.id: h for h in hospital_list}
+
+    # Construir resposta com can_delete, job_status, hospital_id e hospital_name
     file_responses = []
     for item in items:
         can_delete = item.id not in file_ids_with_completed_job
         job_status = file_id_to_latest_job_status.get(item.id)
-        # Criar FileResponse manualmente incluindo can_delete e job_status (não usar model_validate)
+        hospital = hospital_dict.get(item.hospital_id)
+        hospital_name = hospital.name if hospital else f"Hospital {item.hospital_id}"
+        # Criar FileResponse manualmente incluindo can_delete, job_status, hospital_id e hospital_name
         file_response = FileResponse(
             id=item.id,
             filename=item.filename,
             content_type=item.content_type,
             file_size=item.file_size,
             created_at=item.created_at,
+            hospital_id=item.hospital_id,
+            hospital_name=hospital_name,
             can_delete=can_delete,
             job_status=job_status,
         )
@@ -1091,3 +1135,177 @@ async def schedule_generate(
         ) from e
 
     return ScheduleGenerateResponse(job_id=job.id, schedule_version_id=sv.id)
+
+
+# ============================================================================
+# Hospital Endpoints
+# ============================================================================
+
+class HospitalCreate(PydanticBaseModel):
+    name: str
+    prompt: str
+
+    @field_validator("name", "prompt")
+    @classmethod
+    def validate_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Campo não pode estar vazio")
+        return v.strip()
+
+
+class HospitalUpdate(PydanticBaseModel):
+    name: str | None = None
+    prompt: str | None = None
+
+    @field_validator("name", "prompt")
+    @classmethod
+    def validate_not_empty(cls, v: str | None) -> str | None:
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("Campo não pode estar vazio")
+        return v.strip() if v else None
+
+
+class HospitalResponse(PydanticBaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    prompt: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class HospitalListResponse(PydanticBaseModel):
+    items: list[HospitalResponse]
+    total: int
+
+
+@router.post("/hospital", response_model=HospitalResponse, status_code=201, tags=["Hospital"])
+def create_hospital(
+    body: HospitalCreate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria um novo hospital (apenas admin).
+    Hospital sempre pertence ao tenant atual (do membership).
+    """
+    # Verificar se já existe hospital com mesmo nome no tenant
+    existing = session.exec(
+        select(Hospital).where(
+            Hospital.tenant_id == membership.tenant_id,
+            Hospital.name == body.name,
+        )
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+        )
+
+    hospital = Hospital(
+        tenant_id=membership.tenant_id,
+        name=body.name,
+        prompt=body.prompt,
+    )
+    session.add(hospital)
+    try:
+        session.commit()
+        session.refresh(hospital)
+        return hospital
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+        ) from e
+
+
+@router.get("/hospital/list", response_model=HospitalListResponse, tags=["Hospital"])
+def list_hospital(
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista todos os hospitais do tenant atual.
+    """
+    query = select(Hospital).where(Hospital.tenant_id == membership.tenant_id)
+    items = session.exec(query.order_by(Hospital.name)).all()
+    total = len(items)
+
+    return HospitalListResponse(
+        items=[HospitalResponse.model_validate(h) for h in items],
+        total=total,
+    )
+
+
+@router.get("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
+def get_hospital(
+    hospital_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Obtém detalhes de um hospital específico.
+    Valida que o hospital pertence ao tenant atual.
+    """
+    hospital = session.get(Hospital, hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital não encontrado")
+    if hospital.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return hospital
+
+
+@router.put("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
+def update_hospital(
+    hospital_id: int,
+    body: HospitalUpdate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um hospital (apenas admin).
+    Valida que o hospital pertence ao tenant atual.
+    """
+    hospital = session.get(Hospital, hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital não encontrado")
+    if hospital.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Verificar se novo nome já existe (se estiver alterando)
+    if body.name is not None and body.name != hospital.name:
+        existing = session.exec(
+            select(Hospital).where(
+                Hospital.tenant_id == membership.tenant_id,
+                Hospital.name == body.name,
+                Hospital.id != hospital_id,
+            )
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+            )
+
+    # Atualizar campos
+    if body.name is not None:
+        hospital.name = body.name
+    if body.prompt is not None:
+        hospital.prompt = body.prompt
+    hospital.updated_at = utc_now()
+
+    session.add(hospital)
+    try:
+        session.commit()
+        session.refresh(hospital)
+        return hospital
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+        ) from e

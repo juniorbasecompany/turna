@@ -45,11 +45,29 @@ interface JobResponse {
   completed_at: string | null
 }
 
+interface Hospital {
+  id: number
+  tenant_id: number
+  name: string
+  prompt: string
+  created_at: string
+  updated_at: string
+}
+
+interface HospitalListResponse {
+  items: Hospital[]
+  total: number
+}
+
 export default function ImportPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { settings } = useTenantSettings()
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
+  const [hospitalList, setHospitalList] = useState<Hospital[]>([])
+  const [loadingHospitalList, setLoadingHospitalList] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [jobId, setJobId] = useState<number | null>(null)
@@ -139,6 +157,10 @@ export default function ImportPage() {
   // Upload e criação do job
   const handleUpload = useCallback(async () => {
     if (!selectedFile) return
+    if (!selectedHospitalId) {
+      setError('Selecione um hospital antes de fazer upload')
+      return
+    }
 
     setError(null)
     setUploading(true)
@@ -149,7 +171,7 @@ export default function ImportPage() {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const uploadResponse = await fetch('/api/file/upload', {
+      const uploadResponse = await fetch(`/api/file/upload?hospital_id=${selectedHospitalId}`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -206,6 +228,7 @@ export default function ImportPage() {
   // Reset do formulário
   const handleReset = useCallback(() => {
     setSelectedFile(null)
+    setSelectedHospitalId(null)
     setUploading(false)
     setProcessing(false)
     setJobId(null)
@@ -216,6 +239,39 @@ export default function ImportPage() {
       fileInputRef.current.value = ''
     }
   }, [])
+
+  // Carregar hospitais ao montar
+  useEffect(() => {
+    const loadHospitalList = async () => {
+      try {
+        setLoadingHospitalList(true)
+        const response = await fetch('/api/hospital/list', {
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/login')
+            return
+          }
+          throw new Error(`Erro ao carregar hospitais: ${response.status}`)
+        }
+
+        const data: HospitalListResponse = await response.json()
+        setHospitalList(data.items)
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Erro ao carregar hospitais'
+        )
+      } finally {
+        setLoadingHospitalList(false)
+      }
+    }
+
+    loadHospitalList()
+  }, [router])
 
   // Limpar estados ao desmontar
   useEffect(() => {
@@ -406,7 +462,7 @@ export default function ImportPage() {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={!selectedFile || uploading || processing}
+            disabled={!selectedFile || !selectedHospitalId || uploading || processing}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? 'Enviando...' : processing ? 'Processando...' : 'Enviar e Processar'}

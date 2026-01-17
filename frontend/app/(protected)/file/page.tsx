@@ -12,8 +12,24 @@ interface FileResponse {
     content_type: string
     file_size: number
     created_at: string
+    hospital_id: number
+    hospital_name: string
     can_delete: boolean
     job_status: string | null
+}
+
+interface Hospital {
+    id: number
+    tenant_id: number
+    name: string
+    prompt: string
+    created_at: string
+    updated_at: string
+}
+
+interface HospitalListResponse {
+    items: Hospital[]
+    total: number
 }
 
 interface FileListResponse {
@@ -302,9 +318,37 @@ export default function FilesPage() {
         return new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
     })
 
+    // Filtro de hospital
+    const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
+    const [hospitalList, setHospitalList] = useState<Hospital[]>([])
+    const [loadingHospitalList, setLoadingHospitalList] = useState(true)
+
     // Paginação
     const [limit] = useState(19) // Limite padrão
     const [offset, setOffset] = useState(0)
+
+    // Carregar hospitais ao montar
+    useEffect(() => {
+        async function loadHospitalList() {
+            try {
+                setLoadingHospitalList(true)
+                const response = await fetch('/api/hospital/list', {
+                    credentials: 'include',
+                })
+
+                if (response.ok) {
+                    const data: HospitalListResponse = await response.json()
+                    setHospitalList(data.items)
+                }
+            } catch (err) {
+                console.error('Erro ao carregar hospitais:', err)
+            } finally {
+                setLoadingHospitalList(false)
+            }
+        }
+
+        loadHospitalList()
+    }, [])
 
     // Carregar arquivos
     useEffect(() => {
@@ -368,7 +412,7 @@ export default function FilesPage() {
         }
 
         loadFiles()
-    }, [startDate, endDate, settings, limit, offset, refreshKey])
+    }, [startDate, endDate, selectedHospitalId, settings, limit, offset, refreshKey])
 
     // Calcular página atual e total de páginas
     const currentPage = Math.floor(offset / limit) + 1
@@ -396,6 +440,11 @@ export default function FilesPage() {
 
     const handleEndDateChange = (date: Date | null) => {
         setEndDate(date)
+        setOffset(0) // Resetar paginação ao mudar filtro
+    }
+
+    const handleHospitalChange = (hospitalId: string) => {
+        setSelectedHospitalId(hospitalId ? parseInt(hospitalId) : null)
         setOffset(0) // Resetar paginação ao mudar filtro
     }
 
@@ -509,10 +558,15 @@ export default function FilesPage() {
 
         try {
             // 1. Upload do arquivo
+            // Validar que há hospital selecionado
+            if (!selectedHospitalId) {
+                throw new Error('Selecione um hospital no filtro antes de fazer upload')
+            }
+
             const formData = new FormData()
             formData.append('file', pendingFile.file)
 
-            const uploadResponse = await fetch('/api/file/upload', {
+            const uploadResponse = await fetch(`/api/file/upload?hospital_id=${selectedHospitalId}`, {
                 method: 'POST',
                 body: formData,
                 credentials: 'include',
@@ -895,7 +949,7 @@ export default function FilesPage() {
                 </p>
             </div>
 
-            {/* Filtro por período */}
+            {/* Filtro por período e hospital */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
@@ -913,6 +967,28 @@ export default function FilesPage() {
                             id="end_at"
                             name="end_at"
                         />
+                    </div>
+                    <div className="flex-1 sm:flex-initial sm:w-64">
+                        <label htmlFor="hospital-filter" className="block text-sm font-medium text-gray-700 mb-2">
+                            Hospital
+                        </label>
+                        {loadingHospitalList ? (
+                            <div className="text-sm text-gray-500">Carregando...</div>
+                        ) : (
+                            <select
+                                id="hospital-filter"
+                                value={selectedHospitalId || ''}
+                                onChange={(e) => handleHospitalChange(e.target.value)}
+                                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="">Todos os hospitais</option>
+                                {hospitalList.map((hospital) => (
+                                    <option key={hospital.id} value={hospital.id}>
+                                        {hospital.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
                 {startDate && endDate && startDate > endDate && (
@@ -1156,6 +1232,9 @@ export default function FilesPage() {
                                                             file.job_status === 'COMPLETED' ? 'Conteúdo lido' :
                                                                 file.job_status === 'FAILED' ? 'Não foi possível ler o conteúdo' :
                                                                     'Pronto para ser lido'}
+                                                </span>
+                                                <span className="text-xs text-slate-500 truncate mb-0.5">
+                                                    {file.hospital_name}
                                                 </span>
                                                 <span className="text-sm text-slate-500 truncate">
                                                     {settings
