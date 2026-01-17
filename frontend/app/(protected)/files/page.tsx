@@ -1,6 +1,6 @@
 'use client'
 
-import { SaveButton } from '@/components/SaveButton'
+import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { useEffect, useState } from 'react'
 
 interface FileResponse {
@@ -309,7 +309,7 @@ export default function FilesPage() {
             {/* Lista de arquivos */}
             {!loading && !error && (
                 <>
-                    {/* Barra de ações */}
+                    {/* Barra de informações */}
                     <div className="mb-4 flex items-center justify-between">
                         <div className="text-sm text-gray-600">
                             Total de arquivos: <span className="font-medium">{total}</span>
@@ -338,8 +338,7 @@ export default function FilesPage() {
                                 >
                                     <div className="mb-4 flex items-start justify-between">
                                         <h3
-                                            className={`text-lg font-medium truncate flex-1 ${selectedFiles.has(file.id) ? 'text-red-900' : 'text-gray-900'
-                                                }`}
+                                            className={`text-lg font-medium truncate flex-1 ${selectedFiles.has(file.id) ? 'text-red-900' : 'text-gray-900'}`}
                                             title={file.filename}
                                         >
                                             {file.filename}
@@ -349,8 +348,8 @@ export default function FilesPage() {
                                                 onClick={() => toggleFileSelection(file.id)}
                                                 disabled={deleting}
                                                 className={`ml-2 p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selectedFiles.has(file.id)
-                                                    ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                                                    : 'text-gray-400 hover:bg-gray-100'
+                                                        ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                                        : 'text-gray-400 hover:bg-gray-100'
                                                     }`}
                                                 title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                             >
@@ -421,12 +420,24 @@ export default function FilesPage() {
                 </>
             )}
 
-            {/* Botão Salvar fixo no canto inferior direito */}
-            <SaveButton
-                show={selectedFiles.size > 0}
-                onClick={handleDeleteSelected}
-                disabled={deleting}
-                processing={deleting}
+            {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
+            {selectedFiles.size > 0 && <BottomActionBarSpacer />}
+
+            {/* Barra inferior fixa com ações */}
+            <BottomActionBar
+                buttons={
+                    selectedFiles.size > 0
+                        ? [
+                            {
+                                label: 'Salvar',
+                                onClick: handleDeleteSelected,
+                                variant: 'primary',
+                                disabled: deleting,
+                                loading: deleting,
+                            },
+                        ]
+                        : []
+                }
             />
         </div>
     )
