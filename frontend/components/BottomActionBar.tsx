@@ -98,12 +98,33 @@ export function BottomActionBar({
         secondary: 'bg-gray-200 border-gray-300 text-gray-800 hover:bg-gray-300',
     }
 
+    // Renderizar botões
+    const renderButtons = () => {
+        if (!buttons || buttons.length === 0) return null
+        return (
+            <div className="flex items-center gap-3">
+                {buttons.map((button, index) => (
+                    <button
+                        key={index}
+                        onClick={button.onClick}
+                        disabled={button.disabled || button.loading}
+                        className={`px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            buttonClasses[button.variant || 'primary']
+                        }`}
+                    >
+                        {button.loading ? 'Processando...' : button.label}
+                    </button>
+                ))}
+            </div>
+        )
+    }
+
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg h-20">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
-                <div className="flex items-center justify-between gap-4 w-full">
-                    {/* Mensagem */}
-                    {message && (
+            {message ? (
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
+                    <div className="flex items-center justify-between gap-4 w-full">
+                        {/* Mensagem */}
                         <div
                             className={`flex-1 px-4 py-2 rounded-md border ${messageColorClasses[messageType]}`}
                         >
@@ -113,26 +134,17 @@ export function BottomActionBar({
                                 message
                             )}
                         </div>
-                    )}
 
-                    {/* Botões de ação - alinhados à direita */}
-                    {buttons && buttons.length > 0 && (
-                        <div className="flex items-center gap-3 ml-auto">
-                            {buttons.map((button, index) => (
-                                <button
-                                    key={index}
-                                    onClick={button.onClick}
-                                    disabled={button.disabled || button.loading}
-                                    className={`px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonClasses[button.variant || 'primary']
-                                        }`}
-                                >
-                                    {button.loading ? 'Processando...' : button.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                        {/* Botões de ação - alinhados à direita */}
+                        {renderButtons()}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="h-full flex items-center justify-end px-4 sm:px-6 lg:px-8">
+                    {/* Botões de ação - alinhados à direita da tela */}
+                    {renderButtons()}
+                </div>
+            )}
         </div>
     )
 }
