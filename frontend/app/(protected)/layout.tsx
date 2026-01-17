@@ -3,6 +3,7 @@
 import { useState, createContext, useContext } from 'react'
 import { Header } from '@/components/Header'
 import { Sidebar } from '@/components/Sidebar'
+import { TenantSettingsProvider } from '@/contexts/TenantSettingsContext'
 
 // Contexto para controlar o drawer em mobile/tablet
 const DrawerContext = createContext<{
@@ -34,20 +35,22 @@ export default function ProtectedLayout({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   return (
-    <DrawerContext.Provider
-      value={{
-        isDrawerOpen,
-        openDrawer: () => setIsDrawerOpen(true),
-        closeDrawer: () => setIsDrawerOpen(false),
-      }}
-    >
-      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
-        <Header />
-        <Sidebar />
-        <main className="pt-16 lg:ml-64 min-w-0">
-          {children}
-        </main>
-      </div>
-    </DrawerContext.Provider>
+    <TenantSettingsProvider>
+      <DrawerContext.Provider
+        value={{
+          isDrawerOpen,
+          openDrawer: () => setIsDrawerOpen(true),
+          closeDrawer: () => setIsDrawerOpen(false),
+        }}
+      >
+        <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+          <Header />
+          <Sidebar />
+          <main className="pt-16 lg:ml-64 min-w-0">
+            {children}
+          </main>
+        </div>
+      </DrawerContext.Provider>
+    </TenantSettingsProvider>
   )
 }

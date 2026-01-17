@@ -1,6 +1,9 @@
 'use client'
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { TenantDatePicker } from '@/components/TenantDatePicker'
+import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useEffect, useState } from 'react'
 
 interface FileResponse {
@@ -28,19 +31,6 @@ function formatFileSize(bytes: number): string {
     return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
 
-/**
- * Formata data ISO 8601 para formato brasileiro (ex: "17/01/2026 14:30")
- * Converte de UTC para timezone local do navegador
- */
-function formatDate(isoString: string): string {
-    const date = new Date(isoString)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-    return `${day}/${month}/${year} ${hours}:${minutes}`
-}
 
 /**
  * Verifica se o tipo de arquivo é uma imagem
@@ -101,32 +91,6 @@ function handleFileDownload(fileId: number, filename: string) {
     const url = `/api/file/${fileId}/proxy`
     // Abrir em nova aba - o navegador decide se mostra ou faz download
     window.open(url, '_blank')
-}
-
-/**
- * Obtém início do dia atual em UTC (00:00:00)
- */
-function getStartOfTodayUTC(): string {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth()
-    const day = now.getDate()
-    const startOfDay = new Date(year, month, day, 0, 0, 0, 0)
-    // Retorna em ISO 8601 com timezone (UTC)
-    return startOfDay.toISOString()
-}
-
-/**
- * Obtém fim do dia atual em UTC (23:59:59.999)
- */
-function getEndOfTodayUTC(): string {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth()
-    const day = now.getDate()
-    const endOfDay = new Date(year, month, day, 23, 59, 59, 999)
-    // Retorna em ISO 8601 com timezone (UTC)
-    return endOfDay.toISOString()
 }
 
 /**
@@ -209,6 +173,7 @@ function FileThumbnail({ file }: { file: FileResponse }) {
 }
 
 export default function FilesPage() {
+    const { settings } = useTenantSettings()
     const [files, setFiles] = useState<FileResponse[]>([])
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
@@ -216,9 +181,17 @@ export default function FilesPage() {
     const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
 
-    // Filtros de período (padrão: dia atual)
-    const [startAt, setStartAt] = useState<string>(() => getStartOfTodayUTC())
-    const [endAt, setEndAt] = useState<string>(() => getEndOfTodayUTC())
+    // Filtros de período usando TenantDatePicker (Date objects)
+    // Inicializar com data de hoje
+    const [startDate, setStartDate] = useState<Date | null>(() => {
+        const today = new Date()
+        return new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
+    })
+
+    const [endDate, setEndDate] = useState<Date | null>(() => {
+        const today = new Date()
+        return new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
+    })
 
     // Paginação
     const [limit] = useState(21) // Limite padrão
@@ -227,16 +200,25 @@ export default function FilesPage() {
     // Carregar arquivos
     useEffect(() => {
         async function loadFiles() {
+            if (!settings) {
+                // Aguardar settings carregar
+                return
+            }
+
             setLoading(true)
             setError(null)
 
             try {
-                // Validar intervalo
-                if (startAt && endAt && new Date(startAt) > new Date(endAt)) {
+                // Validar intervalo (se ambas as datas estão selecionadas)
+                if (startDate && endDate && startDate > endDate) {
                     setError('Data inicial deve ser menor ou igual à data final')
                     setLoading(false)
                     return
                 }
+
+                // Converter Date objects para UTC strings (ISO 8601) antes de enviar à API
+                const startAt = startDate ? localDateToUtcStart(startDate, settings) : ''
+                const endAt = endDate ? localDateToUtcEndExclusive(endDate, settings) : ''
 
                 // Construir URL com query params
                 const url = new URL('/api/file/list', window.location.origin)
@@ -277,7 +259,7 @@ export default function FilesPage() {
         }
 
         loadFiles()
-    }, [startAt, endAt, limit, offset])
+    }, [startDate, endDate, settings, limit, offset])
 
     // Calcular página atual e total de páginas
     const currentPage = Math.floor(offset / limit) + 1
@@ -297,36 +279,15 @@ export default function FilesPage() {
         }
     }
 
-    // Handler para mudança de filtro de data
-    const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.value) {
-            const date = new Date(e.target.value)
-            date.setHours(0, 0, 0, 0)
-            setStartAt(date.toISOString())
-        } else {
-            setStartAt('')
-        }
+    // Handlers para mudança de data no TenantDatePicker
+    const handleStartDateChange = (date: Date | null) => {
+        setStartDate(date)
         setOffset(0) // Resetar paginação ao mudar filtro
     }
 
-    const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.value) {
-            const date = new Date(e.target.value)
-            date.setHours(23, 59, 59, 999)
-            setEndAt(date.toISOString())
-        } else {
-            setEndAt('')
-        }
+    const handleEndDateChange = (date: Date | null) => {
+        setEndDate(date)
         setOffset(0) // Resetar paginação ao mudar filtro
-    }
-
-    // Converter ISO para formato de input date (YYYY-MM-DD)
-    const formatDateForInput = (isoString: string): string => {
-        const date = new Date(isoString)
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        return `${year}-${month}-${day}`
     }
 
     // Toggle seleção de arquivo
@@ -400,32 +361,22 @@ export default function FilesPage() {
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
                 <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Filtro por Período</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                        <label htmlFor="start_at" className="block text-sm font-medium text-gray-700 mb-2">
-                            Data de Início
-                        </label>
-                        <input
-                            type="date"
-                            id="start_at"
-                            value={startAt ? formatDateForInput(startAt) : ''}
-                            onChange={handleStartDateChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="end_at" className="block text-sm font-medium text-gray-700 mb-2">
-                            Data de Fim
-                        </label>
-                        <input
-                            type="date"
-                            id="end_at"
-                            value={endAt ? formatDateForInput(endAt) : ''}
-                            onChange={handleEndDateChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
+                    <TenantDatePicker
+                        label="Data de Início"
+                        value={startDate}
+                        onChange={handleStartDateChange}
+                        id="start_at"
+                        name="start_at"
+                    />
+                    <TenantDatePicker
+                        label="Data de Fim"
+                        value={endDate}
+                        onChange={handleEndDateChange}
+                        id="end_at"
+                        name="end_at"
+                    />
                 </div>
-                {startAt && endAt && new Date(startAt) > new Date(endAt) && (
+                {startDate && endDate && startDate > endDate && (
                     <p className="mt-2 text-sm text-red-600">
                         Data inicial deve ser menor ou igual à data final
                     </p>
@@ -475,8 +426,8 @@ export default function FilesPage() {
                                     <div
                                         key={file.id}
                                         className={`group rounded-xl border bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${isSelected
-                                                ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                                : 'border-slate-200 hover:border-slate-300'
+                                            ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
+                                            : 'border-slate-200 hover:border-slate-300'
                                             }`}
                                     >
                                         {/* 1. Topo - Identidade do arquivo */}
@@ -501,8 +452,8 @@ export default function FilesPage() {
                                                     }}
                                                     disabled={deleting}
                                                     className={`shrink-0 p-1.5 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100 ${isSelected
-                                                            ? 'text-red-700 bg-red-100 hover:bg-red-200 opacity-100'
-                                                            : 'text-gray-400 hover:bg-gray-100'
+                                                        ? 'text-red-700 bg-red-100 hover:bg-red-200 opacity-100'
+                                                        : 'text-gray-400 hover:bg-gray-100'
                                                         }`}
                                                     title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                                 >
@@ -532,7 +483,11 @@ export default function FilesPage() {
                                         <div className="flex items-center justify-between gap-2 text-sm text-slate-500">
                                             <span className="truncate">{formatFileSize(file.file_size)}</span>
                                             <span className="shrink-0">•</span>
-                                            <span className="truncate">{formatDate(file.created_at)}</span>
+                                            <span className="truncate">
+                                                {settings
+                                                    ? formatDateTime(file.created_at, settings)
+                                                    : new Date(file.created_at).toLocaleString()}
+                                            </span>
                                         </div>
                                     </div>
                                 )

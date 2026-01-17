@@ -81,7 +81,9 @@ def get_me(
 class TenantCreate(PydanticBaseModel):
     name: str
     slug: str
-    timezone: str = "UTC"
+    timezone: str = "America/Sao_Paulo"
+    locale: str = "pt-BR"
+    currency: str = "BRL"
 
     @field_validator("timezone")
     @classmethod
@@ -92,12 +94,21 @@ class TenantCreate(PydanticBaseModel):
             raise ValueError("timezone inválido (esperado IANA, ex: America/Sao_Paulo)") from e
         return v
 
+    @field_validator("locale", "currency")
+    @classmethod
+    def validate_string_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("campo não pode ser vazio")
+        return v.strip()
+
 
 class TenantResponse(PydanticBaseModel):
     id: int
     name: str
     slug: str
     timezone: str
+    locale: str
+    currency: str
     created_at: datetime
     updated_at: datetime
 
@@ -123,7 +134,13 @@ def create_tenant(
     if existing:
         raise HTTPException(status_code=400, detail="Tenant com este slug já existe")
 
-    tenant = Tenant(name=tenant_data.name, slug=tenant_data.slug, timezone=tenant_data.timezone)
+    tenant = Tenant(
+        name=tenant_data.name,
+        slug=tenant_data.slug,
+        timezone=tenant_data.timezone,
+        locale=tenant_data.locale,
+        currency=tenant_data.currency,
+    )
     session.add(tenant)
     session.commit()
     session.refresh(tenant)

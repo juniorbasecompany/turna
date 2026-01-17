@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { formatNumber } from '@/lib/tenantFormat'
 
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -265,7 +267,9 @@ export default function ImportPage() {
                   {selectedFile.name}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                  {settings
+                    ? `${formatNumber(selectedFile.size / 1024 / 1024, settings, { maximumFractionDigits: 2 })} MB`
+                    : `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`}
                 </p>
               </div>
               {!uploading && !processing && (

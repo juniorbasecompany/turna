@@ -51,6 +51,8 @@ export interface TenantResponse {
   name: string
   slug: string
   timezone: string
+  locale: string
+  currency: string
   created_at: string
   updated_at: string
 }
@@ -151,4 +153,6 @@ export interface TenantCreateRequest {
   name: string
   slug: string
   timezone?: string
+  locale?: string
+  currency?: string
 }
