@@ -50,6 +50,51 @@ function isImage(contentType: string): boolean {
 }
 
 /**
+ * Obtém informações de ícone e cor por tipo de arquivo
+ */
+function getFileTypeInfo(contentType: string): { icon: JSX.Element; colorClass: string } {
+    if (contentType === 'application/pdf') {
+        return {
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            ),
+            colorClass: 'text-red-500'
+        }
+    }
+    if (isImage(contentType)) {
+        return {
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            ),
+            colorClass: 'text-blue-500'
+        }
+    }
+    if (contentType.includes('spreadsheet') || contentType.includes('excel') || contentType.includes('csv')) {
+        return {
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            ),
+            colorClass: 'text-green-500'
+        }
+    }
+    // Outros tipos
+    return {
+        icon: (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        ),
+        colorClass: 'text-slate-500'
+    }
+}
+
+/**
  * Abre o arquivo em nova aba (visualização ou download se necessário)
  */
 function handleFileDownload(fileId: number, filename: string) {
@@ -85,7 +130,7 @@ function getEndOfTodayUTC(): string {
 }
 
 /**
- * Componente de thumbnail do arquivo
+ * Componente de thumbnail do arquivo (preview no corpo do card)
  */
 function FileThumbnail({ file }: { file: FileResponse }) {
     const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -102,31 +147,32 @@ function FileThumbnail({ file }: { file: FileResponse }) {
         }
     }, [file.id, file.content_type, imageUrl, loadingImage])
 
+    const fileTypeInfo = getFileTypeInfo(file.content_type)
+
     return (
         <button
             onClick={() => handleFileDownload(file.id, file.filename)}
-            className="w-full h-32 sm:h-40 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-blue-400 hover:bg-gray-100 transition-colors flex items-center justify-center overflow-hidden cursor-pointer group"
+            className="w-full h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer group transition-all duration-200 hover:bg-slate-100"
             title="Clique para baixar o arquivo"
         >
             {isImage(file.content_type) && imageUrl ? (
                 <img
                     src={imageUrl}
                     alt={file.filename}
-                    className="max-w-full max-h-full object-contain"
+                    className="w-full h-full object-cover rounded-lg"
                     onError={() => {
                         setImageUrl(null)
                     }}
                 />
             ) : (
-                <div className="flex flex-col items-center justify-center text-gray-400 group-hover:text-blue-500">
-                    {file.content_type === 'application/pdf' ? (
-                        <>
+                <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                        {file.content_type === 'application/pdf' ? (
                             <svg
-                                className="w-12 h-12 sm:w-16 sm:h-16 mb-2"
+                                className="w-full h-full"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
-                                xmlns="http://www.w3.org/2000/svg"
                             >
                                 <path
                                     strokeLinecap="round"
@@ -135,16 +181,12 @@ function FileThumbnail({ file }: { file: FileResponse }) {
                                     d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                                 />
                             </svg>
-                            <span className="text-xs font-medium">PDF</span>
-                        </>
-                    ) : (
-                        <>
+                        ) : (
                             <svg
-                                className="w-12 h-12 sm:w-16 sm:h-16 mb-2"
+                                className="w-full h-full"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
-                                xmlns="http://www.w3.org/2000/svg"
                             >
                                 <path
                                     strokeLinecap="round"
@@ -153,11 +195,13 @@ function FileThumbnail({ file }: { file: FileResponse }) {
                                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                 />
                             </svg>
-                            <span className="text-xs font-medium truncate max-w-[120px]">
-                                {file.content_type.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
-                            </span>
-                        </>
-                    )}
+                        )}
+                    </div>
+                    <span className="text-xs font-medium">
+                        {file.content_type === 'application/pdf'
+                            ? 'PDF'
+                            : file.content_type.split('/')[1]?.toUpperCase() || 'DOCUMENTO'}
+                    </span>
                 </div>
             )}
         </button>
@@ -423,69 +467,76 @@ export default function FilesPage() {
                             <p className="text-gray-600">Nenhum arquivo encontrado no período selecionado.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                            {files.map((file) => (
-                                <div
-                                    key={file.id}
-                                    className={`rounded-lg border p-4 sm:p-6 hover:shadow-md transition-shadow min-w-0 ${selectedFiles.has(file.id)
-                                        ? 'bg-red-50 border-red-300 ring-2 ring-red-200'
-                                        : 'bg-white border-gray-200'
-                                        }`}
-                                >
-                                    <div className="mb-3 sm:mb-4 flex items-start justify-between gap-2 min-w-0">
-                                        <h3
-                                            className={`text-base sm:text-lg font-medium truncate flex-1 min-w-0 ${selectedFiles.has(file.id) ? 'text-red-900' : 'text-gray-900'}`}
-                                            title={file.filename}
-                                        >
-                                            {file.filename}
-                                        </h3>
-                                        {file.can_delete && (
-                                            <button
-                                                onClick={() => toggleFileSelection(file.id)}
-                                                disabled={deleting}
-                                                className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${selectedFiles.has(file.id)
-                                                    ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                                                    : 'text-gray-400 hover:bg-gray-100'
-                                                    }`}
-                                                title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                            >
-                                                <svg
-                                                    className="w-5 h-5"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                    xmlns="http://www.w3.org/2000/svg"
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                            {files.map((file) => {
+                                const fileTypeInfo = getFileTypeInfo(file.content_type)
+                                const isSelected = selectedFiles.has(file.id)
+                                return (
+                                    <div
+                                        key={file.id}
+                                        className={`group rounded-xl border bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${isSelected
+                                                ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
+                                                : 'border-slate-200 hover:border-slate-300'
+                                            }`}
+                                    >
+                                        {/* 1. Topo - Identidade do arquivo */}
+                                        <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                    {fileTypeInfo.icon}
+                                                </div>
+                                                <h3
+                                                    className={`text-sm font-semibold truncate min-w-0 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                        }`}
+                                                    title={file.filename}
                                                 >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                    {/* Thumbnail ou ícone do arquivo */}
-                                    <div className="mb-3 sm:mb-4">
-                                        <FileThumbnail file={file} />
-                                    </div>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-gray-600 shrink-0">Tamanho:</span>
-                                            <span className="text-gray-900 font-medium text-right">
-                                                {formatFileSize(file.file_size)}
-                                            </span>
+                                                    {file.filename}
+                                                </h3>
+                                            </div>
+                                            {file.can_delete && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        toggleFileSelection(file.id)
+                                                    }}
+                                                    disabled={deleting}
+                                                    className={`shrink-0 p-1.5 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100 ${isSelected
+                                                            ? 'text-red-700 bg-red-100 hover:bg-red-200 opacity-100'
+                                                            : 'text-gray-400 hover:bg-gray-100'
+                                                        }`}
+                                                    title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                >
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-gray-600 shrink-0">Criado em:</span>
-                                            <span className="text-gray-900 font-medium text-right">
-                                                {formatDate(file.created_at)}
-                                            </span>
+
+                                        {/* 2. Corpo - Preview */}
+                                        <div className="mb-3">
+                                            <FileThumbnail file={file} />
+                                        </div>
+
+                                        {/* 3. Rodapé - Metadados */}
+                                        <div className="flex items-center justify-between gap-2 text-sm text-slate-500">
+                                            <span className="truncate">{formatFileSize(file.file_size)}</span>
+                                            <span className="shrink-0">•</span>
+                                            <span className="truncate">{formatDate(file.created_at)}</span>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
 
