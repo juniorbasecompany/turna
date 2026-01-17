@@ -48,6 +48,15 @@ Console para administrar a forma de autenticação
   npm run build; npm start
   ```
 
+## MinIO
+
+- **Visualizar arquivos**
+  - Usuário: minio
+  - Senha: minio12345
+  ```
+  http://localhost:9001
+  ```
+
 ## NGROK - Acesso pelo Celular em desenvolvimento
 Precisa estar na mesma rede WiFi:
 

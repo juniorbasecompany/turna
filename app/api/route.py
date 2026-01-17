@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File as FastAPIFile, Response
+from fastapi.responses import StreamingResponse
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import func
@@ -691,6 +692,17 @@ class FileListResponse(PydanticBaseModel):
     total: int
 
 
+class FileDownloadResponse(PydanticBaseModel):
+    """Resposta de download de arquivo com URL presignada."""
+    id: int
+    filename: str
+    content_type: str
+    presigned_url: str
+
+    class Config:
+        from_attributes = True
+
+
 class ScheduleGenerateRequest(PydanticBaseModel):
     extract_job_id: int
     period_start_at: datetime
@@ -842,6 +854,83 @@ def list_files(
         items=file_responses,
         total=total,
     )
+
+
+@router.get("/file/{file_id}", response_model=FileDownloadResponse, tags=["File"])
+def get_file(
+    file_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Retorna informações do arquivo e URL presignada para download.
+    """
+    # Buscar arquivo
+    file_model = session.get(File, file_id)
+    if not file_model:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
+    # Validar tenant_id
+    if file_model.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Gerar URL presignada
+    storage_service = StorageService()
+    presigned_url = storage_service.get_file_presigned_url(
+        s3_key=file_model.s3_key,
+        expiration=3600,  # 1 hora
+    )
+
+    return FileDownloadResponse(
+        id=file_model.id,
+        filename=file_model.filename,
+        content_type=file_model.content_type,
+        presigned_url=presigned_url,
+    )
+
+
+@router.get("/file/{file_id}/download", tags=["File"])
+def download_file(
+    file_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Faz download direto do arquivo do MinIO.
+    Retorna o arquivo como stream para o cliente.
+    """
+    # Buscar arquivo
+    file_model = session.get(File, file_id)
+    if not file_model:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
+    # Validar tenant_id
+    if file_model.tenant_id != membership.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Obter arquivo do MinIO
+    storage_service = StorageService()
+    s3_client = storage_service.client
+    
+    try:
+        # Obter objeto do S3/MinIO
+        response = s3_client._client.get_object(
+            Bucket=storage_service.config.bucket_name,
+            Key=file_model.s3_key,
+        )
+        
+        # Retornar como stream
+        return StreamingResponse(
+            response['Body'].iter_chunks(chunk_size=8192),
+            media_type=file_model.content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_model.filename}"',
+            },
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"Erro ao fazer download do arquivo {file_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao fazer download do arquivo: {str(e)}")
 
 
 @router.delete("/file/{file_id}", status_code=204, tags=["File"])

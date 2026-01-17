@@ -43,6 +43,49 @@ function formatDate(isoString: string): string {
 }
 
 /**
+ * Verifica se o tipo de arquivo é uma imagem
+ */
+function isImage(contentType: string): boolean {
+    return contentType.startsWith('image/')
+}
+
+/**
+ * Faz download do arquivo via proxy
+ */
+async function handleFileDownload(fileId: number, filename: string) {
+    try {
+        const url = `/api/file/${fileId}/proxy`
+        
+        const response = await fetch(url, {
+            credentials: 'include',
+        })
+        
+        if (!response.ok) {
+            throw new Error('Erro ao baixar arquivo')
+        }
+        
+        const blob = await response.blob()
+        const blobUrl = window.URL.createObjectURL(blob)
+        
+        // Criar link temporário e clicar para fazer download
+        const link = document.createElement('a')
+        link.href = blobUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // Limpar o blob URL após um tempo
+        setTimeout(() => {
+            window.URL.revokeObjectURL(blobUrl)
+        }, 100)
+    } catch (error) {
+        console.error('Erro ao fazer download:', error)
+        alert('Não foi possível fazer download do arquivo.')
+    }
+}
+
+/**
  * Obtém início do dia atual em UTC (00:00:00)
  */
 function getStartOfTodayUTC(): string {
@@ -66,6 +109,86 @@ function getEndOfTodayUTC(): string {
     const endOfDay = new Date(year, month, day, 23, 59, 59, 999)
     // Retorna em ISO 8601 com timezone (UTC)
     return endOfDay.toISOString()
+}
+
+/**
+ * Componente de thumbnail do arquivo
+ */
+function FileThumbnail({ file }: { file: FileResponse }) {
+    const [imageUrl, setImageUrl] = useState<string | null>(null)
+    const [loadingImage, setLoadingImage] = useState(false)
+
+    // Carregar URL da imagem se for imagem
+    useEffect(() => {
+        if (isImage(file.content_type) && !imageUrl && !loadingImage) {
+            setLoadingImage(true)
+            // Usar proxy diretamente para imagens
+            const proxyUrl = `/api/file/${file.id}/proxy`
+            setImageUrl(proxyUrl)
+            setLoadingImage(false)
+        }
+    }, [file.id, file.content_type, imageUrl, loadingImage])
+
+    return (
+        <button
+            onClick={() => handleFileDownload(file.id, file.filename)}
+            className="w-full h-32 sm:h-40 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-blue-400 hover:bg-gray-100 transition-colors flex items-center justify-center overflow-hidden cursor-pointer group"
+            title="Clique para baixar o arquivo"
+        >
+            {isImage(file.content_type) && imageUrl ? (
+                <img
+                    src={imageUrl}
+                    alt={file.filename}
+                    className="max-w-full max-h-full object-contain"
+                    onError={() => {
+                        setImageUrl(null)
+                    }}
+                />
+            ) : (
+                <div className="flex flex-col items-center justify-center text-gray-400 group-hover:text-blue-500">
+                    {file.content_type === 'application/pdf' ? (
+                        <>
+                            <svg
+                                className="w-12 h-12 sm:w-16 sm:h-16 mb-2"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                />
+                            </svg>
+                            <span className="text-xs font-medium">PDF</span>
+                        </>
+                    ) : (
+                        <>
+                            <svg
+                                className="w-12 h-12 sm:w-16 sm:h-16 mb-2"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                            <span className="text-xs font-medium truncate max-w-[120px]">
+                                {file.content_type.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
+                            </span>
+                        </>
+                    )}
+                </div>
+            )}
+        </button>
+    )
 }
 
 export default function FilesPage() {
@@ -343,15 +466,11 @@ export default function FilesPage() {
                                         >
                                             {file.filename}
                                         </h3>
-                                        {file.can_delete && (
+                                        <div className="flex gap-1 shrink-0">
                                             <button
-                                                onClick={() => toggleFileSelection(file.id)}
-                                                disabled={deleting}
-                                                className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${selectedFiles.has(file.id)
-                                                        ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                                                        : 'text-gray-400 hover:bg-gray-100'
-                                                    }`}
-                                                title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                onClick={() => handleFileDownload(file.id, file.filename)}
+                                                className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                                                title="Baixar arquivo"
                                             >
                                                 <svg
                                                     className="w-5 h-5"
@@ -364,17 +483,43 @@ export default function FilesPage() {
                                                         strokeLinecap="round"
                                                         strokeLinejoin="round"
                                                         strokeWidth={2}
-                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                                                     />
                                                 </svg>
                                             </button>
-                                        )}
+                                            {file.can_delete && (
+                                                <button
+                                                    onClick={() => toggleFileSelection(file.id)}
+                                                    disabled={deleting}
+                                                    className={`p-1.5 rounded hover:bg-opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${selectedFiles.has(file.id)
+                                                            ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                                            : 'text-gray-400 hover:bg-gray-100'
+                                                        }`}
+                                                    title={selectedFiles.has(file.id) ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                >
+                                                    <svg
+                                                        className="w-5 h-5"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Thumbnail ou ícone do arquivo */}
+                                    <div className="mb-3 sm:mb-4">
+                                        <FileThumbnail file={file} />
                                     </div>
                                     <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-gray-600 shrink-0">Tipo:</span>
-                                            <span className="text-gray-900 font-medium truncate text-right">{file.content_type}</span>
-                                        </div>
                                         <div className="flex justify-between gap-2">
                                             <span className="text-gray-600 shrink-0">Tamanho:</span>
                                             <span className="text-gray-900 font-medium text-right">
