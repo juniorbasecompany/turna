@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 export interface ColorPickerProps {
     value: string | null // Cor atual em formato hexadecimal (#RRGGBB)
@@ -17,27 +17,28 @@ export interface ColorPickerProps {
  * de um range aceitável para boa legibilidade.
  */
 export function ColorPicker({ value, onChange, label, disabled }: ColorPickerProps) {
-    // Cores base pastéis (em RGB) - 9 cores
+    // Cores base claras (em RGB) - 9 cores distintas (nível 200 do Tailwind para garantir legibilidade com texto preto)
     const baseColors = [
-        { r: 147, g: 197, b: 253 }, // blue-300
-        { r: 134, g: 239, b: 172 }, // green-300
-        { r: 253, g: 224, b: 71 }, // yellow-300
-        { r: 253, g: 186, b: 116 }, // orange-300
-        { r: 251, g: 146, b: 60 }, // rose-300
-        { r: 196, g: 181, b: 253 }, // purple-300
-        { r: 103, g: 232, b: 249 }, // cyan-300
-        { r: 94, g: 234, b: 212 }, // teal-300
-        { r: 251, g: 113, b: 133 }, // pink-300
+        { r: 219, g: 234, b: 254 }, // blue-200 - Azul
+        { r: 187, g: 247, b: 208 }, // green-200 - Verde
+        { r: 254, g: 249, b: 195 }, // yellow-200 - Amarelo
+        { r: 254, g: 215, b: 170 }, // orange-200 - Laranja
+        { r: 254, g: 202, b: 202 }, // red-200 - Vermelho
+        { r: 233, g: 213, b: 255 }, // purple-200 - Roxo
+        { r: 199, g: 210, b: 254 }, // indigo-200 - Índigo
+        { r: 251, g: 207, b: 232 }, // pink-200 - Rosa
+        { r: 165, g: 243, b: 252 }, // cyan-200 - Ciano
     ]
 
-    // Intensidade: valor entre 0.5 (mais claro) e 1.2 (mais escuro, mas ainda suave)
-    // Valor padrão: 1.0 (cor base)
-    const MIN_INTENSITY = 0.5
-    const MAX_INTENSITY = 1.2
-    const INTENSITY_STEP = 0.1
+    // Intensidade: valor entre 0.7 (mais claro) e 1.0 (cor base, máximo permitido)
+    // Valor padrão: 1.0 (intensidade máxima)
+    const MIN_INTENSITY = 0.7
+    const MAX_INTENSITY = 1.0
+    const INTENSITY_STEP = 0.02 // Passo menor para mudanças mais suaves
 
     const [selectedBaseIndex, setSelectedBaseIndex] = useState<number | null>(null)
-    const [intensity, setIntensity] = useState<number>(1.0) // Padrão: cor base
+    const [intensity, setIntensity] = useState<number>(1.0) // Padrão: intensidade máxima
+    const intensityIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
     // Converter RGB para hexadecimal
     const rgbToHex = (r: number, g: number, b: number): string => {
@@ -110,18 +111,54 @@ export function ColorPicker({ value, onChange, label, disabled }: ColorPickerPro
     }
 
     const handleIntensityChange = (delta: number) => {
-        const newIntensity = Math.max(
-            MIN_INTENSITY,
-            Math.min(MAX_INTENSITY, intensity + delta)
-        )
-        setIntensity(newIntensity)
+        setIntensity((prevIntensity) => {
+            const newIntensity = Math.max(
+                MIN_INTENSITY,
+                Math.min(MAX_INTENSITY, prevIntensity + delta)
+            )
 
-        // Se há uma cor selecionada, atualizar a cor com a nova intensidade
-        if (selectedBaseIndex !== null) {
-            const color = getColorWithIntensity(baseColors[selectedBaseIndex], newIntensity)
-            onChange(color)
+            // Se há uma cor selecionada, atualizar a cor com a nova intensidade
+            if (selectedBaseIndex !== null) {
+                const color = getColorWithIntensity(baseColors[selectedBaseIndex], newIntensity)
+                onChange(color)
+            }
+
+            return newIntensity
+        })
+    }
+
+    // Iniciar mudança contínua de intensidade
+    const startIntensityChange = (delta: number) => {
+        // Primeira mudança imediata
+        handleIntensityChange(delta)
+
+        // Limpar intervalo anterior se existir
+        if (intensityIntervalRef.current) {
+            clearInterval(intensityIntervalRef.current)
+        }
+
+        // Configurar intervalo para mudanças contínuas
+        intensityIntervalRef.current = setInterval(() => {
+            handleIntensityChange(delta)
+        }, 50) // Atualiza a cada 50ms para mudanças mais suaves
+    }
+
+    // Parar mudança contínua de intensidade
+    const stopIntensityChange = () => {
+        if (intensityIntervalRef.current) {
+            clearInterval(intensityIntervalRef.current)
+            intensityIntervalRef.current = null
         }
     }
+
+    // Limpar intervalo ao desmontar componente
+    useEffect(() => {
+        return () => {
+            if (intensityIntervalRef.current) {
+                clearInterval(intensityIntervalRef.current)
+            }
+        }
+    }, [])
 
     const handleNoColor = () => {
         setSelectedBaseIndex(null)
@@ -170,26 +207,34 @@ export function ColorPicker({ value, onChange, label, disabled }: ColorPickerPro
                     </svg>
                 </button>
 
-                {/* Botão diminuir intensidade */}
+                {/* Botão - (deixar mais escuro) */}
                 <button
                     type="button"
-                    onClick={() => handleIntensityChange(-INTENSITY_STEP)}
-                    disabled={disabled || intensity <= MIN_INTENSITY}
-                    className="aspect-square w-12 h-12 rounded-md border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                    title="Diminuir intensidade"
+                    onMouseDown={() => !disabled && intensity < MAX_INTENSITY && startIntensityChange(INTENSITY_STEP)}
+                    onMouseUp={stopIntensityChange}
+                    onMouseLeave={stopIntensityChange}
+                    onTouchStart={() => !disabled && intensity < MAX_INTENSITY && startIntensityChange(INTENSITY_STEP)}
+                    onTouchEnd={stopIntensityChange}
+                    disabled={disabled || intensity >= MAX_INTENSITY}
+                    className="aspect-square w-12 h-12 rounded-md border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center select-none"
+                    title="Deixar mais escuro (mantenha pressionado)"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                     </svg>
                 </button>
 
-                {/* Botão aumentar intensidade */}
+                {/* Botão + (deixar mais claro) */}
                 <button
                     type="button"
-                    onClick={() => handleIntensityChange(INTENSITY_STEP)}
-                    disabled={disabled || intensity >= MAX_INTENSITY}
-                    className="aspect-square w-12 h-12 rounded-md border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                    title="Aumentar intensidade"
+                    onMouseDown={() => !disabled && intensity > MIN_INTENSITY && startIntensityChange(-INTENSITY_STEP)}
+                    onMouseUp={stopIntensityChange}
+                    onMouseLeave={stopIntensityChange}
+                    onTouchStart={() => !disabled && intensity > MIN_INTENSITY && startIntensityChange(-INTENSITY_STEP)}
+                    onTouchEnd={stopIntensityChange}
+                    disabled={disabled || intensity <= MIN_INTENSITY}
+                    className="aspect-square w-12 h-12 rounded-md border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center select-none"
+                    title="Deixar mais claro (mantenha pressionado)"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
