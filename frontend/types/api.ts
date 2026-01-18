@@ -162,7 +162,7 @@ export interface HospitalResponse {
   id: number
   tenant_id: number
   name: string
-  prompt: string
+  prompt: string | null
   created_at: string
   updated_at: string
 }
@@ -174,7 +174,7 @@ export interface HospitalListResponse {
 
 export interface HospitalCreateRequest {
   name: string
-  prompt: string
+  prompt?: string | null
 }
 
 export interface HospitalUpdateRequest {

@@ -11,7 +11,7 @@ class Hospital(BaseModel, table=True):
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True, nullable=False)
     name: str = Field(nullable=False)
-    prompt: str = Field(nullable=False)
+    prompt: str | None = Field(default=None, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_hospital_tenant_name"),

@@ -1,7 +1,10 @@
 import os
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -1147,33 +1150,49 @@ async def schedule_generate(
 
 class HospitalCreate(PydanticBaseModel):
     name: str
-    prompt: str
+    prompt: str | None = None
 
-    @field_validator("name", "prompt")
+    @field_validator("name")
     @classmethod
-    def validate_not_empty(cls, v: str) -> str:
+    def validate_name_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("Campo não pode estar vazio")
         return v.strip()
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip() if isinstance(v, str) else v
+        return None if not stripped else stripped
 
 
 class HospitalUpdate(PydanticBaseModel):
     name: str | None = None
     prompt: str | None = None
 
-    @field_validator("name", "prompt")
+    @field_validator("name")
     @classmethod
-    def validate_not_empty(cls, v: str | None) -> str | None:
+    def validate_name(cls, v: str | None) -> str | None:
         if v is not None and (not v or not v.strip()):
-            raise ValueError("Campo não pode estar vazio")
+            raise ValueError("Campo nome não pode estar vazio")
         return v.strip() if v else None
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip() if isinstance(v, str) else v
+        return None if not stripped else stripped
 
 
 class HospitalResponse(PydanticBaseModel):
     id: int
     tenant_id: int
     name: str
-    prompt: str
+    prompt: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -1196,34 +1215,69 @@ def create_hospital(
     Cria um novo hospital (apenas admin).
     Hospital sempre pertence ao tenant atual (do membership).
     """
-    # Verificar se já existe hospital com mesmo nome no tenant
-    existing = session.exec(
-        select(Hospital).where(
-            Hospital.tenant_id == membership.tenant_id,
-            Hospital.name == body.name,
-        )
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
-        )
-
-    hospital = Hospital(
-        tenant_id=membership.tenant_id,
-        name=body.name,
-        prompt=body.prompt,
-    )
-    session.add(hospital)
     try:
-        session.commit()
-        session.refresh(hospital)
-        return hospital
-    except IntegrityError as e:
-        session.rollback()
+        logger.info(f"Criando hospital: name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={membership.tenant_id}")
+
+        # Verificar se já existe hospital com mesmo nome no tenant
+        existing = session.exec(
+            select(Hospital).where(
+                Hospital.tenant_id == membership.tenant_id,
+                Hospital.name == body.name,
+            )
+        ).first()
+        if existing:
+            logger.warning(f"Hospital com nome '{body.name}' já existe no tenant {membership.tenant_id} (id={existing.id})")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+            )
+
+        logger.info(f"Valor do prompt após validação Pydantic: {body.prompt}")
+
+        hospital = Hospital(
+            tenant_id=membership.tenant_id,
+            name=body.name,
+            prompt=body.prompt,
+        )
+        logger.info(f"Objeto Hospital criado: tenant_id={hospital.tenant_id}, name={hospital.name}, prompt={hospital.prompt}")
+
+        session.add(hospital)
+        try:
+            session.commit()
+            logger.info(f"Hospital criado com sucesso: id={hospital.id}")
+            session.refresh(hospital)
+            return hospital
+        except IntegrityError as e:
+            session.rollback()
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"Erro de integridade ao criar hospital: {error_msg}", exc_info=True)
+
+            # Verificar se é erro de constraint única
+            if "uq_hospital_tenant_name" in error_msg.lower() or "unique constraint" in error_msg.lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+                ) from e
+            else:
+                # Outro tipo de erro de integridade
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Erro de integridade ao criar hospital: {error_msg}",
+                ) from e
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro inesperado ao criar hospital: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao criar hospital: {str(e)}",
+            ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro crítico ao criar hospital: {e}", exc_info=True)
         raise HTTPException(
-            status_code=409,
-            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+            status_code=500,
+            detail=f"Erro inesperado ao criar hospital: {str(e)}",
         ) from e
 
 
@@ -1235,14 +1289,45 @@ def list_hospital(
     """
     Lista todos os hospitais do tenant atual.
     """
-    query = select(Hospital).where(Hospital.tenant_id == membership.tenant_id)
-    items = session.exec(query.order_by(Hospital.name)).all()
-    total = len(items)
+    try:
+        logger.info(f"Listando hospitais para tenant_id={membership.tenant_id}")
+        query = select(Hospital).where(Hospital.tenant_id == membership.tenant_id)
+        items = session.exec(query.order_by(Hospital.name)).all()
+        total = len(items)
 
-    return HospitalListResponse(
-        items=[HospitalResponse.model_validate(h) for h in items],
-        total=total,
-    )
+        logger.info(f"Encontrados {total} hospitais")
+
+        # Se não há itens, retornar lista vazia diretamente
+        if total == 0:
+            logger.info("Nenhum hospital encontrado, retornando lista vazia")
+            return HospitalListResponse(
+                items=[],
+                total=0,
+            )
+
+        # Validar e converter itens
+        response_items = []
+        for h in items:
+            try:
+                validated = HospitalResponse.model_validate(h)
+                response_items.append(validated)
+            except Exception as e:
+                logger.error(f"Erro ao validar hospital id={h.id}, name={h.name}, prompt={h.prompt}: {e}", exc_info=True)
+                raise
+
+        logger.info(f"Retornando {len(response_items)} hospitais validados")
+        return HospitalListResponse(
+            items=response_items,
+            total=total,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar hospitais: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar hospitais: {str(e)}",
+        ) from e
 
 
 @router.get("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
@@ -1255,12 +1340,26 @@ def get_hospital(
     Obtém detalhes de um hospital específico.
     Valida que o hospital pertence ao tenant atual.
     """
-    hospital = session.get(Hospital, hospital_id)
-    if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital não encontrado")
-    if hospital.tenant_id != membership.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    return hospital
+    try:
+        logger.info(f"Buscando hospital id={hospital_id} para tenant_id={membership.tenant_id}")
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital:
+            logger.warning(f"Hospital não encontrado: id={hospital_id}")
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if hospital.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        logger.info(f"Hospital encontrado: id={hospital.id}, name={hospital.name}, prompt={'presente' if hospital.prompt else 'None'}")
+        return hospital
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar hospital: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar hospital: {str(e)}",
+        ) from e
 
 
 @router.put("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
@@ -1274,42 +1373,135 @@ def update_hospital(
     Atualiza um hospital (apenas admin).
     Valida que o hospital pertence ao tenant atual.
     """
-    hospital = session.get(Hospital, hospital_id)
-    if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital não encontrado")
-    if hospital.tenant_id != membership.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+    try:
+        logger.info(f"Atualizando hospital: id={hospital_id}, name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={membership.tenant_id}")
 
-    # Verificar se novo nome já existe (se estiver alterando)
-    if body.name is not None and body.name != hospital.name:
-        existing = session.exec(
-            select(Hospital).where(
-                Hospital.tenant_id == membership.tenant_id,
-                Hospital.name == body.name,
-                Hospital.id != hospital_id,
-            )
-        ).first()
-        if existing:
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital:
+            logger.warning(f"Hospital não encontrado: id={hospital_id}")
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if hospital.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Verificar se novo nome já existe (se estiver alterando)
+        if body.name is not None and body.name != hospital.name:
+            existing = session.exec(
+                select(Hospital).where(
+                    Hospital.tenant_id == membership.tenant_id,
+                    Hospital.name == body.name,
+                    Hospital.id != hospital_id,
+                )
+            ).first()
+            if existing:
+                logger.warning(f"Hospital com nome '{body.name}' já existe no tenant")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+                )
+
+        # Atualizar campos
+        if body.name is not None:
+            hospital.name = body.name
+            logger.info(f"Nome atualizado para: {hospital.name}")
+        if body.prompt is not None:
+            hospital.prompt = body.prompt
+            logger.info(f"Prompt atualizado: {body.prompt}")
+        hospital.updated_at = utc_now()
+
+        logger.info(f"Objeto Hospital antes do commit: tenant_id={hospital.tenant_id}, name={hospital.name}, prompt={hospital.prompt}")
+
+        session.add(hospital)
+        try:
+            session.commit()
+            logger.info(f"Hospital atualizado com sucesso: id={hospital.id}")
+            session.refresh(hospital)
+            return hospital
+        except IntegrityError as e:
+            session.rollback()
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"Erro de integridade ao atualizar hospital: {error_msg}", exc_info=True)
+
+            # Verificar se é erro de constraint única
+            if "uq_hospital_tenant_name" in error_msg.lower() or "unique constraint" in error_msg.lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Hospital com nome '{body.name or hospital.name}' já existe neste tenant",
+                ) from e
+            else:
+                # Outro tipo de erro de integridade
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Erro de integridade ao atualizar hospital: {error_msg}",
+                ) from e
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro inesperado ao atualizar hospital: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao atualizar hospital: {str(e)}",
+            ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro crítico ao atualizar hospital: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro inesperado ao atualizar hospital: {str(e)}",
+        ) from e
+
+
+@router.delete("/hospital/{hospital_id}", status_code=204, tags=["Hospital"])
+def delete_hospital(
+    hospital_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Deleta um hospital (apenas admin).
+    Valida que o hospital pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Deletando hospital id={hospital_id} para tenant_id={membership.tenant_id}")
+        
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital:
+            logger.warning(f"Hospital não encontrado: id={hospital_id}")
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if hospital.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Verificar se há arquivos associados a este hospital
+        from app.model.file import File
+        files_count = session.exec(
+            select(func.count(File.id)).where(File.hospital_id == hospital_id)
+        ).one()
+        
+        if files_count > 0:
+            logger.warning(f"Não é possível deletar hospital {hospital_id}: há {files_count} arquivo(s) associado(s)")
             raise HTTPException(
                 status_code=409,
-                detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+                detail=f"Não é possível deletar o hospital. Há {files_count} arquivo(s) associado(s) a este hospital.",
             )
 
-    # Atualizar campos
-    if body.name is not None:
-        hospital.name = body.name
-    if body.prompt is not None:
-        hospital.prompt = body.prompt
-    hospital.updated_at = utc_now()
-
-    session.add(hospital)
-    try:
-        session.commit()
-        session.refresh(hospital)
-        return hospital
-    except IntegrityError as e:
-        session.rollback()
+        session.delete(hospital)
+        try:
+            session.commit()
+            logger.info(f"Hospital deletado com sucesso: id={hospital_id}")
+            return Response(status_code=204)
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Erro ao deletar hospital: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao deletar hospital: {str(e)}",
+            ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro crítico ao deletar hospital: {e}", exc_info=True)
         raise HTTPException(
-            status_code=409,
-            detail=f"Hospital com nome '{body.name}' já existe neste tenant",
+            status_code=500,
+            detail=f"Erro inesperado ao deletar hospital: {str(e)}",
         ) from e
