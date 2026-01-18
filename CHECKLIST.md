@@ -251,7 +251,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Retornar `{file_id, s3_url, presigned_url}`
 - [x] Testar upload/download:
   - [x] Upload de arquivo cria registro no banco e arquivo no MinIO
-  - [ ] Download retorna arquivo correto
+  - [x] Download retorna arquivo correto
   - [x] URLs presignadas funcionam
 
 ---
@@ -328,9 +328,9 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ### 5.2 Endpoints de Schedule
 - [x] Criar `app/api/schedule.py`:
-  - [ ] `GET /schedule/list` (listar ScheduleVersions - filtrado por tenant)
-  - [ ] `POST /schedule` (criar ScheduleVersion - filtrado por tenant)
-  - [ ] `GET /schedule/{id}` (detalhes - validar tenant)
+  - [x] `GET /schedule/list` (listar ScheduleVersions - filtrado por tenant)
+  - [x] `POST /schedule` (criar ScheduleVersion - filtrado por tenant)
+  - [x] `GET /schedule/{id}` (detalhes - validar tenant)
   - [x] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
   - [x] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
   - [x] Retornar URL presignada do S3
@@ -816,13 +816,13 @@ Antes de considerar completo, verificar:
 
 ### 10.1 Menu / Navegação
 
-- [ ] Adicionar nova opção no menu lateral
-  - [ ] Posição: abaixo de **Dashboard**
-  - [ ] Label: **Hospitais**
-  - [ ] Ícone coerente com cadastro/configuração
-  - [ ] Rota: `/hospital`
+- [x] Adicionar nova opção no menu lateral
+  - [x] Posição: abaixo de **Dashboard**
+  - [x] Label: **Hospitais**
+  - [x] Ícone coerente com cadastro/configuração
+  - [x] Rota: `/hospital`
 
-- [ ] Garantir visibilidade apenas para usuários com permissão administrativa do tenant
+- [x] Garantir visibilidade apenas para usuários com permissão administrativa do tenant
 
 ---
 
@@ -832,7 +832,8 @@ Antes de considerar completo, verificar:
   - [x] `id`
   - [x] `tenant_id` (FK, obrigatório)
   - [x] `name` (obrigatório)
-  - [x] `prompt` (obrigatório)
+  - [x] `prompt` (nullable, pode ser None)
+  - [x] `color` (nullable, formato hexadecimal)
   - [x] `created_at` (`timestamptz`)
   - [x] `updated_at` (`timestamptz`)
   - [x] `unique (tenant_id, name)`
@@ -848,11 +849,12 @@ Antes de considerar completo, verificar:
   - [x] `GET /hospital/list` (listar)
   - [x] `GET /hospital/{id}` (detalhe)
   - [x] `PUT /hospital/{id}` (editar)
-  - [x] (Opcional) bloquear delete por enquanto
+  - [x] `DELETE /hospital/{id}` (deletar, com validação de arquivos associados)
 
 - [x] Validações
   - [x] `name` obrigatório e único por tenant
-  - [x] `prompt` obrigatório
+  - [x] `prompt` pode ser nullable (não obrigatório)
+  - [x] `color` opcional, formato hexadecimal (#RRGGBB)
   - [x] Hospital sempre pertence ao tenant do usuário logado
 
 ---
@@ -894,23 +896,25 @@ Antes de considerar completo, verificar:
 
 ### 10.5 Frontend – Tela de Hospitais (CRUD)
 
-- [ ] Página `/hospital`
-  - [ ] Lista de hospitais do tenant
-  - [ ] Mostrar: nome, data de criação
-  - [ ] Ação: editar
+- [x] Página `/hospital`
+  - [x] Lista de hospitais do tenant
+  - [x] Mostrar: nome, data de criação, cor
+  - [x] Ação: editar e deletar
 
-- [ ] Criar hospital
-  - [ ] Campo **Nome**
-  - [ ] Campo **Prompt** (textarea grande, monoespaçado)
-  - [ ] Validação de obrigatoriedade
+- [x] Criar hospital
+  - [x] Campo **Nome**
+  - [x] Campo **Prompt** (textarea grande, monoespaçado)
+  - [x] Campo **Cor** (ColorPicker para seleção de cor hexadecimal)
+  - [x] Validação de obrigatoriedade do nome
 
-- [ ] Editar hospital
-  - [ ] Permitir alterar nome e prompt
-  - [ ] Bloquear edição do tenant
+- [x] Editar hospital
+  - [x] Permitir alterar nome, prompt e cor
+  - [x] Bloquear edição do tenant (validação no backend)
 
-- [ ] UX
-  - [ ] Aviso claro de que o prompt influencia a leitura dos arquivos
-  - [ ] Evitar delete (ou exigir confirmação forte, se existir)
+- [x] UX
+  - [x] Aviso claro de que o prompt influencia a leitura dos arquivos
+  - [x] Delete com validação (não permite deletar se houver arquivos associados)
+  - [x] Seleção múltipla para exclusão em lote
 
 ---
 
@@ -918,7 +922,7 @@ Antes de considerar completo, verificar:
 
 - [x] Confirmar que:
   - [x] Todo `file` referencia um `hospital_id`
-  - [ ] O hospital default pode ser usado no upload sem ajustes
+  - [x] O hospital default pode ser usado no upload sem ajustes
   - [x] O filtro por hospital no painel de arquivos lista este hospital
 
 ---
