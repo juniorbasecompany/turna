@@ -1151,6 +1151,7 @@ async def schedule_generate(
 class HospitalCreate(PydanticBaseModel):
     name: str
     prompt: str | None = None
+    color: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -1167,10 +1168,31 @@ class HospitalCreate(PydanticBaseModel):
         stripped = v.strip() if isinstance(v, str) else v
         return None if not stripped else stripped
 
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip() if isinstance(v, str) else v
+        if not stripped:
+            return None
+        # Validar formato hexadecimal (#RRGGBB)
+        if not stripped.startswith('#'):
+            raise ValueError("Cor deve começar com #")
+        hex_part = stripped[1:]
+        if len(hex_part) != 6:
+            raise ValueError("Cor deve ter 6 dígitos hexadecimais após o #")
+        try:
+            int(hex_part, 16)
+        except ValueError:
+            raise ValueError("Cor deve conter apenas caracteres hexadecimais válidos")
+        return stripped.upper()
+
 
 class HospitalUpdate(PydanticBaseModel):
     name: str | None = None
     prompt: str | None = None
+    color: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -1187,12 +1209,33 @@ class HospitalUpdate(PydanticBaseModel):
         stripped = v.strip() if isinstance(v, str) else v
         return None if not stripped else stripped
 
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip() if isinstance(v, str) else v
+        if not stripped:
+            return None
+        # Validar formato hexadecimal (#RRGGBB)
+        if not stripped.startswith('#'):
+            raise ValueError("Cor deve começar com #")
+        hex_part = stripped[1:]
+        if len(hex_part) != 6:
+            raise ValueError("Cor deve ter 6 dígitos hexadecimais após o #")
+        try:
+            int(hex_part, 16)
+        except ValueError:
+            raise ValueError("Cor deve conter apenas caracteres hexadecimais válidos")
+        return stripped.upper()
+
 
 class HospitalResponse(PydanticBaseModel):
     id: int
     tenant_id: int
     name: str
     prompt: str | None
+    color: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -1238,6 +1281,7 @@ def create_hospital(
             tenant_id=membership.tenant_id,
             name=body.name,
             prompt=body.prompt,
+            color=body.color,
         )
         logger.info(f"Objeto Hospital criado: tenant_id={hospital.tenant_id}, name={hospital.name}, prompt={hospital.prompt}")
 
@@ -1407,6 +1451,9 @@ def update_hospital(
         if body.prompt is not None:
             hospital.prompt = body.prompt
             logger.info(f"Prompt atualizado: {body.prompt}")
+        if body.color is not None:
+            hospital.color = body.color
+            logger.info(f"Cor atualizada: {body.color}")
         hospital.updated_at = utc_now()
 
         logger.info(f"Objeto Hospital antes do commit: tenant_id={hospital.tenant_id}, name={hospital.name}, prompt={hospital.prompt}")
@@ -1463,7 +1510,7 @@ def delete_hospital(
     """
     try:
         logger.info(f"Deletando hospital id={hospital_id} para tenant_id={membership.tenant_id}")
-        
+
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             logger.warning(f"Hospital não encontrado: id={hospital_id}")
@@ -1477,7 +1524,7 @@ def delete_hospital(
         files_count = session.exec(
             select(func.count(File.id)).where(File.hospital_id == hospital_id)
         ).one()
-        
+
         if files_count > 0:
             logger.warning(f"Não é possível deletar hospital {hospital_id}: há {files_count} arquivo(s) associado(s)")
             raise HTTPException(
