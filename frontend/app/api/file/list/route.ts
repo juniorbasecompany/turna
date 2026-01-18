@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const startAt = searchParams.get('start_at')
         const endAt = searchParams.get('end_at')
+        const hospitalId = searchParams.get('hospital_id')
         const limit = searchParams.get('limit') || '19'
         const offset = searchParams.get('offset') || '0'
 
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
         const url = new URL(`${API_URL}/file/list`)
         if (startAt) url.searchParams.set('start_at', startAt)
         if (endAt) url.searchParams.set('end_at', endAt)
+        if (hospitalId) url.searchParams.set('hospital_id', hospitalId)
         url.searchParams.set('limit', limit)
         url.searchParams.set('offset', offset)
 

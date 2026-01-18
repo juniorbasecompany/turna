@@ -140,6 +140,62 @@ function getFileTypeInfo(contentType: string): { icon: JSX.Element; colorClass: 
 }
 
 /**
+ * Obtém classes de cor para o card baseado no status do job
+ */
+function getJobStatusCardClasses(jobStatus: string | null): { border: string; bg: string; text: string } {
+    switch (jobStatus) {
+        case 'PENDING':
+            return {
+                border: 'border-yellow-300',
+                bg: 'bg-yellow-50',
+                text: 'text-yellow-900'
+            }
+        case 'RUNNING':
+            return {
+                border: 'border-blue-300',
+                bg: 'bg-blue-50',
+                text: 'text-blue-900'
+            }
+        case 'COMPLETED':
+            return {
+                border: 'border-green-300',
+                bg: 'bg-green-50',
+                text: 'text-green-900'
+            }
+        case 'FAILED':
+            return {
+                border: 'border-red-300',
+                bg: 'bg-red-50',
+                text: 'text-red-900'
+            }
+        default:
+            return {
+                border: 'border-slate-200',
+                bg: 'bg-white',
+                text: 'text-gray-900'
+            }
+    }
+}
+
+/**
+ * Obtém o texto descritivo do status do job
+ */
+function getJobStatusText(jobStatus: string | null): string {
+    switch (jobStatus) {
+        case 'PENDING':
+            return 'Na fila para ser lido'
+        case 'RUNNING':
+            return 'Lendo o conteúdo do arquivo'
+        case 'COMPLETED':
+            return 'Conteúdo lido'
+        case 'FAILED':
+            return 'Não foi possível ler o conteúdo'
+        default:
+            return 'Pronto para ser lido'
+    }
+}
+
+/**
  * Abre o arquivo em nova aba (visualização ou download se necessário)
  */
 function handleFileDownload(fileId: number, filename: string) {
@@ -297,6 +353,7 @@ export default function FilesPage() {
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
     const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
     const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
@@ -327,6 +384,11 @@ export default function FilesPage() {
     const [limit] = useState(19) // Limite padrão
     const [offset, setOffset] = useState(0)
 
+    // Flash vermelho no card de upload quando não há hospital selecionado
+    const [uploadCardFlash, setUploadCardFlash] = useState(false)
+    // Flash vermelho no campo hospital quando não há hospital selecionado
+    const [hospitalFieldFlash, setHospitalFieldFlash] = useState(false)
+
     // Carregar hospitais ao montar
     useEffect(() => {
         async function loadHospitalList() {
@@ -339,12 +401,6 @@ export default function FilesPage() {
                 if (response.ok) {
                     const data: HospitalListResponse = await response.json()
                     setHospitalList(data.items)
-
-                    // Selecionar automaticamente o hospital default (nome "Hospital") ou o primeiro da lista
-                    if (data.items.length > 0 && !selectedHospitalId) {
-                        const defaultHospital = data.items.find(h => h.name === 'Hospital') || data.items[0]
-                        setSelectedHospitalId(defaultHospital.id)
-                    }
                 }
             } catch (err) {
                 console.error('Erro ao carregar hospitais:', err)
@@ -383,6 +439,7 @@ export default function FilesPage() {
                 const url = new URL('/api/file/list', window.location.origin)
                 if (startAt) url.searchParams.set('start_at', startAt)
                 if (endAt) url.searchParams.set('end_at', endAt)
+                if (selectedHospitalId) url.searchParams.set('hospital_id', String(selectedHospitalId))
                 url.searchParams.set('limit', String(limit))
                 url.searchParams.set('offset', String(offset))
 
@@ -452,6 +509,7 @@ export default function FilesPage() {
     const handleHospitalChange = (hospitalId: string) => {
         setSelectedHospitalId(hospitalId ? parseInt(hospitalId) : null)
         setOffset(0) // Resetar paginação ao mudar filtro
+        setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
 
     // Toggle seleção de arquivo para exclusão
@@ -566,7 +624,7 @@ export default function FilesPage() {
             // 1. Upload do arquivo
             // Validar que há hospital selecionado
             if (!selectedHospitalId) {
-                throw new Error('Selecione um hospital no filtro antes de fazer upload')
+                throw new Error('Selecione o hospital')
             }
 
             const formData = new FormData()
@@ -607,7 +665,7 @@ export default function FilesPage() {
                 return newPending
             })
         }
-    }, [])
+    }, [selectedHospitalId])
 
     // Função para adicionar arquivos à lista (usada tanto pelo input quanto pelo drag&drop)
     const addFilesToList = useCallback((files: File[]) => {
@@ -684,8 +742,19 @@ export default function FilesPage() {
 
     // Abrir seletor de arquivos ao clicar no card
     const handleUploadCardClick = useCallback(() => {
+        if (!selectedHospitalId) {
+            setUploadCardFlash(true)
+            setHospitalFieldFlash(true)
+            // Remover o flash após 1 segundo
+            setTimeout(() => {
+                setUploadCardFlash(false)
+                setHospitalFieldFlash(false)
+            }, 1000)
+            return
+        }
+        setBottomBarMessage(null)
         fileInputRef.current?.click()
-    }, [])
+    }, [selectedHospitalId])
 
 
     // Remover arquivo pendente
@@ -969,9 +1038,12 @@ export default function FilesPage() {
                                 id="hospital-filter"
                                 value={selectedHospitalId || ''}
                                 onChange={(e) => handleHospitalChange(e.target.value)}
-                                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
+                                        ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                                    }`}
                             >
-                                <option value="">Todos os hospitais</option>
+                                <option value=""></option>
                                 {hospitalList.map((hospital) => (
                                     <option key={hospital.id} value={hospital.id}>
                                         {hospital.name}
@@ -1040,14 +1112,25 @@ export default function FilesPage() {
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
-                            className={`group rounded-xl border-2 border-dashed bg-white p-4 min-w-0 cursor-pointer transition-all duration-200 flex flex-col items-center justify-center min-h-[200px] ${isDragging
+                            className={`group rounded-xl border-2 border-dashed bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px] overflow-hidden ${isDragging
                                 ? 'border-blue-500 bg-blue-50'
-                                : 'border-slate-300'
+                                : uploadCardFlash
+                                    ? 'border-red-500 bg-red-50'
+                                    : 'border-slate-300'
                                 }`}
                         >
-                            <div className="flex flex-col items-center justify-center text-center px-2">
+                            {/* Compartimento superior para mensagem */}
+                            <div className="h-8 flex items-center justify-center">
+                                {uploadCardFlash && (
+                                    <p className="text-sm font-medium text-red-700 text-center">
+                                        Selecione o hospital
+                                    </p>
+                                )}
+                            </div>
+                            {/* Conteúdo principal do card */}
+                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
                                 <svg
-                                    className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : 'text-slate-400'}`}
+                                    className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : uploadCardFlash ? 'text-red-600' : 'text-slate-400'}`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -1191,28 +1274,41 @@ export default function FilesPage() {
                         {files.map((file) => {
                             const fileTypeInfo = getFileTypeInfo(file.content_type)
                             const isSelected = selectedFiles.has(file.id)
+                            const isSelectedForReading = selectedFilesForReading.has(file.id)
+                            const jobStatusClasses = getJobStatusCardClasses(file.job_status)
+
+                            // Priorizar cores de seleção sobre cores de status
+                            let cardClasses = 'group rounded-xl border p-4 min-w-0 transition-all duration-200'
+                            if (isSelected) {
+                                cardClasses += ' border-red-300 ring-2 ring-red-200 bg-red-50'
+                            } else if (isSelectedForReading) {
+                                cardClasses += ' border-blue-300 ring-2 ring-blue-200 bg-blue-50'
+                            } else {
+                                cardClasses += ` ${jobStatusClasses.border} ${jobStatusClasses.bg}`
+                            }
+
                             return (
                                 <div
                                     key={file.id}
-                                    className={`group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 ${isSelected
-                                        ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                        : selectedFilesForReading.has(file.id)
-                                            ? 'border-blue-300 ring-2 ring-blue-200 bg-blue-50'
-                                            : 'border-slate-200'
-                                        }`}
+                                    className={cardClasses}
                                 >
                                     {/* 1. Topo - Identidade do arquivo */}
-                                    <div className="mb-3 flex items-start gap-2 min-w-0">
-                                        <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                            {fileTypeInfo.icon}
+                                    <div className="mb-3 flex flex-col gap-1 min-w-0">
+                                        <span className="text-xs text-slate-500 truncate">
+                                            {file.hospital_name}
+                                        </span>
+                                        <div className="flex items-start gap-2 min-w-0">
+                                            <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                {fileTypeInfo.icon}
+                                            </div>
+                                            <h3
+                                                className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
+                                                    }`}
+                                                title={file.filename}
+                                            >
+                                                {file.filename}
+                                            </h3>
                                         </div>
-                                        <h3
-                                            className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
-                                                }`}
-                                            title={file.filename}
-                                        >
-                                            {file.filename}
-                                        </h3>
                                     </div>
 
                                     {/* 2. Corpo - Preview */}
@@ -1228,14 +1324,7 @@ export default function FilesPage() {
                                         {/* Metadados à esquerda */}
                                         <div className="flex flex-col min-w-0 flex-1">
                                             <span className="text-xs text-slate-400 truncate mb-0.5">
-                                                {file.job_status === 'PENDING' ? 'Na fila para ser lido' :
-                                                    file.job_status === 'RUNNING' ? 'Lendo o conteúdo do arquivo' :
-                                                        file.job_status === 'COMPLETED' ? 'Conteúdo lido' :
-                                                            file.job_status === 'FAILED' ? 'Não foi possível ler o conteúdo' :
-                                                                'Pronto para ser lido'}
-                                            </span>
-                                            <span className="text-xs text-slate-500 truncate mb-0.5">
-                                                {file.hospital_name}
+                                                {getJobStatusText(file.job_status)}
                                             </span>
                                             <span className="text-sm text-slate-500 truncate">
                                                 {settings
@@ -1314,16 +1403,22 @@ export default function FilesPage() {
             <BottomActionBar
                 leftContent={
                     <div className="text-sm text-gray-600">
-                        Total de arquivos: <span className="font-medium">{total}</span>
-                        {selectedFilesForReading.size > 0 && (
-                            <span className="ml-2 sm:ml-4 text-blue-600">
-                                {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
-                            </span>
-                        )}
-                        {selectedFiles.size > 0 && (
-                            <span className="ml-2 sm:ml-4 text-red-600">
-                                {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
-                            </span>
+                        {bottomBarMessage ? (
+                            <span className="text-red-600">{bottomBarMessage}</span>
+                        ) : (
+                            <>
+                                Total de arquivos: <span className="font-medium">{total}</span>
+                                {selectedFilesForReading.size > 0 && (
+                                    <span className="ml-2 sm:ml-4 text-blue-600">
+                                        {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
+                                    </span>
+                                )}
+                                {selectedFiles.size > 0 && (
+                                    <span className="ml-2 sm:ml-4 text-red-600">
+                                        {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
+                                    </span>
+                                )}
+                            </>
                         )}
                     </div>
                 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { formatDateTime } from '@/lib/tenantFormat'
 import {
   HospitalResponse,
   HospitalListResponse,
@@ -9,6 +11,7 @@ import {
 } from '@/types/api'
 
 export default function HospitalPage() {
+  const { settings } = useTenantSettings()
   const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -169,50 +172,78 @@ export default function HospitalPage() {
           <p className="text-gray-600">Nenhum hospital cadastrado ainda.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nome
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Criado em
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {hospitals.map((hospital) => (
-                  <tr key={hospital.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{hospital.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-600">
-                        {new Date(hospital.created_at).toLocaleDateString('pt-BR', {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {hospitals.map((hospital) => (
+            <div
+              key={hospital.id}
+              className="group rounded-xl border border-slate-200 bg-white p-4 min-w-0 transition-all duration-200 hover:border-slate-300"
+            >
+              {/* 1. Topo - Nome do hospital */}
+              <div className="mb-3 flex items-start gap-2 min-w-0">
+                <div className="shrink-0 text-blue-500">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                    />
+                  </svg>
+                </div>
+                <h3
+                  className="text-sm font-semibold truncate min-w-0 flex-1 text-gray-900"
+                  title={hospital.name}
+                >
+                  {hospital.name}
+                </h3>
+              </div>
+
+              {/* 2. Corpo - Ícone de hospital */}
+              <div className="mb-3">
+                <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center text-blue-500">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                      <svg
+                        className="w-full h-full"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-medium">HOSPITAL</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Rodapé - Metadados e ações */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-sm text-slate-500 truncate">
+                    {settings
+                      ? formatDateTime(hospital.created_at, settings)
+                      : new Date(hospital.created_at).toLocaleDateString('pt-BR', {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric',
                         })}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleEditClick(hospital)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleEditClick(hospital)}
+                  className="shrink-0 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-all duration-200"
+                >
+                  Editar
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
