@@ -4,7 +4,7 @@ import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActio
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface FileResponse {
     id: number
@@ -14,6 +14,7 @@ interface FileResponse {
     created_at: string
     hospital_id: number
     hospital_name: string
+    hospital_color: string | null
     can_delete: boolean
     job_status: string | null
 }
@@ -142,37 +143,42 @@ function getFileTypeInfo(contentType: string): { icon: JSX.Element; colorClass: 
 /**
  * Obtém classes de cor para o card baseado no status do job
  */
-function getJobStatusCardClasses(jobStatus: string | null): { border: string; bg: string; text: string } {
+function getJobStatusCardClasses(jobStatus: string | null): { border: string; bg: string; text: string; borderColor: string } {
     switch (jobStatus) {
         case 'PENDING':
             return {
                 border: 'border-yellow-300',
                 bg: 'bg-yellow-50',
-                text: 'text-yellow-900'
+                text: 'text-yellow-900',
+                borderColor: '#FCD34D' // yellow-300
             }
         case 'RUNNING':
             return {
                 border: 'border-blue-300',
                 bg: 'bg-blue-50',
-                text: 'text-blue-900'
+                text: 'text-blue-900',
+                borderColor: '#93C5FD' // blue-300
             }
         case 'COMPLETED':
             return {
                 border: 'border-green-300',
                 bg: 'bg-green-50',
-                text: 'text-green-900'
+                text: 'text-green-900',
+                borderColor: '#86EFAC' // green-300
             }
         case 'FAILED':
             return {
                 border: 'border-red-300',
                 bg: 'bg-red-50',
-                text: 'text-red-900'
+                text: 'text-red-900',
+                borderColor: '#FCA5A5' // red-300
             }
         default:
             return {
                 border: 'border-slate-200',
                 bg: 'bg-white',
-                text: 'text-gray-900'
+                text: 'text-gray-900',
+                borderColor: '#E2E8F0' // slate-200
             }
     }
 }
@@ -380,6 +386,11 @@ export default function FilesPage() {
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
+    // Filtro de status
+    const [selectedStatuses, setSelectedStatuses] = useState<Set<JobStatus | null>>(
+        new Set(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]) // Todos selecionados por padrão
+    )
+
     // Paginação
     const [limit] = useState(19) // Limite padrão
     const [offset, setOffset] = useState(0)
@@ -511,6 +522,39 @@ export default function FilesPage() {
         setOffset(0) // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
+
+    // Toggle seleção de status
+    const toggleStatus = (status: JobStatus | null) => {
+        setSelectedStatuses((prev) => {
+            const newSet = new Set(prev)
+            if (newSet.has(status)) {
+                newSet.delete(status)
+            } else {
+                newSet.add(status)
+            }
+            return newSet
+        })
+        setOffset(0) // Resetar paginação ao mudar filtro
+    }
+
+    // Selecionar/deselecionar todos os status
+    const toggleAllStatuses = () => {
+        const allStatuses: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
+        const allSelected = allStatuses.every((status) => selectedStatuses.has(status))
+        
+        if (allSelected) {
+            setSelectedStatuses(new Set())
+        } else {
+            setSelectedStatuses(new Set(allStatuses))
+        }
+        setOffset(0) // Resetar paginação ao mudar filtro
+    }
+
+    // Verificar se todos os status estão selecionados
+    const allStatusesSelected = useMemo(() => {
+        const allStatuses: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
+        return allStatuses.every((status) => selectedStatuses.has(status))
+    }, [selectedStatuses])
 
     // Toggle seleção de arquivo para exclusão
     const toggleFileSelection = (fileId: number) => {
@@ -1026,47 +1070,93 @@ export default function FilesPage() {
 
             {/* Filtro por período e hospital */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <div className="flex-1 sm:flex-initial sm:w-64">
-                        <label htmlFor="hospital-filter" className="block text-sm font-medium text-gray-700 mb-2">
-                            Hospital
-                        </label>
-                        {loadingHospitalList ? (
-                            <div className="text-sm text-gray-500">Carregando...</div>
-                        ) : (
-                            <select
-                                id="hospital-filter"
-                                value={selectedHospitalId || ''}
-                                onChange={(e) => handleHospitalChange(e.target.value)}
-                                className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
+                <div className="flex flex-col gap-4">
+                    {/* Primeira linha: Hospital e Datas */}
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <div className="flex-1 sm:flex-initial sm:w-64">
+                            <label htmlFor="hospital-filter" className="block text-sm font-medium text-gray-700 mb-2">
+                                Hospital
+                            </label>
+                            {loadingHospitalList ? (
+                                <div className="text-sm text-gray-500">Carregando...</div>
+                            ) : (
+                                <select
+                                    id="hospital-filter"
+                                    value={selectedHospitalId || ''}
+                                    onChange={(e) => handleHospitalChange(e.target.value)}
+                                    className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
                                         ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
                                         : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                    }`}
-                            >
-                                <option value=""></option>
-                                {hospitalList.map((hospital) => (
-                                    <option key={hospital.id} value={hospital.id}>
-                                        {hospital.name}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
+                                        }`}
+                                >
+                                    <option value=""></option>
+                                    {hospitalList.map((hospital) => (
+                                        <option key={hospital.id} value={hospital.id}>
+                                            {hospital.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
+                            <TenantDatePicker
+                                label="Cadastrados deste"
+                                value={startDate}
+                                onChange={handleStartDateChange}
+                                id="start_at"
+                                name="start_at"
+                            />
+                            <TenantDatePicker
+                                label="Cadastrados até"
+                                value={endDate}
+                                onChange={handleEndDateChange}
+                                id="end_at"
+                                name="end_at"
+                            />
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
-                        <TenantDatePicker
-                            label="Cadastrados deste"
-                            value={startDate}
-                            onChange={handleStartDateChange}
-                            id="start_at"
-                            name="start_at"
-                        />
-                        <TenantDatePicker
-                            label="Cadastrados até"
-                            value={endDate}
-                            onChange={handleEndDateChange}
-                            id="end_at"
-                            name="end_at"
-                        />
+                    
+                    {/* Segunda linha: Filtro de Status */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Status
+                        </label>
+                        <div className="flex flex-wrap gap-3 sm:gap-4">
+                            {/* Botão para selecionar/deselecionar todos */}
+                            <label className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={allStatusesSelected}
+                                    onChange={toggleAllStatuses}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                />
+                                <span className="text-gray-700 cursor-pointer">Todos</span>
+                            </label>
+                            
+                            {/* Checkbox para cada status */}
+                            {([
+                                { status: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
+                                { status: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
+                                { status: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
+                                { status: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
+                                { status: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
+                            ] as const).map(({ status, label, color }) => (
+                                <label
+                                    key={status === null ? 'null' : status}
+                                    className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStatuses.has(status)}
+                                        onChange={() => toggleStatus(status)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <span className={`${color} cursor-pointer`}>{label}</span>
+                                </label>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 {startDate && endDate && startDate > endDate && (
@@ -1092,10 +1182,18 @@ export default function FilesPage() {
             )}
 
             {/* Lista de arquivos */}
-            {!loading && !error && (
-                <>
-                    {/* Cards de arquivos */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+            {!loading && !error && (() => {
+                // Filtrar arquivos por status
+                const filteredFiles = files.filter((file) => {
+                    const status = file.job_status === null ? null : (file.job_status as JobStatus)
+                    return selectedStatuses.has(status)
+                })
+                const filteredTotal = filteredFiles.length
+
+                return (
+                    <>
+                        {/* Cards de arquivos */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
                         {/* Card de upload - sempre o primeiro */}
                         <input
                             ref={fileInputRef}
@@ -1271,29 +1369,41 @@ export default function FilesPage() {
                             })}
 
                         {/* Renderizar arquivos existentes */}
-                        {files.map((file) => {
+                        {filteredFiles.map((file) => {
                             const fileTypeInfo = getFileTypeInfo(file.content_type)
                             const isSelected = selectedFiles.has(file.id)
                             const isSelectedForReading = selectedFilesForReading.has(file.id)
                             const jobStatusClasses = getJobStatusCardClasses(file.job_status)
 
-                            // Priorizar cores de seleção sobre cores de status
-                            let cardClasses = 'group rounded-xl border p-4 min-w-0 transition-all duration-200'
+                            // Calcular cor do hospital (com fallback para branco se não houver cor)
+                            const hospitalColor = file.hospital_color || '#FFFFFF'
+                            const hospitalBorderColor = file.hospital_color || '#E2E8F0' // slate-200 como fallback
+
+                            // Aplicar destaque na borda quando selecionado
+                            let cardBorderClasses = ''
+                            let cardBgStyle: React.CSSProperties = {}
+
                             if (isSelected) {
-                                cardClasses += ' border-red-300 ring-2 ring-red-200 bg-red-50'
+                                cardBorderClasses = 'border-4 ring-4 ring-red-300'
+                                cardBgStyle.borderColor = '#EF4444' // red-500
                             } else if (isSelectedForReading) {
-                                cardClasses += ' border-blue-300 ring-2 ring-blue-200 bg-blue-50'
+                                cardBorderClasses = 'border-4 ring-4 ring-blue-300'
+                                cardBgStyle.borderColor = '#3B82F6' // blue-500
                             } else {
-                                cardClasses += ` ${jobStatusClasses.border} ${jobStatusClasses.bg}`
+                                cardBorderClasses = 'border border-slate-400'
                             }
 
                             return (
                                 <div
                                     key={file.id}
-                                    className={cardClasses}
+                                    className={`group rounded-xl ${cardBorderClasses} bg-white p-4 min-w-0 transition-all duration-200 flex flex-col`}
+                                    style={cardBgStyle}
                                 >
-                                    {/* 1. Topo - Identidade do arquivo */}
-                                    <div className="mb-3 flex flex-col gap-1 min-w-0">
+                                    {/* 1. Topo - Identidade do arquivo - com cor do hospital */}
+                                    <div 
+                                        className="mb-3 flex flex-col gap-1 min-w-0 rounded-t-xl -mx-4 -mt-4 px-4 pt-4"
+                                        style={{ backgroundColor: hospitalColor }}
+                                    >
                                         <span className="text-xs text-slate-500 truncate">
                                             {file.hospital_name}
                                         </span>
@@ -1302,8 +1412,7 @@ export default function FilesPage() {
                                                 {fileTypeInfo.icon}
                                             </div>
                                             <h3
-                                                className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : selectedFilesForReading.has(file.id) ? 'text-blue-900' : 'text-gray-900'
-                                                    }`}
+                                                className="text-sm font-semibold truncate min-w-0 flex-1 text-gray-900"
                                                 title={file.filename}
                                             >
                                                 {file.filename}
@@ -1312,20 +1421,17 @@ export default function FilesPage() {
                                     </div>
 
                                     {/* 2. Corpo - Preview */}
-                                    <div className="mb-3">
+                                    <div className="mb-3 flex-1">
                                         <FileThumbnail
                                             file={file}
                                             onClick={() => toggleFileSelectionForReading(file.id)}
                                         />
                                     </div>
 
-                                    {/* 3. Rodapé - Metadados à esquerda, ações à direita */}
-                                    <div className="flex items-center justify-between gap-2">
+                                    {/* 3. Metadados e ações */}
+                                    <div className="mb-3 flex items-center justify-between gap-2">
                                         {/* Metadados à esquerda */}
                                         <div className="flex flex-col min-w-0 flex-1">
-                                            <span className="text-xs text-slate-400 truncate mb-0.5">
-                                                {getJobStatusText(file.job_status)}
-                                            </span>
                                             <span className="text-sm text-slate-500 truncate">
                                                 {settings
                                                     ? formatDateTime(file.created_at, settings)
@@ -1364,6 +1470,16 @@ export default function FilesPage() {
                                             </button>
                                         </div>
                                     </div>
+
+                                    {/* 4. Compartimento inferior para status - usa cor do status */}
+                                    <div
+                                        className={`h-10 flex items-center justify-center rounded-b-xl border-t-4 ${jobStatusClasses.bg}`}
+                                        style={{ borderTopColor: jobStatusClasses.borderColor }}
+                                    >
+                                        <span className={`text-sm font-medium text-center ${jobStatusClasses.text}`}>
+                                            {getJobStatusText(file.job_status)}
+                                        </span>
+                                    </div>
                                 </div>
                             )
                         })}
@@ -1373,7 +1489,7 @@ export default function FilesPage() {
                     {total > limit && (
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0 bg-white rounded-lg border border-gray-200 px-4 sm:px-6 py-4">
                             <div className="text-sm text-gray-700 text-center sm:text-left">
-                                Página {currentPage} de {totalPages} ({total} arquivos)
+                                Página {currentPage} de {totalPages} ({total} arquivos{filteredTotal !== total ? `, ${filteredTotal} visíveis` : ''})
                             </div>
                             <div className="flex gap-2 justify-center sm:justify-end">
                                 <button
@@ -1393,8 +1509,9 @@ export default function FilesPage() {
                             </div>
                         </div>
                     )}
-                </>
-            )}
+                    </>
+                )
+            })()}
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
             <BottomActionBarSpacer />
@@ -1408,6 +1525,16 @@ export default function FilesPage() {
                         ) : (
                             <>
                                 Total de arquivos: <span className="font-medium">{total}</span>
+                                {(() => {
+                                    const filteredCount = files.filter((file) => 
+                                        selectedStatuses.has(file.job_status as JobStatus | null)
+                                    ).length
+                                    return filteredCount !== total ? (
+                                        <span className="ml-2 sm:ml-4">
+                                            ({filteredCount} visíveis)
+                                        </span>
+                                    ) : null
+                                })()}
                                 {selectedFilesForReading.size > 0 && (
                                     <span className="ml-2 sm:ml-4 text-blue-600">
                                         {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura

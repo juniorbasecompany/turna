@@ -708,6 +708,7 @@ class FileResponse(PydanticBaseModel):
     created_at: datetime
     hospital_id: int
     hospital_name: str
+    hospital_color: Optional[str] = None  # Cor do hospital em formato hexadecimal (#RRGGBB)
     can_delete: bool  # True se não possui job EXTRACT_DEMAND COMPLETED
     job_status: Optional[str] = None  # Status do job mais recente EXTRACT_DEMAND (PENDING, RUNNING, COMPLETED, FAILED) ou None se não houver job
 
@@ -922,14 +923,15 @@ def list_files(
         hospital_list = session.exec(hospital_query).all()
         hospital_dict = {h.id: h for h in hospital_list}
 
-    # Construir resposta com can_delete, job_status, hospital_id e hospital_name
+    # Construir resposta com can_delete, job_status, hospital_id, hospital_name e hospital_color
     file_responses = []
     for item in items:
         can_delete = item.id not in file_ids_with_completed_job
         job_status = file_id_to_latest_job_status.get(item.id)
         hospital = hospital_dict.get(item.hospital_id)
         hospital_name = hospital.name if hospital else f"Hospital {item.hospital_id}"
-        # Criar FileResponse manualmente incluindo can_delete, job_status, hospital_id e hospital_name
+        hospital_color = hospital.color if hospital else None
+        # Criar FileResponse manualmente incluindo can_delete, job_status, hospital_id, hospital_name e hospital_color
         file_response = FileResponse(
             id=item.id,
             filename=item.filename,
@@ -938,6 +940,7 @@ def list_files(
             created_at=item.created_at,
             hospital_id=item.hospital_id,
             hospital_name=hospital_name,
+            hospital_color=hospital_color,
             can_delete=can_delete,
             job_status=job_status,
         )

@@ -324,7 +324,7 @@ export default function HospitalPage() {
                                 key={hospital.id}
                                 className={`group rounded-xl border p-4 min-w-0 transition-all duration-200 ${isSelected
                                     ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                                    : 'border-slate-400 bg-white hover:border-slate-500'
                                     }`}
                             >
                                 {/* 1. Corpo - Ícone de hospital e nome */}
