@@ -7,5 +7,6 @@ from app.model.job import Job
 from app.model.file import File
 from app.model.schedule_version import ScheduleVersion
 from app.model.hospital import Hospital
+from app.model.demand import Demand
 
-__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion", "Hospital"]
+__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion", "Hospital", "Demand"]

@@ -184,3 +184,60 @@ export interface HospitalUpdateRequest {
   prompt?: string
   color?: string | null
 }
+
+export interface DemandResponse {
+  id: number
+  tenant_id: number
+  hospital_id: number | null
+  job_id: number | null
+  room: string | null
+  start_time: string
+  end_time: string
+  procedure: string
+  anesthesia_type: string | null
+  complexity: string | null
+  skills: string[] | null
+  priority: string | null
+  is_pediatric: boolean
+  notes: string | null
+  source: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DemandListResponse {
+  items: DemandResponse[]
+  total: number
+}
+
+export interface DemandCreateRequest {
+  hospital_id?: number | null
+  job_id?: number | null
+  room?: string | null
+  start_time: string
+  end_time: string
+  procedure: string
+  anesthesia_type?: string | null
+  complexity?: string | null
+  skills?: string[] | null
+  priority?: string | null
+  is_pediatric?: boolean
+  notes?: string | null
+  source?: Record<string, unknown> | null
+}
+
+export interface DemandUpdateRequest {
+  hospital_id?: number | null
+  job_id?: number | null
+  room?: string | null
+  start_time?: string
+  end_time?: string
+  procedure?: string
+  anesthesia_type?: string | null
+  complexity?: string | null
+  skills?: string[] | null
+  priority?: string | null
+  is_pediatric?: boolean
+  notes?: string | null
+  source?: Record<string, unknown> | null
+}

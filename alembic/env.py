@@ -11,7 +11,7 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 # Importa todos os modelos para que o SQLModel os registre
-from app.model import Tenant, Account, Membership, Job, File, ScheduleVersion, Hospital
+from app.model import Tenant, Account, Membership, Job, File, ScheduleVersion, Hospital, Demand
 
 config = context.config
 fileConfig(config.config_file_name)

@@ -29,6 +29,7 @@ from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleVersion, ScheduleStatus
 from app.model.hospital import Hospital
+from app.model.demand import Demand
 from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
@@ -1554,4 +1555,443 @@ def delete_hospital(
         raise HTTPException(
             status_code=500,
             detail=f"Erro inesperado ao deletar hospital: {str(e)}",
+        ) from e
+
+
+# ============================================================================
+# Demand Endpoints
+# ============================================================================
+
+class DemandCreate(PydanticBaseModel):
+    hospital_id: int | None = None
+    job_id: int | None = None
+    room: str | None = None
+    start_time: datetime
+    end_time: datetime
+    procedure: str
+    anesthesia_type: str | None = None
+    complexity: str | None = None
+    skills: list[str] | None = None
+    priority: str | None = None  # "Urgente" | "Emergência" | None
+    is_pediatric: bool = False
+    notes: str | None = None
+    source: dict | None = None
+
+    @field_validator("procedure")
+    @classmethod
+    def validate_procedure_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Campo procedure não pode estar vazio")
+        return v.strip()
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_end_after_start(cls, v: datetime, info) -> datetime:
+        if "start_time" in info.data and v <= info.data["start_time"]:
+            raise ValueError("end_time deve ser maior que start_time")
+        return v
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_timezone(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("Datetime deve ter timezone explícito (timestamptz)")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v_lower = v.strip().lower() if isinstance(v, str) else v
+        if v_lower in {"urgente", "emergência", "emergencia"}:
+            return "Urgente" if "urg" in v_lower else "Emergência"
+        return None
+
+
+class DemandUpdate(PydanticBaseModel):
+    hospital_id: int | None = None
+    job_id: int | None = None
+    room: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    procedure: str | None = None
+    anesthesia_type: str | None = None
+    complexity: str | None = None
+    skills: list[str] | None = None
+    priority: str | None = None
+    is_pediatric: bool | None = None
+    notes: str | None = None
+    source: dict | None = None
+
+    @field_validator("procedure")
+    @classmethod
+    def validate_procedure(cls, v: str | None) -> str | None:
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("Campo procedure não pode estar vazio")
+        return v.strip() if v else None
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_timezone(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("Datetime deve ter timezone explícito (timestamptz)")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v_lower = v.strip().lower() if isinstance(v, str) else v
+        if v_lower in {"urgente", "emergência", "emergencia"}:
+            return "Urgente" if "urg" in v_lower else "Emergência"
+        return None
+
+
+class DemandResponse(PydanticBaseModel):
+    id: int
+    tenant_id: int
+    hospital_id: int | None
+    job_id: int | None
+    room: str | None
+    start_time: datetime
+    end_time: datetime
+    procedure: str
+    anesthesia_type: str | None
+    complexity: str | None
+    skills: list[str] | None
+    priority: str | None
+    is_pediatric: bool
+    notes: str | None
+    source: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DemandListResponse(PydanticBaseModel):
+    items: list[DemandResponse]
+    total: int
+
+
+@router.post("/demand", response_model=DemandResponse, status_code=201, tags=["Demand"])
+def create_demand(
+    body: DemandCreate,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria uma nova demanda.
+    Valida que hospital_id e job_id (se fornecidos) pertencem ao tenant atual.
+    """
+    try:
+        logger.info(f"Criando demanda: procedure={body.procedure}, tenant_id={membership.tenant_id}")
+
+        # Validar hospital_id se fornecido
+        if body.hospital_id is not None:
+            hospital = session.get(Hospital, body.hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
+        # Validar job_id se fornecido
+        if body.job_id is not None:
+            job = session.get(Job, body.job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail="Job não encontrado")
+            if job.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+
+        demand = Demand(
+            tenant_id=membership.tenant_id,
+            hospital_id=body.hospital_id,
+            job_id=body.job_id,
+            room=body.room,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            procedure=body.procedure,
+            anesthesia_type=body.anesthesia_type,
+            complexity=body.complexity,
+            skills=body.skills,
+            priority=body.priority,
+            is_pediatric=body.is_pediatric,
+            notes=body.notes,
+            source=body.source,
+        )
+
+        session.add(demand)
+        session.commit()
+        session.refresh(demand)
+        logger.info(f"Demanda criada com sucesso: id={demand.id}")
+        return demand
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao criar demanda: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar demanda: {str(e)}",
+        ) from e
+
+
+@router.get("/demand/list", response_model=DemandListResponse, tags=["Demand"])
+def list_demands(
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id"),
+    job_id: Optional[int] = Query(None, description="Filtrar por job_id"),
+    start_at: Optional[datetime] = Query(None, description="Filtrar por start_time >= start_at (timestamptz em ISO 8601)"),
+    end_at: Optional[datetime] = Query(None, description="Filtrar por end_time <= end_at (timestamptz em ISO 8601)"),
+    is_pediatric: Optional[bool] = Query(None, description="Filtrar por is_pediatric"),
+    priority: Optional[str] = Query(None, description="Filtrar por priority (Urgente, Emergência)"),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista demandas do tenant atual, com filtros opcionais e paginação.
+    Sempre filtra por tenant_id do JWT (via membership).
+    Ordena por start_time crescente.
+    """
+    try:
+        logger.info(f"Listando demandas para tenant_id={membership.tenant_id}")
+
+        # Query base - sempre filtrar por tenant_id
+        query = select(Demand).where(Demand.tenant_id == membership.tenant_id)
+
+        # Aplicar filtros
+        if hospital_id is not None:
+            hospital = session.get(Hospital, hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+            query = query.where(Demand.hospital_id == hospital_id)
+
+        if job_id is not None:
+            job = session.get(Job, job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail="Job não encontrado")
+            if job.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+            query = query.where(Demand.job_id == job_id)
+
+        if start_at is not None:
+            if start_at.tzinfo is None:
+                raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
+            query = query.where(Demand.start_time >= start_at)
+
+        if end_at is not None:
+            if end_at.tzinfo is None:
+                raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
+            query = query.where(Demand.end_time <= end_at)
+
+        if is_pediatric is not None:
+            query = query.where(Demand.is_pediatric == is_pediatric)
+
+        if priority is not None:
+            if priority not in {"Urgente", "Emergência"}:
+                raise HTTPException(status_code=400, detail="priority inválido (esperado: Urgente, Emergência)")
+            query = query.where(Demand.priority == priority)
+
+        # Validar intervalo
+        if start_at is not None and end_at is not None:
+            if start_at > end_at:
+                raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
+
+        # Contar total antes de aplicar paginação
+        count_query = select(func.count(Demand.id)).where(Demand.tenant_id == membership.tenant_id)
+        if hospital_id is not None:
+            count_query = count_query.where(Demand.hospital_id == hospital_id)
+        if job_id is not None:
+            count_query = count_query.where(Demand.job_id == job_id)
+        if start_at is not None:
+            count_query = count_query.where(Demand.start_time >= start_at)
+        if end_at is not None:
+            count_query = count_query.where(Demand.end_time <= end_at)
+        if is_pediatric is not None:
+            count_query = count_query.where(Demand.is_pediatric == is_pediatric)
+        if priority is not None:
+            count_query = count_query.where(Demand.priority == priority)
+        total = session.exec(count_query).one()
+
+        # Aplicar ordenação e paginação (start_time crescente)
+        query = query.order_by(Demand.start_time.asc()).limit(limit).offset(offset)
+
+        items = session.exec(query).all()
+        logger.info(f"Encontradas {total} demandas, retornando {len(items)}")
+
+        return DemandListResponse(
+            items=[DemandResponse.model_validate(item) for item in items],
+            total=total,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar demandas: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar demandas: {str(e)}",
+        ) from e
+
+
+@router.get("/demand/{demand_id}", response_model=DemandResponse, tags=["Demand"])
+def get_demand(
+    demand_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Obtém detalhes de uma demanda específica.
+    Valida que a demanda pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Buscando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+        demand = session.get(Demand, demand_id)
+        if not demand:
+            logger.warning(f"Demanda não encontrada: id={demand_id}")
+            raise HTTPException(status_code=404, detail="Demanda não encontrada")
+        if demand.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        logger.info(f"Demanda encontrada: id={demand.id}, procedure={demand.procedure}")
+        return demand
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar demanda: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar demanda: {str(e)}",
+        ) from e
+
+
+@router.put("/demand/{demand_id}", response_model=DemandResponse, tags=["Demand"])
+def update_demand(
+    demand_id: int,
+    body: DemandUpdate,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza uma demanda.
+    Valida que a demanda pertence ao tenant atual.
+    Valida que hospital_id e job_id (se fornecidos) pertencem ao tenant atual.
+    """
+    try:
+        logger.info(f"Atualizando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+
+        demand = session.get(Demand, demand_id)
+        if not demand:
+            logger.warning(f"Demanda não encontrada: id={demand_id}")
+            raise HTTPException(status_code=404, detail="Demanda não encontrada")
+        if demand.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Validar hospital_id se fornecido
+        if body.hospital_id is not None:
+            hospital = session.get(Hospital, body.hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
+        # Validar job_id se fornecido
+        if body.job_id is not None:
+            job = session.get(Job, body.job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail="Job não encontrado")
+            if job.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+
+        # Validar end_time > start_time se ambos forem atualizados
+        start_time = body.start_time if body.start_time is not None else demand.start_time
+        end_time = body.end_time if body.end_time is not None else demand.end_time
+        if end_time <= start_time:
+            raise HTTPException(status_code=400, detail="end_time deve ser maior que start_time")
+
+        # Atualizar campos
+        if body.hospital_id is not None:
+            demand.hospital_id = body.hospital_id
+        if body.job_id is not None:
+            demand.job_id = body.job_id
+        if body.room is not None:
+            demand.room = body.room
+        if body.start_time is not None:
+            demand.start_time = body.start_time
+        if body.end_time is not None:
+            demand.end_time = body.end_time
+        if body.procedure is not None:
+            demand.procedure = body.procedure
+        if body.anesthesia_type is not None:
+            demand.anesthesia_type = body.anesthesia_type
+        if body.complexity is not None:
+            demand.complexity = body.complexity
+        if body.skills is not None:
+            demand.skills = body.skills
+        if body.priority is not None:
+            demand.priority = body.priority
+        if body.is_pediatric is not None:
+            demand.is_pediatric = body.is_pediatric
+        if body.notes is not None:
+            demand.notes = body.notes
+        if body.source is not None:
+            demand.source = body.source
+        demand.updated_at = utc_now()
+
+        session.add(demand)
+        session.commit()
+        session.refresh(demand)
+        logger.info(f"Demanda atualizada com sucesso: id={demand.id}")
+        return demand
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar demanda: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar demanda: {str(e)}",
+        ) from e
+
+
+@router.delete("/demand/{demand_id}", status_code=204, tags=["Demand"])
+def delete_demand(
+    demand_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Deleta uma demanda.
+    Valida que a demanda pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Deletando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+
+        demand = session.get(Demand, demand_id)
+        if not demand:
+            logger.warning(f"Demanda não encontrada: id={demand_id}")
+            raise HTTPException(status_code=404, detail="Demanda não encontrada")
+        if demand.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        session.delete(demand)
+        session.commit()
+        logger.info(f"Demanda deletada com sucesso: id={demand_id}")
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao deletar demanda: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao deletar demanda: {str(e)}",
         ) from e
