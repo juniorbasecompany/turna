@@ -2818,20 +2818,41 @@ def send_professional_invite_email(
         )
 
         # Enviar email de convite
-        success = send_professional_invite(
-            to_email=professional.email,
-            professional_name=professional.name,
-            tenant_name=tenant.name,
-        )
+        try:
+            result = send_professional_invite(
+                to_email=professional.email,
+                professional_name=professional.name,
+                tenant_name=tenant.name,
+            )
+
+            # Garantir que o resultado é uma tupla
+            if isinstance(result, tuple) and len(result) == 2:
+                success, error_message = result
+            else:
+                # Fallback se a função retornar apenas bool (código antigo em cache)
+                logger.warning(
+                    f"[INVITE] Função retornou tipo inesperado: {type(result)}. "
+                    f"Esperado: tuple[bool, str]. Usando fallback."
+                )
+                success = bool(result) if isinstance(result, bool) else False
+                error_message = "Erro ao processar envio de email. Reinicie o servidor."
+        except ValueError as e:
+            # Erro de unpacking - função ainda retorna apenas bool
+            logger.error(
+                f"[INVITE] Erro ao desempacotar resultado: {e}. "
+                f"Função pode estar retornando apenas bool. Reinicie o servidor."
+            )
+            success = False
+            error_message = "Erro ao processar envio de email. Reinicie o servidor para aplicar atualizações."
 
         if not success:
             logger.error(
                 f"[INVITE] ❌ FALHA - Envio de convite falhou para profissional ID={professional_id} "
-                f"(email={professional.email})"
+                f"(email={professional.email}): {error_message}"
             )
             raise HTTPException(
                 status_code=500,
-                detail="Erro ao enviar email de convite. Tente novamente mais tarde."
+                detail=error_message or "Erro ao enviar email de convite. Tente novamente mais tarde."
             )
 
         logger.info(

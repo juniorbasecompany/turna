@@ -319,16 +319,7 @@ export default function ProfessionalPage() {
             setEditingProfessional(null)
             setSendInvite(false)
             setShowEditArea(false)
-
-            // Limpar mensagem de email após alguns segundos (se foi sucesso)
-            // A mensagem já foi definida acima no bloco de envio de email
-            if (emailMessageType === 'success') {
-                console.log('[EMAIL-MESSAGE] Agendando limpeza da mensagem de sucesso em 5 segundos')
-                setTimeout(() => {
-                    console.log('[EMAIL-MESSAGE] Limpando mensagem de sucesso')
-                    setEmailMessage(null)
-                }, 5000) // Limpar após 5 segundos
-            }
+            // Mensagem de email permanece visível até o usuário fechar o formulário ou fazer nova ação
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profissional'
             setError(message)

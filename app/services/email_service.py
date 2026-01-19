@@ -4,7 +4,8 @@ Faz fallback para modo "log" quando RESEND_API_KEY não está configurado (desen
 """
 import logging
 import os
-from typing import Optional
+import re
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ def send_professional_invite(
     professional_name: str,
     tenant_name: str,
     app_url: Optional[str] = None,
-) -> bool:
+) -> Tuple[bool, str]:
     """
     Envia email de convite para um profissional se juntar à clínica usando Resend.
     Faz fallback para modo "log" quando RESEND_API_KEY não está configurado.
@@ -127,7 +128,9 @@ def send_professional_invite(
         app_url: URL do aplicativo (opcional, pega de env var se não fornecido)
 
     Returns:
-        True se o email foi enviado com sucesso, False caso contrário
+        Tupla (success: bool, error_message: str):
+        - success: True se o email foi enviado com sucesso, False caso contrário
+        - error_message: Mensagem de erro específica se falhou, string vazia se sucesso
     """
     logger.info(
         f"Iniciando envio de email de convite para {to_email} (profissional: {professional_name}, clínica: {tenant_name})"
@@ -156,29 +159,32 @@ def send_professional_invite(
 
         # Verificar se Resend está disponível e configurado
         if not RESEND_AVAILABLE:
+            error_msg = "Resend não está instalado. Configure o serviço de email."
             logger.warning(
-                f"[EMAIL] Resend não está instalado. Email de convite apenas logado para {to_email}"
+                f"[EMAIL] {error_msg} Email de convite apenas logado para {to_email}"
             )
             logger.info(f"[EMAIL] Assunto: {subject}")
             logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
             logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
-            return True
+            return False, error_msg
 
         if not resend_api_key:
+            error_msg = "Chave de API do Resend não configurada. Configure RESEND_API_KEY no ambiente."
             logger.warning(
-                f"[EMAIL] RESEND_API_KEY não configurado. Email de convite apenas logado para {to_email}"
+                f"[EMAIL] {error_msg} Email de convite apenas logado para {to_email}"
             )
             logger.info(f"[EMAIL] Assunto: {subject}")
             logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
             logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
-            return True
+            return False, error_msg
 
         if not email_from:
+            error_msg = "Endereço de email remetente não configurado. Configure EMAIL_FROM no ambiente."
             logger.error(
-                f"[EMAIL] EMAIL_FROM não configurado. Não é possível enviar email para {to_email}"
+                f"[EMAIL] {error_msg} Não é possível enviar email para {to_email}"
             )
             logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
-            return False
+            return False, error_msg
 
         # Configurar Resend
         resend.api_key = resend_api_key
@@ -199,38 +205,68 @@ def send_professional_invite(
             # Resend retorna um objeto com 'id' quando bem-sucedido
             if email_response and isinstance(email_response, dict) and "id" in email_response:
                 logger.info(
-                    f"Email de convite enviado com sucesso para {to_email} (Resend ID: {email_response['id']})"
+                    f"[EMAIL] ✅ SUCESSO - Email de convite enviado com sucesso para {to_email} (Resend ID: {email_response['id']})"
                 )
-                return True
+                logger.info(f"[EMAIL] Processo concluído com SUCESSO - Email enviado para {to_email}")
+                return True, ""
             elif email_response:
                 # Pode retornar objeto com atributo id
                 email_id = getattr(email_response, "id", None)
                 if email_id:
                     logger.info(
-                        f"Email de convite enviado com sucesso para {to_email} (Resend ID: {email_id})"
+                        f"[EMAIL] ✅ SUCESSO - Email de convite enviado com sucesso para {to_email} (Resend ID: {email_id})"
                     )
-                    return True
+                    logger.info(f"[EMAIL] Processo concluído com SUCESSO - Email enviado para {to_email}")
+                    return True, ""
 
-            logger.error(f"Resposta inesperada do Resend ao enviar email para {to_email}: {email_response}")
-            return False
+            error_msg = f"Resposta inesperada do serviço de email: {email_response}"
+            logger.error(f"[EMAIL] ❌ FALHA - {error_msg} para {to_email}")
+            logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
+            return False, error_msg
 
         except Exception as resend_error:
             # Capturar exceções específicas do Resend sem expor API key
-            error_msg = str(resend_error)
-            # Remover possíveis vazamentos de API key do log
-            if resend_api_key in error_msg:
-                error_msg = error_msg.replace(resend_api_key, "***REDACTED***")
+            error_msg_raw = str(resend_error)
+            # Remover possíveis vazamentos de API key
+            if resend_api_key and resend_api_key in error_msg_raw:
+                error_msg_raw = error_msg_raw.replace(resend_api_key, "***REDACTED***")
+
+            # Extrair mensagem de erro mais amigável
+            # Detectar erro de domínio não verificado (mensagem específica do Resend)
+            if "domain" in error_msg_raw.lower() and ("not verified" in error_msg_raw.lower() or "não verificado" in error_msg_raw.lower() or "unverified" in error_msg_raw.lower()):
+                # Extrair o domínio da mensagem de erro se possível
+                # Exemplo: "The basecompany.com.br domain is not verified"
+                domain_pattern = r"\b([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}"
+                domain_match = re.search(domain_pattern, error_msg_raw)
+
+                if domain_match:
+                    domain = domain_match.group(0)
+                    error_msg = f"Domínio '{domain}' não está verificado no Resend. Adicione e verifique o domínio em https://resend.com/domains"
+                else:
+                    error_msg = "Domínio de email não está verificado no Resend. Adicione e verifique o domínio em https://resend.com/domains"
+            elif "domain" in error_msg_raw.lower() or "verificado" in error_msg_raw.lower() or "verified" in error_msg_raw.lower():
+                error_msg = "Domínio de email não verificado no Resend. Verifique o domínio nas configurações."
+            elif "invalid" in error_msg_raw.lower() or "inválido" in error_msg_raw.lower():
+                error_msg = "Configuração de email inválida. Verifique EMAIL_FROM e RESEND_API_KEY."
+            elif "unauthorized" in error_msg_raw.lower() or "401" in error_msg_raw:
+                error_msg = "Chave de API do Resend inválida ou expirada. Verifique RESEND_API_KEY."
+            elif "rate limit" in error_msg_raw.lower() or "quota" in error_msg_raw.lower():
+                error_msg = "Limite de envio de emails excedido. Tente novamente mais tarde."
+            else:
+                error_msg = f"Erro ao enviar email: {error_msg_raw[:100]}"  # Limitar tamanho
+
             logger.error(
-                f"[EMAIL] ❌ FALHA - Erro ao enviar email via Resend para {to_email}: {error_msg}",
+                f"[EMAIL] ❌ FALHA - Erro ao enviar email via Resend para {to_email}: {error_msg_raw}",
                 exc_info=True,
             )
             logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
-            return False
+            return False, error_msg
 
     except Exception as e:
+        error_msg = f"Erro inesperado: {str(e)[:100]}"
         logger.error(
             f"[EMAIL] ❌ FALHA - Erro inesperado ao processar envio de email de convite para {to_email}: {e}",
             exc_info=True,
         )
         logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
-        return False
+        return False, error_msg
