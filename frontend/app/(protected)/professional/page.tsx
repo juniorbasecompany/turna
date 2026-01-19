@@ -238,7 +238,7 @@ export default function ProfessionalPage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profissional'
-            setError(message)
+            setErrorWithVersion(message)
             console.error('Erro ao salvar profissional:', err)
         } finally {
             setSubmitting(false)
@@ -534,9 +534,9 @@ export default function ProfessionalPage() {
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={(() => {
+                error={(() => {
                     const hasButtons = isEditing || selectedProfessionals.size > 0
-                    return hasButtons ? (error || undefined) : undefined
+                    return hasButtons ? error : undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

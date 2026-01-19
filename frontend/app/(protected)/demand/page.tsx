@@ -26,6 +26,7 @@ export default function DemandPage() {
     const [loading, setLoading] = useState(true)
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [errorVersion, setErrorVersion] = useState<number>(0)
     const [editingDemand, setEditingDemand] = useState<DemandResponse | null>(null)
 
     type DemandFormData = {
@@ -222,6 +223,13 @@ export default function DemandPage() {
         setShowEditArea(false)
         setSelectedDemands(new Set())
         setError(null)
+        setErrorVersion(0)
+    }
+
+    // Função auxiliar para setar erro e incrementar versão
+    const setErrorWithVersion = (errorMessage: string) => {
+        setError(errorMessage)
+        setErrorVersion((prev) => prev + 1)
     }
 
     // Atualizar skills a partir do input
@@ -237,12 +245,12 @@ export default function DemandPage() {
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         if (!formData.procedure.trim()) {
-            setError('Procedimento é obrigatório')
+            setErrorWithVersion('Procedimento é obrigatório')
             return
         }
 
         if (!formData.start_time || !formData.end_time) {
-            setError('Data/hora de início e fim são obrigatórias')
+            setErrorWithVersion('Data/hora de início e fim são obrigatórias')
             return
         }
 
@@ -250,13 +258,14 @@ export default function DemandPage() {
         const endIso = formData.end_time.toISOString()
 
         if (formData.end_time <= formData.start_time) {
-            setError('Data/hora de fim deve ser maior que a de início')
+            setErrorWithVersion('Data/hora de fim deve ser maior que a de início')
             return
         }
 
         try {
             setSubmitting(true)
             setError(null)
+            setErrorVersion(0)
 
             if (editingDemand) {
                 // Editar demanda existente
@@ -327,7 +336,7 @@ export default function DemandPage() {
             handleCancel()
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar demanda'
-            setError(message)
+            setErrorWithVersion(message)
             console.error('Erro ao salvar demanda:', err)
         } finally {
             setSubmitting(false)
@@ -379,7 +388,7 @@ export default function DemandPage() {
 
             await loadDemands()
         } catch (err) {
-            setError(
+            setErrorWithVersion(
                 err instanceof Error
                     ? err.message
                     : 'Erro ao excluir demandas. Tente novamente.'
@@ -749,7 +758,8 @@ export default function DemandPage() {
                 leftContent={(() => {
                     // Mostra erro no BottomActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedDemands.size > 0
-                    return hasButtons ? (error || undefined) : undefined
+                    // Usa errorVersion para forçar atualização quando o erro mudar
+                    return hasButtons ? (error ? `${error}|${errorVersion}` : undefined) : undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

@@ -21,6 +21,7 @@ export default function HospitalPage() {
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [errorVersion, setErrorVersion] = useState<number>(0)
     const [editingHospital, setEditingHospital] = useState<HospitalResponse | null>(null)
     const [formData, setFormData] = useState({ name: '', prompt: '', color: null as string | null })
     const [originalFormData, setOriginalFormData] = useState({ name: '', prompt: '', color: null as string | null })
@@ -105,18 +106,26 @@ export default function HospitalPage() {
         setShowEditArea(false)
         setSelectedHospitals(new Set())
         setError(null)
+        setErrorVersion(0)
+    }
+
+    // Função auxiliar para setar erro e incrementar versão
+    const setErrorWithVersion = (errorMessage: string) => {
+        setError(errorMessage)
+        setErrorVersion((prev) => prev + 1)
     }
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         if (!formData.name.trim()) {
-            setError('Nome é obrigatório')
+            setErrorWithVersion('Nome é obrigatório')
             return
         }
 
         try {
             setSubmitting(true)
             setError(null)
+            setErrorVersion(0)
 
             if (editingHospital) {
                 // Editar hospital existente
@@ -170,7 +179,7 @@ export default function HospitalPage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar hospital'
-            setError(message)
+            setErrorWithVersion(message)
             console.error('Erro ao salvar hospital:', err)
         } finally {
             setSubmitting(false)
@@ -225,7 +234,7 @@ export default function HospitalPage() {
             // Recarregar lista para garantir sincronização
             await loadHospitals()
         } catch (err) {
-            setError(
+            setErrorWithVersion(
                 err instanceof Error
                     ? err.message
                     : 'Erro ao excluir hospitais. Tente novamente.'
@@ -376,7 +385,8 @@ export default function HospitalPage() {
                 leftContent={(() => {
                     // Mostra erro no BottomActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedHospitals.size > 0
-                    return hasButtons ? (error || undefined) : undefined
+                    // Usa errorVersion para forçar atualização quando o erro mudar
+                    return hasButtons ? (error ? `${error}|${errorVersion}` : undefined) : undefined
                 })()}
                 buttons={(() => {
                     const buttons = []
