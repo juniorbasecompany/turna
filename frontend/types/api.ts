@@ -241,3 +241,29 @@ export interface DemandUpdateRequest {
   notes?: string | null
   source?: Record<string, unknown> | null
 }
+
+export interface ProfileResponse {
+  id: number
+  tenant_id: number
+  account_id: number
+  hospital_id: number | null
+  attribute: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface ProfileListResponse {
+  items: ProfileResponse[]
+  total: number
+}
+
+export interface ProfileCreateRequest {
+  account_id: number
+  hospital_id?: number | null
+  attribute?: Record<string, unknown>
+}
+
+export interface ProfileUpdateRequest {
+  hospital_id?: number | null
+  attribute?: Record<string, unknown>
+}

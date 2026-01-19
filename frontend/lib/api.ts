@@ -69,7 +69,7 @@ export async function apiRequest<T>(
             // Páginas protegidas devem decidir o que fazer com 401, não fazer redirecionamento automático
             if (typeof window !== 'undefined') {
                 const path = window.location.pathname
-                if (!path.startsWith('/login') && !path.startsWith('/select-tenant') && !path.startsWith('/dashboard') && !path.startsWith('/file') && !path.startsWith('/hospital') && !path.startsWith('/demand')) {
+                if (!path.startsWith('/login') && !path.startsWith('/select-tenant') && !path.startsWith('/dashboard') && !path.startsWith('/file') && !path.startsWith('/hospital') && !path.startsWith('/demand') && !path.startsWith('/profile')) {
                     window.location.href = '/login'
                 }
             }

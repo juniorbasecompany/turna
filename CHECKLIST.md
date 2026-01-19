@@ -951,6 +951,205 @@ Antes de considerar completo, verificar:
 
 ---
 
+## FASE 11: Tabela Profile - Perfis de Usuários
+
+### 11.1 Banco de Dados / Modelos
+
+- [ ] Criar `app/model/profile.py`:
+  - [ ] Modelo `Profile` (SQLModel) com:
+    - [ ] `id` (PK)
+    - [ ] `tenant_id` (FK `tenant.id`, obrigatório, index)
+    - [ ] `account_id` (FK `account.id`, obrigatório, index)
+    - [ ] `hospital_id` (FK `hospital.id`, opcional, index)
+    - [ ] `attribute` (JSONB, obrigatório, default `{}`)
+    - [ ] `created_at` (`timestamptz`)
+    - [ ] `updated_at` (`timestamptz`)
+  - [ ] Herdar de `BaseModel` para `created_at` e `updated_at`
+  - [ ] Usar `Column(JSON)` do SQLAlchemy para campo JSONB
+
+- [ ] Atualizar `app/model/__init__.py`:
+  - [ ] Exportar `Profile`
+
+- [ ] Atualizar `app/db/base.py`:
+  - [ ] Adicionar `Profile` no import para Alembic detectar
+
+- [ ] Criar migração Alembic:
+  - [ ] Executar `alembic revision --autogenerate -m "add_profile_table"`
+  - [ ] Revisar migração gerada:
+    - [ ] Verificar criação da tabela `profile`
+    - [ ] Verificar FKs para `tenant.id`, `account.id`, `hospital.id`
+    - [ ] Verificar índices em `tenant_id`, `account_id`, `hospital_id`
+    - [ ] Verificar campo `attribute` como JSONB com default `{}`
+    - [ ] Verificar `created_at` e `updated_at` como `timestamptz`
+  - [ ] Aplicar migração: `alembic upgrade head`
+
+### 11.2 Backend – Schemas Pydantic
+
+- [ ] Criar schemas em `app/api/route.py` (ou arquivo separado):
+  - [ ] `ProfileCreate`:
+    - [ ] `account_id: int`
+    - [ ] `hospital_id: Optional[int] = None`
+    - [ ] `attribute: dict = {}`
+  - [ ] `ProfileUpdate`:
+    - [ ] `hospital_id: Optional[int] = None`
+    - [ ] `attribute: Optional[dict] = None`
+  - [ ] `ProfileResponse`:
+    - [ ] `id: int`
+    - [ ] `tenant_id: int`
+    - [ ] `account_id: int`
+    - [ ] `hospital_id: Optional[int]`
+    - [ ] `attribute: dict`
+    - [ ] `created_at: datetime`
+    - [ ] `updated_at: datetime`
+
+### 11.3 Backend – Endpoints API
+
+- [ ] `POST /api/profile` (criar profile):
+  - [ ] Usar `get_current_membership()` para obter `tenant_id`
+  - [ ] Validar que `account_id` existe e pertence ao tenant (via Membership)
+  - [ ] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
+  - [ ] Criar profile com `tenant_id` do membership
+  - [ ] Retornar `ProfileResponse`
+
+- [ ] `GET /api/profile/list` (listar profiles):
+  - [ ] Filtrar por `tenant_id` do membership
+  - [ ] Retornar lista paginada: `{items: ProfileResponse[], total: int}`
+  - [ ] Ordenar por `created_at` (decrescente)
+
+- [ ] `GET /api/profile/{profile_id}` (buscar profile específico):
+  - [ ] Validar que profile existe
+  - [ ] Validar que `profile.tenant_id == membership.tenant_id`
+  - [ ] Retornar `ProfileResponse` ou 403 se não pertencer ao tenant
+
+- [ ] `PUT /api/profile/{profile_id}` (atualizar profile):
+  - [ ] Validar que profile existe e pertence ao tenant
+  - [ ] Validar que `hospital_id` (se fornecido) pertence ao tenant
+  - [ ] Atualizar campos permitidos (nunca permitir alterar `tenant_id` ou `account_id`)
+  - [ ] Atualizar `updated_at` automaticamente
+  - [ ] Retornar `ProfileResponse`
+
+- [ ] `DELETE /api/profile/{profile_id}` (deletar profile):
+  - [ ] Validar que profile existe e pertence ao tenant
+  - [ ] Deletar profile
+  - [ ] Retornar 204 No Content
+
+- [ ] Validações de segurança:
+  - [ ] Todos os endpoints validam `tenant_id` via `get_current_membership()`
+  - [ ] Queries sempre filtram por `tenant_id`
+  - [ ] Endpoints de criação usam `membership.tenant_id` (nunca aceitar do body)
+  - [ ] Endpoints de atualização não permitem alterar `tenant_id` ou `account_id`
+
+### 11.4 Frontend – Tipos TypeScript
+
+- [ ] Atualizar `frontend/types/api.ts`:
+  - [ ] `ProfileResponse`:
+    - [ ] `id: number`
+    - [ ] `tenant_id: number`
+    - [ ] `account_id: number`
+    - [ ] `hospital_id: number | null`
+    - [ ] `attribute: Record<string, unknown>`
+    - [ ] `created_at: string`
+    - [ ] `updated_at: string`
+  - [ ] `ProfileListResponse`:
+    - [ ] `items: ProfileResponse[]`
+    - [ ] `total: number`
+  - [ ] `ProfileCreateRequest`:
+    - [ ] `account_id: number`
+    - [ ] `hospital_id?: number | null`
+    - [ ] `attribute?: Record<string, unknown>`
+  - [ ] `ProfileUpdateRequest`:
+    - [ ] `hospital_id?: number | null`
+    - [ ] `attribute?: Record<string, unknown>`
+
+### 11.5 Frontend – Rotas API (Next.js)
+
+- [ ] Criar `frontend/app/api/profile/route.ts`:
+  - [ ] `GET` - listar profiles (proxy para backend)
+  - [ ] `POST` - criar profile (proxy para backend)
+
+- [ ] Criar `frontend/app/api/profile/[id]/route.ts`:
+  - [ ] `GET` - buscar profile específico (proxy para backend)
+  - [ ] `PUT` - atualizar profile (proxy para backend)
+  - [ ] `DELETE` - deletar profile (proxy para backend)
+
+### 11.6 Frontend – Página de Edição
+
+- [ ] Criar `frontend/app/(protected)/profile/page.tsx`:
+  - [ ] Lista de profiles em tabela:
+    - [ ] Exibir: id, account_id, hospital_id, created_at, updated_at
+    - [ ] Botão "Criar Profile"
+    - [ ] Botões de editar/excluir em cada linha
+  - [ ] Área de edição (similar a `hospital/page.tsx` e `demand/page.tsx`):
+    - [ ] Formulário com campos:
+      - [ ] Select para `account_id` (carregar accounts do tenant via API)
+      - [ ] Select para `hospital_id` (opcional, carregar hospitals do tenant)
+      - [ ] Editor JSON para `attribute` (textarea com validação ou editor JSON)
+    - [ ] Botões de salvar/cancelar
+    - [ ] Feedback visual de sucesso/erro
+  - [ ] Funcionalidades:
+    - [ ] Criar novo profile
+    - [ ] Editar profile existente
+    - [ ] Deletar profile (com confirmação)
+    - [ ] Validação de JSON antes de enviar
+    - [ ] Tratamento de erros de validação
+
+### 11.7 Componentes Auxiliares (se necessário)
+
+- [ ] Editor JSON para `attribute`:
+  - [ ] Usar textarea com validação JSON
+  - [ ] Ou integrar biblioteca como `react-json-view` (opcional)
+  - [ ] Mostrar erros de sintaxe JSON
+
+- [ ] Select de accounts:
+  - [ ] Carregar accounts do tenant via API
+  - [ ] Endpoint: `GET /account/list` (se existir) ou usar dados do Membership
+
+- [ ] Select de hospitals:
+  - [ ] Reutilizar componente existente ou carregar via `GET /hospital/list`
+
+### 11.8 Validações e Segurança
+
+- [ ] Backend:
+  - [ ] Validar que `account_id` existe e pertence ao tenant (via Membership)
+  - [ ] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
+  - [ ] Validar formato JSON de `attribute` (se necessário)
+  - [ ] Garantir isolamento multi-tenant em todas as operações
+
+- [ ] Frontend:
+  - [ ] Validar JSON antes de enviar (usar `JSON.parse()`)
+  - [ ] Mostrar erros de validação claramente
+  - [ ] Confirmar exclusão antes de deletar
+  - [ ] Tratamento de erros HTTP (401, 403, 404, 409, 500)
+
+### 11.9 Testes Essenciais
+
+- [ ] Criar profile via API:
+  - [ ] Validar criação com `account_id` e `hospital_id`
+  - [ ] Validar criação apenas com `account_id` (sem hospital)
+  - [ ] Validar que `attribute` default é `{}`
+- [ ] Listar profiles:
+  - [ ] Validar que retorna apenas profiles do tenant atual
+  - [ ] Validar paginação
+- [ ] Atualizar profile:
+  - [ ] Validar atualização de `hospital_id`
+  - [ ] Validar atualização de `attribute`
+  - [ ] Validar que não permite alterar `tenant_id` ou `account_id`
+- [ ] Deletar profile:
+  - [ ] Validar exclusão
+- [ ] Frontend:
+  - [ ] Testar criação via formulário
+  - [ ] Testar edição via formulário
+  - [ ] Testar validação de JSON
+  - [ ] Testar exclusão com confirmação
+
+### 11.10 Documentação
+
+- [ ] Atualizar `CHECKLIST.md` (esta seção)
+- [ ] Atualizar `SECURITY.md` (se necessário, com exemplos de validação de profile)
+- [ ] Documentar uso de `attribute` como campo JSONB flexível para usar com Pydantic
+
+---
+
 ## Scripts de Teste
 
 ### `script_validate_docker_compose.py`

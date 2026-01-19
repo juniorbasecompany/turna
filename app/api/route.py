@@ -30,6 +30,7 @@ from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleVersion, ScheduleStatus
 from app.model.hospital import Hospital
 from app.model.demand import Demand
+from app.model.profile import Profile
 from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
@@ -82,6 +83,49 @@ def get_me(
         "created_at": _isoformat_utc(account.created_at),
         "updated_at": _isoformat_utc(account.updated_at),
     }
+
+
+class AccountOption(PydanticBaseModel):
+    id: int
+    email: str
+    name: str
+
+
+@router.get("/account/list", response_model=list[AccountOption], tags=["Account"])
+def list_accounts(
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista accounts do tenant atual (via Membership ACTIVE).
+    """
+    try:
+        logger.info(f"Listando accounts para tenant_id={membership.tenant_id}")
+        # Buscar accounts via Membership
+        memberships = session.exec(
+            select(Membership, Account)
+            .join(Account, Membership.account_id == Account.id)
+            .where(
+                Membership.tenant_id == membership.tenant_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+            .order_by(Account.name)
+        ).all()
+
+        accounts = []
+        for membership_obj, account in memberships:
+            accounts.append(AccountOption(id=account.id, email=account.email, name=account.name))
+
+        logger.info(f"Encontrados {len(accounts)} accounts")
+        return accounts
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar accounts: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar accounts: {str(e)}",
+        ) from e
 
 
 class TenantCreate(PydanticBaseModel):
@@ -1677,6 +1721,49 @@ class DemandListResponse(PydanticBaseModel):
     total: int
 
 
+class ProfileCreate(PydanticBaseModel):
+    account_id: int
+    hospital_id: int | None = None
+    attribute: dict = {}
+
+    @field_validator("attribute")
+    @classmethod
+    def validate_attribute(cls, v: dict) -> dict:
+        if not isinstance(v, dict):
+            raise ValueError("attribute deve ser um objeto JSON")
+        return v
+
+
+class ProfileUpdate(PydanticBaseModel):
+    hospital_id: int | None = None
+    attribute: dict | None = None
+
+    @field_validator("attribute")
+    @classmethod
+    def validate_attribute(cls, v: dict | None) -> dict | None:
+        if v is not None and not isinstance(v, dict):
+            raise ValueError("attribute deve ser um objeto JSON")
+        return v
+
+
+class ProfileResponse(PydanticBaseModel):
+    id: int
+    tenant_id: int
+    account_id: int
+    hospital_id: int | None
+    attribute: dict
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ProfileListResponse(PydanticBaseModel):
+    items: list[ProfileResponse]
+    total: int
+
+
 @router.post("/demand", response_model=DemandResponse, status_code=201, tags=["Demand"])
 def create_demand(
     body: DemandCreate,
@@ -1994,4 +2081,222 @@ def delete_demand(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao deletar demanda: {str(e)}",
+        ) from e
+
+
+@router.post("/profile", response_model=ProfileResponse, status_code=201, tags=["Profile"])
+def create_profile(
+    body: ProfileCreate,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria um novo profile.
+    Valida que account_id pertence ao tenant atual (via Membership) e que hospital_id (se fornecido) pertence ao tenant.
+    """
+    try:
+        logger.info(f"Criando profile: account_id={body.account_id}, hospital_id={body.hospital_id}, tenant_id={membership.tenant_id}")
+
+        # Validar que account_id pertence ao tenant via Membership
+        account_membership = session.exec(
+            select(Membership).where(
+                Membership.account_id == body.account_id,
+                Membership.tenant_id == membership.tenant_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).first()
+        if not account_membership:
+            logger.warning(f"Account {body.account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Account {body.account_id} não pertence ao tenant atual",
+            )
+
+        # Validar hospital_id se fornecido
+        if body.hospital_id is not None:
+            hospital = session.get(Hospital, body.hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
+        profile = Profile(
+            tenant_id=membership.tenant_id,
+            account_id=body.account_id,
+            hospital_id=body.hospital_id,
+            attribute=body.attribute,
+        )
+
+        session.add(profile)
+        session.commit()
+        session.refresh(profile)
+        logger.info(f"Profile criado com sucesso: id={profile.id}")
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao criar profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar profile: {str(e)}",
+        ) from e
+
+
+@router.get("/profile/list", response_model=ProfileListResponse, tags=["Profile"])
+def list_profile(
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """
+    Lista profiles do tenant atual com paginação.
+    """
+    try:
+        logger.info(f"Listando profiles para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
+        query = select(Profile).where(Profile.tenant_id == membership.tenant_id)
+
+        # Contar total
+        total_query = select(func.count(Profile.id)).where(Profile.tenant_id == membership.tenant_id)
+        total = session.exec(total_query).one()
+
+        # Buscar itens com paginação
+        items = session.exec(query.order_by(Profile.created_at.desc()).offset(offset).limit(limit)).all()
+
+        logger.info(f"Encontrados {total} profiles, retornando {len(items)}")
+
+        return ProfileListResponse(
+            items=items,
+            total=total,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar profiles: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar profiles: {str(e)}",
+        ) from e
+
+
+@router.get("/profile/{profile_id}", response_model=ProfileResponse, tags=["Profile"])
+def get_profile(
+    profile_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Obtém detalhes de um profile específico.
+    Valida que o profile pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Buscando profile id={profile_id} para tenant_id={membership.tenant_id}")
+        profile = session.get(Profile, profile_id)
+        if not profile:
+            logger.warning(f"Profile não encontrado: id={profile_id}")
+            raise HTTPException(status_code=404, detail="Profile não encontrado")
+        if profile.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        logger.info(f"Profile encontrado: id={profile.id}")
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar profile: {str(e)}",
+        ) from e
+
+
+@router.put("/profile/{profile_id}", response_model=ProfileResponse, tags=["Profile"])
+def update_profile(
+    profile_id: int,
+    body: ProfileUpdate,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um profile.
+    Valida que o profile pertence ao tenant atual.
+    Não permite alterar tenant_id ou account_id.
+    """
+    try:
+        logger.info(f"Atualizando profile: id={profile_id}, tenant_id={membership.tenant_id}")
+
+        profile = session.get(Profile, profile_id)
+        if not profile:
+            logger.warning(f"Profile não encontrado: id={profile_id}")
+            raise HTTPException(status_code=404, detail="Profile não encontrado")
+        if profile.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Validar hospital_id se fornecido
+        if body.hospital_id is not None:
+            hospital = session.get(Hospital, body.hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != membership.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
+        # Atualizar campos permitidos (nunca permitir alterar tenant_id ou account_id)
+        if body.hospital_id is not None:
+            profile.hospital_id = body.hospital_id
+        if body.attribute is not None:
+            profile.attribute = body.attribute
+        profile.updated_at = utc_now()
+
+        session.add(profile)
+        session.commit()
+        session.refresh(profile)
+        logger.info(f"Profile atualizado com sucesso: id={profile.id}")
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar profile: {str(e)}",
+        ) from e
+
+
+@router.delete("/profile/{profile_id}", status_code=204, tags=["Profile"])
+def delete_profile(
+    profile_id: int,
+    membership: Membership = Depends(get_current_membership),
+    session: Session = Depends(get_session),
+):
+    """
+    Deleta um profile.
+    Valida que o profile pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Deletando profile id={profile_id} para tenant_id={membership.tenant_id}")
+
+        profile = session.get(Profile, profile_id)
+        if not profile:
+            logger.warning(f"Profile não encontrado: id={profile_id}")
+            raise HTTPException(status_code=404, detail="Profile não encontrado")
+        if profile.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        session.delete(profile)
+        session.commit()
+        logger.info(f"Profile deletado com sucesso: id={profile_id}")
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao deletar profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao deletar profile: {str(e)}",
         ) from e
