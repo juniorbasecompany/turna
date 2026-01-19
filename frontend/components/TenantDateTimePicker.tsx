@@ -312,7 +312,7 @@ export function TenantDateTimePicker({
 
             {/* Calendário e Time Picker Popover */}
             {isOpen && (
-                <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[600px] max-h-[465px] flex flex-col">
+                <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-[600px] max-h-[465px] flex flex-col">
                     <div className="flex gap-6 flex-1 min-h-0">
                         {/* Seção do Calendário */}
                         <div className="flex-1">
