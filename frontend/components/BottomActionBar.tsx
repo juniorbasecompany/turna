@@ -25,7 +25,7 @@ interface ActionBarButton {
     loading?: boolean
 }
 
-interface ActionBarProps {
+interface BottomActionBarProps {
     /**
      * Mensagem a ser exibida na barra (opcional)
      */

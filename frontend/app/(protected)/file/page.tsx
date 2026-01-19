@@ -1,6 +1,6 @@
 'use client'
 
-import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
@@ -1533,10 +1533,10 @@ export default function FilesPage() {
             })()}
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
-            <BottomActionBarSpacer />
+            <ActionBarSpacer />
 
             {/* Barra inferior fixa com ações */}
-            <BottomActionBar
+            <ActionBar
                 leftContent={<div></div>}
                 buttons={(() => {
                     const buttons = []

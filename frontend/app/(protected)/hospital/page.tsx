@@ -1,6 +1,6 @@
 'use client'
 
-import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
@@ -21,7 +21,6 @@ export default function HospitalPage() {
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [errorVersion, setErrorVersion] = useState<number>(0)
     const [editingHospital, setEditingHospital] = useState<HospitalResponse | null>(null)
     const [formData, setFormData] = useState({ name: '', prompt: '', color: null as string | null })
     const [originalFormData, setOriginalFormData] = useState({ name: '', prompt: '', color: null as string | null })
@@ -106,26 +105,18 @@ export default function HospitalPage() {
         setShowEditArea(false)
         setSelectedHospitals(new Set())
         setError(null)
-        setErrorVersion(0)
-    }
-
-    // Função auxiliar para setar erro e incrementar versão
-    const setErrorWithVersion = (errorMessage: string) => {
-        setError(errorMessage)
-        setErrorVersion((prev) => prev + 1)
     }
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         if (!formData.name.trim()) {
-            setErrorWithVersion('Nome é obrigatório')
+            setError('Nome é obrigatório')
             return
         }
 
         try {
             setSubmitting(true)
             setError(null)
-            setErrorVersion(0)
 
             if (editingHospital) {
                 // Editar hospital existente
@@ -179,7 +170,7 @@ export default function HospitalPage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar hospital'
-            setErrorWithVersion(message)
+            setError(message)
             console.error('Erro ao salvar hospital:', err)
         } finally {
             setSubmitting(false)
@@ -234,7 +225,7 @@ export default function HospitalPage() {
             // Recarregar lista para garantir sincronização
             await loadHospitals()
         } catch (err) {
-            setErrorWithVersion(
+            setError(
                 err instanceof Error
                     ? err.message
                     : 'Erro ao excluir hospitais. Tente novamente.'
@@ -378,15 +369,14 @@ export default function HospitalPage() {
             </CardPanel>
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
-            <BottomActionBarSpacer />
+            <ActionBarSpacer />
 
             {/* Barra inferior fixa com ações */}
-            <BottomActionBar
-                leftContent={(() => {
-                    // Mostra erro no BottomActionBar apenas se houver botões de ação
+            <ActionBar
+                error={(() => {
+                    // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedHospitals.size > 0
-                    // Usa errorVersion para forçar atualização quando o erro mudar
-                    return hasButtons ? (error ? `${error}|${errorVersion}` : undefined) : undefined
+                    return hasButtons ? error : undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

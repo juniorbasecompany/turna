@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { BottomActionBar } from './BottomActionBar'
+import { ActionBar } from './ActionBar'
 
 interface CardPanelProps {
     title: string
@@ -14,7 +14,7 @@ interface CardPanelProps {
     children: ReactNode
     className?: string
     /**
-     * Mensagem de erro a ser exibida no BottomActionBar
+     * Mensagem de erro a ser exibida no ActionBar
      */
     error?: string | null
     /**
@@ -101,9 +101,9 @@ export function CardPanel({
                 )}
             </div>
 
-            {/* BottomActionBar para exibir erros quando não há botões de ação */}
+            {/* ActionBar para exibir erros quando não há botões de ação */}
             {error && (
-                <BottomActionBar
+                <ActionBar
                     message={error}
                     messageType="error"
                     show={!!error}

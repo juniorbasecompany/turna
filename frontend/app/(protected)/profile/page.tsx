@@ -1,6 +1,6 @@
 'use client'
 
-import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
@@ -32,7 +32,6 @@ export default function ProfilePage() {
     const [loadingAccounts, setLoadingAccounts] = useState(true)
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [errorVersion, setErrorVersion] = useState<number>(0)
     const [editingProfile, setEditingProfile] = useState<ProfileResponse | null>(null)
     const [formData, setFormData] = useState({
         account_id: null as number | null,
@@ -190,20 +189,13 @@ export default function ProfilePage() {
         setSelectedProfiles(new Set())
         setError(null)
         setJsonError(null)
-        setErrorVersion(0)
-    }
-
-    // Função auxiliar para setar erro e incrementar versão
-    const setErrorWithVersion = (errorMessage: string) => {
-        setError(errorMessage)
-        setErrorVersion((prev) => prev + 1)
     }
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         // Validar account_id
         if (!formData.account_id) {
-            setErrorWithVersion('Conta é obrigatória')
+            setError('Conta é obrigatória')
             return
         }
 
@@ -212,7 +204,7 @@ export default function ProfilePage() {
         if (!jsonValidation.valid) {
             const errorMsg = jsonValidation.error || 'JSON inválido'
             setJsonError(errorMsg)
-            setErrorWithVersion(errorMsg)
+            setError(errorMsg)
             return
         }
         setJsonError(null)
@@ -220,7 +212,6 @@ export default function ProfilePage() {
         try {
             setSubmitting(true)
             setError(null)
-            setErrorVersion(0)
 
             const attributeObj = jsonValidation.parsed || {}
 
@@ -275,7 +266,7 @@ export default function ProfilePage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profile'
-            setErrorWithVersion(message)
+            setError(message)
             console.error('Erro ao salvar profile:', err)
         } finally {
             setSubmitting(false)
@@ -518,14 +509,13 @@ export default function ProfilePage() {
                         })}
             </CardPanel>
 
-            <BottomActionBarSpacer />
+            <ActionBarSpacer />
 
-            <BottomActionBar
-                leftContent={(() => {
-                    // Mostra erro no BottomActionBar apenas se houver botões de ação
+            <ActionBar
+                error={(() => {
+                    // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedProfiles.size > 0
-                    // Usa errorVersion para forçar atualização quando o erro mudar
-                    return hasButtons ? (error ? `${error}|${errorVersion}` : undefined) : undefined
+                    return hasButtons ? error : undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

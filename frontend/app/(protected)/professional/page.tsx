@@ -1,6 +1,6 @@
 'use client'
 
-import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
@@ -238,7 +238,7 @@ export default function ProfessionalPage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profissional'
-            setErrorWithVersion(message)
+            setError(message)
             console.error('Erro ao salvar profissional:', err)
         } finally {
             setSubmitting(false)
@@ -531,9 +531,9 @@ export default function ProfessionalPage() {
                 </div>
             )}
 
-            <BottomActionBarSpacer />
+            <ActionBarSpacer />
 
-            <BottomActionBar
+            <ActionBar
                 error={(() => {
                     const hasButtons = isEditing || selectedProfessionals.size > 0
                     return hasButtons ? error : undefined

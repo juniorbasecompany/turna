@@ -1,6 +1,6 @@
 'use client'
 
-import { BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { ActionBarSpacer } from '@/components/ActionBar'
 import { CardPanel } from '@/components/CardPanel'
 import { AccountOption } from '@/types/api'
 import { extractErrorMessage } from '@/lib/api'
@@ -100,7 +100,7 @@ export default function AccountPage() {
             </CardPanel>
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
-            <BottomActionBarSpacer />
+            <ActionBarSpacer />
         </>
     )
 }
