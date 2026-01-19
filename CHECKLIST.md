@@ -1251,6 +1251,108 @@ Antes de considerar completo, verificar:
   - [ ] Integrar com SMTP, SendGrid, AWS SES, etc.
   - [ ] Configurar variáveis de ambiente para credenciais
 
+## FASE 13: Envio de Emails com Resend
+
+### 13.1 Dependências e Configuração
+
+- [ ] Adicionar `resend` ao `requirements.txt`:
+  - [ ] Versão: `resend>=2.0.0` (suporta type hints e melhorias)
+- [ ] Criar conta no Resend (https://resend.com):
+  - [ ] Obter API key do dashboard
+  - [ ] Verificar domínio (ou usar domínio de teste inicialmente)
+- [ ] Configurar variáveis de ambiente:
+  - [ ] `RESEND_API_KEY` (API key do Resend)
+  - [ ] `EMAIL_FROM` (endereço remetente, ex: `noreply@seudominio.com`)
+  - [ ] `APP_URL` (URL do aplicativo para links nos emails, já existe)
+
+### 13.2 Atualização do Serviço de Email
+
+- [ ] Atualizar `app/services/email_service.py`:
+  - [ ] Importar `resend` e configurar API key via variável de ambiente
+  - [ ] Modificar `send_professional_invite()` para usar Resend:
+    - [ ] Usar `resend.Emails.send()` com parâmetros adequados
+    - [ ] Definir `from` usando `EMAIL_FROM`
+    - [ ] Definir `to` com email do profissional
+    - [ ] Definir `subject` com assunto do convite
+    - [ ] Definir `html` com corpo do email (pode manter texto simples ou criar HTML)
+    - [ ] Tratar erros da API do Resend (exceptions)
+    - [ ] Manter logging para debug
+  - [ ] Manter fallback para modo "log" quando `RESEND_API_KEY` não estiver configurado (dev)
+  - [ ] Validar que `EMAIL_FROM` está configurado antes de enviar
+
+### 13.3 Estrutura do Email
+
+- [ ] Definir template HTML do email de convite:
+  - [ ] Cabeçalho com nome da clínica
+  - [ ] Mensagem de boas-vindas personalizada
+  - [ ] Link para acessar o aplicativo (`APP_URL`)
+  - [ ] Instruções claras (login ou criar conta)
+  - [ ] Rodapé com informações da clínica
+  - [ ] Estilo básico (CSS inline ou simples)
+- [ ] Considerar versão texto simples (plain text) como fallback:
+  - [ ] Resend gera automaticamente se não fornecer `text`
+  - [ ] Ou criar versão texto manualmente para melhor controle
+
+### 13.4 Configuração do Docker Compose
+
+- [ ] Atualizar `docker-compose.yml`:
+  - [ ] Adicionar variáveis de ambiente no serviço `api`:
+    - [ ] `RESEND_API_KEY` (usar placeholder ou variável de ambiente do host)
+    - [ ] `EMAIL_FROM` (ex: `noreply@turna.com` ou configurável)
+  - [ ] Adicionar variáveis no serviço `worker` (se necessário enviar emails de jobs)
+- [ ] Documentar no README ou `.env.example`:
+  - [ ] Como obter API key do Resend
+  - [ ] Como configurar domínio verificado
+  - [ ] Exemplo de valores para desenvolvimento
+
+### 13.5 Tratamento de Erros e Logging
+
+- [ ] Implementar tratamento robusto de erros:
+  - [ ] Capturar exceções do Resend (`resend.exceptions.*`)
+  - [ ] Logar erros detalhados (sem expor API key)
+  - [ ] Retornar `False` em caso de erro (mantém compatibilidade)
+  - [ ] Não quebrar o fluxo de criação/edição do profissional se email falhar
+- [ ] Melhorar logging:
+  - [ ] Logar quando email for enviado com sucesso (sem dados sensíveis)
+  - [ ] Logar tentativas de envio e resultados
+  - [ ] Logar quando Resend não estiver configurado (modo dev)
+
+### 13.6 Testes
+
+- [ ] Testar envio real de email:
+  - [ ] Criar profissional via frontend com checkbox "Enviar convite" marcado
+  - [ ] Verificar recebimento do email na caixa de entrada
+  - [ ] Verificar que email chega corretamente formatado
+  - [ ] Testar com diferentes provedores de email (Gmail, Outlook, etc.)
+- [ ] Testar tratamento de erros:
+  - [ ] Simular API key inválida
+  - [ ] Simular domínio não verificado
+  - [ ] Verificar que erro não quebra criação do profissional
+- [ ] Testar em ambiente de desenvolvimento:
+  - [ ] Verificar que funciona sem `RESEND_API_KEY` (modo log)
+  - [ ] Verificar que funciona com `RESEND_API_KEY` configurado
+
+### 13.7 Documentação
+
+- [ ] Atualizar `STACK.md`:
+  - [ ] Adicionar informações sobre Resend
+- [ ] Atualizar `CHECKLIST.md` (esta seção):
+  - [ ] Marcar itens concluídos conforme implementação
+
+### 13.8 Melhorias Futuras (Opcional)
+
+- [ ] Templates do Resend:
+  - [ ] Criar template no dashboard do Resend
+  - [ ] Usar template em vez de HTML inline (quando feature sair de beta)
+- [ ] Email HTML mais elaborado:
+  - [ ] Design responsivo
+  - [ ] Imagens/branding da clínica
+  - [ ] Links de tracking (se necessário)
+- [ ] Outros tipos de email:
+  - [ ] Email de boas-vindas ao criar conta
+  - [ ] Email de notificação de escala publicada
+  - [ ] Email de recuperação de senha (se implementar)
+
 ## Scripts de Teste
 
 ### `script_validate_docker_compose.py`

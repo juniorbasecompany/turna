@@ -611,7 +611,8 @@ export default function ProfessionalPage() {
                             loading: deleting,
                         })
                     }
-                    if (isEditing && hasChanges()) {
+                    // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
+                    if (isEditing && (hasChanges() || sendInvite)) {
                         buttons.push({
                             label: submitting ? 'Salvando...' : 'Salvar',
                             onClick: handleSave,
