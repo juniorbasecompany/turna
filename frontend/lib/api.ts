@@ -155,14 +155,14 @@ export async function apiRequest<T>(
                 console.warn('Failed to read error response text:', textError)
                 errorData = {}
             }
-            
+
             const errorMessage = extractErrorMessage(errorData, `Erro HTTP ${response.status}`)
-            
+
             // Debug: log da mensagem extraída
             if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
                 console.log('Extracted error message:', errorMessage)
             }
-            
+
             throw new ApiError(
                 errorMessage,
                 response.status,

@@ -64,6 +64,60 @@ def _isoformat_utc(dt: datetime | None) -> str | None:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _sanitize_error_message(error: Exception, default_message: str = "Ocorreu um erro inesperado") -> str:
+    """
+    Sanitiza mensagens de erro removendo detalhes técnicos desnecessários.
+    Remove SQL queries, stack traces, e outros detalhes que não são úteis para o usuário final.
+    """
+    error_str = str(error)
+
+    # Se a mensagem contém SQL, tenta extrair apenas a parte relevante
+    if "[SQL:" in error_str:
+        # Remove a parte do SQL query
+        parts = error_str.split("[SQL:")
+        if parts:
+            error_str = parts[0].strip()
+
+    # Remove detalhes de parâmetros SQL
+    if "[parameters:" in error_str:
+        parts = error_str.split("[parameters:")
+        if parts:
+            error_str = parts[0].strip()
+
+    # Remove referências a stack traces
+    if "(Background on this error" in error_str:
+        parts = error_str.split("(Background on this error")
+        if parts:
+            error_str = parts[0].strip()
+
+    # Remove detalhes técnicos de psycopg
+    if "psycopg.errors." in error_str:
+        # Extrai apenas a parte após o último ponto, se houver
+        if "DETAIL:" in error_str:
+            # Tenta extrair a mensagem do DETAIL
+            detail_parts = error_str.split("DETAIL:")
+            if len(detail_parts) > 1:
+                detail = detail_parts[1].split("[")[0].strip()
+                if detail:
+                    error_str = detail
+
+    # Remove informações de constraint muito técnicas
+    if "duplicate key value violates unique constraint" in error_str.lower():
+        # Já tratado nos handlers específicos de IntegrityError
+        pass
+
+    # Limita o tamanho da mensagem
+    max_length = 200
+    if len(error_str) > max_length:
+        error_str = error_str[:max_length] + "..."
+
+    # Se a mensagem ficou vazia ou muito curta, usa a mensagem padrão
+    if not error_str or len(error_str.strip()) < 10:
+        return default_message
+
+    return error_str.strip()
+
+
 @router.get("/me", tags=["Auth"])
 def get_me(
     account: Account = Depends(get_current_account),
@@ -2132,14 +2186,43 @@ def create_profile(
         session.refresh(profile)
         logger.info(f"Profile criado com sucesso: id={profile.id}")
         return profile
+    except IntegrityError as e:
+        session.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        logger.error(f"Erro de integridade ao criar profile: {error_msg}", exc_info=True)
+
+        # Verificar se é erro de constraint única de profile
+        error_lower = error_msg.lower()
+        if "uq_profile_tenant_account" in error_lower or "uq_profile_tenant_account_no_hospital" in error_lower:
+            # Determinar mensagem baseada no hospital_id
+            if body.hospital_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Já existe um perfil para esta conta sem hospital associado. Cada conta pode ter apenas um perfil geral (sem hospital).",
+                ) from e
+            else:
+                # Buscar nome do hospital para mensagem mais amigável
+                hospital = session.get(Hospital, body.hospital_id)
+                hospital_name = hospital.name if hospital else "este hospital"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Já existe um perfil para esta conta no hospital '{hospital_name}'. Cada conta pode ter apenas um perfil por hospital.",
+                ) from e
+        else:
+            # Outro tipo de erro de integridade
+            raise HTTPException(
+                status_code=409,
+                detail="Erro de integridade: os dados fornecidos violam uma regra de negócio. Verifique se já existe um perfil com essas informações.",
+            ) from e
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
         logger.error(f"Erro ao criar profile: {e}", exc_info=True)
+        sanitized_message = _sanitize_error_message(e, "Erro ao criar perfil. Tente novamente.")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao criar profile: {str(e)}",
+            detail=f"Erro ao criar perfil: {sanitized_message}",
         ) from e
 
 
@@ -2255,14 +2338,44 @@ def update_profile(
         session.refresh(profile)
         logger.info(f"Profile atualizado com sucesso: id={profile.id}")
         return profile
+    except IntegrityError as e:
+        session.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        logger.error(f"Erro de integridade ao atualizar profile: {error_msg}", exc_info=True)
+
+        # Verificar se é erro de constraint única de profile
+        error_lower = error_msg.lower()
+        if "uq_profile_tenant_account" in error_lower or "uq_profile_tenant_account_no_hospital" in error_lower:
+            # Determinar mensagem baseada no hospital_id
+            new_hospital_id = body.hospital_id if body.hospital_id is not None else profile.hospital_id
+            if new_hospital_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Já existe um perfil para esta conta sem hospital associado. Cada conta pode ter apenas um perfil geral (sem hospital).",
+                ) from e
+            else:
+                # Buscar nome do hospital para mensagem mais amigável
+                hospital = session.get(Hospital, new_hospital_id)
+                hospital_name = hospital.name if hospital else "este hospital"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Já existe um perfil para esta conta no hospital '{hospital_name}'. Cada conta pode ter apenas um perfil por hospital.",
+                ) from e
+        else:
+            # Outro tipo de erro de integridade
+            raise HTTPException(
+                status_code=409,
+                detail="Erro de integridade: os dados fornecidos violam uma regra de negócio. Verifique se já existe um perfil com essas informações.",
+            ) from e
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
         logger.error(f"Erro ao atualizar profile: {e}", exc_info=True)
+        sanitized_message = _sanitize_error_message(e, "Erro ao atualizar perfil. Tente novamente.")
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao atualizar profile: {str(e)}",
+            detail=f"Erro ao atualizar perfil: {sanitized_message}",
         ) from e
 
 

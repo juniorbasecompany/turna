@@ -81,16 +81,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def unhandled_exception_handler(request: Request, exc: Exception):
     # Loga o erro completo para debug
     logger.error(f"Erro não tratado: {exc}", exc_info=True)
-    
+
     # Extrai mensagem do erro de forma segura
     error_message = str(exc) if exc else "Internal server error"
-    
+
     # Limita o tamanho da mensagem para evitar expor informações sensíveis
     # e manter a resposta em tamanho razoável
     max_message_length = 500
     if len(error_message) > max_message_length:
         error_message = error_message[:max_message_length] + "..."
-    
+
     # Retorna a mensagem do erro para ajudar no debug, mas sem stacktrace
     return JSONResponse(
         status_code=500,
