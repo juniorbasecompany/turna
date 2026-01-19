@@ -1282,16 +1282,16 @@ Antes de considerar completo, verificar:
 
 ### 13.3 Estrutura do Email
 
-- [ ] Definir template HTML do email de convite:
-  - [ ] Cabeçalho com nome da clínica
-  - [ ] Mensagem de boas-vindas personalizada
-  - [ ] Link para acessar o aplicativo (`APP_URL`)
-  - [ ] Instruções claras (login ou criar conta)
-  - [ ] Rodapé com informações da clínica
-  - [ ] Estilo básico (CSS inline ou simples)
-- [ ] Considerar versão texto simples (plain text) como fallback:
-  - [ ] Resend gera automaticamente se não fornecer `text`
-  - [ ] Ou criar versão texto manualmente para melhor controle
+- [x] Definir template HTML do email de convite:
+  - [x] Cabeçalho com nome da clínica
+  - [x] Mensagem de boas-vindas personalizada
+  - [x] Link para acessar o aplicativo (`APP_URL`)
+  - [x] Instruções claras (login ou criar conta)
+  - [x] Rodapé com informações da clínica
+  - [x] Estilo básico (CSS inline ou simples)
+- [x] Considerar versão texto simples (plain text) como fallback:
+  - [x] Versão texto criada manualmente para melhor controle
+  - [x] Ambas versões (HTML e texto) são enviadas ao Resend
 
 ### 13.4 Configuração do Docker Compose
 
@@ -1308,30 +1308,33 @@ Antes de considerar completo, verificar:
 
 ### 13.5 Tratamento de Erros e Logging
 
-- [ ] Implementar tratamento robusto de erros:
-  - [ ] Capturar exceções do Resend (`resend.exceptions.*`)
-  - [ ] Logar erros detalhados (sem expor API key)
-  - [ ] Retornar `False` em caso de erro (mantém compatibilidade)
-  - [ ] Não quebrar o fluxo de criação/edição do profissional se email falhar
-- [ ] Melhorar logging:
-  - [ ] Logar quando email for enviado com sucesso (sem dados sensíveis)
-  - [ ] Logar tentativas de envio e resultados
-  - [ ] Logar quando Resend não estiver configurado (modo dev)
+- [x] Implementar tratamento robusto de erros:
+  - [x] Capturar exceções do Resend (Exception genérica com sanitização de API key)
+  - [x] Logar erros detalhados (sem expor API key - sanitização implementada)
+  - [x] Retornar tupla `(bool, str)` com mensagem de erro específica (mantém compatibilidade)
+  - [x] Não quebrar o fluxo de criação/edição do profissional se email falhar (já implementado no endpoint)
+  - [x] Mensagens de erro específicas e úteis (ex: domínio não verificado, API key inválida, etc.)
+- [x] Melhorar logging:
+  - [x] Logar quando email for enviado com sucesso (com Resend ID, sem dados sensíveis)
+  - [x] Logar tentativas de envio e resultados
+  - [x] Logar quando Resend não estiver configurado (modo dev com fallback)
+  - [x] Logs detalhados em todo o fluxo (frontend, handler Next.js, backend, email service)
 
 ### 13.6 Testes
 
-- [ ] Testar envio real de email:
-  - [ ] Criar profissional via frontend com checkbox "Enviar convite" marcado
-  - [ ] Verificar recebimento do email na caixa de entrada
-  - [ ] Verificar que email chega corretamente formatado
-  - [ ] Testar com diferentes provedores de email (Gmail, Outlook, etc.)
-- [ ] Testar tratamento de erros:
-  - [ ] Simular API key inválida
-  - [ ] Simular domínio não verificado
-  - [ ] Verificar que erro não quebra criação do profissional
-- [ ] Testar em ambiente de desenvolvimento:
-  - [ ] Verificar que funciona sem `RESEND_API_KEY` (modo log)
-  - [ ] Verificar que funciona com `RESEND_API_KEY` configurado
+- [x] Testar envio real de email:
+  - [x] Criar profissional via frontend com checkbox "Enviar convite" marcado
+  - [x] Verificar recebimento do email na caixa de entrada (testado com domínio verificado)
+  - [x] Verificar que email chega corretamente formatado
+  - [ ] Testar com diferentes provedores de email (Gmail, Outlook, etc.) - pendente testes adicionais
+- [x] Testar tratamento de erros:
+  - [x] Simular API key inválida (mensagem específica implementada)
+  - [x] Simular domínio não verificado (mensagem específica com domínio extraído implementada)
+  - [x] Verificar que erro não quebra criação do profissional (implementado e testado)
+  - [x] Mensagens de erro exibidas no ActionBar do frontend
+- [x] Testar em ambiente de desenvolvimento:
+  - [x] Verificar que funciona sem `RESEND_API_KEY` (modo log - implementado e testado)
+  - [x] Verificar que funciona com `RESEND_API_KEY` configurado (implementado e testado)
 
 ### 13.7 Documentação
 
@@ -1340,7 +1343,39 @@ Antes de considerar completo, verificar:
 - [x] Atualizar `CHECKLIST.md` (esta seção):
   - [x] Marcar itens concluídos conforme implementação
 
-### 13.8 Melhorias Futuras (Opcional)
+### 13.8 Integração Frontend
+
+- [x] Criar handler Next.js para endpoint de convite:
+  - [x] `frontend/app/api/professional/[id]/invite/route.ts` criado
+  - [x] Proxy para backend com tratamento de erros
+- [x] Exibir mensagens de sucesso/erro no ActionBar:
+  - [x] Mensagens de sucesso exibidas (verde)
+  - [x] Mensagens de erro exibidas (vermelho)
+  - [x] Mesmo layout das mensagens de erro (sem bordas, apenas texto)
+  - [x] Mensagens não desaparecem automaticamente
+- [x] Integração com formulário de profissional:
+  - [x] Checkbox "Enviar convite" funcional
+  - [x] Envio automático após salvar profissional
+  - [x] Tratamento de erros sem quebrar fluxo de salvamento
+
+### 13.9 Melhorias Adicionais Implementadas
+
+- [x] Mensagens de erro específicas e úteis:
+  - [x] Detecção de erro de domínio não verificado com extração do domínio
+  - [x] Mensagens específicas para diferentes tipos de erro (API key inválida, domínio não verificado, limite excedido, etc.)
+  - [x] Mensagens traduzidas e amigáveis em português
+  - [x] Função retorna tupla `(bool, str)` com mensagem de erro específica
+- [x] Logs detalhados em todo o fluxo:
+  - [x] Logs no frontend (UI) com prefixo [INVITE-UI]
+  - [x] Logs no handler Next.js com prefixo [INVITE-FRONTEND]
+  - [x] Logs no backend (endpoint) com prefixo [INVITE]
+  - [x] Logs no serviço de email com prefixo [EMAIL]
+- [x] Validação de segurança:
+  - [x] Tratamento de código antigo em cache (validação de tipo de retorno)
+  - [x] Sanitização de API key nos logs
+  - [x] Retorno de tupla `(bool, str)` para mensagens de erro específicas
+
+### 13.10 Melhorias Futuras (Opcional)
 
 - [ ] Templates do Resend:
   - [ ] Criar template no dashboard do Resend
