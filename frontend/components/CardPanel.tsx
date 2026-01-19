@@ -49,7 +49,13 @@ export function CardPanel({
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                         <p className="mt-2 text-sm text-gray-600">{loadingMessage}</p>
                     </div>
+                ) : totalCount === 0 && createCard ? (
+                    // Quando não há itens mas há card de criação, mostrar apenas o card
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {createCard}
+                    </div>
                 ) : totalCount === 0 ? (
+                    // Quando não há itens e não há card de criação, mostrar mensagem vazia
                     <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
                         <p className="text-gray-600">{emptyMessage}</p>
                     </div>

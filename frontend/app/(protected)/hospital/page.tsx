@@ -4,6 +4,7 @@ import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActio
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
+import { CreateCard } from '@/components/CreateCard'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
@@ -299,32 +300,11 @@ export default function HospitalPage() {
                 emptyMessage="Nenhum hospital cadastrado ainda."
                 countLabel="Total de hospitais"
                 createCard={
-                    <div
+                    <CreateCard
+                        label="Criar novo hospital"
+                        subtitle="Clique para adicionar"
                         onClick={handleCreateClick}
-                        className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
-                    >
-                        <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-                            <svg
-                                className="w-12 h-12 mb-3 text-slate-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 4v16m8-8H4"
-                                />
-                            </svg>
-                            <p className="text-sm font-medium mb-1 text-slate-700">
-                                Criar novo hospital
-                            </p>
-                            <p className="text-xs text-slate-500">
-                                Clique para adicionar
-                            </p>
-                        </div>
-                    </div>
+                    />
                 }
             >
                 {hospitals.map((hospital) => {

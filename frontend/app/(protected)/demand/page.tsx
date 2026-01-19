@@ -3,6 +3,7 @@
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { CardActionButtons } from '@/components/CardActionButtons'
 import { CardPanel } from '@/components/CardPanel'
+import { CreateCard } from '@/components/CreateCard'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { extractErrorMessage } from '@/lib/api'
@@ -587,32 +588,11 @@ export default function DemandPage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    <div
+                    <CreateCard
+                        label="Criar nova demanda"
+                        subtitle="Clique para adicionar"
                         onClick={handleCreateClick}
-                        className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
-                    >
-                        <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-                            <svg
-                                className="w-12 h-12 mb-3 text-slate-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 4v16m8-8H4"
-                                />
-                            </svg>
-                            <p className="text-sm font-medium mb-1 text-slate-700">
-                                Criar nova demanda
-                            </p>
-                            <p className="text-xs text-slate-500">
-                                Clique para adicionar
-                            </p>
-                        </div>
-                    </div>
+                    />
                 }
             >
                 {demands.map((demand) => {
