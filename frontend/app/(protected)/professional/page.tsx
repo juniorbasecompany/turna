@@ -302,132 +302,6 @@ export default function ProfessionalPage() {
 
     return (
         <>
-            {/* Área de edição */}
-            {isEditing && (
-                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-                    <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                            {editingProfessional ? 'Editar Profissional' : 'Criar Profissional'}
-                        </h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Nome <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    required
-                                    disabled={submitting}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Email
-                                    </label>
-                                    <input
-                                        type="email"
-                                        id="email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Telefone
-                                    </label>
-                                    <input
-                                        type="text"
-                                        id="phone"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id="active"
-                                    checked={formData.active}
-                                    onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    disabled={submitting}
-                                />
-                                <label htmlFor="active" className="ml-2 block text-sm text-gray-700">
-                                    Ativo
-                                </label>
-                            </div>
-                            <div>
-                                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Observações
-                                </label>
-                                <textarea
-                                    id="notes"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    disabled={submitting}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Filtros */}
-            <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-                <div className="mb-4 bg-white rounded-lg border border-gray-200 p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="filter-q" className="block text-sm font-medium text-gray-700 mb-2">
-                                Buscar
-                            </label>
-                            <input
-                                type="text"
-                                id="filter-q"
-                                value={filters.q}
-                                onChange={(e) => {
-                                    setFilters({ ...filters, q: e.target.value })
-                                    setPagination({ ...pagination, offset: 0 })
-                                }}
-                                placeholder="Nome..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="filter-active" className="block text-sm font-medium text-gray-700 mb-2">
-                                Status
-                            </label>
-                            <select
-                                id="filter-active"
-                                value={filters.active === null ? '' : String(filters.active)}
-                                onChange={(e) => {
-                                    setFilters({
-                                        ...filters,
-                                        active: e.target.value === '' ? null : e.target.value === 'true',
-                                    })
-                                    setPagination({ ...pagination, offset: 0 })
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                <option value="">Todos</option>
-                                <option value="true">Ativos</option>
-                                <option value="false">Inativos</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <CardPanel
                 title="Profissionais"
                 description="Gerencie os profissionais que podem ser alocados nas escalas"
@@ -437,6 +311,130 @@ export default function ProfessionalPage() {
                 loadingMessage="Carregando profissionais..."
                 emptyMessage="Nenhum profissional cadastrado ainda."
                 countLabel="Total de profissionais"
+                editContent={
+                    isEditing ? (
+                        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                                {editingProfessional ? 'Editar Profissional' : 'Criar Profissional'}
+                            </h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Nome <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="name"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                        disabled={submitting}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                                            Email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            id="email"
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            disabled={submitting}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                                            Telefone
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="phone"
+                                            value={formData.phone}
+                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            disabled={submitting}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        id="active"
+                                        checked={formData.active}
+                                        onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        disabled={submitting}
+                                    />
+                                    <label htmlFor="active" className="ml-2 block text-sm text-gray-700">
+                                        Ativo
+                                    </label>
+                                </div>
+                                <div>
+                                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Observações
+                                    </label>
+                                    <textarea
+                                        id="notes"
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        disabled={submitting}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : undefined
+                }
+                filterContent={
+                    !isEditing ? (
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="filter-q" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Buscar
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="filter-q"
+                                        value={filters.q}
+                                        onChange={(e) => {
+                                            setFilters({ ...filters, q: e.target.value })
+                                            setPagination({ ...pagination, offset: 0 })
+                                        }}
+                                        placeholder="Nome..."
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="filter-active" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Status
+                                    </label>
+                                    <select
+                                        id="filter-active"
+                                        value={filters.active === null ? '' : String(filters.active)}
+                                        onChange={(e) => {
+                                            setFilters({
+                                                ...filters,
+                                                active: e.target.value === '' ? null : e.target.value === 'true',
+                                            })
+                                            setPagination({ ...pagination, offset: 0 })
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="true">Ativos</option>
+                                        <option value="false">Inativos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    ) : undefined
+                }
                 createCard={
                     <CreateCard
                         label="Criar novo profissional"

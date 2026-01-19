@@ -17,6 +17,16 @@ interface CardPanelProps {
      * Mensagem de erro a ser exibida no BottomActionBar
      */
     error?: string | null
+    /**
+     * Conteúdo de filtros a ser exibido na área superior compartilhada
+     * Não aparece se editContent estiver presente
+     */
+    filterContent?: ReactNode
+    /**
+     * Conteúdo do formulário de edição/criação a ser exibido na área superior compartilhada
+     * Tem prioridade sobre filterContent (se presente, filterContent não aparece)
+     */
+    editContent?: ReactNode
 }
 
 export function CardPanel({
@@ -32,6 +42,8 @@ export function CardPanel({
     children,
     className = '',
     error,
+    filterContent,
+    editContent,
 }: CardPanelProps) {
     return (
         <>
@@ -43,6 +55,13 @@ export function CardPanel({
                         <p className="mt-1 text-sm text-gray-600">{description}</p>
                     </div>
                 </div>
+
+                {/* Área superior compartilhada: filtros ou formulário de edição */}
+                {(editContent || filterContent) && (
+                    <div className="mb-4 sm:mb-6">
+                        {editContent || filterContent}
+                    </div>
+                )}
 
                 {loading ? (
                     <div className="text-center py-12">
