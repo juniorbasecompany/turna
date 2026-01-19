@@ -105,9 +105,9 @@ export default function ProfilePage() {
             const data: ProfileListResponse = await response.json()
             setProfiles(data.items)
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar profiles'
+            const message = err instanceof Error ? err.message : 'Erro ao carregar perfis'
             setError(message)
-            console.error('Erro ao carregar profiles:', err)
+            console.error('Erro ao carregar perfis:', err)
         } finally {
             setLoading(false)
         }
@@ -190,7 +190,7 @@ export default function ProfilePage() {
     const handleSave = async () => {
         // Validar account_id
         if (!formData.account_id) {
-            setError('Account é obrigatório')
+            setError('Conta é obrigatória')
             return
         }
 
@@ -284,7 +284,7 @@ export default function ProfilePage() {
     const handleDeleteSelected = async () => {
         if (selectedProfiles.size === 0) return
 
-        if (!confirm(`Tem certeza que deseja deletar ${selectedProfiles.size} profile(s)?`)) {
+        if (!confirm(`Tem certeza que deseja deletar ${selectedProfiles.size} perfil(is)?`)) {
             return
         }
 
@@ -321,7 +321,7 @@ export default function ProfilePage() {
             setError(
                 err instanceof Error
                     ? err.message
-                    : 'Erro ao deletar profiles. Tente novamente.'
+                    : 'Erro ao deletar perfis. Tente novamente.'
             )
         } finally {
             setDeleting(false)
@@ -343,7 +343,7 @@ export default function ProfilePage() {
         <div className="p-4 sm:p-6 lg:p-8 min-w-0">
             <div className="mb-4 sm:mb-6 flex justify-between items-center">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Profiles</h1>
+                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Perfis</h1>
                     <p className="mt-1 text-sm text-gray-600">
                         Gerencie os perfis de usuários com atributos customizados
                     </p>
@@ -352,7 +352,7 @@ export default function ProfilePage() {
                     onClick={handleCreateClick}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md transition-colors text-sm font-medium"
                 >
-                    Criar Profile
+                    Criar Perfil
                 </button>
             </div>
 
@@ -366,12 +366,12 @@ export default function ProfilePage() {
             {isEditing && (
                 <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                        {editingProfile ? 'Editar Profile' : 'Criar Profile'}
+                        {editingProfile ? 'Editar Perfil' : 'Criar Perfil'}
                     </h2>
                     <div className="space-y-4">
                         <div>
                             <label htmlFor="account_id" className="block text-sm font-medium text-gray-700 mb-2">
-                                Account <span className="text-red-500">*</span>
+                                Conta <span className="text-red-500">*</span>
                             </label>
                             <select
                                 id="account_id"
@@ -439,54 +439,77 @@ export default function ProfilePage() {
             {loading ? (
                 <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                    <p className="mt-2 text-sm text-gray-600">Carregando profiles...</p>
+                    <p className="mt-2 text-sm text-gray-600">Carregando perfis...</p>
                 </div>
             ) : profiles.length === 0 ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                    <p className="text-gray-600">Nenhum profile cadastrado ainda.</p>
+                    <p className="text-gray-600">Nenhum perfil cadastrado ainda.</p>
                 </div>
             ) : (
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    ID
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Account
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Hospital
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Criado em
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Ações
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {profiles.map((profile) => {
-                                const isSelected = selectedProfiles.has(profile.id)
-                                const account = accounts.find((a) => a.id === profile.account_id)
-                                const hospital = hospitals.find((h) => h.id === profile.hospital_id)
-                                return (
-                                    <tr
-                                        key={profile.id}
-                                        className={isSelected ? 'bg-red-50' : ''}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {profiles.map((profile) => {
+                        const isSelected = selectedProfiles.has(profile.id)
+                        const account = accounts.find((a) => a.id === profile.account_id)
+                        const hospital = hospitals.find((h) => h.id === profile.hospital_id)
+                        return (
+                            <div
+                                key={profile.id}
+                                className={`group rounded-xl border p-4 min-w-0 transition-all duration-200 ${isSelected
+                                    ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
+                                    : 'border-slate-400 bg-white'
+                                    }`}
+                            >
+                                {/* 1. Corpo - Ícone de perfil e informações */}
+                                <div className="mb-3">
+                                    <div
+                                        className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
+                                        style={{
+                                            backgroundColor: '#f1f5f9',
+                                        }}
                                     >
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {profile.id}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {account ? `${account.name} (${account.email})` : profile.account_id}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {hospital ? hospital.name : profile.hospital_id || '-'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div className="flex flex-col items-center justify-center text-blue-500">
+                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                <svg
+                                                    className="w-full h-full"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                                    />
+                                                </svg>
+                                            </div>
+                                            <h3
+                                                className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                    }`}
+                                                title={account ? account.name : `ID: ${profile.id}`}
+                                            >
+                                                {account ? account.name : `Perfil ${profile.id}`}
+                                            </h3>
+                                            {account && (
+                                                <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                    }`}>
+                                                    {account.email}
+                                                </p>
+                                            )}
+                                            {hospital && (
+                                                <p className={`text-xs text-center px-2 mt-1 ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                    }`}>
+                                                    {hospital.name}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 3. Rodapé - Metadados e ações */}
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                        <span className={`text-sm truncate ${isSelected ? 'text-red-900' : 'text-slate-500'}`}>
                                             {settings
                                                 ? formatDateTime(profile.created_at, settings)
                                                 : new Date(profile.created_at).toLocaleDateString('pt-BR', {
@@ -494,61 +517,60 @@ export default function ProfilePage() {
                                                     month: '2-digit',
                                                     year: 'numeric',
                                                 })}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        toggleProfileSelection(profile.id)
-                                                    }}
-                                                    disabled={deleting}
-                                                    className={`px-2 py-1 rounded transition-colors ${isSelected
-                                                        ? 'text-red-700 bg-red-100'
-                                                        : 'text-gray-400'
-                                                        }`}
-                                                    title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleEditClick(profile)}
-                                                    className="px-2 py-1 rounded text-blue-600 transition-colors"
-                                                    title="Editar profile"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {/* Ícone para exclusão */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                toggleProfileSelection(profile.id)
+                                            }}
+                                            disabled={deleting}
+                                            className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                                ? 'text-red-700 bg-red-100 opacity-100'
+                                                : 'text-gray-400'
+                                                }`}
+                                            title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                        >
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={() => handleEditClick(profile)}
+                                            className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
+                                            title="Editar perfil"
+                                        >
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
             )}
 
