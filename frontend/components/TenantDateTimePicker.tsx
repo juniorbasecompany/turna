@@ -314,7 +314,7 @@ export function TenantDateTimePicker({
             {isOpen && (
                 <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-6">
                     {/* Região do Calendário - Tamanho fixo */}
-                    <div className="w-[280px] flex-shrink-0">
+                    <div className="w-[380px] flex-shrink-0">
                         {/* Header do calendário */}
                         <div className="flex items-center justify-between mb-4">
                             <button
@@ -448,12 +448,13 @@ export function TenantDateTimePicker({
                     </div>
 
                     {/* Região das Horas - Tamanho fixo */}
-                    <div className="w-[280px] flex-shrink-0 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
+                    <div className="w-[240px] flex-shrink-0 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
                         {/* Seletores de hora, minutos e AM/PM */}
                         <div className="flex gap-3 items-start justify-center">
                             {/* Hora (0-11) */}
-                            <div className="flex flex-col items-center">
-                                <div className="rounded w-12">
+                            <div className="flex flex-col items-center relative">
+                                <div className="text-xs text-gray-500 absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-1">hora</div>
+                                <div className="border border-gray-300 rounded w-12 pt-2 px-1 pb-1">
                                     {hours12.map((hour) => (
                                         <button
                                             key={hour}
@@ -470,43 +471,47 @@ export function TenantDateTimePicker({
                                 </div>
                             </div>
 
-                            <div className="text-lg font-semibold text-gray-400">:</div>
+                            {/* Minutos - Dezenas e Unidades envolvidas */}
+                            <div className="flex flex-col items-center relative">
+                                <div className="text-xs text-gray-500 absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-1">minuto</div>
+                                <div className="border border-gray-300 rounded p-1 pt-2 flex gap-1">
+                                    {/* Dezenas de minutos (00, 10, 20, 30, 40, 50) */}
+                                    <div className="flex flex-col items-center">
+                                        <div className="rounded w-12">
+                                            {minuteTens.map((tens) => (
+                                                <button
+                                                    key={tens}
+                                                    type="button"
+                                                    onClick={() => setTempMinuteTens(tens)}
+                                                    className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
+                                                        ? 'bg-blue-600 text-white font-medium'
+                                                        : 'text-gray-700 hover:bg-gray-100'
+                                                        }`}
+                                                >
+                                                    {String(tens).padStart(2, '0')}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
 
-                            {/* Dezenas de minutos (00, 10, 20, 30, 40, 50) */}
-                            <div className="flex flex-col items-center">
-                                <div className="rounded w-12">
-                                    {minuteTens.map((tens) => (
-                                        <button
-                                            key={tens}
-                                            type="button"
-                                            onClick={() => setTempMinuteTens(tens)}
-                                            className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
-                                                ? 'bg-blue-600 text-white font-medium'
-                                                : 'text-gray-700 hover:bg-gray-100'
-                                                }`}
-                                        >
-                                            {String(tens).padStart(2, '0')}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Unidades de minutos (0-9) */}
-                            <div className="flex flex-col items-center">
-                                <div className="rounded w-12">
-                                    {minuteUnits.map((unit) => (
-                                        <button
-                                            key={unit}
-                                            type="button"
-                                            onClick={() => setTempMinuteUnits(unit)}
-                                            className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
-                                                ? 'bg-blue-600 text-white font-medium'
-                                                : 'text-gray-700 hover:bg-gray-100'
-                                                }`}
-                                        >
-                                            {String(unit)}
-                                        </button>
-                                    ))}
+                                    {/* Unidades de minutos (0-9) */}
+                                    <div className="flex flex-col items-center">
+                                        <div className="rounded w-12">
+                                            {minuteUnits.map((unit) => (
+                                                <button
+                                                    key={unit}
+                                                    type="button"
+                                                    onClick={() => setTempMinuteUnits(unit)}
+                                                    className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
+                                                        ? 'bg-blue-600 text-white font-medium'
+                                                        : 'text-gray-700 hover:bg-gray-100'
+                                                        }`}
+                                                >
+                                                    {String(unit)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
