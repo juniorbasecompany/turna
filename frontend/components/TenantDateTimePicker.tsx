@@ -312,239 +312,237 @@ export function TenantDateTimePicker({
 
             {/* Calendário e Time Picker Popover */}
             {isOpen && (
-                <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-[600px] max-h-[465px] flex flex-col">
-                    <div className="flex gap-6 flex-1 min-h-0">
-                        {/* Seção do Calendário */}
-                        <div className="flex-1">
-                            {/* Header do calendário */}
-                            <div className="flex items-center justify-between mb-4">
-                                <button
-                                    type="button"
-                                    onClick={goToPreviousMonth}
-                                    className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                                    aria-label="Mês anterior"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                </button>
-                                <div className="font-medium text-gray-900">
-                                    {monthNames[displayMonth.getMonth()]} {displayMonth.getFullYear()}
+                <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-6">
+                    {/* Região do Calendário - Tamanho fixo */}
+                    <div className="w-[280px] flex-shrink-0">
+                        {/* Header do calendário */}
+                        <div className="flex items-center justify-between mb-4">
+                            <button
+                                type="button"
+                                onClick={goToPreviousMonth}
+                                className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
+                                aria-label="Mês anterior"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+                            <div className="font-medium text-gray-900">
+                                {monthNames[displayMonth.getMonth()]} {displayMonth.getFullYear()}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={goToNextMonth}
+                                className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
+                                aria-label="Próximo mês"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Dias da semana */}
+                        <div className="grid grid-cols-7 gap-1 mb-2">
+                            {dayNames.map((day, index) => (
+                                <div key={index} className="text-center text-xs font-medium text-gray-500 py-1">
+                                    {day}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={goToNextMonth}
-                                    className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                                    aria-label="Próximo mês"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </button>
-                            </div>
+                            ))}
+                        </div>
 
-                            {/* Dias da semana */}
-                            <div className="grid grid-cols-7 gap-1 mb-2">
-                                {dayNames.map((day, index) => (
-                                    <div key={index} className="text-center text-xs font-medium text-gray-500 py-1">
+                        {/* Dias do mês */}
+                        <div className="grid grid-cols-7 mb-4">
+                            {days.map((day, index) => {
+                                if (day === null) {
+                                    return <div key={index} className="py-2" />
+                                }
+
+                                const disabled = isDisabled(day)
+                                const selected = isSelected(day)
+
+                                return (
+                                    <button
+                                        key={index}
+                                        type="button"
+                                        onClick={() => !disabled && handleDateSelect(day)}
+                                        disabled={disabled}
+                                        className={`w-full py-2 px-1 text-sm rounded-md min-w-[48px] ${selected
+                                            ? 'bg-blue-600 text-white font-medium'
+                                            : disabled
+                                                ? 'text-gray-300 cursor-not-allowed'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        aria-label={`Selecionar dia ${day}`}
+                                    >
                                         {day}
-                                    </div>
-                                ))}
-                            </div>
+                                    </button>
+                                )
+                            })}
+                        </div>
 
-                            {/* Dias do mês */}
-                            <div className="grid grid-cols-7 mb-4">
-                                {days.map((day, index) => {
-                                    if (day === null) {
-                                        return <div key={index} className="py-2" />
-                                    }
+                        {/* Botões de ação do calendário */}
+                        <div className="flex justify-between items-center mb-3">
+                            <button
+                                type="button"
+                                onClick={handleClear}
+                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
+                            >
+                                Limpar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const today = new Date()
+                                    setTempDate(today)
+                                    setDisplayMonth(today)
+                                }}
+                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
+                            >
+                                Hoje
+                            </button>
+                        </div>
 
-                                    const disabled = isDisabled(day)
-                                    const selected = isSelected(day)
-
-                                    return (
-                                        <button
-                                            key={index}
-                                            type="button"
-                                            onClick={() => !disabled && handleDateSelect(day)}
-                                            disabled={disabled}
-                                            className={`w-full py-2 px-1 text-sm rounded-md min-w-[48px] ${selected
-                                                ? 'bg-blue-600 text-white font-medium'
-                                                : disabled
-                                                    ? 'text-gray-300 cursor-not-allowed'
-                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                }`}
-                                            aria-label={`Selecionar dia ${day}`}
-                                        >
-                                            {day}
-                                        </button>
-                                    )
-                                })}
-                            </div>
-
-                            {/* Botões de ação do calendário */}
-                            <div className="flex justify-between items-center mb-3">
-                                <button
-                                    type="button"
-                                    onClick={handleClear}
-                                    className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
-                                >
-                                    Limpar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const today = new Date()
-                                        setTempDate(today)
-                                        setDisplayMonth(today)
-                                    }}
-                                    className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
-                                >
-                                    Hoje
-                                </button>
-                            </div>
-
-                            {/* Exibição da data e hora completos */}
-                            {tempDate && (
-                                <div className="mt-2 pt-3 border-t border-gray-200">
-                                    <div className="text-sm font-medium text-gray-700">
-                                        {(() => {
-                                            const finalDate = new Date(tempDate)
-                                            let hour24 = tempHour12
-                                            if (tempAmPm === 'PM') {
-                                                if (tempHour12 === 0) {
-                                                    hour24 = 12
-                                                } else {
-                                                    hour24 = tempHour12 + 12
-                                                }
+                        {/* Exibição da data e hora completos */}
+                        {tempDate && (
+                            <div className="mt-2 pt-3 border-t border-gray-200">
+                                <div className="text-sm font-medium text-gray-700">
+                                    {(() => {
+                                        const finalDate = new Date(tempDate)
+                                        let hour24 = tempHour12
+                                        if (tempAmPm === 'PM') {
+                                            if (tempHour12 === 0) {
+                                                hour24 = 12
                                             } else {
-                                                hour24 = tempHour12
+                                                hour24 = tempHour12 + 12
                                             }
-                                            const totalMinutes = tempMinuteTens + tempMinuteUnits
-                                            finalDate.setHours(hour24)
-                                            finalDate.setMinutes(totalMinutes)
-                                            finalDate.setSeconds(0)
-                                            finalDate.setMilliseconds(0)
+                                        } else {
+                                            hour24 = tempHour12
+                                        }
+                                        const totalMinutes = tempMinuteTens + tempMinuteUnits
+                                        finalDate.setHours(hour24)
+                                        finalDate.setMinutes(totalMinutes)
+                                        finalDate.setSeconds(0)
+                                        finalDate.setMilliseconds(0)
 
-                                            if (settings) {
-                                                return formatDateTime(finalDate.toISOString(), settings, {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })
-                                            }
-                                            return finalDate.toLocaleString('pt-BR', {
+                                        if (settings) {
+                                            return formatDateTime(finalDate.toISOString(), settings, {
                                                 day: '2-digit',
                                                 month: '2-digit',
                                                 year: 'numeric',
                                                 hour: '2-digit',
                                                 minute: '2-digit',
                                             })
-                                        })()}
-                                    </div>
+                                        }
+                                        return finalDate.toLocaleString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })
+                                    })()}
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
+                    </div>
 
-                        {/* Região das Horas */}
-                        <div className="flex-1 border-l border-gray-200 pl-6 flex flex-col relative">
-                            {/* Seletores de hora, minutos e AM/PM */}
-                            <div className="flex gap-3 items-start justify-center flex-1">
-                                {/* Hora (0-11) */}
-                                <div className="flex flex-col items-center">
-                                    <div className="rounded w-12">
-                                        {hours12.map((hour) => (
-                                            <button
-                                                key={hour}
-                                                type="button"
-                                                onClick={() => setTempHour12(hour)}
-                                                className={`w-full py-2 text-sm rounded-md ${tempHour12 === hour
-                                                    ? 'bg-blue-600 text-white font-medium'
-                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                    }`}
-                                            >
-                                                {String(hour).padStart(2, '0')}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="text-lg font-semibold text-gray-400">:</div>
-
-                                {/* Dezenas de minutos (00, 10, 20, 30, 40, 50) */}
-                                <div className="flex flex-col items-center">
-                                    <div className="rounded w-12">
-                                        {minuteTens.map((tens) => (
-                                            <button
-                                                key={tens}
-                                                type="button"
-                                                onClick={() => setTempMinuteTens(tens)}
-                                                className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
-                                                    ? 'bg-blue-600 text-white font-medium'
-                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                    }`}
-                                            >
-                                                {String(tens).padStart(2, '0')}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Unidades de minutos (0-9) */}
-                                <div className="flex flex-col items-center">
-                                    <div className="rounded w-12">
-                                        {minuteUnits.map((unit) => (
-                                            <button
-                                                key={unit}
-                                                type="button"
-                                                onClick={() => setTempMinuteUnits(unit)}
-                                                className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
-                                                    ? 'bg-blue-600 text-white font-medium'
-                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                    }`}
-                                            >
-                                                {String(unit)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* AM/PM */}
-                                <div className="flex flex-col items-center">
-                                    <div className="rounded w-12">
-                                        {amPmOptions.map((ampm) => (
-                                            <button
-                                                key={ampm}
-                                                type="button"
-                                                onClick={() => setTempAmPm(ampm)}
-                                                className={`w-full py-2 text-sm rounded-md ${tempAmPm === ampm
-                                                    ? 'bg-blue-600 text-white font-medium'
-                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                    }`}
-                                            >
-                                                {ampm}
-                                            </button>
-                                        ))}
-                                    </div>
+                    {/* Região das Horas - Tamanho fixo */}
+                    <div className="w-[280px] flex-shrink-0 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
+                        {/* Seletores de hora, minutos e AM/PM */}
+                        <div className="flex gap-3 items-start justify-center">
+                            {/* Hora (0-11) */}
+                            <div className="flex flex-col items-center">
+                                <div className="rounded w-12">
+                                    {hours12.map((hour) => (
+                                        <button
+                                            key={hour}
+                                            type="button"
+                                            onClick={() => setTempHour12(hour)}
+                                            className={`w-full py-2 text-sm rounded-md ${tempHour12 === hour
+                                                ? 'bg-blue-600 text-white font-medium'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {String(hour).padStart(2, '0')}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* Botão OK - Fixo no canto inferior direito */}
-                            {tempDate && (
-                                <div className="absolute bottom-0 right-0">
-                                    <button
-                                        type="button"
-                                        onClick={handleConfirm}
-                                        disabled={!tempDate}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                    >
-                                        OK
-                                    </button>
+                            <div className="text-lg font-semibold text-gray-400">:</div>
+
+                            {/* Dezenas de minutos (00, 10, 20, 30, 40, 50) */}
+                            <div className="flex flex-col items-center">
+                                <div className="rounded w-12">
+                                    {minuteTens.map((tens) => (
+                                        <button
+                                            key={tens}
+                                            type="button"
+                                            onClick={() => setTempMinuteTens(tens)}
+                                            className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
+                                                ? 'bg-blue-600 text-white font-medium'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {String(tens).padStart(2, '0')}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                            </div>
+
+                            {/* Unidades de minutos (0-9) */}
+                            <div className="flex flex-col items-center">
+                                <div className="rounded w-12">
+                                    {minuteUnits.map((unit) => (
+                                        <button
+                                            key={unit}
+                                            type="button"
+                                            onClick={() => setTempMinuteUnits(unit)}
+                                            className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
+                                                ? 'bg-blue-600 text-white font-medium'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {String(unit)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* AM/PM */}
+                            <div className="flex flex-col items-center">
+                                <div className="rounded w-12">
+                                    {amPmOptions.map((ampm) => (
+                                        <button
+                                            key={ampm}
+                                            type="button"
+                                            onClick={() => setTempAmPm(ampm)}
+                                            className={`w-full py-2 text-sm rounded-md ${tempAmPm === ampm
+                                                ? 'bg-blue-600 text-white font-medium'
+                                                : 'text-gray-700 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {ampm}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
+
+                        {/* Botão OK - Fixo no canto inferior direito */}
+                        {tempDate && (
+                            <div className="absolute bottom-0 right-0">
+                                <button
+                                    type="button"
+                                    onClick={handleConfirm}
+                                    disabled={!tempDate}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
