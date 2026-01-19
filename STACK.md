@@ -41,6 +41,9 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 - **OAuth 2.0 (Google)** (login)
 - **JWT** (sessão/claims: account_id, tenant_id, role)
 
+### Email
+- **Resend** (envio de emails transacionais)
+
 ### Infra (Fase 1)
 - **Docker** + **Docker Compose**
 - **VPS simples** para produção inicial (1 servidor)

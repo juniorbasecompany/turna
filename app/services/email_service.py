@@ -1,12 +1,113 @@
 """
-Serviço de envio de emails.
-Por enquanto, apenas loga o email. Pode ser expandido para usar SMTP, SendGrid, AWS SES, etc.
+Serviço de envio de emails usando Resend.
+Faz fallback para modo "log" quando RESEND_API_KEY não está configurado (desenvolvimento).
 """
 import logging
 import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Tentar importar Resend, mas não falhar se não estiver instalado
+try:
+    import resend
+    RESEND_AVAILABLE = True
+except ImportError:
+    RESEND_AVAILABLE = False
+    logger.warning("Resend não está instalado. Emails serão apenas logados.")
+
+
+def _get_email_template_html(
+    professional_name: str,
+    tenant_name: str,
+    app_url: str,
+    to_email: str,
+) -> str:
+    """
+    Gera template HTML para email de convite.
+    """
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convite - {tenant_name}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h1 style="color: #2c3e50; margin-top: 0;">Bem-vindo(a) à {tenant_name}!</h1>
+    </div>
+
+    <div style="padding: 20px 0;">
+        <p>Olá <strong>{professional_name}</strong>,</p>
+
+        <p>Você foi convidado(a) para fazer parte da clínica <strong>{tenant_name}</strong> no sistema Turna.</p>
+
+        <p>Para acessar o aplicativo e começar a usar o sistema, clique no botão abaixo:</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{app_url}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                Acessar Aplicativo
+            </a>
+        </div>
+
+        <p>Ou copie e cole este link no seu navegador:</p>
+        <p style="word-break: break-all; color: #007bff;">{app_url}</p>
+
+        <div style="background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Instruções:</strong></p>
+            <ul style="margin: 10px 0;">
+                <li>Se você já possui uma conta, faça login normalmente.</li>
+                <li>Se ainda não possui uma conta, você poderá criar uma usando seu email: <strong>{to_email}</strong></li>
+            </ul>
+        </div>
+
+        <p>Bem-vindo(a)!</p>
+
+        <p style="margin-top: 30px;">
+            Atenciosamente,<br>
+            <strong>Equipe {tenant_name}</strong>
+        </p>
+    </div>
+
+    <div style="border-top: 1px solid #dee2e6; padding-top: 20px; margin-top: 30px; font-size: 12px; color: #6c757d;">
+        <p style="margin: 0;">Este é um email automático do sistema Turna. Por favor, não responda este email.</p>
+    </div>
+</body>
+</html>
+    """.strip()
+
+
+def _get_email_template_text(
+    professional_name: str,
+    tenant_name: str,
+    app_url: str,
+    to_email: str,
+) -> str:
+    """
+    Gera versão texto simples do email de convite.
+    """
+    return f"""
+Olá {professional_name},
+
+Você foi convidado(a) para fazer parte da clínica {tenant_name} no sistema Turna.
+
+Para acessar o aplicativo e começar a usar o sistema, acesse:
+{app_url}
+
+Instruções:
+- Se você já possui uma conta, faça login normalmente.
+- Se ainda não possui uma conta, você poderá criar uma usando seu email: {to_email}
+
+Bem-vindo(a)!
+
+Atenciosamente,
+Equipe {tenant_name}
+
+---
+Este é um email automático do sistema Turna. Por favor, não responda este email.
+    """.strip()
 
 
 def send_professional_invite(
@@ -16,7 +117,8 @@ def send_professional_invite(
     app_url: Optional[str] = None,
 ) -> bool:
     """
-    Envia email de convite para um profissional se juntar à clínica.
+    Envia email de convite para um profissional se juntar à clínica usando Resend.
+    Faz fallback para modo "log" quando RESEND_API_KEY não está configurado.
 
     Args:
         to_email: Email do destinatário
@@ -29,38 +131,95 @@ def send_professional_invite(
     """
     try:
         app_url = app_url or os.getenv("APP_URL", "http://localhost:3000")
+        resend_api_key = os.getenv("RESEND_API_KEY")
+        email_from = os.getenv("EMAIL_FROM")
 
         subject = f"Convite para se juntar à {tenant_name}"
 
-        body = f"""
-Olá {professional_name},
+        # Gerar templates
+        html_body = _get_email_template_html(
+            professional_name=professional_name,
+            tenant_name=tenant_name,
+            app_url=app_url,
+            to_email=to_email,
+        )
+        text_body = _get_email_template_text(
+            professional_name=professional_name,
+            tenant_name=tenant_name,
+            app_url=app_url,
+            to_email=to_email,
+        )
 
-Você foi convidado(a) para fazer parte da clínica {tenant_name} no sistema Turna.
+        # Verificar se Resend está disponível e configurado
+        if not RESEND_AVAILABLE:
+            logger.warning(
+                f"Resend não está instalado. Email de convite apenas logado para {to_email}"
+            )
+            logger.info(f"Assunto: {subject}")
+            logger.info(f"Corpo (texto):\n{text_body}")
+            return True
 
-Para acessar o aplicativo e começar a usar o sistema, acesse:
-{app_url}
+        if not resend_api_key:
+            logger.warning(
+                f"RESEND_API_KEY não configurado. Email de convite apenas logado para {to_email}"
+            )
+            logger.info(f"Assunto: {subject}")
+            logger.info(f"Corpo (texto):\n{text_body}")
+            return True
 
-Se você já possui uma conta, faça login normalmente.
-Se ainda não possui uma conta, você poderá criar uma usando seu email: {to_email}
+        if not email_from:
+            logger.error(
+                f"EMAIL_FROM não configurado. Não é possível enviar email para {to_email}"
+            )
+            return False
 
-Bem-vindo(a)!
+        # Configurar Resend
+        resend.api_key = resend_api_key
 
-Equipe {tenant_name}
-        """.strip()
+        # Enviar email via Resend
+        try:
+            params = {
+                "from": email_from,
+                "to": [to_email],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
+            }
+            email_response = resend.Emails.send(params)
 
-        # Por enquanto, apenas loga o email
-        # TODO: Implementar envio real via SMTP, SendGrid, AWS SES, etc.
-        logger.info(f"Email de convite enviado para {to_email}")
-        logger.info(f"Assunto: {subject}")
-        logger.info(f"Corpo:\n{body}")
+            # Resend retorna um objeto com 'id' quando bem-sucedido
+            if email_response and isinstance(email_response, dict) and "id" in email_response:
+                logger.info(
+                    f"Email de convite enviado com sucesso para {to_email} (Resend ID: {email_response['id']})"
+                )
+                return True
+            elif email_response:
+                # Pode retornar objeto com atributo id
+                email_id = getattr(email_response, "id", None)
+                if email_id:
+                    logger.info(
+                        f"Email de convite enviado com sucesso para {to_email} (Resend ID: {email_id})"
+                    )
+                    return True
 
-        # Em produção, aqui você faria o envio real:
-        # - Usar smtplib para SMTP
-        # - Usar boto3 para AWS SES
-        # - Usar sendgrid para SendGrid
-        # - etc.
+            logger.error(f"Resposta inesperada do Resend ao enviar email para {to_email}: {email_response}")
+            return False
 
-        return True
+        except Exception as resend_error:
+            # Capturar exceções específicas do Resend sem expor API key
+            error_msg = str(resend_error)
+            # Remover possíveis vazamentos de API key do log
+            if resend_api_key in error_msg:
+                error_msg = error_msg.replace(resend_api_key, "***REDACTED***")
+            logger.error(
+                f"Erro ao enviar email via Resend para {to_email}: {error_msg}",
+                exc_info=True,
+            )
+            return False
+
     except Exception as e:
-        logger.error(f"Erro ao enviar email de convite para {to_email}: {e}", exc_info=True)
+        logger.error(
+            f"Erro inesperado ao processar envio de email de convite para {to_email}: {e}",
+            exc_info=True,
+        )
         return False
