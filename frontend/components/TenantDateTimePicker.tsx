@@ -1,5 +1,6 @@
 'use client'
 
+import { Calendar } from '@/components/Calendar'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { formatDateTime } from '@/lib/tenantFormat'
 import { useEffect, useRef, useState } from 'react'
@@ -49,8 +50,8 @@ export function TenantDateTimePicker({
         return hour24
     }
 
-    const getAmPm = (hour24: number): 'AM' | 'PM' => {
-        return hour24 >= 12 ? 'PM' : 'AM'
+    const getAmPm = (hour24: number): 'am' | 'pm' => {
+        return hour24 >= 12 ? 'pm' : 'am'
     }
 
     // Estados para seleção de hora (0-11 format)
@@ -120,25 +121,6 @@ export function TenantDateTimePicker({
         minute: '2-digit',
     }) : ''
 
-    // Navegação do calendário
-    const goToPreviousMonth = () => {
-        setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() - 1, 1))
-    }
-
-    const goToNextMonth = () => {
-        setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 1))
-    }
-
-    // Gerar dias do mês
-    const getDaysInMonth = (date: Date) => {
-        return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
-    }
-
-    const getFirstDayOfMonth = (date: Date) => {
-        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1)
-        return firstDay.getDay()
-    }
-
     // Selecionar data (temporária, não confirma ainda)
     const handleDateSelect = (day: number) => {
         if (!tempDate) {
@@ -189,48 +171,23 @@ export function TenantDateTimePicker({
         setIsOpen(false)
     }
 
-    // Verificar se data está selecionada
-    const isSelected = (day: number) => {
-        if (!tempDate) return false
-        return (
-            day === tempDate.getDate() &&
-            displayMonth.getMonth() === tempDate.getMonth() &&
-            displayMonth.getFullYear() === tempDate.getFullYear()
-        )
+    // Handler para botão Limpar do calendário
+    const handleCalendarClear = () => {
+        setTempDate(null)
     }
 
-    // Verificar se data está desabilitada
-    const isDisabled = (day: number) => {
-        const date = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), day)
-        if (minDate && date < minDate) return true
-        if (maxDate && date > maxDate) return true
-        return false
+    // Handler para botão Hoje do calendário
+    const handleCalendarToday = () => {
+        const today = new Date()
+        setTempDate(today)
+        setDisplayMonth(today)
     }
-
-    // Gerar array de dias para o calendário
-    const daysInMonth = getDaysInMonth(displayMonth)
-    const firstDay = getFirstDayOfMonth(displayMonth)
-    const days: (number | null)[] = []
-
-    // Preencher com nulls até o primeiro dia do mês
-    for (let i = 0; i < firstDay; i++) {
-        days.push(null)
-    }
-
-    // Adicionar dias do mês
-    for (let day = 1; day <= daysInMonth; day++) {
-        days.push(day)
-    }
-
-    // Nomes dos meses e dias da semana em português
-    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
     // Gerar arrays para seleção
     const hours12 = Array.from({ length: 12 }, (_, i) => i) // 0 a 11
     const minuteTens = [0, 10, 20, 30, 40, 50] // Dezenas de minutos
     const minuteUnits = Array.from({ length: 10 }, (_, i) => i) // 0 a 9
-    const amPmOptions: ('AM' | 'PM')[] = ['AM', 'PM']
+    const amPmOptions: ('am' | 'pm')[] = ['am', 'pm']
 
     if (!settings) {
         // Fallback se settings não estiver carregado
@@ -314,103 +271,25 @@ export function TenantDateTimePicker({
             {isOpen && (
                 <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-6">
                     {/* Região do Calendário - Tamanho fixo */}
-                    <div className="w-[380px] flex-shrink-0 flex flex-col relative">
-                        {/* Header do calendário */}
-                        <div className="flex items-center justify-between mb-4">
-                            <button
-                                type="button"
-                                onClick={goToPreviousMonth}
-                                className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                                aria-label="Mês anterior"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                            <div className="font-medium text-gray-900">
-                                {monthNames[displayMonth.getMonth()]} {displayMonth.getFullYear()}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={goToNextMonth}
-                                className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                                aria-label="Próximo mês"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Dias da semana */}
-                        <div className="grid grid-cols-7 gap-1 mb-2">
-                            {dayNames.map((day, index) => (
-                                <div key={index} className="text-center text-xs font-medium text-gray-500 py-1">
-                                    {day}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Dias do mês */}
-                        <div className="grid grid-cols-7 mb-4">
-                            {days.map((day, index) => {
-                                if (day === null) {
-                                    return <div key={index} className="py-2" />
-                                }
-
-                                const disabled = isDisabled(day)
-                                const selected = isSelected(day)
-
-                                return (
-                                    <button
-                                        key={index}
-                                        type="button"
-                                        onClick={() => !disabled && handleDateSelect(day)}
-                                        disabled={disabled}
-                                        className={`w-full py-2 px-1 text-sm rounded-md min-w-[48px] ${selected
-                                            ? 'bg-blue-600 text-white font-medium'
-                                            : disabled
-                                                ? 'text-gray-300 cursor-not-allowed'
-                                                : 'text-gray-700 hover:bg-gray-100'
-                                            }`}
-                                        aria-label={`Selecionar dia ${day}`}
-                                    >
-                                        {day}
-                                    </button>
-                                )
-                            })}
-                        </div>
-
-                        {/* Botões de ação do calendário */}
-                        <div className="flex justify-between items-center mb-3">
-                            <button
-                                type="button"
-                                onClick={handleClear}
-                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
-                            >
-                                Limpar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const today = new Date()
-                                    setTempDate(today)
-                                    setDisplayMonth(today)
-                                }}
-                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
-                            >
-                                Hoje
-                            </button>
-                        </div>
-
-                        {/* Exibição da data e hora completos - Canto inferior esquerdo */}
-                        {tempDate && (
-                            <div className="absolute bottom-0 left-0">
+                    <Calendar
+                        selectedDate={value}
+                        tempDate={tempDate}
+                        displayMonth={displayMonth}
+                        onDisplayMonthChange={setDisplayMonth}
+                        onDateSelect={handleDateSelect}
+                        onClear={handleCalendarClear}
+                        onToday={handleCalendarToday}
+                        minDate={minDate}
+                        maxDate={maxDate}
+                        width="w-[380px]"
+                        showActionButtons={true}
+                        footerContent={
+                            tempDate && (
                                 <div className="text-sm font-medium text-gray-700">
                                     {(() => {
                                         const finalDate = new Date(tempDate)
                                         let hour24 = tempHour12
-                                        if (tempAmPm === 'PM') {
+                                        if (tempAmPm === 'pm') {
                                             if (tempHour12 === 0) {
                                                 hour24 = 12
                                             } else {
@@ -443,9 +322,9 @@ export function TenantDateTimePicker({
                                         })
                                     })()}
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )
+                        }
+                    />
 
                     {/* Região das Horas - Tamanho fixo */}
                     <div className="w-[270px] flex-shrink-0 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
@@ -517,7 +396,7 @@ export function TenantDateTimePicker({
 
                             {/* AM/PM */}
                             <div className="flex flex-col items-center">
-                                <div className="rounded w-12">
+                                <div className="rounded w-12 pt-[9px]">
                                     {amPmOptions.map((ampm) => (
                                         <button
                                             key={ampm}
@@ -544,7 +423,7 @@ export function TenantDateTimePicker({
                                     disabled={!tempDate}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                                 >
-                                    OK
+                                    Ok
                                 </button>
                             </div>
                         )}
