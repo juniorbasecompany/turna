@@ -314,7 +314,7 @@ export function TenantDateTimePicker({
             {isOpen && (
                 <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-6">
                     {/* Região do Calendário - Tamanho fixo */}
-                    <div className="w-[380px] flex-shrink-0">
+                    <div className="w-[380px] flex-shrink-0 flex flex-col relative">
                         {/* Header do calendário */}
                         <div className="flex items-center justify-between mb-4">
                             <button
@@ -386,7 +386,7 @@ export function TenantDateTimePicker({
                             <button
                                 type="button"
                                 onClick={handleClear}
-                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
+                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
                             >
                                 Limpar
                             </button>
@@ -397,15 +397,15 @@ export function TenantDateTimePicker({
                                     setTempDate(today)
                                     setDisplayMonth(today)
                                 }}
-                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none"
+                                className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
                             >
                                 Hoje
                             </button>
                         </div>
 
-                        {/* Exibição da data e hora completos */}
+                        {/* Exibição da data e hora completos - Canto inferior esquerdo */}
                         {tempDate && (
-                            <div className="mt-2 pt-3 border-t border-gray-200">
+                            <div className="absolute bottom-0 left-0">
                                 <div className="text-sm font-medium text-gray-700">
                                     {(() => {
                                         const finalDate = new Date(tempDate)
@@ -448,13 +448,13 @@ export function TenantDateTimePicker({
                     </div>
 
                     {/* Região das Horas - Tamanho fixo */}
-                    <div className="w-[240px] flex-shrink-0 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
+                    <div className="w-[270px] flex-shrink-0 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
                         {/* Seletores de hora, minutos e AM/PM */}
                         <div className="flex gap-3 items-start justify-center">
                             {/* Hora (0-11) */}
                             <div className="flex flex-col items-center relative">
                                 <div className="text-xs text-gray-500 absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-1">hora</div>
-                                <div className="border border-gray-300 rounded w-12 pt-2 px-1 pb-1">
+                                <div className="border border-gray-300 rounded w-14 pt-2 px-1 pb-1">
                                     {hours12.map((hour) => (
                                         <button
                                             key={hour}
