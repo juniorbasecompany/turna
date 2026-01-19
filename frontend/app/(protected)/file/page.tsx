@@ -1,6 +1,7 @@
 'use client'
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { CreateCard } from '@/components/CreateCard'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { extractErrorMessage } from '@/lib/api'
@@ -1236,31 +1237,20 @@ export default function FilesPage() {
                                 className="hidden"
                                 id="file-upload"
                             />
-                            <div
+                            <CreateCard
+                                label="Adicionar um ou mais arquivos"
+                                subtitle="Clique ou arraste e solte"
                                 onClick={handleUploadCardClick}
+                                isDragging={isDragging}
+                                showFlash={uploadCardFlash}
+                                flashMessage="Selecione o hospital"
                                 onDragEnter={handleDragEnter}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
                                 onDrop={handleDrop}
-                                className={`group rounded-xl border-2 border-dashed bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px] overflow-hidden ${isDragging
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : uploadCardFlash
-                                        ? 'border-red-500 bg-red-50'
-                                        : 'border-slate-300'
-                                    }`}
-                            >
-                                {/* Compartimento superior para mensagem */}
-                                <div className="h-8 flex items-center justify-center">
-                                    {uploadCardFlash && (
-                                        <p className="text-sm font-medium text-red-700 text-center">
-                                            Selecione o hospital
-                                        </p>
-                                    )}
-                                </div>
-                                {/* Conteúdo principal do card */}
-                                <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                                customIcon={
                                     <svg
-                                        className={`w-12 h-12 mb-3 ${isDragging ? 'text-blue-600' : uploadCardFlash ? 'text-red-600' : 'text-slate-400'}`}
+                                        className="w-full h-full"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -1272,12 +1262,9 @@ export default function FilesPage() {
                                             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                                         />
                                     </svg>
-                                    <p className={`text-sm font-medium mb-1 ${isDragging ? 'text-blue-600' : 'text-slate-700'}`}>
-                                        {isDragging ? 'Solte os arquivos aqui' : 'Adicionar um ou mais arquivos'}
-                                    </p>
-                                    <p className="text-xs text-slate-500 mb-2">
-                                        Clique ou arraste e solte
-                                    </p>
+                                }
+                            >
+                                <div className="space-y-0.5">
                                     <p className="text-xs text-slate-400 leading-tight">
                                         Documentos PDF
                                     </p>
@@ -1291,7 +1278,7 @@ export default function FilesPage() {
                                         Texto CSV
                                     </p>
                                 </div>
-                            </div>
+                            </CreateCard>
 
                             {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
                             {pendingFiles
