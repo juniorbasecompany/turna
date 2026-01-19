@@ -96,7 +96,7 @@ export async function PUT(
 /**
  * DELETE /api/demand/[id]
  *
- * Deleta uma demanda.
+ * Exclui uma demanda.
  */
 export async function DELETE(
   request: NextRequest,
@@ -124,13 +124,13 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Erro ao deletar demanda:', error)
+    console.error('Erro ao excluir demanda:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao deletar demanda',
+            : 'Erro desconhecido ao excluir demanda',
       },
       { status: 500 }
     )

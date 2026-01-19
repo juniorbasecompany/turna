@@ -158,10 +158,10 @@ class S3Client:
 
     def delete_file(self, s3_key: str) -> None:
         """
-        Deleta arquivo do S3/MinIO.
+        Exclui arquivo do S3/MinIO.
 
         Args:
-            s3_key: Chave S3 do arquivo a ser deletado
+            s3_key: Chave S3 do arquivo a ser excluído
         """
         try:
             self._client.delete_object(
@@ -169,4 +169,4 @@ class S3Client:
                 Key=s3_key,
             )
         except ClientError as e:
-            raise Exception(f"Erro ao deletar arquivo do S3: {e}")
+            raise Exception(f"Erro ao excluir arquivo do S3: {e}")

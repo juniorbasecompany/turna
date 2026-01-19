@@ -174,9 +174,9 @@ class StorageService:
 
     def delete_file(self, s3_key: str) -> None:
         """
-        Deleta arquivo do S3/MinIO.
+        Exclui arquivo do S3/MinIO.
 
         Args:
-            s3_key: Chave S3 do arquivo a ser deletado
+            s3_key: Chave S3 do arquivo a ser excluído
         """
         self.client.delete_file(s3_key)

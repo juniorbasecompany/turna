@@ -96,7 +96,7 @@ export async function PUT(
 /**
  * DELETE /api/profile/[id]
  *
- * Deleta um profile.
+ * Exclui um profile.
  */
 export async function DELETE(
   request: NextRequest,
@@ -124,13 +124,13 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Erro ao deletar profile:', error)
+    console.error('Erro ao excluir profile:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao deletar profile',
+            : 'Erro desconhecido ao excluir profile',
       },
       { status: 500 }
     )

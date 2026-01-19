@@ -357,7 +357,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Retornar `job_status` (status do job EXTRACT_DEMAND mais recente do arquivo)
 - [x] `GET /file/{file_id}` (obter informações do arquivo e URL presignada)
 - [x] `GET /file/{file_id}/download` (download direto do arquivo)
-- [x] `DELETE /file/{file_id}` (deletar arquivo do banco e S3/MinIO - sem restrições)
+- [x] `DELETE /file/{file_id}` (excluir arquivo do banco e S3/MinIO - sem restrições)
 
 ### 5.5 Validações e Segurança
 - [x] Garantir que TODOS os endpoints validam tenant_id:
@@ -849,7 +849,7 @@ Antes de considerar completo, verificar:
   - [x] `GET /hospital/list` (listar)
   - [x] `GET /hospital/{id}` (detalhe)
   - [x] `PUT /hospital/{id}` (editar)
-  - [x] `DELETE /hospital/{id}` (deletar, com validação de arquivos associados)
+  - [x] `DELETE /hospital/{id}` (excluir, com validação de arquivos associados)
 
 - [x] Validações
   - [x] `name` obrigatório e único por tenant
@@ -899,7 +899,7 @@ Antes de considerar completo, verificar:
 - [x] Página `/hospital`
   - [x] Lista de hospitais do tenant
   - [x] Mostrar: nome, data de criação, cor
-  - [x] Ação: editar e deletar
+  - [x] Ação: editar e excluir
 
 - [x] Criar hospital
   - [x] Campo **Nome**
@@ -913,7 +913,7 @@ Antes de considerar completo, verificar:
 
 - [x] UX
   - [x] Aviso claro de que o prompt influencia a leitura dos arquivos
-  - [x] Delete com validação (não permite deletar se houver arquivos associados)
+  - [x] Delete com validação (não permite excluir se houver arquivos associados)
   - [x] Seleção múltipla para exclusão em lote
 
 ---
@@ -1031,9 +1031,9 @@ Antes de considerar completo, verificar:
   - [x] Atualizar `updated_at` automaticamente
   - [x] Retornar `ProfileResponse`
 
-- [x] `DELETE /api/profile/{profile_id}` (deletar profile):
+- [x] `DELETE /api/profile/{profile_id}` (excluir profile):
   - [x] Validar que profile existe e pertence ao tenant
-  - [x] Deletar profile
+  - [x] Excluir profile
   - [x] Retornar 204 No Content
 
 - [x] Validações de segurança:
@@ -1078,7 +1078,7 @@ Antes de considerar completo, verificar:
 - [x] Criar `frontend/app/api/profile/[id]/route.ts`:
   - [x] `GET` - buscar profile específico (proxy para backend)
   - [x] `PUT` - atualizar profile (proxy para backend)
-  - [x] `DELETE` - deletar profile (proxy para backend)
+  - [x] `DELETE` - excluir profile (proxy para backend)
 
 - [x] Criar `frontend/app/api/account/list/route.ts`:
   - [x] `GET` - listar accounts do tenant (proxy para backend)
@@ -1100,7 +1100,7 @@ Antes de considerar completo, verificar:
   - [ ] Funcionalidades:
     - [ ] Criar novo profile
     - [ ] Editar profile existente
-    - [ ] Deletar profile (com confirmação)
+    - [ ] Excluir profile
     - [ ] Validação de JSON antes de enviar
     - [ ] Tratamento de erros de validação
 
@@ -1130,7 +1130,6 @@ Antes de considerar completo, verificar:
 - [x] Frontend:
   - [x] Validar JSON antes de enviar (usar `JSON.parse()`)
   - [x] Mostrar erros de validação claramente
-  - [x] Confirmar exclusão antes de deletar
   - [x] Tratamento de erros HTTP (401, 403, 404, 409, 500)
   - [x] Adicionar exceção `/profile` no `lib/api.ts` para evitar redirecionamento indevido
 
@@ -1147,13 +1146,13 @@ Antes de considerar completo, verificar:
   - [ ] Validar atualização de `hospital_id`
   - [ ] Validar atualização de `attribute`
   - [ ] Validar que não permite alterar `tenant_id` ou `account_id`
-- [ ] Deletar profile:
+- [ ] Excluir profile:
   - [ ] Validar exclusão
 - [ ] Frontend:
   - [ ] Testar criação via formulário
   - [ ] Testar edição via formulário
   - [ ] Testar validação de JSON
-  - [ ] Testar exclusão com confirmação
+  - [ ] Testar exclusão
 
 ### 11.10 Documentação
 

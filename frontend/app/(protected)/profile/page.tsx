@@ -1,8 +1,9 @@
 'use client'
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { CardFooter } from '@/components/CardFooter'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { formatDateTime } from '@/lib/tenantFormat'
+import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     HospitalListResponse,
     HospitalResponse,
@@ -280,13 +281,9 @@ export default function ProfilePage() {
         })
     }
 
-    // Deletar profiles selecionados
+    // Excluir profiles selecionados
     const handleDeleteSelected = async () => {
         if (selectedProfiles.size === 0) return
-
-        if (!confirm(`Tem certeza que deseja deletar ${selectedProfiles.size} perfil(is)?`)) {
-            return
-        }
 
         setDeleting(true)
         setError(null)
@@ -321,7 +318,7 @@ export default function ProfilePage() {
             setError(
                 err instanceof Error
                     ? err.message
-                    : 'Erro ao deletar perfis. Tente novamente.'
+                    : 'Erro ao excluir perfis. Tente novamente.'
             )
         } finally {
             setDeleting(false)
@@ -341,19 +338,13 @@ export default function ProfilePage() {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-            <div className="mb-4 sm:mb-6 flex justify-between items-center">
+            <div className="mb-4 sm:mb-6">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Perfis</h1>
                     <p className="mt-1 text-sm text-gray-600">
                         Gerencie os perfis de usuários com atributos customizados
                     </p>
                 </div>
-                <button
-                    onClick={handleCreateClick}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md transition-colors text-sm font-medium"
-                >
-                    Criar Perfil
-                </button>
             </div>
 
             {error && (
@@ -460,130 +451,107 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {profiles.map((profile) => {
-                        const isSelected = selectedProfiles.has(profile.id)
-                        const account = accounts.find((a) => a.id === profile.account_id)
-                        const hospital = hospitals.find((h) => h.id === profile.hospital_id)
-                        return (
-                            <div
-                                key={profile.id}
-                                className={`group rounded-xl border p-4 min-w-0 transition-all duration-200 ${isSelected
-                                    ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                    : 'border-slate-400 bg-white'
-                                    }`}
-                            >
-                                {/* 1. Corpo - Ícone de perfil e informações */}
-                                <div className="mb-3">
-                                    <div
-                                        className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
-                                        style={{
-                                            backgroundColor: '#f1f5f9',
-                                        }}
-                                    >
-                                        <div className="flex flex-col items-center justify-center text-blue-500">
-                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                <svg
-                                                    className="w-full h-full"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
+                        {/* Card de criação - sempre o primeiro */}
+                        <div
+                            onClick={handleCreateClick}
+                            className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
+                        >
+                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                                <svg
+                                    className="w-12 h-12 mb-3 text-slate-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 4v16m8-8H4"
+                                    />
+                                </svg>
+                                <p className="text-sm font-medium mb-1 text-slate-700">
+                                    Criar novo perfil
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                    Clique para adicionar
+                                </p>
+                            </div>
+                        </div>
+
+                        {profiles.map((profile) => {
+                            const isSelected = selectedProfiles.has(profile.id)
+                            const account = accounts.find((a) => a.id === profile.account_id)
+                            const hospital = hospitals.find((h) => h.id === profile.hospital_id)
+                            return (
+                                <div
+                                    key={profile.id}
+                                    className={getCardContainerClasses(isSelected)}
+                                >
+                                    {/* 1. Corpo - Ícone de perfil e informações */}
+                                    <div className="mb-3">
+                                        <div
+                                            className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
+                                            style={{
+                                                backgroundColor: '#f1f5f9',
+                                            }}
+                                        >
+                                            <div className="flex flex-col items-center justify-center text-blue-500">
+                                                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                    <svg
+                                                        className="w-full h-full"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                <h3
+                                                    className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                        }`}
+                                                    title={account ? account.name : `ID: ${profile.id}`}
                                                 >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                                    />
-                                                </svg>
+                                                    {account ? account.name : `Perfil ${profile.id}`}
+                                                </h3>
+                                                {account && (
+                                                    <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                        }`}>
+                                                        {account.email}
+                                                    </p>
+                                                )}
+                                                {hospital && (
+                                                    <p className={`text-xs text-center px-2 mt-1 ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                        }`}>
+                                                        {hospital.name}
+                                                    </p>
+                                                )}
                                             </div>
-                                            <h3
-                                                className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                    }`}
-                                                title={account ? account.name : `ID: ${profile.id}`}
-                                            >
-                                                {account ? account.name : `Perfil ${profile.id}`}
-                                            </h3>
-                                            {account && (
-                                                <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
-                                                    }`}>
-                                                    {account.email}
-                                                </p>
-                                            )}
-                                            {hospital && (
-                                                <p className={`text-xs text-center px-2 mt-1 ${isSelected ? 'text-red-700' : 'text-gray-500'
-                                                    }`}>
-                                                    {hospital.name}
-                                                </p>
-                                            )}
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* 3. Rodapé - Metadados e ações */}
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex flex-col min-w-0 flex-1">
-                                        <span className={`text-sm truncate ${isSelected ? 'text-red-900' : 'text-slate-500'}`}>
-                                            {settings
-                                                ? formatDateTime(profile.created_at, settings)
-                                                : new Date(profile.created_at).toLocaleDateString('pt-BR', {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: 'numeric',
-                                                })}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {/* Ícone para exclusão */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                toggleProfileSelection(profile.id)
-                                            }}
-                                            disabled={deleting}
-                                            className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
-                                                ? 'text-red-700 bg-red-100 opacity-100'
-                                                : 'text-gray-400'
-                                                }`}
-                                            title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditClick(profile)}
-                                            className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
-                                            title="Editar perfil"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                                />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                    {/* 3. Rodapé - Metadados e ações */}
+                                    <CardFooter
+                                        isSelected={isSelected}
+                                        date={profile.created_at}
+                                        settings={settings}
+                                        onToggleSelection={(e) => {
+                                            e.stopPropagation()
+                                            toggleProfileSelection(profile.id)
+                                        }}
+                                        onEdit={() => handleEditClick(profile)}
+                                        disabled={deleting}
+                                        deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                        editTitle="Editar perfil"
+                                    />
                                 </div>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
                     </div>
                 </>
             )}

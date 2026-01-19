@@ -1,9 +1,10 @@
 'use client'
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
+import { CardFooter } from '@/components/CardFooter'
 import { ColorPicker } from '@/components/ColorPicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { formatDateTime } from '@/lib/tenantFormat'
+import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
     HospitalListResponse,
@@ -117,7 +118,7 @@ export default function HospitalPage() {
                 // Editar hospital existente
                 const updateData: HospitalUpdateRequest = {
                     name: formData.name.trim(),
-                    prompt: formData.prompt ? formData.prompt.trim() || null : null,
+                    prompt: formData.prompt ? formData.prompt.trim() : undefined,
                     color: formData.color || null,
                 }
 
@@ -138,8 +139,8 @@ export default function HospitalPage() {
                 // Criar novo hospital
                 const createData: HospitalCreateRequest = {
                     name: formData.name.trim(),
-                    prompt: formData.prompt ? formData.prompt.trim() || null : null,
-                    color: formData.color || null,
+                    prompt: formData.prompt ? formData.prompt.trim() || undefined : undefined,
+                    color: formData.color || undefined,
                 }
 
                 const response = await fetch('/api/hospital', {
@@ -185,7 +186,7 @@ export default function HospitalPage() {
         })
     }
 
-    // Deletar hospitais selecionados
+    // Excluir hospitais selecionados
     const handleDeleteSelected = async () => {
         if (selectedHospitals.size === 0) return
 
@@ -193,7 +194,7 @@ export default function HospitalPage() {
         setError(null)
 
         try {
-            // Deletar todos os hospitais selecionados em paralelo
+            // Excluir todos os hospitais selecionados em paralelo
             const deletePromises = Array.from(selectedHospitals).map(async (hospitalId) => {
                 const response = await fetch(`/api/hospital/${hospitalId}`, {
                     method: 'DELETE',
@@ -225,7 +226,7 @@ export default function HospitalPage() {
             setError(
                 err instanceof Error
                     ? err.message
-                    : 'Erro ao deletar hospitais. Tente novamente.'
+                    : 'Erro ao excluir hospitais. Tente novamente.'
             )
         } finally {
             setDeleting(false)
@@ -234,19 +235,13 @@ export default function HospitalPage() {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-            <div className="mb-4 sm:mb-6 flex justify-between items-center">
+            <div className="mb-4 sm:mb-6">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Hospitais</h1>
                     <p className="mt-1 text-sm text-gray-600">
                         Gerencie os hospitais e seus prompts de extração
                     </p>
                 </div>
-                <button
-                    onClick={handleCreateClick}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                    Criar Hospital
-                </button>
             </div>
 
             {error && (
@@ -330,116 +325,93 @@ export default function HospitalPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {hospitals.map((hospital) => {
-                        const isSelected = selectedHospitals.has(hospital.id)
-                        return (
-                            <div
-                                key={hospital.id}
-                                className={`group rounded-xl border p-4 min-w-0 transition-all duration-200 ${isSelected
-                                    ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-                                    : 'border-slate-400 bg-white hover:border-slate-500'
-                                    }`}
-                            >
-                                {/* 1. Corpo - Ícone de hospital e nome */}
-                                <div className="mb-3">
-                                    <div
-                                        className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
-                                        style={{
-                                            backgroundColor: hospital.color || '#f1f5f9',
-                                        }}
-                                    >
-                                        <div className="flex flex-col items-center justify-center text-blue-500">
-                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                <svg
-                                                    className="w-full h-full"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
+                        {/* Card de criação - sempre o primeiro */}
+                        <div
+                            onClick={handleCreateClick}
+                            className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
+                        >
+                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                                <svg
+                                    className="w-12 h-12 mb-3 text-slate-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 4v16m8-8H4"
+                                    />
+                                </svg>
+                                <p className="text-sm font-medium mb-1 text-slate-700">
+                                    Criar novo hospital
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                    Clique para adicionar
+                                </p>
+                            </div>
+                        </div>
+
+                        {hospitals.map((hospital) => {
+                            const isSelected = selectedHospitals.has(hospital.id)
+                            return (
+                                <div
+                                    key={hospital.id}
+                                    className={getCardContainerClasses(isSelected)}
+                                >
+                                    {/* 1. Corpo - Ícone de hospital e nome */}
+                                    <div className="mb-3">
+                                        <div
+                                            className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
+                                            style={{
+                                                backgroundColor: hospital.color || '#f1f5f9',
+                                            }}
+                                        >
+                                            <div className="flex flex-col items-center justify-center text-blue-500">
+                                                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                    <svg
+                                                        className="w-full h-full"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                <h3
+                                                    className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                        }`}
+                                                    title={hospital.name}
                                                 >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                                    />
-                                                </svg>
+                                                    {hospital.name}
+                                                </h3>
                                             </div>
-                                            <h3
-                                                className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                    }`}
-                                                title={hospital.name}
-                                            >
-                                                {hospital.name}
-                                            </h3>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* 3. Rodapé - Metadados e ações */}
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex flex-col min-w-0 flex-1">
-                                        <span className={`text-sm truncate ${isSelected ? 'text-red-900' : 'text-slate-500'}`}>
-                                            {settings
-                                                ? formatDateTime(hospital.created_at, settings)
-                                                : new Date(hospital.created_at).toLocaleDateString('pt-BR', {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: 'numeric',
-                                                })}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {/* Ícone para exclusão */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                toggleHospitalSelection(hospital.id)
-                                            }}
-                                            disabled={deleting}
-                                            className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
-                                                ? 'text-red-700 bg-red-100 opacity-100'
-                                                : 'text-gray-400'
-                                                }`}
-                                            title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditClick(hospital)}
-                                            className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                            title="Editar hospital"
-                                        >
-                                            <svg
-                                                className="w-4 h-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                                />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                    {/* 3. Rodapé - Metadados e ações */}
+                                    <CardFooter
+                                        isSelected={isSelected}
+                                        date={hospital.created_at}
+                                        settings={settings}
+                                        onToggleSelection={(e) => {
+                                            e.stopPropagation()
+                                            toggleHospitalSelection(hospital.id)
+                                        }}
+                                        onEdit={() => handleEditClick(hospital)}
+                                        disabled={deleting}
+                                        deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                        editTitle="Editar hospital"
+                                    />
                                 </div>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
                     </div>
                 </>
             )}

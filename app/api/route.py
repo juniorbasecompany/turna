@@ -1081,7 +1081,7 @@ def delete_file(
     session: Session = Depends(get_session),
 ):
     """
-    Deleta arquivo do banco e do S3/MinIO.
+    Exclui arquivo do banco e do S3/MinIO.
     """
     # Buscar arquivo
     file_model = session.get(File, file_id)
@@ -1092,20 +1092,20 @@ def delete_file(
     if file_model.tenant_id != membership.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    # Deletar arquivo do S3/MinIO
+    # Excluir arquivo do S3/MinIO
     storage_service = StorageService()
     try:
         storage_service.delete_file(file_model.s3_key)
     except Exception as e:
         # Log erro mas continua com exclusão do banco (arquivo pode já ter sido deletado)
         import logging
-        logging.warning(f"Erro ao deletar arquivo do S3 (continuando com exclusão do banco): {e}")
+        logging.warning(f"Erro ao excluir arquivo do S3 (continuando com exclusão do banco): {e}")
         # Em desenvolvimento, log mais detalhado
         if os.getenv("APP_ENV", "dev") == "dev":
             import traceback
-            logging.warning(f"Traceback ao deletar do S3:\n{traceback.format_exc()}")
+            logging.warning(f"Traceback ao excluir do S3:\n{traceback.format_exc()}")
 
-    # Deletar registro do banco
+    # Excluir registro do banco
     try:
         session.delete(file_model)
         session.commit()
@@ -1113,7 +1113,7 @@ def delete_file(
         session.rollback()
         import logging
         import traceback
-        error_detail = f"Erro ao deletar arquivo do banco: {str(e)}"
+        error_detail = f"Erro ao excluir arquivo do banco: {str(e)}"
         if os.getenv("APP_ENV", "dev") == "dev":
             error_detail += f"\n\nTraceback:\n{traceback.format_exc()}"
         logging.error(error_detail)
@@ -1553,11 +1553,11 @@ def delete_hospital(
     session: Session = Depends(get_session),
 ):
     """
-    Deleta um hospital (apenas admin).
+    Exclui um hospital (apenas admin).
     Valida que o hospital pertence ao tenant atual.
     """
     try:
-        logger.info(f"Deletando hospital id={hospital_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Excluindo hospital id={hospital_id} para tenant_id={membership.tenant_id}")
 
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
@@ -1574,10 +1574,10 @@ def delete_hospital(
         ).one()
 
         if files_count > 0:
-            logger.warning(f"Não é possível deletar hospital {hospital_id}: há {files_count} arquivo(s) associado(s)")
+            logger.warning(f"Não é possível excluir hospital {hospital_id}: há {files_count} arquivo(s) associado(s)")
             raise HTTPException(
                 status_code=409,
-                detail=f"Não é possível deletar o hospital. Há {files_count} arquivo(s) associado(s) a este hospital.",
+                detail=f"Não é possível excluir o hospital. Há {files_count} arquivo(s) associado(s) a este hospital.",
             )
 
         session.delete(hospital)
@@ -1587,18 +1587,18 @@ def delete_hospital(
             return Response(status_code=204)
         except Exception as e:
             session.rollback()
-            logger.error(f"Erro ao deletar hospital: {e}", exc_info=True)
+            logger.error(f"Erro ao excluir hospital: {e}", exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail=f"Erro ao deletar hospital: {str(e)}",
+                detail=f"Erro ao excluir hospital: {str(e)}",
             ) from e
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro crítico ao deletar hospital: {e}", exc_info=True)
+        logger.error(f"Erro crítico ao excluir hospital: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro inesperado ao deletar hospital: {str(e)}",
+            detail=f"Erro inesperado ao excluir hospital: {str(e)}",
         ) from e
 
 
@@ -2055,11 +2055,11 @@ def delete_demand(
     session: Session = Depends(get_session),
 ):
     """
-    Deleta uma demanda.
+    Exclui uma demanda.
     Valida que a demanda pertence ao tenant atual.
     """
     try:
-        logger.info(f"Deletando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Excluindo demanda id={demand_id} para tenant_id={membership.tenant_id}")
 
         demand = session.get(Demand, demand_id)
         if not demand:
@@ -2071,16 +2071,16 @@ def delete_demand(
 
         session.delete(demand)
         session.commit()
-        logger.info(f"Demanda deletada com sucesso: id={demand_id}")
+        logger.info(f"Demanda excluída com sucesso: id={demand_id}")
         return Response(status_code=204)
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Erro ao deletar demanda: {e}", exc_info=True)
+        logger.error(f"Erro ao excluir demanda: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao deletar demanda: {str(e)}",
+            detail=f"Erro ao excluir demanda: {str(e)}",
         ) from e
 
 
@@ -2273,7 +2273,7 @@ def delete_profile(
     session: Session = Depends(get_session),
 ):
     """
-    Deleta um profile.
+    Exclui um profile.
     Valida que o profile pertence ao tenant atual.
     """
     try:
@@ -2289,14 +2289,14 @@ def delete_profile(
 
         session.delete(profile)
         session.commit()
-        logger.info(f"Profile deletado com sucesso: id={profile_id}")
+        logger.info(f"Profile excluído com sucesso: id={profile_id}")
         return Response(status_code=204)
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Erro ao deletar profile: {e}", exc_info=True)
+        logger.error(f"Erro ao excluir profile: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao deletar profile: {str(e)}",
+            detail=f"Erro ao excluir profile: {str(e)}",
         ) from e

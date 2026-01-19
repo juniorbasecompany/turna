@@ -62,7 +62,7 @@ export async function GET(
 /**
  * DELETE /api/file/[id]
  *
- * Deleta arquivo do backend e do S3/MinIO.
+ * Exclui arquivo do backend e do S3/MinIO.
  */
 export async function DELETE(
   request: NextRequest,
@@ -111,13 +111,13 @@ export async function DELETE(
     // 204 No Content - retornar response vazia
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Erro ao deletar arquivo:', error)
+    console.error('Erro ao excluir arquivo:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao deletar arquivo',
+            : 'Erro desconhecido ao excluir arquivo',
       },
       { status: 500 }
     )
