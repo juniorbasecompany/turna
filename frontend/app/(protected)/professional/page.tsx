@@ -5,6 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     ProfessionalCreateRequest,
@@ -12,7 +13,6 @@ import {
     ProfessionalResponse,
     ProfessionalUpdateRequest,
 } from '@/types/api'
-import { extractErrorMessage } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function ProfessionalPage() {

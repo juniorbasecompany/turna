@@ -262,6 +262,25 @@ def create_tenant(
     # Criar hospital default para o tenant
     create_default_hospital_for_tenant(session, tenant.id)
 
+    # Criar professional automaticamente para o account criador do tenant
+    # Usa dados do account (nome e email) para criar o professional
+    try:
+        professional = Professional(
+            tenant_id=tenant.id,
+            account_id=account.id,
+            name=account.name,
+            email=account.email,
+            active=True,
+        )
+        session.add(professional)
+        session.commit()
+        logger.info(f"Professional criado automaticamente para account {account.id} no tenant {tenant.id}")
+    except Exception as e:
+        # Se falhar ao criar professional, logar mas não quebrar a criação do tenant
+        logger.warning(f"Erro ao criar professional automaticamente para account {account.id}: {e}")
+        session.rollback()
+        # Continuar mesmo se falhar (professional é opcional)
+
     return tenant
 
 
@@ -1821,7 +1840,7 @@ class ProfileListResponse(PydanticBaseModel):
 
 class ProfessionalCreate(PydanticBaseModel):
     name: str
-    email: str | None = None
+    email: str
     phone: str | None = None
     notes: str | None = None
     active: bool = True
@@ -1835,14 +1854,11 @@ class ProfessionalCreate(PydanticBaseModel):
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        stripped = v.strip() if isinstance(v, str) else v
-        if not stripped:
-            return None
+    def validate_email(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Campo email é obrigatório")
         # Normalizar email para lowercase
-        return stripped.lower()
+        return v.strip().lower()
 
 
 class ProfessionalUpdate(PydanticBaseModel):
@@ -1874,6 +1890,7 @@ class ProfessionalUpdate(PydanticBaseModel):
 class ProfessionalResponse(PydanticBaseModel):
     id: int
     tenant_id: int
+    account_id: int | None
     name: str
     email: str | None
     phone: str | None
