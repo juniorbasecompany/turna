@@ -1132,8 +1132,9 @@ Antes de considerar completo, verificar:
 - [x] Definir `Professional(BaseModel, table=True)` com `__tablename__ = "professional"`
 - [x] Campos mínimos (MVP)
   - [x] `tenant_id: int` (FK `tenant.id`, index, obrigatório)
+  - [x] `account_id: int | None` (FK `account.id`, index, opcional) - vincula profissional ao account
   - [x] `name: str` (obrigatório, index)
-  - [x] `email: str | None` (opcional, index) *(útil para convite/login depois)*
+  - [x] `email: str` (obrigatório, index) - usado para envio de convites
   - [x] `phone: str | None` (opcional)
   - [x] `notes: str | None` (opcional)
   - [x] `active: bool` (default `True`, index)
@@ -1144,45 +1145,47 @@ Antes de considerar completo, verificar:
 
 ### 12.2 Migration (Alembic)
 
-- [ ] Garantir que `Professional` está importado no local onde o Alembic descobre metadata (ex.: `app/db/base.py` ou `app/model/__init__.py`)
-- [ ] Criar migration: `alembic revision --autogenerate -m "add_professional_table"`
-- [ ] Revisar migration gerada:
-  - [ ] `tenant_id` FK + index
-  - [ ] JSON para `skills`
-  - [ ] `created_at` e `updated_at` como `timestamptz`
-  - [ ] Unique constraint
-- [ ] Aplicar migration: `alembic upgrade head`
-- [ ] Teste rápido no banco: tabela existe e constraints ok
+- [x] Garantir que `Professional` está importado no local onde o Alembic descobre metadata (ex.: `app/db/base.py` ou `app/model/__init__.py`)
+- [x] Criar migration: `alembic revision --autogenerate -m "add_professional_table"` (0110yz012345)
+- [x] Revisar migration gerada:
+  - [x] `tenant_id` FK + index
+  - [x] `created_at` e `updated_at` como `timestamptz`
+  - [x] Unique constraint
+- [x] Migration adicional: adicionar `account_id` (0111ab012345)
+  - [x] Campo `account_id` (FK `account.id`, nullable=True, index)
+- [x] Migration adicional: tornar `email` obrigatório (0112cd012345)
+  - [x] Campo `email` alterado para `nullable=False`
+- [x] Aplicar migrations: `alembic upgrade head`
+- [x] Teste rápido no banco: tabela existe e constraints ok
 
 ### 12.3 Backend (FastAPI) — schemas Pydantic
 
 - [x] Criar schemas (em `app/api/route.py` junto do router existente):
   - [x] `ProfessionalCreate`
     - [x] `name: str`
-    - [x] `email: str | None = None`
+    - [x] `email: str` (obrigatório)
     - [x] `phone: str | None = None`
     - [x] `notes: str | None = None`
     - [x] `active: bool = True`
   - [x] `ProfessionalUpdate` (todos opcionais)
-  - [x] `ProfessionalResponse` (inclui `id`, `tenant_id`, `created_at`, `updated_at`)
+  - [x] `ProfessionalResponse` (inclui `id`, `tenant_id`, `account_id`, `email`, `created_at`, `updated_at`)
 - [x] Validar normalizações simples:
-  - [x] `email`: opcional; se vier, manter lowercase
+  - [x] `email`: obrigatório; sempre manter lowercase
 
 ### 12.4 Backend — endpoints CRUD (isolamento por tenant)
 
 > Todos usando `membership = Depends(get_current_membership)` e **NUNCA** aceitando `tenant_id` do request.
 
-- [ ] Criar router `app/api/professional.py` e adicionar em `app/api/routes.py`
-- [ ] Endpoints (MVP)
-  - [ ] `POST /professional` (admin)
-  - [ ] `GET /professional/list` (com `limit`, `offset`, filtros opcionais `active`, `is_pediatric`, `q=...`)
-  - [ ] `GET /professional/{id}`
-  - [ ] `PUT /professional/{id}` (admin)
-  - [ ] `DELETE /professional/{id}` (admin) *(hard delete no MVP, igual arquivos; evolui depois se precisar)*
-- [ ] Regras obrigatórias
-  - [ ] **Create**: `tenant_id = membership.tenant_id`
-  - [ ] **Get/Put/Delete**: validar `professional.tenant_id == membership.tenant_id` (403 se não bater)
-  - [ ] **List**: query sempre filtra por `tenant_id == membership.tenant_id`
+- [x] Endpoints implementados em `app/api/route.py` (não criado router separado)
+- [x] Endpoints (MVP)
+  - [x] `POST /professional` (admin)
+  - [x] `GET /professional/list` (com `limit`, `offset`, filtros opcionais `active`, `q=...`)
+  - [x] `PUT /professional/{id}` (admin)
+  - [x] `DELETE /professional/{id}` (admin) *(hard delete no MVP, igual arquivos; evolui depois se precisar)*
+- [x] Regras obrigatórias
+  - [x] **Create**: `tenant_id = membership.tenant_id`
+  - [x] **Get/Put/Delete**: validar `professional.tenant_id == membership.tenant_id` (403 se não bater)
+  - [x] **List**: query sempre filtra por `tenant_id == membership.tenant_id`
 - [ ] Testes rápidos via Swagger
   - [ ] Criar 1 profissional
   - [ ] Listar (paginado)
@@ -1203,34 +1206,50 @@ Antes de considerar completo, verificar:
 
 ### 12.6 Frontend — página CRUD `/professional`
 
-- [ ] Criar menu lateral "Profissionais"
-- [ ] Criar página `frontend/app/(protected)/professional/page.tsx`
-- [ ] IMPORTANTE: adicionar exceção `/professional` no `frontend/lib/api.ts` para não redirecionar no F5 (mesma regra do `/dashboard`/`/file`)
-- [ ] UI (simples e funcional)
-  - [ ] Lista (tabela ou cards) com: `name`, `active`, `is_pediatric`, `skills` (resumo), `created_at`
-  - [ ] Filtros: texto (`q`), `active` (todos/ativos/inativos), `is_pediatric` (todos/sim/não)
-  - [ ] Paginação com `limit/offset`
-  - [ ] Usar o padrão do card panel.
-- [ ] Form (lado direito ou modal, estilo do CRUD de Hospitais/Profile)
-  - [ ] Campos: nome, email, telefone, pediatria (checkbox), skills (textarea 1 por linha ou input simples), ativo, observações
-  - [ ] Validações: nome obrigatório; skills limpa vazios; email opcional
-  - [ ] Feedback: sucesso/erro em português
+- [x] Criar menu lateral "Profissionais"
+- [x] Criar página `frontend/app/(protected)/professional/page.tsx`
+- [x] IMPORTANTE: adicionar exceção `/professional` no `frontend/lib/api.ts` para não redirecionar no F5 (mesma regra do `/dashboard`/`/file`)
+- [x] UI (simples e funcional)
+  - [x] Lista (cards) com: `name`, `active`, `created_at`
+  - [x] Filtros: texto (`q`), `active` (todos/ativos/inativos)
+  - [x] Paginação com `limit/offset`
+  - [x] Usar o padrão do card panel.
+- [x] Form (lado direito, estilo do CRUD de Hospitais/Profile)
+  - [x] Campos: nome (obrigatório), email (obrigatório), telefone, ativo, observações
+  - [x] Validações: nome obrigatório; email obrigatório
+  - [x] Feedback: sucesso/erro em português
 
 ### 12.7 Ajustes finais e consistência
 
 - [x] Garantir que não mexeu em fluxos já definidos (auth, membership, hospital, file, jobs)
+- [x] Criação automática de Professional ao criar Tenant:
+  - [x] Ao criar tenant, cria automaticamente Professional para o account criador
+  - [x] Usa dados do account (nome e email)
+  - [x] Vincula com `account_id` e `tenant_id`
 - [ ] Teste de regressão rápido:
   - [ ] Login + select-tenant ok
   - [ ] Dashboard ok
   - [ ] File/Hospital/Profile continuam ok
   - [ ] Profissionais CRUD ok
 
-### 12.8 (Opcional, mas recomendado) Preparar o futuro "convite por email"
+### 12.8 Envio de Convite por Email
 
-- [x] Se `email` existir no Professional:
-  - [x] Campo `email` implementado e opcional (não atrapalha o MVP)
-  - [ ] Planejar conversão "Professional → Membership invite" (admin convida e vira Account/Membership depois) *(futuro)*
-  - [x] Não implementar agora: só garantir que o campo não atrapalha o MVP
+- [x] Campo `email` implementado e obrigatório no Professional
+- [x] Serviço de email criado (`app/services/email_service.py`):
+  - [x] Função `send_professional_invite()` para enviar convite
+  - [x] Por enquanto apenas loga o email (pode ser expandido para SMTP, SendGrid, AWS SES, etc.)
+- [x] Endpoint de convite criado:
+  - [x] `POST /professional/{professional_id}/invite` (admin)
+  - [x] Valida que profissional pertence ao tenant
+  - [x] Envia email de convite com link do aplicativo
+- [x] Frontend implementado:
+  - [x] Checkbox "Enviar convite" no formulário de criação/edição
+  - [x] Checkbox vem desmarcado por padrão
+  - [x] Após salvar, se checkbox marcado, chama endpoint de convite
+  - [x] Tratamento de erro não quebra o fluxo de salvamento
+- [ ] (Futuro) Implementar envio real de email:
+  - [ ] Integrar com SMTP, SendGrid, AWS SES, etc.
+  - [ ] Configurar variáveis de ambiente para credenciais
 
 ## Scripts de Teste
 

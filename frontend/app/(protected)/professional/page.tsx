@@ -28,6 +28,7 @@ export default function ProfessionalPage() {
         notes: '',
         active: true,
     })
+    const [sendInvite, setSendInvite] = useState(false)
     const [originalFormData, setOriginalFormData] = useState({
         name: '',
         email: '',
@@ -86,7 +87,7 @@ export default function ProfessionalPage() {
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
         if (!editingProfessional) {
-            return formData.name.trim() !== '' || formData.email.trim() !== '' || formData.phone.trim() !== '' || formData.notes.trim() !== ''
+            return formData.name.trim() !== '' && formData.email.trim() !== ''
         }
         return (
             formData.name.trim() !== originalFormData.name.trim() ||
@@ -117,6 +118,7 @@ export default function ProfessionalPage() {
             active: true,
         })
         setEditingProfessional(null)
+        setSendInvite(false)
         setShowEditArea(true)
         setError(null)
     }
@@ -125,7 +127,7 @@ export default function ProfessionalPage() {
     const handleEditClick = (professional: ProfessionalResponse) => {
         const initialData = {
             name: professional.name,
-            email: professional.email || '',
+            email: professional.email, // Email é obrigatório, sempre terá valor
             phone: professional.phone || '',
             notes: professional.notes || '',
             active: professional.active,
@@ -133,6 +135,7 @@ export default function ProfessionalPage() {
         setFormData(initialData)
         setOriginalFormData(initialData)
         setEditingProfessional(professional)
+        setSendInvite(false)
         setShowEditArea(true)
         setError(null)
     }
@@ -154,6 +157,7 @@ export default function ProfessionalPage() {
             active: true,
         })
         setEditingProfessional(null)
+        setSendInvite(false)
         setShowEditArea(false)
         setSelectedProfessionals(new Set())
         setError(null)
@@ -166,9 +170,16 @@ export default function ProfessionalPage() {
             return
         }
 
+        if (!formData.email.trim()) {
+            setError('Email é obrigatório')
+            return
+        }
+
         try {
             setSubmitting(true)
             setError(null)
+
+            let savedProfessional: ProfessionalResponse | null = null
 
             if (editingProfessional) {
                 // Editar profissional existente
@@ -193,11 +204,13 @@ export default function ProfessionalPage() {
                     const errorData = await response.json().catch(() => ({}))
                     throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
+
+                savedProfessional = await response.json()
             } else {
                 // Criar novo profissional
                 const createData: ProfessionalCreateRequest = {
                     name: formData.name.trim(),
-                    email: formData.email.trim() || undefined,
+                    email: formData.email.trim(),
                     phone: formData.phone.trim() || undefined,
                     notes: formData.notes.trim() || undefined,
                     active: formData.active,
@@ -215,6 +228,30 @@ export default function ProfessionalPage() {
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
                     throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
+                }
+
+                savedProfessional = await response.json()
+            }
+
+            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
+            if (sendInvite && savedProfessional) {
+                try {
+                    const inviteResponse = await fetch(`/api/professional/${savedProfessional.id}/invite`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                    })
+
+                    if (!inviteResponse.ok) {
+                        const errorData = await inviteResponse.json().catch(() => ({}))
+                        console.warn(`Erro ao enviar convite: ${extractErrorMessage(errorData, `Erro HTTP ${inviteResponse.status}`)}`)
+                        // Não quebra o fluxo, apenas loga o erro
+                    }
+                } catch (inviteErr) {
+                    console.warn('Erro ao enviar convite:', inviteErr)
+                    // Não quebra o fluxo, apenas loga o erro
                 }
             }
 
@@ -235,6 +272,7 @@ export default function ProfessionalPage() {
                 active: true,
             })
             setEditingProfessional(null)
+            setSendInvite(false)
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profissional'
@@ -335,7 +373,7 @@ export default function ProfessionalPage() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                                            Email
+                                            Email <span className="text-red-500">*</span>
                                         </label>
                                         <input
                                             type="email"
@@ -343,6 +381,7 @@ export default function ProfessionalPage() {
                                             value={formData.email}
                                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            required
                                             disabled={submitting}
                                         />
                                     </div>
@@ -360,19 +399,6 @@ export default function ProfessionalPage() {
                                         />
                                     </div>
                                 </div>
-                                <div className="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        id="active"
-                                        checked={formData.active}
-                                        onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                        disabled={submitting}
-                                    />
-                                    <label htmlFor="active" className="ml-2 block text-sm text-gray-700">
-                                        Ativo
-                                    </label>
-                                </div>
                                 <div>
                                     <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
                                         Observações
@@ -385,6 +411,34 @@ export default function ProfessionalPage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         disabled={submitting}
                                     />
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="sendInvite"
+                                            checked={sendInvite}
+                                            onChange={(e) => setSendInvite(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            disabled={submitting}
+                                        />
+                                        <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
+                                            Enviar convite
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="active"
+                                            checked={formData.active}
+                                            onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            disabled={submitting}
+                                        />
+                                        <label htmlFor="active" className="ml-2 block text-sm text-gray-700">
+                                            Ativo
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

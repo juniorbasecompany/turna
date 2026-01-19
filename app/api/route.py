@@ -33,6 +33,7 @@ from app.model.demand import Demand
 from app.model.profile import Profile
 from app.model.professional import Professional
 from app.services.hospital_service import create_default_hospital_for_tenant
+from app.services.email_service import send_professional_invite
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
 
@@ -2781,4 +2782,55 @@ def delete_professional(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao excluir profissional: {str(e)}",
+        ) from e
+
+
+class ProfessionalInviteRequest(PydanticBaseModel):
+    """Request para enviar convite a um profissional."""
+    pass
+
+
+@router.post("/professional/{professional_id}/invite", status_code=200, tags=["Professional"])
+def send_professional_invite_email(
+    professional_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Envia email de convite para um profissional se juntar à clínica.
+    Apenas admin pode enviar convites.
+    """
+    try:
+        professional = session.get(Professional, professional_id)
+        if not professional:
+            raise HTTPException(status_code=404, detail="Profissional não encontrado")
+
+        if professional.tenant_id != membership.tenant_id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        tenant = session.get(Tenant, membership.tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant não encontrado")
+
+        # Enviar email de convite
+        success = send_professional_invite(
+            to_email=professional.email,
+            professional_name=professional.name,
+            tenant_name=tenant.name,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Erro ao enviar email de convite. Tente novamente mais tarde."
+            )
+
+        return {"message": "Convite enviado com sucesso", "email": professional.email}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao enviar convite para profissional {professional_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao enviar convite: {str(e)}",
         ) from e
