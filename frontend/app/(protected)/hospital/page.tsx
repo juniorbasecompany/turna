@@ -316,7 +316,20 @@ export default function HospitalPage() {
                     <p className="text-gray-600">Nenhum hospital cadastrado ainda.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <>
+                    {/* Mensagem de total e contadores */}
+                    <div className="mb-4 sm:mb-6">
+                        <div className="text-sm text-gray-600">
+                            Total de hospitais: <span className="font-medium">{hospitals.length}</span>
+                            {selectedHospitals.size > 0 && (
+                                <span className="ml-2 sm:ml-4 text-red-600">
+                                    {selectedHospitals.size} marcado{selectedHospitals.size > 1 ? 's' : ''} para exclusão
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {hospitals.map((hospital) => {
                         const isSelected = selectedHospitals.has(hospital.id)
                         return (
@@ -427,7 +440,8 @@ export default function HospitalPage() {
                             </div>
                         )
                     })}
-                </div>
+                    </div>
+                </>
             )}
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
@@ -435,16 +449,7 @@ export default function HospitalPage() {
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                leftContent={
-                    <div className="text-sm text-gray-600">
-                        Total de hospitais: <span className="font-medium">{hospitals.length}</span>
-                        {selectedHospitals.size > 0 && (
-                            <span className="ml-2 sm:ml-4 text-red-600">
-                                {selectedHospitals.size} marcado{selectedHospitals.size > 1 ? 's' : ''} para exclusão
-                            </span>
-                        )}
-                    </div>
-                }
+                leftContent={<div></div>}
                 buttons={(() => {
                     const buttons = []
                     // Adicionar botão "Cancelar" quando estiver editando/criando

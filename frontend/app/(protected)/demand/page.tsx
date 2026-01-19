@@ -592,7 +592,20 @@ export default function DemandPage() {
                     <p className="text-gray-600">Nenhuma demanda cadastrada ainda.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <>
+                    {/* Mensagem de total e contadores */}
+                    <div className="mb-4 sm:mb-6">
+                        <div className="text-sm text-gray-600">
+                            Total de demandas: <span className="font-medium">{demands.length}</span>
+                            {selectedDemands.size > 0 && (
+                                <span className="ml-2 sm:ml-4 text-red-600">
+                                    {selectedDemands.size} marcado{selectedDemands.size > 1 ? 's' : ''} para exclusão
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {demands.map((demand) => {
                         const isSelected = selectedDemands.has(demand.id)
                         const hospital = hospitals.find((h) => h.id === demand.hospital_id)
@@ -781,22 +794,14 @@ export default function DemandPage() {
                             </div>
                         )
                     })}
-                </div>
+                    </div>
+                </>
             )}
 
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={
-                    <div className="text-sm text-gray-600">
-                        Total de demandas: <span className="font-medium">{demands.length}</span>
-                        {selectedDemands.size > 0 && (
-                            <span className="ml-2 sm:ml-4 text-red-600">
-                                {selectedDemands.size} marcada{selectedDemands.size > 1 ? 's' : ''} para exclusão
-                            </span>
-                        )}
-                    </div>
-                }
+                leftContent={<div></div>}
                 buttons={(() => {
                     const buttons = []
                     if (isEditing) {

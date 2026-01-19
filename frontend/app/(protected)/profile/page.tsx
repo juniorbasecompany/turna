@@ -446,7 +446,20 @@ export default function ProfilePage() {
                     <p className="text-gray-600">Nenhum perfil cadastrado ainda.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <>
+                    {/* Mensagem de total e contadores */}
+                    <div className="mb-4 sm:mb-6">
+                        <div className="text-sm text-gray-600">
+                            Total de perfis: <span className="font-medium">{profiles.length}</span>
+                            {selectedProfiles.size > 0 && (
+                                <span className="ml-2 sm:ml-4 text-red-600">
+                                    {selectedProfiles.size} marcado{selectedProfiles.size > 1 ? 's' : ''} para exclusão
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {profiles.map((profile) => {
                         const isSelected = selectedProfiles.has(profile.id)
                         const account = accounts.find((a) => a.id === profile.account_id)
@@ -571,22 +584,14 @@ export default function ProfilePage() {
                             </div>
                         )
                     })}
-                </div>
+                    </div>
+                </>
             )}
 
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={
-                    <div className="text-sm text-gray-600">
-                        Total de profiles: <span className="font-medium">{profiles.length}</span>
-                        {selectedProfiles.size > 0 && (
-                            <span className="ml-2 sm:ml-4 text-red-600">
-                                {selectedProfiles.size} marcado{selectedProfiles.size > 1 ? 's' : ''} para exclusão
-                            </span>
-                        )}
-                    </div>
-                }
+                leftContent={<div></div>}
                 buttons={(() => {
                     const buttons = []
                     if (isEditing) {

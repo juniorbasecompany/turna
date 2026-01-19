@@ -1193,6 +1193,39 @@ export default function FilesPage() {
                 return (
                     <>
                         {/* Cards de arquivos */}
+                        {/* Mensagem de total e contadores */}
+                        <div className="mb-4 sm:mb-6">
+                            <div className="text-sm text-gray-600">
+                                {bottomBarMessage ? (
+                                    <span className="text-red-600">{bottomBarMessage}</span>
+                                ) : (
+                                    <>
+                                        Total de arquivos: <span className="font-medium">{total}</span>
+                                        {(() => {
+                                            const filteredCount = files.filter((file) => 
+                                                selectedStatuses.has(file.job_status as JobStatus | null)
+                                            ).length
+                                            return filteredCount !== total ? (
+                                                <span className="ml-2 sm:ml-4">
+                                                    ({filteredCount} visíveis)
+                                                </span>
+                                            ) : null
+                                        })()}
+                                        {selectedFilesForReading.size > 0 && (
+                                            <span className="ml-2 sm:ml-4 text-blue-600">
+                                                {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
+                                            </span>
+                                        )}
+                                        {selectedFiles.size > 0 && (
+                                            <span className="ml-2 sm:ml-4 text-red-600">
+                                                {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
                         {/* Card de upload - sempre o primeiro */}
                         <input
@@ -1404,7 +1437,7 @@ export default function FilesPage() {
                                         className="mb-3 flex flex-col gap-1 min-w-0 rounded-t-xl -mx-4 -mt-4 px-4 pt-4"
                                         style={{ backgroundColor: hospitalColor }}
                                     >
-                                        <span className="text-xs text-slate-500 truncate">
+                                        <span className={`text-xs truncate ${isSelected ? 'text-red-700' : 'text-slate-500'}`}>
                                             {file.hospital_name}
                                         </span>
                                         <div className="flex items-start gap-2 min-w-0">
@@ -1412,7 +1445,7 @@ export default function FilesPage() {
                                                 {fileTypeInfo.icon}
                                             </div>
                                             <h3
-                                                className="text-sm font-semibold truncate min-w-0 flex-1 text-gray-900"
+                                                className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : 'text-gray-900'}`}
                                                 title={file.filename}
                                             >
                                                 {file.filename}
@@ -1432,12 +1465,12 @@ export default function FilesPage() {
                                     <div className="mb-3 flex items-center justify-between gap-2">
                                         {/* Metadados à esquerda */}
                                         <div className="flex flex-col min-w-0 flex-1">
-                                            <span className="text-sm text-slate-500 truncate">
+                                            <span className={`text-sm truncate ${isSelected ? 'text-red-900' : 'text-slate-500'}`}>
                                                 {settings
                                                     ? formatDateTime(file.created_at, settings)
                                                     : new Date(file.created_at).toLocaleString()}
                                             </span>
-                                            <span className="text-xs text-slate-400 truncate">{formatFileSize(file.file_size)}</span>
+                                            <span className={`text-xs truncate ${isSelected ? 'text-red-700' : 'text-slate-400'}`}>{formatFileSize(file.file_size)}</span>
                                         </div>
                                         {/* Ações à direita */}
                                         <div className="flex items-center gap-1 shrink-0">
@@ -1518,37 +1551,7 @@ export default function FilesPage() {
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                leftContent={
-                    <div className="text-sm text-gray-600">
-                        {bottomBarMessage ? (
-                            <span className="text-red-600">{bottomBarMessage}</span>
-                        ) : (
-                            <>
-                                Total de arquivos: <span className="font-medium">{total}</span>
-                                {(() => {
-                                    const filteredCount = files.filter((file) => 
-                                        selectedStatuses.has(file.job_status as JobStatus | null)
-                                    ).length
-                                    return filteredCount !== total ? (
-                                        <span className="ml-2 sm:ml-4">
-                                            ({filteredCount} visíveis)
-                                        </span>
-                                    ) : null
-                                })()}
-                                {selectedFilesForReading.size > 0 && (
-                                    <span className="ml-2 sm:ml-4 text-blue-600">
-                                        {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
-                                    </span>
-                                )}
-                                {selectedFiles.size > 0 && (
-                                    <span className="ml-2 sm:ml-4 text-red-600">
-                                        {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
-                                    </span>
-                                )}
-                            </>
-                        )}
-                    </div>
-                }
+                leftContent={<div></div>}
                 buttons={(() => {
                     const buttons = []
                     // Adicionar botão "Excluir" se houver arquivos marcados para exclusão
