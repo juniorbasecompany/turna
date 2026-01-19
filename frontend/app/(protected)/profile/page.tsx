@@ -2,6 +2,7 @@
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { CardFooter } from '@/components/CardFooter'
+import { CardPanel } from '@/components/CardPanel'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
@@ -177,12 +178,13 @@ export default function ProfilePage() {
         setJsonError(null)
     }
 
-    // Cancelar edição
+    // Cancelar edição e/ou seleção
     const handleCancel = () => {
         setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
         setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
         setEditingProfile(null)
         setShowEditArea(false)
+        setSelectedProfiles(new Set())
         setError(null)
         setJsonError(null)
     }
@@ -337,29 +339,15 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-            <div className="mb-4 sm:mb-6">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Perfis</h1>
-                    <p className="mt-1 text-sm text-gray-600">
-                        Gerencie os perfis de usuários com atributos customizados
-                    </p>
-                </div>
-            </div>
-
-            {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
-                    {error}
-                </div>
-            )}
-
+        <>
             {/* Área de edição */}
             {isEditing && (
-                <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                        {editingProfile ? 'Editar Perfil' : 'Criar Perfil'}
-                    </h2>
-                    <div className="space-y-4">
+                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
+                    <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                            {editingProfile ? 'Editar Perfil' : 'Criar Perfil'}
+                        </h2>
+                        <div className="space-y-4">
                         <div>
                             <label htmlFor="account_id" className="block text-sm font-medium text-gray-700 mb-2">
                                 Conta <span className="text-red-500">*</span>
@@ -425,61 +413,48 @@ export default function ProfilePage() {
                         </div>
                     </div>
                 </div>
+                </div>
             )}
 
-            {loading ? (
-                <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                    <p className="mt-2 text-sm text-gray-600">Carregando perfis...</p>
-                </div>
-            ) : profiles.length === 0 ? (
-                <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                    <p className="text-gray-600">Nenhum perfil cadastrado ainda.</p>
-                </div>
-            ) : (
-                <>
-                    {/* Mensagem de total e contadores */}
-                    <div className="mb-4 sm:mb-6">
-                        <div className="text-sm text-gray-600">
-                            Total de perfis: <span className="font-medium">{profiles.length}</span>
-                            {selectedProfiles.size > 0 && (
-                                <span className="ml-2 sm:ml-4 text-red-600">
-                                    {selectedProfiles.size} marcado{selectedProfiles.size > 1 ? 's' : ''} para exclusão
-                                </span>
-                            )}
+            <CardPanel
+                title="Perfis"
+                description="Gerencie os perfis de usuários com atributos customizados"
+                totalCount={profiles.length}
+                selectedCount={selectedProfiles.size}
+                loading={loading}
+                loadingMessage="Carregando perfis..."
+                emptyMessage="Nenhum perfil cadastrado ainda."
+                countLabel="Total de perfis"
+                createCard={
+                    <div
+                        onClick={handleCreateClick}
+                        className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
+                    >
+                        <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                            <svg
+                                className="w-12 h-12 mb-3 text-slate-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            <p className="text-sm font-medium mb-1 text-slate-700">
+                                Criar novo perfil
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                Clique para adicionar
+                            </p>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {/* Card de criação - sempre o primeiro */}
-                        <div
-                            onClick={handleCreateClick}
-                            className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
-                        >
-                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-                                <svg
-                                    className="w-12 h-12 mb-3 text-slate-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 4v16m8-8H4"
-                                    />
-                                </svg>
-                                <p className="text-sm font-medium mb-1 text-slate-700">
-                                    Criar novo perfil
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                    Clique para adicionar
-                                </p>
-                            </div>
-                        </div>
-
-                        {profiles.map((profile) => {
+                }
+            >
+                {profiles.map((profile) => {
                             const isSelected = selectedProfiles.has(profile.id)
                             const account = accounts.find((a) => a.id === profile.account_id)
                             const hospital = hospitals.find((h) => h.id === profile.hospital_id)
@@ -552,33 +527,24 @@ export default function ProfilePage() {
                                 </div>
                             )
                         })}
-                    </div>
-                </>
-            )}
+            </CardPanel>
 
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={<div></div>}
+                leftContent={error || undefined}
                 buttons={(() => {
                     const buttons = []
-                    if (isEditing) {
+                    // Botão Cancelar (aparece se houver edição OU seleção)
+                    if (isEditing || selectedProfiles.size > 0) {
                         buttons.push({
                             label: 'Cancelar',
                             onClick: handleCancel,
                             variant: 'secondary' as const,
-                            disabled: submitting,
+                            disabled: submitting || deleting,
                         })
                     }
-                    if (isEditing && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting || !!jsonError,
-                            loading: submitting,
-                        })
-                    }
+                    // Botão Excluir (aparece se houver seleção)
                     if (selectedProfiles.size > 0) {
                         buttons.push({
                             label: 'Excluir',
@@ -588,9 +554,19 @@ export default function ProfilePage() {
                             loading: deleting,
                         })
                     }
+                    // Botão Salvar (aparece se houver edição com mudanças)
+                    if (isEditing && hasChanges()) {
+                        buttons.push({
+                            label: submitting ? 'Salvando...' : 'Salvar',
+                            onClick: handleSave,
+                            variant: 'primary' as const,
+                            disabled: submitting || !!jsonError,
+                            loading: submitting,
+                        })
+                    }
                     return buttons
                 })()}
             />
-        </div>
+        </>
     )
 }

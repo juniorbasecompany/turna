@@ -137,28 +137,20 @@ export function BottomActionBar({
                         </div>
                     </div>
                 </div>
-            ) : leftContent ? (
-                <div className="min-h-20 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-                    {/* Conteúdo à esquerda - sem bordas */}
-                    <div className="flex-1 min-w-0">
-                        {leftContent}
+            ) : (
+                <div className="min-h-20 flex items-center justify-between gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8">
+                    {/* Conteúdo à esquerda - sem bordas, apenas texto - sempre reserva espaço */}
+                    <div className="flex-1 min-w-0 text-sm text-red-600 pr-2 sm:pr-4">
+                        {leftContent && (
+                            typeof leftContent === 'string' ? (
+                                <p className="break-words">{leftContent}</p>
+                            ) : (
+                                leftContent
+                            )
+                        )}
                     </div>
                     {/* Botões de ação - alinhados à direita */}
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        {renderButtons()}
-                    </div>
-                </div>
-            ) : buttons.length > 0 ? (
-                <div className="min-h-20 flex items-center justify-end px-4 sm:px-6 lg:px-8">
-                    {/* Botões de ação - alinhados à direita da tela */}
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        {renderButtons()}
-                    </div>
-                </div>
-            ) : (
-                <div className="min-h-20 flex items-center justify-end px-4 sm:px-6 lg:px-8">
-                    {/* Botões de ação - alinhados à direita da tela */}
-                    <div className="flex items-center gap-2 sm:gap-3">
                         {renderButtons()}
                     </div>
                 </div>

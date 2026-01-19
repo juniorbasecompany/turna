@@ -2,6 +2,7 @@
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { CardActionButtons } from '@/components/CardActionButtons'
+import { CardPanel } from '@/components/CardPanel'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses, getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
@@ -180,7 +181,7 @@ export default function DemandPage() {
         setError(null)
     }
 
-    // Cancelar edição
+    // Cancelar edição e/ou seleção
     const handleCancel = () => {
         setFormData({
             hospital_id: null,
@@ -201,6 +202,7 @@ export default function DemandPage() {
         setEditingDemand(null)
         setSkillsInput('')
         setShowEditArea(false)
+        setSelectedDemands(new Set())
         setError(null)
     }
 
@@ -372,26 +374,12 @@ export default function DemandPage() {
     }
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-            <div className="mb-4 sm:mb-6">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Demandas</h1>
-                    <p className="mt-1 text-sm text-gray-600">
-                        Gerencie as demandas cirúrgicas
-                    </p>
-                </div>
-            </div>
-
-            {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
-                    {error}
-                </div>
-            )}
-
+        <>
             {/* Área de edição */}
             {isEditing && (
-                <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
+                    <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">
                         {editingDemand ? 'Editar Demanda' : 'Criar Demanda'}
                     </h2>
                     <div className="space-y-4">
@@ -576,61 +564,48 @@ export default function DemandPage() {
                         </div>
                     </div>
                 </div>
+                </div>
             )}
 
-            {loading ? (
-                <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                    <p className="mt-2 text-sm text-gray-600">Carregando demandas...</p>
-                </div>
-            ) : demands.length === 0 ? (
-                <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                    <p className="text-gray-600">Nenhuma demanda cadastrada ainda.</p>
-                </div>
-            ) : (
-                <>
-                    {/* Mensagem de total e contadores */}
-                    <div className="mb-4 sm:mb-6">
-                        <div className="text-sm text-gray-600">
-                            Total de demandas: <span className="font-medium">{demands.length}</span>
-                            {selectedDemands.size > 0 && (
-                                <span className="ml-2 sm:ml-4 text-red-600">
-                                    {selectedDemands.size} marcado{selectedDemands.size > 1 ? 's' : ''} para exclusão
-                                </span>
-                            )}
+            <CardPanel
+                title="Demandas"
+                description="Gerencie as demandas cirúrgicas"
+                totalCount={demands.length}
+                selectedCount={selectedDemands.size}
+                loading={loading}
+                loadingMessage="Carregando demandas..."
+                emptyMessage="Nenhuma demanda cadastrada ainda."
+                countLabel="Total de demandas"
+                createCard={
+                    <div
+                        onClick={handleCreateClick}
+                        className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
+                    >
+                        <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                            <svg
+                                className="w-12 h-12 mb-3 text-slate-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            <p className="text-sm font-medium mb-1 text-slate-700">
+                                Criar nova demanda
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                Clique para adicionar
+                            </p>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {/* Card de criação - sempre o primeiro */}
-                        <div
-                            onClick={handleCreateClick}
-                            className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
-                        >
-                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-                                <svg
-                                    className="w-12 h-12 mb-3 text-slate-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 4v16m8-8H4"
-                                    />
-                                </svg>
-                                <p className="text-sm font-medium mb-1 text-slate-700">
-                                    Criar nova demanda
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                    Clique para adicionar
-                                </p>
-                            </div>
-                        </div>
-
-                        {demands.map((demand) => {
+                }
+            >
+                {demands.map((demand) => {
                             const isSelected = selectedDemands.has(demand.id)
                             const hospital = hospitals.find((h) => h.id === demand.hospital_id)
                             return (
@@ -776,33 +751,24 @@ export default function DemandPage() {
                                 </div>
                             )
                         })}
-                    </div>
-                </>
-            )}
+            </CardPanel>
 
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={<div></div>}
+                leftContent={error || undefined}
                 buttons={(() => {
                     const buttons = []
-                    if (isEditing) {
+                    // Botão Cancelar (aparece se houver edição OU seleção)
+                    if (isEditing || selectedDemands.size > 0) {
                         buttons.push({
                             label: 'Cancelar',
                             onClick: handleCancel,
                             variant: 'secondary' as const,
-                            disabled: submitting,
+                            disabled: submitting || deleting,
                         })
                     }
-                    if (isEditing && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
+                    // Botão Excluir (aparece se houver seleção)
                     if (selectedDemands.size > 0) {
                         buttons.push({
                             label: 'Excluir',
@@ -812,9 +778,19 @@ export default function DemandPage() {
                             loading: deleting,
                         })
                     }
+                    // Botão Salvar (aparece se houver edição com mudanças)
+                    if (isEditing && hasChanges()) {
+                        buttons.push({
+                            label: submitting ? 'Salvando...' : 'Salvar',
+                            onClick: handleSave,
+                            variant: 'primary' as const,
+                            disabled: submitting,
+                            loading: submitting,
+                        })
+                    }
                     return buttons
                 })()}
             />
-        </div>
+        </>
     )
 }

@@ -2,6 +2,7 @@
 
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { CardFooter } from '@/components/CardFooter'
+import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses } from '@/lib/cardStyles'
@@ -94,12 +95,13 @@ export default function HospitalPage() {
         setError(null)
     }
 
-    // Cancelar edição
+    // Cancelar edição e/ou seleção
     const handleCancel = () => {
         setFormData({ name: '', prompt: '', color: null })
         setOriginalFormData({ name: '', prompt: '', color: null })
         setEditingHospital(null)
         setShowEditArea(false)
+        setSelectedHospitals(new Set())
         setError(null)
     }
 
@@ -234,24 +236,10 @@ export default function HospitalPage() {
     }
 
     return (
-        <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-            <div className="mb-4 sm:mb-6">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Hospitais</h1>
-                    <p className="mt-1 text-sm text-gray-600">
-                        Gerencie os hospitais e seus prompts de extração
-                    </p>
-                </div>
-            </div>
-
-            {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
-                    {error}
-                </div>
-            )}
-
+        <>
             {/* Área de edição */}
             {isEditing && (
+                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
                 <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                         {editingHospital ? 'Editar Hospital' : 'Criar Hospital'}
@@ -299,61 +287,48 @@ export default function HospitalPage() {
                         </div>
                     </div>
                 </div>
+            </div>
             )}
 
-            {loading ? (
-                <div className="text-center py-12">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                    <p className="mt-2 text-sm text-gray-600">Carregando hospitais...</p>
-                </div>
-            ) : hospitals.length === 0 ? (
-                <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                    <p className="text-gray-600">Nenhum hospital cadastrado ainda.</p>
-                </div>
-            ) : (
-                <>
-                    {/* Mensagem de total e contadores */}
-                    <div className="mb-4 sm:mb-6">
-                        <div className="text-sm text-gray-600">
-                            Total de hospitais: <span className="font-medium">{hospitals.length}</span>
-                            {selectedHospitals.size > 0 && (
-                                <span className="ml-2 sm:ml-4 text-red-600">
-                                    {selectedHospitals.size} marcado{selectedHospitals.size > 1 ? 's' : ''} para exclusão
-                                </span>
-                            )}
+            <CardPanel
+                title="Hospitais"
+                description="Gerencie os hospitais e seus prompts de extração"
+                totalCount={hospitals.length}
+                selectedCount={selectedHospitals.size}
+                loading={loading}
+                loadingMessage="Carregando hospitais..."
+                emptyMessage="Nenhum hospital cadastrado ainda."
+                countLabel="Total de hospitais"
+                createCard={
+                    <div
+                        onClick={handleCreateClick}
+                        className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
+                    >
+                        <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
+                            <svg
+                                className="w-12 h-12 mb-3 text-slate-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            <p className="text-sm font-medium mb-1 text-slate-700">
+                                Criar novo hospital
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                Clique para adicionar
+                            </p>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {/* Card de criação - sempre o primeiro */}
-                        <div
-                            onClick={handleCreateClick}
-                            className="rounded-xl border-2 border-dashed border-slate-300 bg-white min-w-0 cursor-pointer transition-all duration-200 flex flex-col min-h-[200px]"
-                        >
-                            <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-                                <svg
-                                    className="w-12 h-12 mb-3 text-slate-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 4v16m8-8H4"
-                                    />
-                                </svg>
-                                <p className="text-sm font-medium mb-1 text-slate-700">
-                                    Criar novo hospital
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                    Clique para adicionar
-                                </p>
-                            </div>
-                        </div>
-
-                        {hospitals.map((hospital) => {
+                }
+            >
+                {hospitals.map((hospital) => {
                             const isSelected = selectedHospitals.has(hospital.id)
                             return (
                                 <div
@@ -412,38 +387,26 @@ export default function HospitalPage() {
                                 </div>
                             )
                         })}
-                    </div>
-                </>
-            )}
+            </CardPanel>
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
             <BottomActionBarSpacer />
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                leftContent={<div></div>}
+                leftContent={error || undefined}
                 buttons={(() => {
                     const buttons = []
-                    // Adicionar botão "Cancelar" quando estiver editando/criando
-                    if (isEditing) {
+                    // Botão Cancelar (aparece se houver edição OU seleção)
+                    if (isEditing || selectedHospitals.size > 0) {
                         buttons.push({
                             label: 'Cancelar',
                             onClick: handleCancel,
                             variant: 'secondary' as const,
-                            disabled: submitting,
+                            disabled: submitting || deleting,
                         })
                     }
-                    // Adicionar botão "Salvar" quando houver mudanças
-                    if (isEditing && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    // Adicionar botão "Excluir" se houver hospitais marcados para exclusão
+                    // Botão Excluir (aparece se houver seleção)
                     if (selectedHospitals.size > 0) {
                         buttons.push({
                             label: 'Excluir',
@@ -453,9 +416,19 @@ export default function HospitalPage() {
                             loading: deleting,
                         })
                     }
+                    // Botão Salvar (aparece se houver edição com mudanças)
+                    if (isEditing && hasChanges()) {
+                        buttons.push({
+                            label: submitting ? 'Salvando...' : 'Salvar',
+                            onClick: handleSave,
+                            variant: 'primary' as const,
+                            disabled: submitting,
+                            loading: submitting,
+                        })
+                    }
                     return buttons
                 })()}
             />
-        </div>
+        </>
     )
 }
