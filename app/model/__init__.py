@@ -9,5 +9,6 @@ from app.model.schedule_version import ScheduleVersion
 from app.model.hospital import Hospital
 from app.model.demand import Demand
 from app.model.profile import Profile
+from app.model.professional import Professional
 
-__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion", "Hospital", "Demand", "Profile"]
+__all__ = ["BaseModel", "Tenant", "Account", "Membership", "AuditLog", "Job", "File", "ScheduleVersion", "Hospital", "Demand", "Profile", "Professional"]

@@ -267,3 +267,42 @@ export interface ProfileUpdateRequest {
   hospital_id?: number | null
   attribute?: Record<string, unknown>
 }
+
+export interface ProfessionalResponse {
+  id: number
+  tenant_id: number
+  name: string
+  email: string | null
+  phone: string | null
+  notes: string | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProfessionalListResponse {
+  items: ProfessionalResponse[]
+  total: number
+}
+
+export interface ProfessionalCreateRequest {
+  name: string
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  active?: boolean
+}
+
+export interface ProfessionalUpdateRequest {
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
+  active?: boolean | null
+}
+
+export interface AccountOption {
+  id: number
+  email: string
+  name: string
+}

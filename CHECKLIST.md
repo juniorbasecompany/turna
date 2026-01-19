@@ -2,8 +2,6 @@
 
 Este checklist organiza as tarefas necessárias para aderir completamente à stack definida em `stack.md`, seguindo uma abordagem **incremental e testável** em cada etapa.
 
----
-
 ## Status Geral
 
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
@@ -14,8 +12,6 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
 - **Implementação**: ~70% - Fundações completas, falta completar endpoints e testes
-
----
 
 ## Caminho Mínimo Incremental
 
@@ -71,8 +67,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Endpoint `GET /schedule/{id}/pdf` (download)
 - [x] Testar: publicar → download PDF (ok no container, gerou `output_test_schedule.pdf`)
 
----
-
 ## FASE 1: Fundações - Modelos e Banco de Dados
 
 ### 1.1 Modelos SQLModel (Mínimo Inicial: 5 tabelas)
@@ -110,7 +104,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 **Evolução futura (quando necessário):**
 - [ ] Criar `app/model/schedule.py` (quando precisar de múltiplas versões por schedule)
 - [ ] Criar `app/model/demand.py` (quando precisar queryar demandas diretamente)
-- [ ] Criar `app/model/professional.py` (quando precisar CRUD de profissionais)
 
 ### 1.2 Configuração do Alembic
 - [x] Atualizar `alembic/env.py`:
@@ -130,8 +123,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Criar engine singleton
 - [x] Criar `app/db/base.py`:
   - [x] Função para criar todas as tabelas (útil para testes)
-
----
 
 ## FASE 2: Autenticação e Multi-Tenant
 
@@ -220,8 +211,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] `get_current_tenant()` - usa Membership para validar e retornar Tenant
   - [x] `require_role(required_role)` - verifica role do Membership
 
----
-
 ## FASE 3: Storage (S3/MinIO)
 
 ### 3.1 Configuração S3/MinIO
@@ -253,8 +242,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Upload de arquivo cria registro no banco e arquivo no MinIO
   - [x] Download retorna arquivo correto
   - [x] URLs presignadas funcionam
-
----
 
 ## FASE 4: Job Assíncrono (Arq) - Incremental
 
@@ -317,8 +304,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 **Nota**: Abstração completa de AI Provider (interface formal) fica para depois, quando precisar plugar outro provedor.
 
----
-
 ## FASE 5: API Endpoints Completos
 
 ### 5.1 Endpoints de Tenants
@@ -373,8 +358,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Checklist de validação para novos endpoints
 - [x] Documentar API com OpenAPI/Swagger (FastAPI já faz isso automaticamente)
 
----
-
 ## FASE 6: Integração de Código Existente
 
 ### 6.1 Adaptação de Solvers
@@ -397,8 +380,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ### 6.3 Manutenção de Compatibilidade
 - [ ] Manter `app.py` funcionando (não quebrar código legado)
-
----
 
 ## FASE 7: Testes e Validação
 
@@ -671,8 +652,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Telas: Login, Lista de Escalas, Detalhes de Escala
 - [ ] Integração com API
 
----
-
 ## 📝 Notas de Implementação
 
 ### Filosofia: Mínimo Testável
@@ -711,8 +690,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] Abstração completa de AI Provider (quando precisar plugar outro provedor)
 - [ ] Endpoints mobile específicos (quando criar app React Native)
 
----
-
 ## Checklist de Validação Final
 
 Antes de considerar completo, verificar:
@@ -730,8 +707,6 @@ Antes de considerar completo, verificar:
 - [x] Docker Compose sobe sem erros (script de validação criado: `script_validate_docker_compose.py`)
 - [x] Migrações Alembic aplicam sem erros
 - [x] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
-
----
 
 **Última atualização**: Refatorado para abordagem incremental e testável.
 
@@ -824,8 +799,6 @@ Antes de considerar completo, verificar:
 
 - [x] Garantir visibilidade apenas para usuários com permissão administrativa do tenant
 
----
-
 ### 10.2 Backend – Modelo e Regras de Negócio
 
 - [x] Confirmar modelo `hospital`
@@ -839,8 +812,6 @@ Antes de considerar completo, verificar:
   - [x] `unique (tenant_id, name)`
 
 - [x] Garantir isolamento por tenant em todas as operações (CRUD)
-
----
 
 ### 10.3 Backend – CRUD de Hospitais
 
@@ -856,8 +827,6 @@ Antes de considerar completo, verificar:
   - [x] `prompt` pode ser nullable (não obrigatório)
   - [x] `color` opcional, formato hexadecimal (#RRGGBB)
   - [x] Hospital sempre pertence ao tenant do usuário logado
-
----
 
 ### 10.4 Tenant – Criação de Hospital Default
 
@@ -892,8 +861,6 @@ Antes de considerar completo, verificar:
   - [x] Todo tenant nasce com exatamente 1 hospital default
   - [x] Upload de arquivos sempre pode usar esse hospital sem configuração adicional
 
----
-
 ### 10.5 Frontend – Tela de Hospitais (CRUD)
 
 - [x] Página `/hospital`
@@ -916,16 +883,12 @@ Antes de considerar completo, verificar:
   - [x] Delete com validação (não permite excluir se houver arquivos associados)
   - [x] Seleção múltipla para exclusão em lote
 
----
-
 ### 10.6 Integração com Arquivos
 
 - [x] Confirmar que:
   - [x] Todo `file` referencia um `hospital_id`
   - [x] O hospital default pode ser usado no upload sem ajustes
   - [x] O filtro por hospital no painel de arquivos lista este hospital
-
----
 
 ### 10.7 Testes Essenciais
 
@@ -939,8 +902,6 @@ Antes de considerar completo, verificar:
 - [ ] Upload usando hospital customizado
 - [ ] Processamento usa o prompt correto do hospital
 
----
-
 ### 10.8 Documentação
 
 - [x] Atualizar `CHECKLIST.md`
@@ -948,8 +909,6 @@ Antes de considerar completo, verificar:
   - [ ] Conceito de hospital
   - [ ] Hospital como origem semântica das demandas
   - [ ] Prompt como contrato de extração
-
----
 
 ## FASE 11: Tabela Profile - Perfis de Usuários
 
@@ -1165,7 +1124,116 @@ Antes de considerar completo, verificar:
 - Um account pode ter apenas um profile por hospital específico por tenant
 - Implementado via constraint única `(tenant_id, account_id, hospital_id)` e índice único parcial para `hospital_id IS NULL`
 
----
+## FASE 12: CRUD de Profissionais
+
+### 12.1 Banco de Dados (SQLModel) — criar `Professional`
+
+- [ ] Criar `app/model/professional.py`
+- [ ] Definir `Professional(BaseModel, table=True)` com `__tablename__ = "professional"`
+- [ ] Campos mínimos (MVP)
+  - [ ] `tenant_id: int` (FK `tenant.id`, index, obrigatório)
+  - [ ] `name: str` (obrigatório, index)
+  - [ ] `email: str | None` (opcional, index) *(útil para convite/login depois)*
+  - [ ] `phone: str | None` (opcional)
+  - [ ] `is_pediatric: bool` (default `False`, index)
+  - [ ] `skills: list[str] | None` (JSON) *(ex.: "cardio", "ortopedia", etc.)*
+  - [ ] `notes: str | None` (opcional)
+  - [ ] `active: bool` (default `True`, index)
+- [ ] Constraints / índices (escolha simples e segura)
+  - [ ] `UniqueConstraint("tenant_id", "name", name="uq_professional_tenant_name")` *(ou troque por email se preferir)*
+  - [ ] Índices já via `index=True` nos campos acima
+
+### 12.2 Migration (Alembic)
+
+- [ ] Garantir que `Professional` está importado no local onde o Alembic descobre metadata (ex.: `app/db/base.py` ou `app/model/__init__.py`)
+- [ ] Criar migration: `alembic revision --autogenerate -m "add_professional_table"`
+- [ ] Revisar migration gerada:
+  - [ ] `tenant_id` FK + index
+  - [ ] JSON para `skills`
+  - [ ] `created_at` e `updated_at` como `timestamptz`
+  - [ ] Unique constraint
+- [ ] Aplicar migration: `alembic upgrade head`
+- [ ] Teste rápido no banco: tabela existe e constraints ok
+
+### 12.3 Backend (FastAPI) — schemas Pydantic
+
+- [ ] Criar schemas (em arquivo novo `app/api/professional.py` ou junto do router existente):
+  - [ ] `ProfessionalCreate`
+    - [ ] `name: str`
+    - [ ] `email: str | None = None`
+    - [ ] `phone: str | None = None`
+    - [ ] `is_pediatric: bool = False`
+    - [ ] `skills: list[str] = []`
+    - [ ] `notes: str | None = None`
+    - [ ] `active: bool = True`
+  - [ ] `ProfessionalUpdate` (todos opcionais)
+  - [ ] `ProfessionalResponse` (inclui `id`, `tenant_id`, `created_at`, `updated_at`)
+- [ ] Validar normalizações simples:
+  - [ ] `skills`: aceitar `[]` e remover strings vazias (se quiser)
+  - [ ] `email`: opcional; se vier, manter lowercase
+
+### 12.4 Backend — endpoints CRUD (isolamento por tenant)
+
+> Todos usando `membership = Depends(get_current_membership)` e **NUNCA** aceitando `tenant_id` do request.
+
+- [ ] Criar router `app/api/professional.py` e adicionar em `app/api/routes.py`
+- [ ] Endpoints (MVP)
+  - [ ] `POST /professional` (admin)
+  - [ ] `GET /professional/list` (com `limit`, `offset`, filtros opcionais `active`, `is_pediatric`, `q=...`)
+  - [ ] `GET /professional/{id}`
+  - [ ] `PUT /professional/{id}` (admin)
+  - [ ] `DELETE /professional/{id}` (admin) *(hard delete no MVP, igual arquivos; evolui depois se precisar)*
+- [ ] Regras obrigatórias
+  - [ ] **Create**: `tenant_id = membership.tenant_id`
+  - [ ] **Get/Put/Delete**: validar `professional.tenant_id == membership.tenant_id` (403 se não bater)
+  - [ ] **List**: query sempre filtra por `tenant_id == membership.tenant_id`
+- [ ] Testes rápidos via Swagger
+  - [ ] Criar 1 profissional
+  - [ ] Listar (paginado)
+  - [ ] Editar
+  - [ ] Excluir
+  - [ ] Validar isolamento criando outro tenant e confirmando que não vaza dados
+
+### 12.5 Frontend (Next.js) — rotas API (proxy)
+
+- [ ] Criar handlers:
+  - [ ] `frontend/app/api/professional/route.ts` (POST)
+  - [ ] `frontend/app/api/professional/list/route.ts` (GET)
+  - [ ] `frontend/app/api/professional/[id]/route.ts` (GET/PUT/DELETE)
+- [ ] Atualizar `frontend/types/api.ts` com:
+  - [ ] `ProfessionalResponse`
+  - [ ] `ProfessionalListResponse { items, total }`
+  - [ ] `ProfessionalCreateRequest`, `ProfessionalUpdateRequest`
+
+### 12.6 Frontend — página CRUD `/professional`
+
+- [ ] Criar menu lateral "Profissionais"
+- [ ] Criar página `frontend/app/(protected)/professional/page.tsx`
+- [ ] IMPORTANTE: adicionar exceção `/professional` no `frontend/lib/api.ts` para não redirecionar no F5 (mesma regra do `/dashboard`/`/file`)
+- [ ] UI (simples e funcional)
+  - [ ] Lista (tabela ou cards) com: `name`, `active`, `is_pediatric`, `skills` (resumo), `created_at`
+  - [ ] Filtros: texto (`q`), `active` (todos/ativos/inativos), `is_pediatric` (todos/sim/não)
+  - [ ] Paginação com `limit/offset`
+  - [ ] Usar o padrão do card panel.
+- [ ] Form (lado direito ou modal, estilo do CRUD de Hospitais/Profile)
+  - [ ] Campos: nome, email, telefone, pediatria (checkbox), skills (textarea 1 por linha ou input simples), ativo, observações
+  - [ ] Validações: nome obrigatório; skills limpa vazios; email opcional
+  - [ ] Feedback: sucesso/erro em português
+
+### 12.7 Ajustes finais e consistência
+
+- [ ] Garantir que não mexeu em fluxos já definidos (auth, membership, hospital, file, jobs)
+- [ ] Teste de regressão rápido:
+  - [ ] Login + select-tenant ok
+  - [ ] Dashboard ok
+  - [ ] File/Hospital/Profile continuam ok
+  - [ ] Profissionais CRUD ok
+
+### 12.8 (Opcional, mas recomendado) Preparar o futuro "convite por email"
+
+- [ ] Se `email` existir no Professional:
+  - [ ] Planejar conversão "Professional → Membership invite" (admin convida e vira Account/Membership depois)
+  - [ ] Não implementar agora: só garantir que o campo não atrapalha o MVP
 
 ## Scripts de Teste
 
