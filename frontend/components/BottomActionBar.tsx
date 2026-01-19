@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 
 interface BottomActionBarButton {
     /**
@@ -82,6 +82,25 @@ export function BottomActionBar({
         return null
     }
 
+    // Estado para controlar a animação de piscar quando erro aparece
+    const [shouldPulse, setShouldPulse] = useState(false)
+    const hasError = !!leftContent || (message && messageType === 'error')
+    const errorContent = typeof leftContent === 'string' ? leftContent : message && typeof message === 'string' ? message : ''
+
+    // Detectar quando um erro aparece e ativar animação
+    useEffect(() => {
+        if (hasError && errorContent) {
+            setShouldPulse(true)
+            // Remover a classe após a animação completar
+            const timer = setTimeout(() => {
+                setShouldPulse(false)
+            }, 1200) // Animação dura 1.2 segundos
+            return () => clearTimeout(timer)
+        } else {
+            setShouldPulse(false)
+        }
+    }, [errorContent, hasError]) // Reagir quando o conteúdo do erro mudar
+
     const messageColorClasses = {
         info: 'text-gray-700 bg-blue-50 border-blue-200',
         success: 'text-green-800 bg-green-50 border-green-200',
@@ -116,46 +135,65 @@ export function BottomActionBar({
     }
 
     return (
-        <div className="fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
+        <>
+            <style>{`
+                @keyframes errorPulse {
+                    0%, 100% {
+                        background-color: rgb(255, 255, 255);
+                    }
+                    50% {
+                        background-color: rgba(252, 165, 165, 1);
+                    }
+                }
+                .error-pulse {
+                    animation: errorPulse 1.2s ease-in-out;
+                }
+            `}</style>
+            <div
+                className={`fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)] ${
+                    shouldPulse && hasError ? 'error-pulse' : ''
+                }`}
+            >
             {message ? (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-20 flex items-center">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-4 w-full">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-20 flex items-center py-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full">
                         {/* Mensagem */}
                         <div
-                            className={`flex-1 px-4 py-2 rounded-md border ${messageColorClasses[messageType]} min-w-0`}
+                            className={`flex-1 min-w-[200px] px-4 py-2 rounded-md border ${messageColorClasses[messageType]}`}
                         >
                             {typeof message === 'string' ? (
-                                <p className="text-sm font-medium truncate">{message}</p>
+                                <p className="text-sm font-medium break-words">{message}</p>
                             ) : (
                                 message
                             )}
                         </div>
 
-                        {/* Botões de ação - alinhados à direita */}
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             {renderButtons()}
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="min-h-20 flex items-center justify-between gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8">
+                <div className="min-h-20 flex flex-wrap items-center gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8 py-2">
                     {/* Conteúdo à esquerda - sem bordas, apenas texto - sempre reserva espaço */}
-                    <div className="flex-1 min-w-0 text-sm text-red-600 pr-2 sm:pr-4">
+                    <div className="flex-1 min-w-[200px] text-sm text-red-600">
                         {leftContent && (
                             typeof leftContent === 'string' ? (
-                                <p className="break-words">{leftContent}</p>
+                                <p className="break-words">{leftContent.split('|')[0]}</p>
                             ) : (
                                 leftContent
                             )
                         )}
                     </div>
-                    {/* Botões de ação - alinhados à direita */}
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {renderButtons()}
                     </div>
                 </div>
             )}
         </div>
+        </>
     )
 }
 

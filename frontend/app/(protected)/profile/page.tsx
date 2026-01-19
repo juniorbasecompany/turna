@@ -13,7 +13,7 @@ import {
     ProfileResponse,
     ProfileUpdateRequest,
 } from '@/types/api'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface AccountOption {
     id: number
@@ -30,6 +30,7 @@ export default function ProfilePage() {
     const [loadingAccounts, setLoadingAccounts] = useState(true)
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [errorVersion, setErrorVersion] = useState<number>(0)
     const [editingProfile, setEditingProfile] = useState<ProfileResponse | null>(null)
     const [formData, setFormData] = useState({
         account_id: null as number | null,
@@ -187,21 +188,29 @@ export default function ProfilePage() {
         setSelectedProfiles(new Set())
         setError(null)
         setJsonError(null)
+        setErrorVersion(0)
+    }
+
+    // Função auxiliar para setar erro e incrementar versão
+    const setErrorWithVersion = (errorMessage: string) => {
+        setError(errorMessage)
+        setErrorVersion((prev) => prev + 1)
     }
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         // Validar account_id
         if (!formData.account_id) {
-            setError('Conta é obrigatória')
+            setErrorWithVersion('Conta é obrigatória')
             return
         }
 
         // Validar JSON
         const jsonValidation = validateJson(formData.attribute)
         if (!jsonValidation.valid) {
-            setJsonError(jsonValidation.error || 'JSON inválido')
-            setError(jsonValidation.error || 'JSON inválido')
+            const errorMsg = jsonValidation.error || 'JSON inválido'
+            setJsonError(errorMsg)
+            setErrorWithVersion(errorMsg)
             return
         }
         setJsonError(null)
@@ -209,6 +218,7 @@ export default function ProfilePage() {
         try {
             setSubmitting(true)
             setError(null)
+            setErrorVersion(0)
 
             const attributeObj = jsonValidation.parsed || {}
 
@@ -263,7 +273,7 @@ export default function ProfilePage() {
             setShowEditArea(false)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profile'
-            setError(message)
+            setErrorWithVersion(message)
             console.error('Erro ao salvar profile:', err)
         } finally {
             setSubmitting(false)
@@ -532,7 +542,7 @@ export default function ProfilePage() {
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={error || undefined}
+                leftContent={error ? `${error}|${errorVersion}` : undefined}
                 buttons={(() => {
                     const buttons = []
                     // Botão Cancelar (aparece se houver edição OU seleção)
