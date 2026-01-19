@@ -1128,20 +1128,19 @@ Antes de considerar completo, verificar:
 
 ### 12.1 Banco de Dados (SQLModel) — criar `Professional`
 
-- [ ] Criar `app/model/professional.py`
-- [ ] Definir `Professional(BaseModel, table=True)` com `__tablename__ = "professional"`
-- [ ] Campos mínimos (MVP)
-  - [ ] `tenant_id: int` (FK `tenant.id`, index, obrigatório)
-  - [ ] `name: str` (obrigatório, index)
-  - [ ] `email: str | None` (opcional, index) *(útil para convite/login depois)*
-  - [ ] `phone: str | None` (opcional)
-  - [ ] `is_pediatric: bool` (default `False`, index)
-  - [ ] `skills: list[str] | None` (JSON) *(ex.: "cardio", "ortopedia", etc.)*
-  - [ ] `notes: str | None` (opcional)
-  - [ ] `active: bool` (default `True`, index)
-- [ ] Constraints / índices (escolha simples e segura)
-  - [ ] `UniqueConstraint("tenant_id", "name", name="uq_professional_tenant_name")` *(ou troque por email se preferir)*
-  - [ ] Índices já via `index=True` nos campos acima
+- [x] Criar `app/model/professional.py`
+- [x] Definir `Professional(BaseModel, table=True)` com `__tablename__ = "professional"`
+- [x] Campos mínimos (MVP)
+  - [x] `tenant_id: int` (FK `tenant.id`, index, obrigatório)
+  - [x] `name: str` (obrigatório, index)
+  - [x] `email: str | None` (opcional, index) *(útil para convite/login depois)*
+  - [x] `phone: str | None` (opcional)
+  - [x] `notes: str | None` (opcional)
+  - [x] `active: bool` (default `True`, index)
+  - [x] **Nota**: Campos `is_pediatric` e `skills` foram removidos conforme solicitado
+- [x] Constraints / índices (escolha simples e segura)
+  - [x] `UniqueConstraint("tenant_id", "name", name="uq_professional_tenant_name")`
+  - [x] Índices já via `index=True` nos campos acima
 
 ### 12.2 Migration (Alembic)
 
@@ -1157,20 +1156,17 @@ Antes de considerar completo, verificar:
 
 ### 12.3 Backend (FastAPI) — schemas Pydantic
 
-- [ ] Criar schemas (em arquivo novo `app/api/professional.py` ou junto do router existente):
-  - [ ] `ProfessionalCreate`
-    - [ ] `name: str`
-    - [ ] `email: str | None = None`
-    - [ ] `phone: str | None = None`
-    - [ ] `is_pediatric: bool = False`
-    - [ ] `skills: list[str] = []`
-    - [ ] `notes: str | None = None`
-    - [ ] `active: bool = True`
-  - [ ] `ProfessionalUpdate` (todos opcionais)
-  - [ ] `ProfessionalResponse` (inclui `id`, `tenant_id`, `created_at`, `updated_at`)
-- [ ] Validar normalizações simples:
-  - [ ] `skills`: aceitar `[]` e remover strings vazias (se quiser)
-  - [ ] `email`: opcional; se vier, manter lowercase
+- [x] Criar schemas (em `app/api/route.py` junto do router existente):
+  - [x] `ProfessionalCreate`
+    - [x] `name: str`
+    - [x] `email: str | None = None`
+    - [x] `phone: str | None = None`
+    - [x] `notes: str | None = None`
+    - [x] `active: bool = True`
+  - [x] `ProfessionalUpdate` (todos opcionais)
+  - [x] `ProfessionalResponse` (inclui `id`, `tenant_id`, `created_at`, `updated_at`)
+- [x] Validar normalizações simples:
+  - [x] `email`: opcional; se vier, manter lowercase
 
 ### 12.4 Backend — endpoints CRUD (isolamento por tenant)
 
@@ -1196,14 +1192,14 @@ Antes de considerar completo, verificar:
 
 ### 12.5 Frontend (Next.js) — rotas API (proxy)
 
-- [ ] Criar handlers:
-  - [ ] `frontend/app/api/professional/route.ts` (POST)
-  - [ ] `frontend/app/api/professional/list/route.ts` (GET)
-  - [ ] `frontend/app/api/professional/[id]/route.ts` (GET/PUT/DELETE)
-- [ ] Atualizar `frontend/types/api.ts` com:
-  - [ ] `ProfessionalResponse`
-  - [ ] `ProfessionalListResponse { items, total }`
-  - [ ] `ProfessionalCreateRequest`, `ProfessionalUpdateRequest`
+- [x] Criar handlers:
+  - [x] `frontend/app/api/professional/route.ts` (POST)
+  - [x] `frontend/app/api/professional/list/route.ts` (GET)
+  - [x] `frontend/app/api/professional/[id]/route.ts` (GET/PUT/DELETE)
+- [x] Atualizar `frontend/types/api.ts` com:
+  - [x] `ProfessionalResponse`
+  - [x] `ProfessionalListResponse { items, total }`
+  - [x] `ProfessionalCreateRequest`, `ProfessionalUpdateRequest`
 
 ### 12.6 Frontend — página CRUD `/professional`
 
@@ -1222,7 +1218,7 @@ Antes de considerar completo, verificar:
 
 ### 12.7 Ajustes finais e consistência
 
-- [ ] Garantir que não mexeu em fluxos já definidos (auth, membership, hospital, file, jobs)
+- [x] Garantir que não mexeu em fluxos já definidos (auth, membership, hospital, file, jobs)
 - [ ] Teste de regressão rápido:
   - [ ] Login + select-tenant ok
   - [ ] Dashboard ok
@@ -1231,9 +1227,10 @@ Antes de considerar completo, verificar:
 
 ### 12.8 (Opcional, mas recomendado) Preparar o futuro "convite por email"
 
-- [ ] Se `email` existir no Professional:
-  - [ ] Planejar conversão "Professional → Membership invite" (admin convida e vira Account/Membership depois)
-  - [ ] Não implementar agora: só garantir que o campo não atrapalha o MVP
+- [x] Se `email` existir no Professional:
+  - [x] Campo `email` implementado e opcional (não atrapalha o MVP)
+  - [ ] Planejar conversão "Professional → Membership invite" (admin convida e vira Account/Membership depois) *(futuro)*
+  - [x] Não implementar agora: só garantir que o campo não atrapalha o MVP
 
 ## Scripts de Teste
 
