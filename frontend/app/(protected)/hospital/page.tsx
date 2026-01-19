@@ -12,6 +12,7 @@ import {
     HospitalResponse,
     HospitalUpdateRequest,
 } from '@/types/api'
+import { extractErrorMessage } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function HospitalPage() {
@@ -39,7 +40,7 @@ export default function HospitalPage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
             }
 
             const data: HospitalListResponse = await response.json()
@@ -135,7 +136,7 @@ export default function HospitalPage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             } else {
                 // Criar novo hospital
@@ -156,7 +157,7 @@ export default function HospitalPage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             }
 
@@ -207,10 +208,8 @@ export default function HospitalPage() {
                     if (response.status === 401) {
                         throw new Error('Sessão expirada. Por favor, faça login novamente.')
                     }
-                    const errorData = await response.json().catch(() => ({
-                        detail: `Erro HTTP ${response.status}`,
-                    }))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
 
                 return hospitalId
@@ -394,7 +393,11 @@ export default function HospitalPage() {
 
             {/* Barra inferior fixa com ações */}
             <BottomActionBar
-                leftContent={error || undefined}
+                leftContent={(() => {
+                    // Mostra erro no BottomActionBar apenas se houver botões de ação
+                    const hasButtons = isEditing || selectedHospitals.size > 0
+                    return hasButtons ? (error || undefined) : undefined
+                })()}
                 buttons={(() => {
                     const buttons = []
                     // Botão Cancelar (aparece se houver edição OU seleção)

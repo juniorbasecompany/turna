@@ -1,6 +1,7 @@
 'use client'
 
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { extractErrorMessage } from '@/lib/api'
 import { formatNumber } from '@/lib/tenantFormat'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -183,7 +184,7 @@ export default function ImportPage() {
                     return
                 }
                 const errorData = await uploadResponse.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro ao fazer upload: ${uploadResponse.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro ao fazer upload: ${uploadResponse.status}`))
             }
 
             const uploadData: FileUploadResponse = await uploadResponse.json()
@@ -205,7 +206,7 @@ export default function ImportPage() {
                     return
                 }
                 const errorData = await jobResponse.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro ao criar job: ${jobResponse.status}`))
             }
 
             const jobData: JobExtractResponse = await jobResponse.json()

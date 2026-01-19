@@ -13,6 +13,7 @@ import {
     ProfileResponse,
     ProfileUpdateRequest,
 } from '@/types/api'
+import { extractErrorMessage } from '@/lib/api'
 import { useEffect, useRef, useState } from 'react'
 
 interface AccountOption {
@@ -54,7 +55,7 @@ export default function ProfilePage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
             }
 
             const data: AccountOption[] = await response.json()
@@ -77,7 +78,7 @@ export default function ProfilePage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
             }
 
             const data: HospitalListResponse = await response.json()
@@ -102,7 +103,7 @@ export default function ProfilePage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
             }
 
             const data: ProfileListResponse = await response.json()
@@ -240,7 +241,7 @@ export default function ProfilePage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             } else {
                 // Criar novo profile
@@ -261,7 +262,7 @@ export default function ProfilePage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             }
 
@@ -311,10 +312,8 @@ export default function ProfilePage() {
                     if (response.status === 401) {
                         throw new Error('Sessão expirada. Por favor, faça login novamente.')
                     }
-                    const errorData = await response.json().catch(() => ({
-                        detail: `Erro HTTP ${response.status}`,
-                    }))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
 
                 return profileId
@@ -542,7 +541,12 @@ export default function ProfilePage() {
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={error ? `${error}|${errorVersion}` : undefined}
+                leftContent={(() => {
+                    // Mostra erro no BottomActionBar apenas se houver botões de ação
+                    const hasButtons = isEditing || selectedProfiles.size > 0
+                    // Usa errorVersion para forçar atualização quando o erro mudar
+                    return hasButtons ? (error ? `${error}|${errorVersion}` : undefined) : undefined
+                })()}
                 buttons={(() => {
                     const buttons = []
                     // Botão Cancelar (aparece se houver edição OU seleção)

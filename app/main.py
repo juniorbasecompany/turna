@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi import Request
@@ -10,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.route import router
 from app.middleware.tenant import tenant_context_middleware
+
+logger = logging.getLogger(__name__)
 
 # Carrega variáveis de ambiente do .env
 try:
@@ -76,10 +79,25 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    # Fallback: evita vazar stacktrace/detalhes no response.
+    # Loga o erro completo para debug
+    logger.error(f"Erro não tratado: {exc}", exc_info=True)
+    
+    # Extrai mensagem do erro de forma segura
+    error_message = str(exc) if exc else "Internal server error"
+    
+    # Limita o tamanho da mensagem para evitar expor informações sensíveis
+    # e manter a resposta em tamanho razoável
+    max_message_length = 500
+    if len(error_message) > max_message_length:
+        error_message = error_message[:max_message_length] + "..."
+    
+    # Retorna a mensagem do erro para ajudar no debug, mas sem stacktrace
     return JSONResponse(
         status_code=500,
-        content=_error_payload(code="INTERNAL_ERROR", message="Internal server error"),
+        content=_error_payload(
+            code="INTERNAL_ERROR",
+            message=error_message
+        ),
     )
 
 

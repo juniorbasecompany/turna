@@ -3,6 +3,7 @@
 import { BottomActionBar, BottomActionBarSpacer } from '@/components/BottomActionBar'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { extractErrorMessage } from '@/lib/api'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -685,7 +686,7 @@ export default function FilesPage() {
                     throw new Error('Sessão expirada. Por favor, faça login novamente.')
                 }
                 const errorData = await uploadResponse.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro ao fazer upload: ${uploadResponse.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro ao fazer upload: ${uploadResponse.status}`))
             }
 
             const uploadData: FileUploadResponse = await uploadResponse.json()
@@ -982,7 +983,7 @@ export default function FilesPage() {
                             throw new Error('Sessão expirada. Por favor, faça login novamente.')
                         }
                         const errorData = await jobResponse.json().catch(() => ({}))
-                        throw new Error(errorData.detail || `Erro ao criar job: ${jobResponse.status}`)
+                        throw new Error(extractErrorMessage(errorData, `Erro ao criar job: ${jobResponse.status}`))
                     }
 
                     // Job criado com sucesso - o worker processará em background
@@ -1027,10 +1028,8 @@ export default function FilesPage() {
                     if (response.status === 401) {
                         throw new Error('Sessão expirada. Por favor, faça login novamente.')
                     }
-                    const errorData = await response.json().catch(() => ({
-                        detail: `Erro HTTP ${response.status}`,
-                    }))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
 
                 return fileId

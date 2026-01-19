@@ -18,6 +18,50 @@ export class ApiError extends Error {
     }
 }
 
+/**
+ * Extrai a mensagem de erro de um objeto de erro do backend.
+ * Suporta múltiplos formatos de resposta de erro.
+ */
+export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro desconhecido'): string {
+    if (!errorData || typeof errorData !== 'object') {
+        return defaultMessage
+    }
+
+    const data = errorData as Record<string, unknown>
+
+    // Debug: log do objeto de erro para entender o formato
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('Error data received:', JSON.stringify(data, null, 2))
+    }
+
+    // Formato FastAPI padrão: { detail: "..." }
+    if (typeof data.detail === 'string') {
+        return data.detail
+    }
+
+    // Formato normalizado: { error: { code: "...", message: "..." } }
+    if (data.error && typeof data.error === 'object') {
+        const error = data.error as Record<string, unknown>
+        if (typeof error.message === 'string') {
+            // Retorna apenas a mensagem (sem incluir o código HTTP_500, etc)
+            return error.message
+        }
+    }
+
+    // Formato alternativo: { message: "..." }
+    if (typeof data.message === 'string') {
+        return data.message
+    }
+
+    // Se não encontrou nenhum formato conhecido, retorna o default
+    // mas também tenta stringificar o objeto para debug
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.warn('Could not extract error message from:', data)
+    }
+
+    return defaultMessage
+}
+
 interface RequestOptions extends RequestInit {
     params?: Record<string, string | number | boolean | null | undefined>
 }
@@ -80,7 +124,7 @@ export async function apiRequest<T>(
             // Acesso negado → mensagem clara
             const errorData = await response.json().catch(() => ({}))
             throw new ApiError(
-                errorData.detail || 'Acesso negado a este recurso',
+                extractErrorMessage(errorData, 'Acesso negado a este recurso'),
                 403,
                 errorData
             )
@@ -88,9 +132,39 @@ export async function apiRequest<T>(
 
         if (!response.ok) {
             // Outros erros HTTP
-            const errorData = await response.json().catch(() => ({}))
+            let errorData: unknown = {}
+            try {
+                const text = await response.text()
+                if (text) {
+                    try {
+                        errorData = JSON.parse(text)
+                        // Debug: log do erro parseado
+                        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+                            console.log('Parsed error data:', errorData)
+                        }
+                    } catch (parseError) {
+                        // Se não conseguir fazer parse JSON, usa o texto como mensagem
+                        console.warn('Failed to parse error response as JSON:', parseError, 'Text:', text)
+                        errorData = { message: text }
+                    }
+                } else {
+                    console.warn('Empty error response body')
+                }
+            } catch (textError) {
+                // Se não conseguir ler o texto, usa mensagem padrão
+                console.warn('Failed to read error response text:', textError)
+                errorData = {}
+            }
+            
+            const errorMessage = extractErrorMessage(errorData, `Erro HTTP ${response.status}`)
+            
+            // Debug: log da mensagem extraída
+            if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+                console.log('Extracted error message:', errorMessage)
+            }
+            
             throw new ApiError(
-                errorData.detail || `Erro HTTP ${response.status}`,
+                errorMessage,
                 response.status,
                 errorData
             )

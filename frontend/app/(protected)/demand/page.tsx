@@ -14,6 +14,7 @@ import {
     HospitalListResponse,
     HospitalResponse,
 } from '@/types/api'
+import { extractErrorMessage } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function DemandPage() {
@@ -78,7 +79,7 @@ export default function DemandPage() {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
-                throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
             }
 
             const data: DemandListResponse = await response.json()
@@ -269,7 +270,7 @@ export default function DemandPage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             } else {
                 // Criar nova demanda
@@ -300,7 +301,7 @@ export default function DemandPage() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
             }
 
@@ -347,10 +348,8 @@ export default function DemandPage() {
                     if (response.status === 401) {
                         throw new Error('Sessão expirada. Por favor, faça login novamente.')
                     }
-                    const errorData = await response.json().catch(() => ({
-                        detail: `Erro HTTP ${response.status}`,
-                    }))
-                    throw new Error(errorData.detail || `Erro HTTP ${response.status}`)
+                    const errorData = await response.json().catch(() => ({}))
+                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
                 }
 
                 return demandId
@@ -576,6 +575,11 @@ export default function DemandPage() {
                 loadingMessage="Carregando demandas..."
                 emptyMessage="Nenhuma demanda cadastrada ainda."
                 countLabel="Total de demandas"
+                error={(() => {
+                    // Mostra erro no CardPanel apenas se não houver botões de ação
+                    const hasButtons = isEditing || selectedDemands.size > 0
+                    return hasButtons ? null : error
+                })()}
                 createCard={
                     <div
                         onClick={handleCreateClick}
@@ -756,7 +760,11 @@ export default function DemandPage() {
             <BottomActionBarSpacer />
 
             <BottomActionBar
-                leftContent={error || undefined}
+                leftContent={(() => {
+                    // Mostra erro no BottomActionBar apenas se houver botões de ação
+                    const hasButtons = isEditing || selectedDemands.size > 0
+                    return hasButtons ? (error || undefined) : undefined
+                })()}
                 buttons={(() => {
                     const buttons = []
                     // Botão Cancelar (aparece se houver edição OU seleção)
