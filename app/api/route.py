@@ -2812,6 +2812,11 @@ def send_professional_invite_email(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
+        logger.info(
+            f"[INVITE] Iniciando envio de convite para profissional ID={professional_id} "
+            f"(email={professional.email}, tenant_id={membership.tenant_id})"
+        )
+
         # Enviar email de convite
         success = send_professional_invite(
             to_email=professional.email,
@@ -2820,11 +2825,19 @@ def send_professional_invite_email(
         )
 
         if not success:
+            logger.error(
+                f"[INVITE] ❌ FALHA - Envio de convite falhou para profissional ID={professional_id} "
+                f"(email={professional.email})"
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Erro ao enviar email de convite. Tente novamente mais tarde."
             )
 
+        logger.info(
+            f"[INVITE] ✅ SUCESSO - Convite enviado com sucesso para profissional ID={professional_id} "
+            f"(email={professional.email})"
+        )
         return {"message": "Convite enviado com sucesso", "email": professional.email}
     except HTTPException:
         raise

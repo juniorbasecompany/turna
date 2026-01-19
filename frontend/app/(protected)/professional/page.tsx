@@ -20,6 +20,8 @@ export default function ProfessionalPage() {
     const [professionals, setProfessionals] = useState<ProfessionalResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [emailMessage, setEmailMessage] = useState<string | null>(null)
+    const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
     const [editingProfessional, setEditingProfessional] = useState<ProfessionalResponse | null>(null)
     const [formData, setFormData] = useState({
         name: '',
@@ -84,6 +86,13 @@ export default function ProfessionalPage() {
         loadProfessionals()
     }, [filters, pagination])
 
+    // Debug: log quando emailMessage mudar
+    useEffect(() => {
+        if (emailMessage) {
+            console.log('[EMAIL-MESSAGE-EFFECT] emailMessage mudou para:', emailMessage, 'tipo:', emailMessageType)
+        }
+    }, [emailMessage, emailMessageType])
+
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
         if (!editingProfessional) {
@@ -138,6 +147,7 @@ export default function ProfessionalPage() {
         setSendInvite(false)
         setShowEditArea(true)
         setError(null)
+        setEmailMessage(null)
     }
 
     // Cancelar edição e/ou seleção
@@ -161,23 +171,27 @@ export default function ProfessionalPage() {
         setShowEditArea(false)
         setSelectedProfessionals(new Set())
         setError(null)
+        setEmailMessage(null)
     }
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
         if (!formData.name.trim()) {
             setError('Nome é obrigatório')
+            setEmailMessage(null) // Limpar mensagem de email ao validar
             return
         }
 
         if (!formData.email.trim()) {
             setError('Email é obrigatório')
+            setEmailMessage(null) // Limpar mensagem de email ao validar
             return
         }
 
         try {
             setSubmitting(true)
             setError(null)
+            setEmailMessage(null) // Limpar mensagem de email anterior ao iniciar novo salvamento
 
             let savedProfessional: ProfessionalResponse | null = null
 
@@ -235,6 +249,9 @@ export default function ProfessionalPage() {
 
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
             if (sendInvite && savedProfessional) {
+                console.log(
+                    `[INVITE-UI] Iniciando envio de convite para profissional ID=${savedProfessional.id} (${savedProfessional.name})`
+                )
                 try {
                     const inviteResponse = await fetch(`/api/professional/${savedProfessional.id}/invite`, {
                         method: 'POST',
@@ -246,17 +263,45 @@ export default function ProfessionalPage() {
 
                     if (!inviteResponse.ok) {
                         const errorData = await inviteResponse.json().catch(() => ({}))
-                        console.warn(`Erro ao enviar convite: ${extractErrorMessage(errorData, `Erro HTTP ${inviteResponse.status}`)}`)
-                        // Não quebra o fluxo, apenas loga o erro
+                        const errorMessage = extractErrorMessage(errorData, `Erro HTTP ${inviteResponse.status}`)
+                        console.error(
+                            `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para profissional ID=${savedProfessional.id}:`,
+                            errorMessage,
+                            'errorData:',
+                            errorData
+                        )
+                        // Definir mensagem de erro no ActionBar
+                        const errorMsg = `E-mail de convite não foi enviado para ${savedProfessional.name}. ${errorMessage}`
+                        console.log('[EMAIL-MESSAGE] Definindo mensagem de erro:', errorMsg)
+                        setEmailMessage(errorMsg)
+                        setEmailMessageType('error')
+                    } else {
+                        const responseData = await inviteResponse.json().catch(() => ({}))
+                        console.log(
+                            `[INVITE-UI] ✅ SUCESSO - Convite enviado com sucesso para profissional ID=${savedProfessional.id} (${savedProfessional.name})`,
+                            responseData
+                        )
+                        // Definir mensagem de sucesso no ActionBar
+                        const successMsg = `E-mail de convite foi enviado para ${savedProfessional.name}`
+                        console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
+                        setEmailMessage(successMsg)
+                        setEmailMessageType('success')
                     }
                 } catch (inviteErr) {
-                    console.warn('Erro ao enviar convite:', inviteErr)
-                    // Não quebra o fluxo, apenas loga o erro
+                    const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
+                    console.error(
+                        `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para profissional ID=${savedProfessional.id}:`,
+                        inviteErr
+                    )
+                    // Definir mensagem de erro no ActionBar
+                    setEmailMessage(`E-mail de convite não foi enviado para ${savedProfessional.name}. ${errorMsg}`)
+                    setEmailMessageType('error')
                 }
             }
 
             // Recarregar lista e limpar formulário
             await loadProfessionals()
+
             setFormData({
                 name: '',
                 email: '',
@@ -274,9 +319,20 @@ export default function ProfessionalPage() {
             setEditingProfessional(null)
             setSendInvite(false)
             setShowEditArea(false)
+
+            // Limpar mensagem de email após alguns segundos (se foi sucesso)
+            // A mensagem já foi definida acima no bloco de envio de email
+            if (emailMessageType === 'success') {
+                console.log('[EMAIL-MESSAGE] Agendando limpeza da mensagem de sucesso em 5 segundos')
+                setTimeout(() => {
+                    console.log('[EMAIL-MESSAGE] Limpando mensagem de sucesso')
+                    setEmailMessage(null)
+                }, 5000) // Limpar após 5 segundos
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar profissional'
             setError(message)
+            setEmailMessage(null) // Limpar mensagem de email se houver erro no salvamento
             console.error('Erro ao salvar profissional:', err)
         } finally {
             setSubmitting(false)
@@ -589,9 +645,17 @@ export default function ProfessionalPage() {
 
             <ActionBar
                 error={(() => {
+                    // Se houver mensagem de email, não mostrar erro genérico
+                    // A mensagem de email será exibida via prop 'message'
+                    if (emailMessage) {
+                        console.log('[ACTIONBAR] Mensagem de email presente, não mostrando erro genérico')
+                        return undefined
+                    }
                     const hasButtons = isEditing || selectedProfessionals.size > 0
                     return hasButtons ? error : undefined
                 })()}
+                message={emailMessage || undefined}
+                messageType={emailMessage ? emailMessageType : undefined}
                 buttons={(() => {
                     const buttons = []
                     if (isEditing || selectedProfessionals.size > 0) {

@@ -81,17 +81,23 @@ export function ActionBar({
     buttons = [],
     show,
 }: ActionBarProps) {
+    // Debug: log quando message mudar
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('[ACTIONBAR-COMPONENT] message:', message, 'messageType:', messageType, 'error:', error, 'buttons:', buttons.length)
+    }
+
     // Se show for explicitamente false, não renderizar
     // Caso contrário, sempre renderizar (mesmo sem botões/mensagem)
     if (show === false) {
         return null
     }
 
-    const messageColorClasses = {
-        info: 'text-gray-700 bg-blue-50 border-blue-200',
-        success: 'text-green-800 bg-green-50 border-green-200',
-        warning: 'text-yellow-800 bg-yellow-50 border-yellow-200',
-        error: 'text-red-800 bg-red-50 border-red-200',
+    // Cores de texto baseadas no tipo (sem bordas, sem fundo, apenas cor do texto)
+    const textColorClasses = {
+        info: 'text-gray-700',
+        success: 'text-green-600',
+        warning: 'text-yellow-600',
+        error: 'text-red-600',
     }
 
     const buttonClasses = {
@@ -114,48 +120,42 @@ export function ActionBar({
         ))
     }
 
+    // Determinar qual conteúdo exibir e qual cor usar
+    // Prioridade: message > error > leftContent
+    let content: ReactNode = null
+    let textColor = 'text-gray-700' // padrão
+
+    if (message) {
+        content = typeof message === 'string' ? message : message
+        textColor = textColorClasses[messageType]
+    } else if (error) {
+        content = error
+        textColor = textColorClasses.error
+    } else if (leftContent) {
+        content = leftContent
+        // leftContent não tem cor padrão definida, usa a cor do container (text-gray-700)
+        // Se o leftContent já tiver cor definida internamente (ex: span com className), ela será aplicada
+        textColor = ''
+    }
+
     return (
         <div className="fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
-            {message ? (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-20 flex items-center py-2">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full">
-                        {/* Mensagem */}
-                        <div
-                            className={`flex-1 min-w-[200px] px-4 py-2 rounded-md border ${messageColorClasses[messageType]}`}
-                        >
-                            {typeof message === 'string' ? (
-                                <p className="text-sm font-medium break-words">{message}</p>
-                            ) : (
-                                message
-                            )}
-                        </div>
-
-                        {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            {renderButtons()}
-                        </div>
-                    </div>
+            <div className="min-h-20 flex flex-wrap items-center gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8 py-2">
+                {/* Conteúdo à esquerda - sem bordas, apenas texto - sempre reserva espaço */}
+                <div className={`flex-1 min-w-[200px] text-sm ${textColor}`}>
+                    {content ? (
+                        typeof content === 'string' ? (
+                            <p className="break-words">{content}</p>
+                        ) : (
+                            content
+                        )
+                    ) : null}
                 </div>
-            ) : (
-                <div className="min-h-20 flex flex-wrap items-center gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8 py-2">
-                    {/* Conteúdo à esquerda - sem bordas, apenas texto - sempre reserva espaço */}
-                    <div className="flex-1 min-w-[200px] text-sm text-red-600">
-                        {error ? (
-                            <p className="break-words">{error}</p>
-                        ) : leftContent ? (
-                            typeof leftContent === 'string' ? (
-                                <p className="break-words">{leftContent}</p>
-                            ) : (
-                                leftContent
-                            )
-                        ) : null}
-                    </div>
-                    {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        {renderButtons()}
-                    </div>
+                {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {renderButtons()}
                 </div>
-            )}
+            </div>
         </div>
     )
 }

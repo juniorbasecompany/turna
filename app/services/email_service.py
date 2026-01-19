@@ -129,12 +129,16 @@ def send_professional_invite(
     Returns:
         True se o email foi enviado com sucesso, False caso contrário
     """
+    logger.info(
+        f"Iniciando envio de email de convite para {to_email} (profissional: {professional_name}, clínica: {tenant_name})"
+    )
     try:
         app_url = app_url or os.getenv("APP_URL", "http://localhost:3000")
         resend_api_key = os.getenv("RESEND_API_KEY")
         email_from = os.getenv("EMAIL_FROM")
 
         subject = f"Convite para se juntar à {tenant_name}"
+        logger.debug(f"Configurações: APP_URL={app_url}, EMAIL_FROM={'***' if email_from else 'NÃO CONFIGURADO'}, RESEND_API_KEY={'***' if resend_api_key else 'NÃO CONFIGURADO'}")
 
         # Gerar templates
         html_body = _get_email_template_html(
@@ -153,30 +157,34 @@ def send_professional_invite(
         # Verificar se Resend está disponível e configurado
         if not RESEND_AVAILABLE:
             logger.warning(
-                f"Resend não está instalado. Email de convite apenas logado para {to_email}"
+                f"[EMAIL] Resend não está instalado. Email de convite apenas logado para {to_email}"
             )
-            logger.info(f"Assunto: {subject}")
-            logger.info(f"Corpo (texto):\n{text_body}")
+            logger.info(f"[EMAIL] Assunto: {subject}")
+            logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
+            logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
             return True
 
         if not resend_api_key:
             logger.warning(
-                f"RESEND_API_KEY não configurado. Email de convite apenas logado para {to_email}"
+                f"[EMAIL] RESEND_API_KEY não configurado. Email de convite apenas logado para {to_email}"
             )
-            logger.info(f"Assunto: {subject}")
-            logger.info(f"Corpo (texto):\n{text_body}")
+            logger.info(f"[EMAIL] Assunto: {subject}")
+            logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
+            logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
             return True
 
         if not email_from:
             logger.error(
-                f"EMAIL_FROM não configurado. Não é possível enviar email para {to_email}"
+                f"[EMAIL] EMAIL_FROM não configurado. Não é possível enviar email para {to_email}"
             )
+            logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
             return False
 
         # Configurar Resend
         resend.api_key = resend_api_key
 
         # Enviar email via Resend
+        logger.info(f"[EMAIL] Tentando enviar email via Resend para {to_email}...")
         try:
             params = {
                 "from": email_from,
@@ -186,6 +194,7 @@ def send_professional_invite(
                 "text": text_body,
             }
             email_response = resend.Emails.send(params)
+            logger.debug(f"[EMAIL] Resposta do Resend recebida: {type(email_response)}")
 
             # Resend retorna um objeto com 'id' quando bem-sucedido
             if email_response and isinstance(email_response, dict) and "id" in email_response:
@@ -212,14 +221,16 @@ def send_professional_invite(
             if resend_api_key in error_msg:
                 error_msg = error_msg.replace(resend_api_key, "***REDACTED***")
             logger.error(
-                f"Erro ao enviar email via Resend para {to_email}: {error_msg}",
+                f"[EMAIL] ❌ FALHA - Erro ao enviar email via Resend para {to_email}: {error_msg}",
                 exc_info=True,
             )
+            logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
             return False
 
     except Exception as e:
         logger.error(
-            f"Erro inesperado ao processar envio de email de convite para {to_email}: {e}",
+            f"[EMAIL] ❌ FALHA - Erro inesperado ao processar envio de email de convite para {to_email}: {e}",
             exc_info=True,
         )
+        logger.error(f"[EMAIL] Processo FALHOU - Email NÃO enviado para {to_email}")
         return False
