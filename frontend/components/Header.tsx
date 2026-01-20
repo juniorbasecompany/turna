@@ -219,12 +219,8 @@ export function Header() {
                                 />
                             </svg>
                         </button>
-                        <h1 className="text-xl font-bold text-gray-900">Turna</h1>
                         {tenant && (
-                            <>
-                                <span className="mx-3 text-gray-300">•</span>
-                                <span className="text-sm font-medium text-gray-700">{tenant.name}</span>
-                            </>
+                            <h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
                         )}
                     </div>
 
@@ -236,7 +232,7 @@ export function Header() {
                                     onClick={() => setShowUserMenu(!showUserMenu)}
                                     className="flex items-center text-sm text-gray-700 hover:text-gray-900"
                                 >
-                                    <span className="mr-2">{account.email}</span>
+                                    <span className="mr-2">{account.name}</span>
                                     <span className="text-gray-400">▼</span>
                                 </button>
 
@@ -244,17 +240,9 @@ export function Header() {
                                 {showUserMenu && (
                                     <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
                                         <div className="py-1" role="menu">
-                                            {/* Nome do usuário */}
-                                            <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
-                                                {account.name}
-                                            </div>
-
                                             {/* Lista de tenants */}
                                             {availableTenants.length > 0 && (
                                                 <>
-                                                    <div className="px-4 py-2 text-xs font-semibold text-gray-700 border-b border-gray-200">
-                                                        Clínicas
-                                                    </div>
                                                     {availableTenants.map((t) => {
                                                         const isCurrentTenant = tenant?.id === t.tenant_id
                                                         return (

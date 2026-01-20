@@ -1,30 +1,149 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { protectedFetch } from '@/lib/api'
+import {
+  HospitalListResponse,
+  MembershipListResponse,
+  DemandListResponse,
+  FileListResponse,
+  JobListResponse,
+  ProfessionalListResponse,
+  ProfileListResponse,
+} from '@/types/api'
+
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [totals, setTotals] = useState({
+    hospitals: 0,
+    memberships: 0,
+    demands: 0,
+    files: 0,
+    jobs: 0,
+    jobsRunning: 0,
+    professionals: 0,
+    profiles: 0,
+  })
+
+  useEffect(() => {
+    const loadTotals = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Carregar todos os totais em paralelo
+        const [
+          hospitalsData,
+          membershipsData,
+          demandsData,
+          filesData,
+          jobsData,
+          jobsRunningData,
+          professionalsData,
+          profilesData,
+        ] = await Promise.all([
+          protectedFetch<HospitalListResponse>('/api/hospital/list'),
+          protectedFetch<MembershipListResponse>('/api/membership/list'),
+          protectedFetch<DemandListResponse>('/api/demand/list'),
+          protectedFetch<FileListResponse>('/api/file/list'),
+          protectedFetch<JobListResponse>('/api/job/list'),
+          protectedFetch<JobListResponse>('/api/job/list?status=RUNNING'),
+          protectedFetch<ProfessionalListResponse>('/api/professional/list'),
+          protectedFetch<ProfileListResponse>('/api/profile/list'),
+        ])
+
+        setTotals({
+          hospitals: hospitalsData.total,
+          memberships: membershipsData.total,
+          demands: demandsData.total,
+          files: filesData.total,
+          jobs: jobsData.total,
+          jobsRunning: jobsRunningData.total,
+          professionals: professionalsData.total,
+          profiles: profilesData.total,
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao carregar dados do dashboard'
+        setError(message)
+        console.error('Erro ao carregar dados do dashboard:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadTotals()
+  }, [])
+
   return (
     <div className="p-8">
       {/* Cards de Indicadores */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Importações Hoje</div>
-          <div className="text-3xl font-semibold text-gray-900">12</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Hospitais</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.hospitals}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Escalas Ativas</div>
-          <div className="text-3xl font-semibold text-gray-900">8</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Membros</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.memberships}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Processando</div>
-          <div className="text-3xl font-semibold text-gray-900">3</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Demandas</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.demands}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Concluído Hoje</div>
-          <div className="text-3xl font-semibold text-gray-900">9</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Arquivos</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.files}
+          </div>
         </div>
       </div>
+
+      {/* Segunda linha de cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Jobs</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.jobs}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-sm font-medium text-gray-600 mb-2">Jobs em Processamento</div>
+          <div className="text-3xl font-semibold text-yellow-600">
+            {loading ? '...' : totals.jobsRunning}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Profissionais</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.professionals}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="text-sm font-medium text-gray-600 mb-2">Total de Perfis</div>
+          <div className="text-3xl font-semibold text-gray-900">
+            {loading ? '...' : totals.profiles}
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
 
       {/* Tabela Principal */}
       <div className="bg-white rounded-lg border border-gray-200">
