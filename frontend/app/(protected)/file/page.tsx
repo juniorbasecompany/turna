@@ -6,7 +6,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { protectedFetch, extractErrorMessage } from '@/lib/api'
+import { protectedFetch } from '@/lib/api'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -1304,8 +1304,7 @@ export default function FilesPage() {
                                                 <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
                                                 {pendingFile.uploading && (
                                                     <>
-                                                        <span className="shrink-0 text-slate-500">•</span>
-                                                        <span className="truncate text-slate-400">Enviando...</span>
+                                                        <LoadingSpinner />
                                                     </>
                                                 )}
                                                 {pendingFile.error && (

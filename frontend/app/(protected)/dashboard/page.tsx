@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { protectedFetch } from '@/lib/api'
 import {
   HospitalListResponse,
@@ -82,28 +83,28 @@ export default function DashboardPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Hospitais</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.hospitals}
+            {loading ? <LoadingSpinner /> : totals.hospitals}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Membros</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.memberships}
+            {loading ? <LoadingSpinner /> : totals.memberships}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Demandas</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.demands}
+            {loading ? <LoadingSpinner /> : totals.demands}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Arquivos</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.files}
+            {loading ? <LoadingSpinner /> : totals.files}
           </div>
         </div>
       </div>
@@ -113,28 +114,28 @@ export default function DashboardPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Jobs</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.jobs}
+            {loading ? <LoadingSpinner /> : totals.jobs}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Jobs em Processamento</div>
           <div className="text-3xl font-semibold text-yellow-600">
-            {loading ? '...' : totals.jobsRunning}
+            {loading ? <LoadingSpinner /> : totals.jobsRunning}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Profissionais</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.professionals}
+            {loading ? <LoadingSpinner /> : totals.professionals}
           </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Perfis</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? '...' : totals.profiles}
+            {loading ? <LoadingSpinner /> : totals.profiles}
           </div>
         </div>
       </div>

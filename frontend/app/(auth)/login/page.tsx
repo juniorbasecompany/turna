@@ -1,5 +1,6 @@
 'use client'
 
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AuthResponse } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -319,7 +320,7 @@ export default function LoginPage() {
 
                     {loading ? (
                         <div className="flex justify-center items-center py-4">
-                            <span className="text-gray-600">Autenticando...</span>
+                            <LoadingSpinner />
                         </div>
                     ) : (
                         <div className="space-y-4">

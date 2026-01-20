@@ -536,7 +536,7 @@ export default function SelectTenantPage() {
 
                 {selecting ? (
                     <div className="flex justify-center items-center py-4">
-                        <span className="text-gray-600">Selecionando clínica...</span>
+                        <LoadingSpinner />
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -588,16 +588,16 @@ export default function SelectTenantPage() {
                                                 <button
                                                     onClick={() => handleAcceptInvite(invite)}
                                                     disabled={processingInvite === invite.membership_id || selecting}
-                                                    className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                    className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                                                 >
-                                                    {processingInvite === invite.membership_id ? 'Processando...' : 'Aceitar'}
+                                                    {processingInvite === invite.membership_id ? <LoadingSpinner /> : 'Aceitar'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleRejectInvite(invite)}
                                                     disabled={processingInvite === invite.membership_id || selecting}
-                                                    className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                    className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                                                 >
-                                                    {processingInvite === invite.membership_id ? 'Processando...' : 'Rejeitar'}
+                                                    {processingInvite === invite.membership_id ? <LoadingSpinner /> : 'Rejeitar'}
                                                 </button>
                                             </div>
                                         </div>

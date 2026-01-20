@@ -194,8 +194,8 @@ export function Header() {
     }, [router])
 
     return (
-        <header className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-30">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <header className="bg-white border-b border-gray-200 fixed top-0 left-0 lg:left-64 right-0 z-30">
+            <div className="max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16">
                     {/* Logo / Nome do tenant */}
                     <div className="flex items-center">
@@ -251,8 +251,8 @@ export function Header() {
                                                                 onClick={() => handleSwitchTenant(t.tenant_id)}
                                                                 disabled={switchingTenant || isCurrentTenant}
                                                                 className={`block w-full text-left px-4 py-2 text-sm ${isCurrentTenant
-                                                                        ? 'bg-blue-50 text-blue-700 font-medium'
-                                                                        : 'text-gray-700 hover:bg-gray-50'
+                                                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                                                    : 'text-gray-700 hover:bg-gray-50'
                                                                     } ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                                 role="menuitem"
                                                                 title={isCurrentTenant ? 'Clínica atual' : `Trocar para ${t.name}`}
@@ -263,7 +263,7 @@ export function Header() {
                                                                         <span className="text-xs text-blue-600">✓</span>
                                                                     )}
                                                                     {switchingTenant && !isCurrentTenant && (
-                                                                        <span className="text-xs text-gray-400">...</span>
+                                                                        <LoadingSpinner />
                                                                     )}
                                                                 </div>
                                                             </button>
