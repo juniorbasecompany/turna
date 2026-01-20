@@ -410,7 +410,9 @@ export default function FilesPage() {
                 const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
                 setHospitalList(data.items)
             } catch (err) {
-                // Erro será tratado pela página principal
+                // Exibir erro no ActionBar
+                const message = err instanceof Error ? err.message : 'Erro ao carregar hospitais'
+                setError(message)
                 console.error('Erro ao carregar hospitais:', err)
             } finally {
                 setLoadingHospitalList(false)
@@ -424,7 +426,8 @@ export default function FilesPage() {
     useEffect(() => {
         async function loadFiles() {
             if (!settings) {
-                // Aguardar settings carregar
+                // Aguardar settings carregar - não setar loading para evitar travamento
+                setLoading(false)
                 return
             }
 
@@ -451,26 +454,9 @@ export default function FilesPage() {
                 url.searchParams.set('limit', String(limit))
                 url.searchParams.set('offset', String(offset))
 
-                try {
-                    const response = await fetch(url.toString(), {
-                        credentials: 'include',
-                    })
-
-                    if (response.ok) {
-                        const data: FileListResponse = await response.json()
-                        setFiles(data.items)
-                        setTotal(data.total)
-                        setLoading(false)
-                        return
-                    }
-                    // Se não ok, não fazer nada aqui - deixar para o catch externo
-                } catch (err) {
-                    // Se a API falhar, ignorar (não setar erro aqui)
-                    // Erro será setado no catch externo se necessário
-                }
-
-                // Se chegou aqui, não foi possível carregar os dados
-                setError('Não foi possível carregar os arquivos. Por favor, tente novamente.')
+                const data = await protectedFetch<FileListResponse>(url.toString())
+                setFiles(data.items)
+                setTotal(data.total)
             } catch (err: unknown) {
                 if (err instanceof Error) {
                     setError(err.message || 'Erro ao carregar arquivos')
