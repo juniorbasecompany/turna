@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+---
+
+# Idioma
+Escreva o código em inglês.
+Escreva os comentários em português.
+Escreva as mensagens ao usuário em português.
+
+# Diretivas do Projeto (Fonte da Verdade)
+
+Frontend e backend são projetos independentes no mesmo repositório, comunicando-se exclusivamente via API HTTP; nenhuma camada pode depender, acoplar ou assumir detalhes internos da outra.

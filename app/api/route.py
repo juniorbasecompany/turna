@@ -2868,3 +2868,365 @@ def send_professional_invite_email(
             status_code=500,
             detail=f"Erro ao enviar convite: {str(e)}",
         ) from e
+
+
+# ============================================================================
+# MEMBERSHIP ENDPOINTS
+# ============================================================================
+
+class MembershipUpdate(PydanticBaseModel):
+    """Schema para atualizar membership."""
+    role: Optional[str] = None
+    status: Optional[str] = None
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip().lower()
+            if v not in {"admin", "account"}:
+                raise ValueError("role deve ser 'admin' ou 'account'")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip().upper()
+            if v not in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+                raise ValueError("status deve ser 'PENDING', 'ACTIVE', 'REJECTED' ou 'REMOVED'")
+        return v
+
+
+class MembershipResponse(PydanticBaseModel):
+    """Schema de resposta para membership."""
+    id: int
+    tenant_id: int
+    account_id: int
+    account_email: Optional[str] = None
+    account_name: Optional[str] = None
+    role: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MembershipListResponse(PydanticBaseModel):
+    """Schema de resposta para listagem de memberships."""
+    items: list[MembershipResponse]
+    total: int
+
+
+@router.get("/membership/list", response_model=MembershipListResponse, tags=["Membership"])
+def list_memberships(
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: Optional[str] = Query(default=None, description="Filtrar por status (PENDING, ACTIVE, REJECTED, REMOVED)"),
+    role: Optional[str] = Query(default=None, description="Filtrar por role (admin, account)"),
+):
+    """
+    Lista memberships do tenant atual (apenas admin).
+    Sempre filtra por tenant_id do JWT (via membership).
+    """
+    try:
+        logger.info(f"Listando memberships para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
+
+        # Query base: memberships do tenant com join em Account
+        query = (
+            select(Membership, Account)
+            .join(Account, Membership.account_id == Account.id)
+            .where(Membership.tenant_id == membership.tenant_id)
+        )
+
+        # Aplicar filtros
+        if status:
+            status_upper = status.strip().upper()
+            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+                query = query.where(Membership.status == MembershipStatus[status_upper])
+        if role:
+            role_lower = role.strip().lower()
+            if role_lower in {"admin", "account"}:
+                query = query.where(Membership.role == MembershipRole[role_lower.upper()])
+
+        # Contar total
+        count_query = (
+            select(func.count(Membership.id))
+            .join(Account, Membership.account_id == Account.id)
+            .where(Membership.tenant_id == membership.tenant_id)
+        )
+        if status:
+            status_upper = status.strip().upper()
+            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+                count_query = count_query.where(Membership.status == MembershipStatus[status_upper])
+        if role:
+            role_lower = role.strip().lower()
+            if role_lower in {"admin", "account"}:
+                count_query = count_query.where(Membership.role == MembershipRole[role_lower.upper()])
+
+        total = session.exec(count_query).one()
+
+        # Aplicar paginação e ordenação
+        query = query.order_by(Membership.created_at.desc()).limit(limit).offset(offset)
+
+        # Executar query
+        results = session.exec(query).all()
+
+        # Montar resposta
+        items = []
+        for membership_obj, account in results:
+            items.append(
+                MembershipResponse(
+                    id=membership_obj.id,
+                    tenant_id=membership_obj.tenant_id,
+                    account_id=membership_obj.account_id,
+                    account_email=account.email,
+                    account_name=account.name,
+                    role=membership_obj.role.value,
+                    status=membership_obj.status.value,
+                    created_at=membership_obj.created_at,
+                    updated_at=membership_obj.updated_at,
+                )
+            )
+
+        logger.info(f"Retornando {len(items)} memberships de {total} total")
+        return MembershipListResponse(items=items, total=total)
+    except Exception as e:
+        logger.error(f"Erro ao listar memberships: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar memberships: {str(e)}",
+        ) from e
+
+
+@router.get("/membership/{membership_id}", response_model=MembershipResponse, tags=["Membership"])
+def get_membership(
+    membership_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Busca um membership específico (apenas admin).
+    Valida que o membership pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Buscando membership id={membership_id} para tenant_id={membership.tenant_id}")
+
+        membership_obj = session.get(Membership, membership_id)
+        if not membership_obj:
+            logger.warning(f"Membership não encontrado: id={membership_id}")
+            raise HTTPException(status_code=404, detail="Membership não encontrado")
+        if membership_obj.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Buscar account
+        account = session.get(Account, membership_obj.account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        return MembershipResponse(
+            id=membership_obj.id,
+            tenant_id=membership_obj.tenant_id,
+            account_id=membership_obj.account_id,
+            account_email=account.email,
+            account_name=account.name,
+            role=membership_obj.role.value,
+            status=membership_obj.status.value,
+            created_at=membership_obj.created_at,
+            updated_at=membership_obj.updated_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar membership: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar membership: {str(e)}",
+        ) from e
+
+
+@router.put("/membership/{membership_id}", response_model=MembershipResponse, tags=["Membership"])
+def update_membership(
+    membership_id: int,
+    body: MembershipUpdate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um membership (apenas admin).
+    Permite alterar role e status.
+    Valida que o membership pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Atualizando membership id={membership_id} para tenant_id={membership.tenant_id}")
+
+        membership_obj = session.get(Membership, membership_id)
+        if not membership_obj:
+            logger.warning(f"Membership não encontrado: id={membership_id}")
+            raise HTTPException(status_code=404, detail="Membership não encontrado")
+        if membership_obj.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Validar regras de negócio
+        if body.status and body.status.upper() == "REMOVED":
+            # Não permitir remover o último membership ACTIVE de um account
+            if membership_obj.status == MembershipStatus.ACTIVE:
+                active_count = session.exec(
+                    select(func.count())
+                    .select_from(Membership)
+                    .where(
+                        Membership.account_id == membership_obj.account_id,
+                        Membership.status == MembershipStatus.ACTIVE,
+                    )
+                ).one()
+                if int(active_count or 0) <= 1:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Não é permitido remover o último membership ACTIVE da conta. "
+                            "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
+                        ),
+                    )
+
+        # Atualizar campos
+        prev_status = membership_obj.status
+        prev_role = membership_obj.role
+
+        if body.role is not None:
+            membership_obj.role = MembershipRole[body.role.upper()]
+        if body.status is not None:
+            membership_obj.status = MembershipStatus[body.status.upper()]
+
+        membership_obj.updated_at = utc_now()
+        session.add(membership_obj)
+        session.commit()
+        session.refresh(membership_obj)
+
+        # Log de auditoria se houver mudanças
+        if prev_status != membership_obj.status or prev_role != membership_obj.role:
+            _try_write_audit_log(
+                session,
+                AuditLog(
+                    tenant_id=membership.tenant_id,
+                    actor_account_id=membership.account_id,
+                    membership_id=membership_obj.id,
+                    event_type="membership_status_changed",
+                    data={
+                        "target_account_id": membership_obj.account_id,
+                        "from_status": prev_status.value,
+                        "to_status": membership_obj.status.value,
+                        "from_role": prev_role.value,
+                        "to_role": membership_obj.role.value,
+                    },
+                ),
+            )
+
+        # Buscar account
+        account = session.get(Account, membership_obj.account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        logger.info(f"Membership atualizado com sucesso: id={membership_id}")
+        return MembershipResponse(
+            id=membership_obj.id,
+            tenant_id=membership_obj.tenant_id,
+            account_id=membership_obj.account_id,
+            account_email=account.email,
+            account_name=account.name,
+            role=membership_obj.role.value,
+            status=membership_obj.status.value,
+            created_at=membership_obj.created_at,
+            updated_at=membership_obj.updated_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar membership: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar membership: {str(e)}",
+        ) from e
+
+
+@router.delete("/membership/{membership_id}", status_code=204, tags=["Membership"])
+def delete_membership(
+    membership_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Remove (soft-delete) um membership (status -> REMOVED) (apenas admin).
+    Valida que o membership pertence ao tenant atual.
+    Regra de segurança: não permitir remover o último membership ACTIVE de um account.
+    """
+    try:
+        logger.info(f"Removendo membership id={membership_id} para tenant_id={membership.tenant_id}")
+
+        membership_obj = session.get(Membership, membership_id)
+        if not membership_obj:
+            logger.warning(f"Membership não encontrado: id={membership_id}")
+            raise HTTPException(status_code=404, detail="Membership não encontrado")
+        if membership_obj.tenant_id != membership.tenant_id:
+            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Validar regra de segurança
+        if membership_obj.status == MembershipStatus.ACTIVE:
+            active_count = session.exec(
+                select(func.count())
+                .select_from(Membership)
+                .where(
+                    Membership.account_id == membership_obj.account_id,
+                    Membership.status == MembershipStatus.ACTIVE,
+                )
+            ).one()
+            if int(active_count or 0) <= 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Não é permitido remover o último membership ACTIVE da conta. "
+                        "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
+                    ),
+                )
+
+        prev_status = membership_obj.status
+        membership_obj.status = MembershipStatus.REMOVED
+        membership_obj.updated_at = utc_now()
+        session.add(membership_obj)
+        session.commit()
+        session.refresh(membership_obj)
+
+        # Log de auditoria
+        _try_write_audit_log(
+            session,
+            AuditLog(
+                tenant_id=membership.tenant_id,
+                actor_account_id=membership.account_id,
+                membership_id=membership_obj.id,
+                event_type="membership_status_changed",
+                data={
+                    "target_account_id": membership_obj.account_id,
+                    "from_status": prev_status.value,
+                    "to_status": membership_obj.status.value,
+                },
+            ),
+        )
+
+        logger.info(f"Membership removido com sucesso: id={membership_id}")
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao remover membership: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao remover membership: {str(e)}",
+        ) from e

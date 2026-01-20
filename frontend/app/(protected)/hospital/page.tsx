@@ -13,7 +13,7 @@ import {
     HospitalResponse,
     HospitalUpdateRequest,
 } from '@/types/api'
-import { extractErrorMessage } from '@/lib/api'
+import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function HospitalPage() {
@@ -34,17 +34,7 @@ export default function HospitalPage() {
             setLoading(true)
             setError(null)
 
-            const response = await fetch('/api/hospital/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: HospitalListResponse = await response.json()
+            const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
             setHospitals(data.items)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar hospitais'
@@ -126,19 +116,13 @@ export default function HospitalPage() {
                     color: formData.color || null,
                 }
 
-                const response = await fetch(`/api/hospital/${editingHospital.id}`, {
+                await protectedFetch(`/api/hospital/${editingHospital.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(updateData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             } else {
                 // Criar novo hospital
                 const createData: HospitalCreateRequest = {
@@ -147,19 +131,13 @@ export default function HospitalPage() {
                     color: formData.color || undefined,
                 }
 
-                const response = await fetch('/api/hospital', {
+                await protectedFetch('/api/hospital', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(createData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             }
 
             // Recarregar lista e limpar formulário
@@ -200,19 +178,9 @@ export default function HospitalPage() {
         try {
             // Excluir todos os hospitais selecionados em paralelo
             const deletePromises = Array.from(selectedHospitals).map(async (hospitalId) => {
-                const response = await fetch(`/api/hospital/${hospitalId}`, {
+                await protectedFetch(`/api/hospital/${hospitalId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 })
-
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                    }
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
                 return hospitalId
             })
 
@@ -377,6 +345,22 @@ export default function HospitalPage() {
                     // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedHospitals.size > 0
                     return hasButtons ? error : undefined
+                })()}
+                message={(() => {
+                    // Se não há botões mas há erro, mostrar via message
+                    const hasButtons = isEditing || selectedHospitals.size > 0
+                    if (!hasButtons && error) {
+                        return error
+                    }
+                    return undefined
+                })()}
+                messageType={(() => {
+                    // Se não há botões mas há erro, usar tipo error
+                    const hasButtons = isEditing || selectedHospitals.size > 0
+                    if (!hasButtons && error) {
+                        return 'error' as const
+                    }
+                    return undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

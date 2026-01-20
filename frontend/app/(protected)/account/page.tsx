@@ -1,9 +1,9 @@
 'use client'
 
-import { ActionBarSpacer } from '@/components/ActionBar'
+import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardPanel } from '@/components/CardPanel'
 import { AccountOption } from '@/types/api'
-import { extractErrorMessage } from '@/lib/api'
+import { protectedFetch } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function AccountPage() {
@@ -17,17 +17,7 @@ export default function AccountPage() {
             setLoading(true)
             setError(null)
 
-            const response = await fetch('/api/account/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: AccountOption[] = await response.json()
+            const data = await protectedFetch<AccountOption[]>('/api/account/list')
             setAccounts(data)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar contas'
@@ -52,7 +42,6 @@ export default function AccountPage() {
                 loadingMessage="Carregando contas..."
                 emptyMessage="Nenhuma conta cadastrada ainda."
                 countLabel="Total de contas"
-                error={error}
             >
                 {accounts.map((account) => {
                     return (
@@ -101,6 +90,12 @@ export default function AccountPage() {
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
             <ActionBarSpacer />
+
+            {/* Barra inferior fixa com mensagens de erro */}
+            <ActionBar
+                message={error || undefined}
+                messageType={error ? 'error' : undefined}
+            />
         </>
     )
 }

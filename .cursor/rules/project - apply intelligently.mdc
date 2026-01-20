@@ -1,0 +1,6 @@
+---
+alwaysApply: false
+---
+
+# Reutilização de código
+Procure tornar o código reutilizável, evitanto gerar código duplicado.

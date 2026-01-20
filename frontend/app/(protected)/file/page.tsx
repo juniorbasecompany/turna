@@ -4,7 +4,7 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { extractErrorMessage } from '@/lib/api'
+import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -407,15 +407,10 @@ export default function FilesPage() {
         async function loadHospitalList() {
             try {
                 setLoadingHospitalList(true)
-                const response = await fetch('/api/hospital/list', {
-                    credentials: 'include',
-                })
-
-                if (response.ok) {
-                    const data: HospitalListResponse = await response.json()
-                    setHospitalList(data.items)
-                }
+                const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
+                setHospitalList(data.items)
             } catch (err) {
+                // Erro será tratado pela página principal
                 console.error('Erro ao carregar hospitais:', err)
             } finally {
                 setLoadingHospitalList(false)
@@ -599,15 +594,7 @@ export default function FilesPage() {
     // Polling do status do job
     const pollJobStatus = useCallback(async (jobId: number, fileIndex: number) => {
         try {
-            const response = await fetch(`/api/job/${jobId}`, {
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                throw new Error(`Erro ao verificar status do job: ${response.status}`)
-            }
-
-            const job: JobResponse = await response.json()
+            const job = await protectedFetch<JobResponse>(`/api/job/${jobId}`)
 
             setPendingFiles((prev) => {
                 const newPending = [...prev]
@@ -893,47 +880,46 @@ export default function FilesPage() {
             try {
                 // Buscar TODOS os jobs EXTRACT_DEMAND recentes (para pegar PENDING, RUNNING, COMPLETED e FAILED)
                 // Buscamos apenas os mais recentes (limit=100) para não sobrecarregar
-                const response = await fetch('/api/job/list?job_type=EXTRACT_DEMAND&limit=100', {
-                    credentials: 'include',
-                })
+                const data = await protectedFetch<{ items: JobResponse[] }>('/api/job/list?job_type=EXTRACT_DEMAND&limit=100')
+                const allJobs = data.items || []
 
-                if (response.ok) {
-                    const data = await response.json()
-                    const allJobs = data.items || []
-
-                    // Criar map de file_id -> job_status (usando o job mais recente para cada file_id)
-                    const fileIdToJobStatus = new Map<number, string>()
-                    for (const job of allJobs) {
-                        if (job.input_data && job.input_data.file_id) {
-                            const fileId = typeof job.input_data.file_id === 'string'
-                                ? parseInt(job.input_data.file_id, 10)
-                                : job.input_data.file_id
-                            if (!isNaN(fileId)) {
-                                // Só atualizar se ainda não tiver um status para este file_id
-                                // (jobs estão ordenados por created_at desc, então o primeiro é o mais recente)
-                                if (!fileIdToJobStatus.has(fileId)) {
-                                    fileIdToJobStatus.set(fileId, job.status)
-                                }
+                // Criar map de file_id -> job_status (usando o job mais recente para cada file_id)
+                const fileIdToJobStatus = new Map<number, string>()
+                for (const job of allJobs) {
+                    if (job.input_data && job.input_data.file_id) {
+                        const fileIdRaw = job.input_data.file_id
+                        let fileId: number | null = null
+                        if (typeof fileIdRaw === 'string') {
+                            const parsed = parseInt(fileIdRaw, 10)
+                            if (!isNaN(parsed)) fileId = parsed
+                        } else if (typeof fileIdRaw === 'number') {
+                            fileId = fileIdRaw
+                        }
+                        if (fileId !== null) {
+                            // Só atualizar se ainda não tiver um status para este file_id
+                            // (jobs estão ordenados por created_at desc, então o primeiro é o mais recente)
+                            if (!fileIdToJobStatus.has(fileId)) {
+                                fileIdToJobStatus.set(fileId, job.status)
                             }
                         }
                     }
-
-                    // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
-                    setFiles((prevFiles) => {
-                        return prevFiles.map((file) => {
-                            const newStatus = fileIdToJobStatus.get(file.id)
-                            // Atualizar se:
-                            // 1. Há um novo status e é diferente do atual
-                            // 2. O arquivo estava em processamento mas agora não tem mais status (raro, mas possível)
-                            if (newStatus && file.job_status !== newStatus) {
-                                return { ...file, job_status: newStatus }
-                            }
-                            // Se o arquivo estava em processamento mas não há mais job, manter o status atual
-                            // (não limpar para evitar perder informação)
-                            return file
-                        })
-                    })
                 }
+
+                // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
+                setFiles((prevFiles) => {
+                    return prevFiles.map((file) => {
+                        const newStatus = fileIdToJobStatus.get(file.id)
+                        // Atualizar se:
+                        // 1. Há um novo status e é diferente do atual
+                        // 2. O arquivo estava em processamento mas agora não tem mais status (raro, mas possível)
+                        if (newStatus && file.job_status !== newStatus) {
+                            return { ...file, job_status: newStatus }
+                        }
+                        // Se o arquivo estava em processamento mas não há mais job, manter o status atual
+                        // (não limpar para evitar perder informação)
+                        return file
+                    })
+                })
             } catch (err) {
                 // Ignorar erros no polling - não queremos interromper a UI
                 console.error('Erro ao atualizar status dos jobs:', err)
@@ -970,22 +956,13 @@ export default function FilesPage() {
             for (const fileId of fileIds) {
                 try {
                     // Criar job de extração
-                    const jobResponse = await fetch('/api/job/extract', {
+                    await protectedFetch('/api/job/extract', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({ file_id: fileId }),
-                        credentials: 'include',
                     })
-
-                    if (!jobResponse.ok) {
-                        if (jobResponse.status === 401) {
-                            throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                        }
-                        const errorData = await jobResponse.json().catch(() => ({}))
-                        throw new Error(extractErrorMessage(errorData, `Erro ao criar job: ${jobResponse.status}`))
-                    }
 
                     // Job criado com sucesso - o worker processará em background
                 } catch (err) {
@@ -1020,19 +997,9 @@ export default function FilesPage() {
         try {
             // Excluir todos os arquivos selecionados em paralelo
             const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
-                const response = await fetch(`/api/file/${fileId}`, {
+                await protectedFetch(`/api/file/${fileId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 })
-
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                    }
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
                 return fileId
             })
 
@@ -1166,14 +1133,6 @@ export default function FilesPage() {
                 )}
             </div>
 
-
-            {/* Mensagem de erro */}
-            {error && (
-                <div className="mb-4 sm:mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-sm text-red-800">{error}</p>
-                </div>
-            )}
-
             {/* Loading */}
             {loading && (
                 <div className="flex justify-center items-center py-12">
@@ -1182,7 +1141,7 @@ export default function FilesPage() {
             )}
 
             {/* Lista de arquivos */}
-            {!loading && !error && (() => {
+            {!loading && (() => {
                 // Filtrar arquivos por status
                 const filteredFiles = files.filter((file) => {
                     const status = file.job_status === null ? null : (file.job_status as JobStatus)
@@ -1538,6 +1497,27 @@ export default function FilesPage() {
             {/* Barra inferior fixa com ações */}
             <ActionBar
                 leftContent={<div></div>}
+                error={(() => {
+                    // Mostra erro no ActionBar apenas se houver botões de ação
+                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    return hasButtons ? error || undefined : undefined
+                })()}
+                message={(() => {
+                    // Se não há botões mas há erro, mostrar via message
+                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    if (!hasButtons && error) {
+                        return error
+                    }
+                    return undefined
+                })()}
+                messageType={(() => {
+                    // Se não há botões mas há erro, usar tipo error
+                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    if (!hasButtons && error) {
+                        return 'error' as const
+                    }
+                    return undefined
+                })()}
                 buttons={(() => {
                     const buttons = []
                     // Adicionar botão "Excluir" se houver arquivos marcados para exclusão

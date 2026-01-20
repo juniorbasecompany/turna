@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { extractErrorMessage } from '@/lib/api'
+import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     ProfessionalCreateRequest,
@@ -60,17 +60,7 @@ export default function ProfessionalPage() {
             params.append('limit', String(pagination.limit))
             params.append('offset', String(pagination.offset))
 
-            const response = await fetch(`/api/professional/list?${params.toString()}`, {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: ProfessionalListResponse = await response.json()
+            const data = await protectedFetch<ProfessionalListResponse>(`/api/professional/list?${params.toString()}`)
             setProfessionals(data.items)
             setTotal(data.total)
         } catch (err) {
@@ -205,21 +195,13 @@ export default function ProfessionalPage() {
                     active: formData.active,
                 }
 
-                const response = await fetch(`/api/professional/${editingProfessional.id}`, {
+                savedProfessional = await protectedFetch<ProfessionalResponse>(`/api/professional/${editingProfessional.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(updateData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
-                savedProfessional = await response.json()
             } else {
                 // Criar novo profissional
                 const createData: ProfessionalCreateRequest = {
@@ -230,21 +212,13 @@ export default function ProfessionalPage() {
                     active: formData.active,
                 }
 
-                const response = await fetch('/api/professional', {
+                savedProfessional = await protectedFetch<ProfessionalResponse>('/api/professional', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(createData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
-                savedProfessional = await response.json()
             }
 
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
@@ -352,19 +326,9 @@ export default function ProfessionalPage() {
 
         try {
             const deletePromises = Array.from(selectedProfessionals).map(async (professionalId) => {
-                const response = await fetch(`/api/professional/${professionalId}`, {
+                await protectedFetch(`/api/professional/${professionalId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 })
-
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                    }
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
                 return professionalId
             })
 
@@ -645,8 +609,30 @@ export default function ProfessionalPage() {
                     const hasButtons = isEditing || selectedProfessionals.size > 0
                     return hasButtons ? error : undefined
                 })()}
-                message={emailMessage || undefined}
-                messageType={emailMessage ? emailMessageType : undefined}
+                message={(() => {
+                    // Priorizar mensagem de email se houver
+                    if (emailMessage) {
+                        return emailMessage
+                    }
+                    // Se não há botões mas há erro, mostrar via message
+                    const hasButtons = isEditing || selectedProfessionals.size > 0
+                    if (!hasButtons && error) {
+                        return error
+                    }
+                    return undefined
+                })()}
+                messageType={(() => {
+                    // Priorizar tipo de mensagem de email se houver
+                    if (emailMessage) {
+                        return emailMessageType
+                    }
+                    // Se não há botões mas há erro, usar tipo error
+                    const hasButtons = isEditing || selectedProfessionals.size > 0
+                    if (!hasButtons && error) {
+                        return 'error' as const
+                    }
+                    return undefined
+                })()}
                 buttons={(() => {
                     const buttons = []
                     if (isEditing || selectedProfessionals.size > 0) {

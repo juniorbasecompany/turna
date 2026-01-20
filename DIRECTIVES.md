@@ -55,15 +55,28 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 
 ## Padrão de carregamento em páginas protegidas
 
-- **Use `fetch()` diretamente**.
-  Não use `api.get()` do `lib/api.ts` nem hooks de autenticação.
-- **Seguir o padrão de `/dashboard`.**
+- **Use `protectedFetch()` de `lib/api.ts`** para todas as chamadas de API.
+  Esta função trata 401 automaticamente e padroniza mensagens de erro.
+- **Nunca use `api.get()` do `lib/api.ts`** nem hooks de autenticação.
 - **Estrutura obrigatória**:
   - `try` externo para controle geral
-  - `try` interno para chamada da API
-  - `catch` interno **ignora erro** (rede/servidor)
+  - Chamada usando `protectedFetch()` que trata erros automaticamente
+  - `catch` captura erros e seta no estado para exibição no ActionBar
 - **Nunca redirecionar para `/login`** em erro de API.
 - **Motivo**: evitar logout indevido ao pressionar F5 em falhas temporárias.
+
+### Tratamento de Erros 401 - ⚠️ REGRA OBRIGATÓRIA
+
+**Todas as páginas protegidas devem usar `protectedFetch()` que garante:**
+- ✅ Erros 401 sempre retornam a mensagem padronizada: "Sessão expirada. Por favor, faça login novamente."
+- ✅ Todos os erros são exibidos no ActionBar (nunca em outros lugares)
+- ✅ Tratamento consistente em todas as páginas
+
+**Ao criar uma nova página protegida:**
+1. Importe `protectedFetch` de `@/lib/api`
+2. Use `protectedFetch<T>(url, options)` em vez de `fetch()` direto
+3. Capture erros no `catch` e set no estado `error`
+4. Exiba erros no ActionBar (padrão já implementado)
 
 ## F5 / Refresh
 
@@ -77,7 +90,7 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 
 ### Problema Identificado
 
-O `AuthProvider` (usado no `RootLayout` via `Providers`) utiliza `api.get()` do `lib/api.ts` para verificar autenticação ao montar a aplicação. O `lib/api.ts` possui lógica que redireciona automaticamente para `/login` quando recebe 401, **exceto para páginas específicas listadas em exceções**.
+O `AuthProvider` (usado no `RootLayout` via `Providers`) utiliza `api.get()` do `lib/api.ts` para verificar autenticação ao montar a aplicação. O `lib/api.ts` possui lógica que redireciona automaticamente para `/login` quando recebe 401, **exceto para páginas específicas que seguem padrões definidos**.
 
 ### Quando o Problema Ocorre
 
@@ -86,31 +99,42 @@ O `AuthProvider` (usado no `RootLayout` via `Providers`) utiliza `api.get()` do 
 - Se houver 401 durante essa verificação, `lib/api.ts` redireciona para `/login` **mesmo que a página use `fetch()` direto**
 - **Resultado**: Ao pressionar F5 na nova página, o usuário é redirecionado para `/login` indevidamente
 
-### Solução OBRIGATÓRIA
+### Solução Implementada
 
-**Ao criar uma nova página protegida que segue o padrão (usa `fetch()` direto e NÃO redireciona em 401):**
+**O `lib/api.ts` usa um padrão de rota automático que detecta páginas protegidas sem precisar listar cada uma individualmente.**
 
-1. **Adicionar o caminho da página à lista de exceções no `lib/api.ts`**
-2. Localizar a verificação de 401 no `lib/api.ts` (função `apiRequest`)
-3. Adicionar a exceção: `!path.startsWith('/sua-pagina')` na condição de redirecionamento
-4. **Páginas atualmente na lista de exceções:**
-   - `/login`
-   - `/select-tenant`
-   - `/dashboard`
-   - `/file`
+**Lógica implementada:**
+- **Rotas de autenticação** (`/login`, `/select-tenant`): não redirecionam
+- **Rotas de API** (`/api/*`): não redirecionam (não são páginas)
+- **Páginas protegidas**: qualquer rota que não seja de autenticação, API ou raiz (`/`) é automaticamente considerada protegida e não redireciona
+- **Outras rotas**: redirecionam para `/login`
 
-### Exemplo de Correção
+**Vantagens:**
+- ✅ **Automático**: novas páginas em `app/(protected)/` são detectadas automaticamente
+- ✅ **Sem manutenção manual**: não precisa adicionar cada página à lista
+- ✅ **Código mais limpo**: lógica baseada em padrões, não em listas
+
+### Código Implementado
 
 ```typescript
-// Em frontend/lib/api.ts, função apiRequest, após linha ~67
+// Em frontend/lib/api.ts, função apiRequest
 if (response.status === 401) {
     if (typeof window !== 'undefined') {
         const path = window.location.pathname
-        if (!path.startsWith('/login') &&
-            !path.startsWith('/select-tenant') &&
-            !path.startsWith('/dashboard') &&
-            !path.startsWith('/file') &&
-            !path.startsWith('/sua-nova-pagina')) {  // ← ADICIONAR AQUI
+
+        // Rotas de autenticação: não redirecionar
+        const isAuthRoute = path.startsWith('/login') || path.startsWith('/select-tenant')
+
+        // Rotas de API: não redirecionar (não são páginas)
+        const isApiRoute = path.startsWith('/api')
+
+        // Páginas protegidas: todas as outras rotas (exceto raiz) são assumidas como protegidas
+        // Todas as páginas em app/(protected)/ seguem o padrão de usar fetch() direto
+        // e gerenciam seus próprios erros 401, então não devem ser redirecionadas automaticamente
+        const isProtectedRoute = path !== '/' && !isAuthRoute && !isApiRoute
+
+        // Redirecionar apenas se não for rota de autenticação, API ou protegida
+        if (!isAuthRoute && !isApiRoute && !isProtectedRoute) {
             window.location.href = '/login'
         }
     }
@@ -123,7 +147,7 @@ if (response.status === 401) {
 - [ ] Página usa `fetch()` direto (não `api.get()`)
 - [ ] Página segue padrão try/catch interno/externo (catch interno ignora erro)
 - [ ] Página NÃO redireciona para `/login` em 401
-- [ ] **Página adicionada à lista de exceções no `lib/api.ts`** ← CRÍTICO
+- [ ] **Nenhuma ação adicional necessária** - a página será detectada automaticamente pelo padrão de rota
 - [ ] Testado pressionando F5 - não deve redirecionar para `/login`
 
 ### Motivo Técnico
@@ -132,9 +156,7 @@ O `AuthProvider` é montado no `RootLayout` e executa em **todas as páginas**, 
 
 ## Referência
 
-- Padrão implementado em:
-  - `/select-tenant`
-  - `/dashboard`
+- Padrão implementado em todas as páginas em `app/(protected)/`
 
 ## Execução (Dev): Docker vs Local
 

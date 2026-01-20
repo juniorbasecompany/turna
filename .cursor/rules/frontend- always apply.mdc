@@ -1,0 +1,8 @@
+---
+alwaysApply: true
+---
+
+# Frontend
+    Se mudar algo em um painel:
+        Veja se faz sentido mudar em todos os demais painéis.
+        Veja se faz sentido reutilizar o código.

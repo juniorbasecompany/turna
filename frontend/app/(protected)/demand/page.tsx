@@ -6,7 +6,7 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { extractErrorMessage } from '@/lib/api'
+import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses, getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
 import {
@@ -69,16 +69,10 @@ export default function DemandPage() {
     const loadHospitals = async () => {
         try {
             setLoadingHospitals(true)
-            const response = await fetch('/api/hospital/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (response.ok) {
-                const data: HospitalListResponse = await response.json()
-                setHospitals(data.items)
-            }
+            const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
+            setHospitals(data.items)
         } catch (err) {
+            // Erro será tratado pela página principal (loadDemands)
             console.error('Erro ao carregar hospitais:', err)
         } finally {
             setLoadingHospitals(false)
@@ -91,17 +85,7 @@ export default function DemandPage() {
             setLoading(true)
             setError(null)
 
-            const response = await fetch('/api/demand/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: DemandListResponse = await response.json()
+            const data = await protectedFetch<DemandListResponse>('/api/demand/list')
             setDemands(data.items)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar demandas'
@@ -276,19 +260,13 @@ export default function DemandPage() {
                     source: formData.source,
                 }
 
-                const response = await fetch(`/api/demand/${editingDemand.id}`, {
+                await protectedFetch(`/api/demand/${editingDemand.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(updateData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             } else {
                 // Criar nova demanda
                 const createData: DemandCreateRequest = {
@@ -307,19 +285,13 @@ export default function DemandPage() {
                     source: formData.source,
                 }
 
-                const response = await fetch('/api/demand', {
+                await protectedFetch('/api/demand', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(createData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             }
 
             // Recarregar lista e limpar formulário
@@ -356,19 +328,9 @@ export default function DemandPage() {
 
         try {
             const deletePromises = Array.from(selectedDemands).map(async (demandId) => {
-                const response = await fetch(`/api/demand/${demandId}`, {
+                await protectedFetch(`/api/demand/${demandId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 })
-
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                    }
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
                 return demandId
             })
 
@@ -750,6 +712,22 @@ export default function DemandPage() {
                     // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedDemands.size > 0
                     return hasButtons ? error : undefined
+                })()}
+                message={(() => {
+                    // Se não há botões mas há erro, mostrar via message
+                    const hasButtons = isEditing || selectedDemands.size > 0
+                    if (!hasButtons && error) {
+                        return error
+                    }
+                    return undefined
+                })()}
+                messageType={(() => {
+                    // Se não há botões mas há erro, usar tipo error
+                    const hasButtons = isEditing || selectedDemands.size > 0
+                    if (!hasButtons && error) {
+                        return 'error' as const
+                    }
+                    return undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

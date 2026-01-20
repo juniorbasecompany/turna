@@ -5,6 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     HospitalListResponse,
@@ -14,8 +15,7 @@ import {
     ProfileResponse,
     ProfileUpdateRequest,
 } from '@/types/api'
-import { extractErrorMessage } from '@/lib/api'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface AccountOption {
     id: number
@@ -44,83 +44,68 @@ export default function ProfilePage() {
     const [deleting, setDeleting] = useState(false)
     const [jsonError, setJsonError] = useState<string | null>(null)
 
-    // Carregar lista de accounts
-    const loadAccounts = async () => {
+    // Carregar todas as listas em paralelo
+    const loadAllData = async () => {
         try {
+            setLoading(true)
             setLoadingAccounts(true)
-            const response = await fetch('/api/account/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: AccountOption[] = await response.json()
-            setAccounts(data)
-        } catch (err) {
-            console.error('Erro ao carregar accounts:', err)
-        } finally {
-            setLoadingAccounts(false)
-        }
-    }
-
-    // Carregar lista de hospitals
-    const loadHospitals = async () => {
-        try {
             setLoadingHospitals(true)
-            const response = await fetch('/api/hospital/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
+            setError(null)
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
+            // Carregar todas as listas em paralelo
+            const [accountsResult, hospitalsResult, profilesResult] = await Promise.allSettled([
+                protectedFetch<AccountOption[]>('/api/account/list'),
+                protectedFetch<HospitalListResponse>('/api/hospital/list'),
+                protectedFetch<ProfileListResponse>('/api/profile/list'),
+            ])
+
+            // Processar resultados e capturar primeiro erro encontrado
+            let firstError: string | null = null
+
+            if (accountsResult.status === 'fulfilled') {
+                setAccounts(accountsResult.value)
+            } else {
+                const error = accountsResult.reason
+                const message = error instanceof Error ? error.message : 'Erro ao carregar contas'
+                if (!firstError) firstError = message
+                console.error('Erro ao carregar accounts:', error)
             }
 
-            const data: HospitalListResponse = await response.json()
-            setHospitals(data.items)
+            if (hospitalsResult.status === 'fulfilled') {
+                setHospitals(hospitalsResult.value.items)
+            } else {
+                const error = hospitalsResult.reason
+                const message = error instanceof Error ? error.message : 'Erro ao carregar hospitais'
+                if (!firstError) firstError = message
+                console.error('Erro ao carregar hospitals:', error)
+            }
+
+            if (profilesResult.status === 'fulfilled') {
+                setProfiles(profilesResult.value.items)
+            } else {
+                const error = profilesResult.reason
+                const message = error instanceof Error ? error.message : 'Erro ao carregar perfis'
+                if (!firstError) firstError = message
+                console.error('Erro ao carregar perfis:', error)
+            }
+
+            // Setar erro se houver algum
+            if (firstError) {
+                setError(firstError)
+            }
         } catch (err) {
-            console.error('Erro ao carregar hospitals:', err)
+            const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
+            setError(message)
+            console.error('Erro ao carregar dados:', err)
         } finally {
+            setLoading(false)
+            setLoadingAccounts(false)
             setLoadingHospitals(false)
         }
     }
 
-    // Carregar lista de profiles
-    const loadProfiles = async () => {
-        try {
-            setLoading(true)
-            setError(null)
-
-            const response = await fetch('/api/profile/list', {
-                method: 'GET',
-                credentials: 'include',
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-            }
-
-            const data: ProfileListResponse = await response.json()
-            setProfiles(data.items)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar perfis'
-            setError(message)
-            console.error('Erro ao carregar perfis:', err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
     useEffect(() => {
-        loadAccounts()
-        loadHospitals()
-        loadProfiles()
+        loadAllData()
     }, [])
 
     // Verificar se há mudanças nos campos
@@ -222,19 +207,13 @@ export default function ProfilePage() {
                     attribute: attributeObj,
                 }
 
-                const response = await fetch(`/api/profile/${editingProfile.id}`, {
+                await protectedFetch(`/api/profile/${editingProfile.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(updateData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             } else {
                 // Criar novo profile
                 const createData: ProfileCreateRequest = {
@@ -243,23 +222,17 @@ export default function ProfilePage() {
                     attribute: attributeObj,
                 }
 
-                const response = await fetch('/api/profile', {
+                await protectedFetch('/api/profile', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    credentials: 'include',
                     body: JSON.stringify(createData),
                 })
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
             }
 
             // Recarregar lista e limpar formulário
-            await loadProfiles()
+            await loadAllData()
             setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
             setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
             setEditingProfile(null)
@@ -295,19 +268,9 @@ export default function ProfilePage() {
 
         try {
             const deletePromises = Array.from(selectedProfiles).map(async (profileId) => {
-                const response = await fetch(`/api/profile/${profileId}`, {
+                await protectedFetch(`/api/profile/${profileId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 })
-
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                    }
-                    const errorData = await response.json().catch(() => ({}))
-                    throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
-                }
-
                 return profileId
             })
 
@@ -316,7 +279,7 @@ export default function ProfilePage() {
             setProfiles(profiles.filter((profile) => !selectedProfiles.has(profile.id)))
             setSelectedProfiles(new Set())
 
-            await loadProfiles()
+            await loadAllData()
         } catch (err) {
             setError(
                 err instanceof Error
@@ -349,71 +312,71 @@ export default function ProfilePage() {
                             {editingProfile ? 'Editar Perfil' : 'Criar Perfil'}
                         </h2>
                         <div className="space-y-4">
-                        <div>
-                            <label htmlFor="account_id" className="block text-sm font-medium text-gray-700 mb-2">
-                                Conta <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                id="account_id"
-                                value={formData.account_id || ''}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, account_id: e.target.value ? parseInt(e.target.value) : null })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                                disabled={submitting || editingProfile !== null || loadingAccounts}
-                            >
-                                <option value=""></option>
-                                {accounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.name} ({account.email})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="hospital_id" className="block text-sm font-medium text-gray-700 mb-2">
-                                Hospital (opcional)
-                            </label>
-                            <p className="text-xs text-gray-500 mb-2">
-                                Informe o hospital se o perfil vale apenas para ele.
-                            </p>
-                            <select
-                                id="hospital_id"
-                                value={formData.hospital_id || ''}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, hospital_id: e.target.value ? parseInt(e.target.value) : null })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting || loadingHospitals}
-                            >
-                                <option value=""></option>
-                                {hospitals.map((hospital) => (
-                                    <option key={hospital.id} value={hospital.id}>
-                                        {hospital.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="attribute" className="block text-sm font-medium text-gray-700 mb-2">
-                                Atributos (JSON) <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                                id="attribute"
-                                value={formData.attribute}
-                                onChange={(e) => handleAttributeChange(e.target.value)}
-                                rows={10}
-                                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
-                                    }`}
-                                disabled={submitting}
-                            />
-                            {jsonError && (
-                                <p className="mt-1 text-sm text-red-600">{jsonError}</p>
-                            )}
+                            <div>
+                                <label htmlFor="account_id" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Conta <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    id="account_id"
+                                    value={formData.account_id || ''}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, account_id: e.target.value ? parseInt(e.target.value) : null })
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    required
+                                    disabled={submitting || editingProfile !== null || loadingAccounts}
+                                >
+                                    <option value=""></option>
+                                    {accounts.map((account) => (
+                                        <option key={account.id} value={account.id}>
+                                            {account.name} ({account.email})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="hospital_id" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Hospital (opcional)
+                                </label>
+                                <p className="text-xs text-gray-500 mb-2">
+                                    Informe o hospital se o perfil vale apenas para ele.
+                                </p>
+                                <select
+                                    id="hospital_id"
+                                    value={formData.hospital_id || ''}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, hospital_id: e.target.value ? parseInt(e.target.value) : null })
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    disabled={submitting || loadingHospitals}
+                                >
+                                    <option value=""></option>
+                                    {hospitals.map((hospital) => (
+                                        <option key={hospital.id} value={hospital.id}>
+                                            {hospital.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="attribute" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Atributos (JSON) <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    id="attribute"
+                                    value={formData.attribute}
+                                    onChange={(e) => handleAttributeChange(e.target.value)}
+                                    rows={10}
+                                    className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
+                                        }`}
+                                    disabled={submitting}
+                                />
+                                {jsonError && (
+                                    <p className="mt-1 text-sm text-red-600">{jsonError}</p>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
                 </div>
             )}
 
@@ -435,78 +398,78 @@ export default function ProfilePage() {
                 }
             >
                 {profiles.map((profile) => {
-                            const isSelected = selectedProfiles.has(profile.id)
-                            const account = accounts.find((a) => a.id === profile.account_id)
-                            const hospital = hospitals.find((h) => h.id === profile.hospital_id)
-                            return (
+                    const isSelected = selectedProfiles.has(profile.id)
+                    const account = accounts.find((a) => a.id === profile.account_id)
+                    const hospital = hospitals.find((h) => h.id === profile.hospital_id)
+                    return (
+                        <div
+                            key={profile.id}
+                            className={getCardContainerClasses(isSelected)}
+                        >
+                            {/* 1. Corpo - Ícone de perfil e informações */}
+                            <div className="mb-3">
                                 <div
-                                    key={profile.id}
-                                    className={getCardContainerClasses(isSelected)}
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
+                                    style={{
+                                        backgroundColor: '#f1f5f9',
+                                    }}
                                 >
-                                    {/* 1. Corpo - Ícone de perfil e informações */}
-                                    <div className="mb-3">
-                                        <div
-                                            className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
-                                            style={{
-                                                backgroundColor: '#f1f5f9',
-                                            }}
-                                        >
-                                            <div className="flex flex-col items-center justify-center text-blue-500">
-                                                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                    <svg
-                                                        className="w-full h-full"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                                <h3
-                                                    className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                        }`}
-                                                    title={account ? account.name : `ID: ${profile.id}`}
-                                                >
-                                                    {account ? account.name : `Perfil ${profile.id}`}
-                                                </h3>
-                                                {account && (
-                                                    <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
-                                                        }`}>
-                                                        {account.email}
-                                                    </p>
-                                                )}
-                                                {hospital && (
-                                                    <p className={`text-xs text-center px-2 mt-1 ${isSelected ? 'text-red-700' : 'text-gray-500'
-                                                        }`}>
-                                                        {hospital.name}
-                                                    </p>
-                                                )}
-                                            </div>
+                                    <div className="flex flex-col items-center justify-center text-blue-500">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                            <svg
+                                                className="w-full h-full"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                                />
+                                            </svg>
                                         </div>
+                                        <h3
+                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                }`}
+                                            title={account ? account.name : `ID: ${profile.id}`}
+                                        >
+                                            {account ? account.name : `Perfil ${profile.id}`}
+                                        </h3>
+                                        {account && (
+                                            <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                }`}>
+                                                {account.email}
+                                            </p>
+                                        )}
+                                        {hospital && (
+                                            <p className={`text-xs text-center px-2 mt-1 ${isSelected ? 'text-red-700' : 'text-gray-500'
+                                                }`}>
+                                                {hospital.name}
+                                            </p>
+                                        )}
                                     </div>
-
-                                    {/* 3. Rodapé - Metadados e ações */}
-                                    <CardFooter
-                                        isSelected={isSelected}
-                                        date={profile.created_at}
-                                        settings={settings}
-                                        onToggleSelection={(e) => {
-                                            e.stopPropagation()
-                                            toggleProfileSelection(profile.id)
-                                        }}
-                                        onEdit={() => handleEditClick(profile)}
-                                        disabled={deleting}
-                                        deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                        editTitle="Editar perfil"
-                                    />
                                 </div>
-                            )
-                        })}
+                            </div>
+
+                            {/* 3. Rodapé - Metadados e ações */}
+                            <CardFooter
+                                isSelected={isSelected}
+                                date={profile.created_at}
+                                settings={settings}
+                                onToggleSelection={(e) => {
+                                    e.stopPropagation()
+                                    toggleProfileSelection(profile.id)
+                                }}
+                                onEdit={() => handleEditClick(profile)}
+                                disabled={deleting}
+                                deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                editTitle="Editar perfil"
+                            />
+                        </div>
+                    )
+                })}
             </CardPanel>
 
             <ActionBarSpacer />
@@ -516,6 +479,22 @@ export default function ProfilePage() {
                     // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedProfiles.size > 0
                     return hasButtons ? error : undefined
+                })()}
+                message={(() => {
+                    // Se não há botões mas há erro, mostrar via message
+                    const hasButtons = isEditing || selectedProfiles.size > 0
+                    if (!hasButtons && error) {
+                        return error
+                    }
+                    return undefined
+                })()}
+                messageType={(() => {
+                    // Se não há botões mas há erro, usar tipo error
+                    const hasButtons = isEditing || selectedProfiles.size > 0
+                    if (!hasButtons && error) {
+                        return 'error' as const
+                    }
+                    return undefined
                 })()}
                 buttons={(() => {
                     const buttons = []

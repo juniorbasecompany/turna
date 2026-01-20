@@ -286,6 +286,28 @@ export interface ProfessionalListResponse {
     total: number
 }
 
+export interface MembershipResponse {
+    id: number
+    tenant_id: number
+    account_id: number
+    account_email: string | null
+    account_name: string | null
+    role: string
+    status: string
+    created_at: string
+    updated_at: string
+}
+
+export interface MembershipListResponse {
+    items: MembershipResponse[]
+    total: number
+}
+
+export interface MembershipUpdateRequest {
+    role?: string | null
+    status?: string | null
+}
+
 export interface ProfessionalCreateRequest {
     name: string
     email: string

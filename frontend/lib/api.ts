@@ -62,6 +62,58 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
     return defaultMessage
 }
 
+/**
+ * Fetch protegido para páginas protegidas.
+ * Trata 401 automaticamente e padroniza mensagens de erro.
+ *
+ * Esta função deve ser usada em todas as páginas protegidas para garantir
+ * que erros 401 sempre retornem a mensagem padronizada e sejam exibidos no ActionBar.
+ *
+ * @param url - URL da API (relativa, ex: '/api/profile/list')
+ * @param options - Opções do fetch (method, headers, body, etc)
+ * @returns Promise com os dados da resposta
+ * @throws Error com mensagem padronizada (401 sempre retorna "Sessão expirada...")
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const data = await protectedFetch<ProfileListResponse>('/api/profile/list')
+ *   setProfiles(data.items)
+ * } catch (err) {
+ *   setError(err instanceof Error ? err.message : 'Erro desconhecido')
+ * }
+ * ```
+ */
+export async function protectedFetch<T>(
+    url: string,
+    options: RequestInit = {}
+): Promise<T> {
+    const response = await fetch(url, {
+        ...options,
+        credentials: 'include',
+    })
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+
+        // SEMPRE tratar 401 primeiro, antes de extractErrorMessage
+        // Isso garante que a mensagem seja sempre padronizada
+        if (response.status === 401) {
+            throw new Error('Sessão expirada. Por favor, faça login novamente.')
+        }
+
+        // Outros erros usam extractErrorMessage
+        throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
+    }
+
+    // Resposta vazia (204 No Content)
+    if (response.status === 204) {
+        return undefined as T
+    }
+
+    return await response.json() as T
+}
+
 interface RequestOptions extends RequestInit {
     params?: Record<string, string | number | boolean | null | undefined>
 }
@@ -113,7 +165,20 @@ export async function apiRequest<T>(
             // Páginas protegidas devem decidir o que fazer com 401, não fazer redirecionamento automático
             if (typeof window !== 'undefined') {
                 const path = window.location.pathname
-                if (!path.startsWith('/login') && !path.startsWith('/select-tenant') && !path.startsWith('/dashboard') && !path.startsWith('/file') && !path.startsWith('/hospital') && !path.startsWith('/demand') && !path.startsWith('/profile') && !path.startsWith('/professional')) {
+
+                // Rotas de autenticação: não redirecionar
+                const isAuthRoute = path.startsWith('/login') || path.startsWith('/select-tenant')
+
+                // Rotas de API: não redirecionar (não são páginas)
+                const isApiRoute = path.startsWith('/api')
+
+                // Páginas protegidas: todas as outras rotas (exceto raiz) são assumidas como protegidas
+                // Todas as páginas em app/(protected)/ seguem o padrão de usar fetch() direto
+                // e gerenciam seus próprios erros 401, então não devem ser redirecionadas automaticamente
+                const isProtectedRoute = path !== '/' && !isAuthRoute && !isApiRoute
+
+                // Redirecionar apenas se não for rota de autenticação, API ou protegida
+                if (!isAuthRoute && !isApiRoute && !isProtectedRoute) {
                     window.location.href = '/login'
                 }
             }
