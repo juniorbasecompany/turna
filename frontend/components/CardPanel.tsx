@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { ActionBar } from './ActionBar'
+import { LoadingSpinner } from './LoadingSpinner'
 
 interface CardPanelProps {
     title: string
@@ -65,8 +66,7 @@ export function CardPanel({
 
                 {loading ? (
                     <div className="text-center py-12">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                        <p className="mt-2 text-sm text-gray-600">{loadingMessage}</p>
+                        <LoadingSpinner />
                     </div>
                 ) : totalCount === 0 && createCard ? (
                     // Quando não há itens mas há card de criação, mostrar apenas o card

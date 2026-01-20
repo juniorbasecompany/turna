@@ -2,6 +2,7 @@
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
@@ -233,7 +234,7 @@ function PendingFileImageThumbnail({ file }: { file: File }) {
     if (!objectUrl) {
         return (
             <div className="w-full h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <LoadingSpinner />
             </div>
         )
     }
@@ -1029,7 +1030,9 @@ export default function FilesPage() {
                                 Hospital
                             </label>
                             {loadingHospitalList ? (
-                                <div className="text-sm text-gray-500">Carregando...</div>
+                                <div className="flex justify-center py-2">
+                                    <LoadingSpinner />
+                                </div>
                             ) : (
                                 <select
                                     id="hospital-filter"
@@ -1120,7 +1123,7 @@ export default function FilesPage() {
             {/* Loading */}
             {loading && (
                 <div className="flex justify-center items-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    <LoadingSpinner />
                 </div>
             )}
 

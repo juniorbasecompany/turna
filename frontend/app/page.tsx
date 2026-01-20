@@ -1,5 +1,6 @@
 'use client'
 
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -37,7 +38,9 @@ export default function Home() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900">Turna</h1>
-        <p className="mt-4 text-gray-600">Carregando...</p>
+        <div className="mt-4 flex justify-center">
+          <LoadingSpinner />
+        </div>
       </div>
     </main>
   )
