@@ -202,7 +202,6 @@ export default function TenantPage() {
                 loading={loading}
                 loadingMessage="Carregando clínicas..."
                 emptyMessage="Nenhuma clínica cadastrada ainda."
-                countLabel="Total de clínicas"
                 createCard={
                     <CreateCard
                         label="Criar nova clínica"

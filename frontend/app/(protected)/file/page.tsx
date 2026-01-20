@@ -1139,38 +1139,29 @@ export default function FilesPage() {
                 return (
                     <>
                         {/* Cards de arquivos */}
-                        {/* Mensagem de total e contadores */}
-                        <div className="mb-4 sm:mb-6">
-                            <div className="text-sm text-gray-600">
-                                {bottomBarMessage ? (
-                                    <span className="text-red-600">{bottomBarMessage}</span>
-                                ) : (
-                                    <>
-                                        Total de arquivos: <span className="font-medium">{total}</span>
-                                        {(() => {
-                                            const filteredCount = files.filter((file) =>
-                                                selectedStatuses.has(file.job_status as JobStatus | null)
-                                            ).length
-                                            return filteredCount !== total ? (
-                                                <span className="ml-2 sm:ml-4">
-                                                    ({filteredCount} visíveis)
+                        {/* Mensagem de contadores de ações */}
+                        {(bottomBarMessage || selectedFilesForReading.size > 0 || selectedFiles.size > 0) && (
+                            <div className="mb-4 sm:mb-6">
+                                <div className="text-sm text-gray-600">
+                                    {bottomBarMessage ? (
+                                        <span className="text-red-600">{bottomBarMessage}</span>
+                                    ) : (
+                                        <>
+                                            {selectedFilesForReading.size > 0 && (
+                                                <span className="text-blue-600">
+                                                    {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
                                                 </span>
-                                            ) : null
-                                        })()}
-                                        {selectedFilesForReading.size > 0 && (
-                                            <span className="ml-2 sm:ml-4 text-blue-600">
-                                                {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
-                                            </span>
-                                        )}
-                                        {selectedFiles.size > 0 && (
-                                            <span className="ml-2 sm:ml-4 text-red-600">
-                                                {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
-                                            </span>
-                                        )}
-                                    </>
-                                )}
+                                            )}
+                                            {selectedFiles.size > 0 && (
+                                                <span className={`ml-2 sm:ml-4 text-red-600`}>
+                                                    {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
+                                                </span>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
                             {/* Card de upload - sempre o primeiro */}

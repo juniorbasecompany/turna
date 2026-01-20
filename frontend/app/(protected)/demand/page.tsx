@@ -556,7 +556,6 @@ export default function DemandPage() {
                 loading={loading}
                 loadingMessage="Carregando demandas..."
                 emptyMessage="Nenhuma demanda cadastrada ainda."
-                countLabel="Total de demandas"
                 error={(() => {
                     // Mostra erro no CardPanel apenas se não houver botões de ação
                     const hasButtons = isEditing || selectedDemands.size > 0

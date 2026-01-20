@@ -10,7 +10,6 @@ interface CardPanelProps {
     loading?: boolean
     loadingMessage?: string
     emptyMessage?: string
-    countLabel?: string
     createCard?: ReactNode
     children: ReactNode
     className?: string
@@ -38,7 +37,6 @@ export function CardPanel({
     loading = false,
     loadingMessage = 'Carregando...',
     emptyMessage = 'Nenhum item cadastrado ainda.',
-    countLabel = 'Total',
     createCard,
     children,
     className = '',
@@ -80,18 +78,6 @@ export function CardPanel({
                     </div>
                 ) : (
                     <>
-                        {/* Mensagem de total e contadores */}
-                        <div className="mb-4 sm:mb-6">
-                            <div className="text-sm text-gray-600">
-                                {countLabel}: <span className="font-medium">{totalCount}</span>
-                                {selectedCount > 0 && (
-                                    <span className="ml-2 sm:ml-4 text-red-600">
-                                        {selectedCount} marcado{selectedCount > 1 ? 's' : ''} para exclusão
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-
                         {/* Grid de cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {createCard}

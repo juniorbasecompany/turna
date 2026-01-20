@@ -337,7 +337,6 @@ export default function ProfessionalPage() {
                 loading={loading}
                 loadingMessage="Carregando profissionais..."
                 emptyMessage="Nenhum profissional cadastrado ainda."
-                countLabel="Total de profissionais"
                 editContent={
                     isEditing ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">

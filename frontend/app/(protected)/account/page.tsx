@@ -302,7 +302,6 @@ export default function AccountPage() {
                 loading={loading}
                 loadingMessage="Carregando contas..."
                 emptyMessage="Nenhuma conta cadastrada ainda."
-                countLabel="Total de contas"
                 editContent={
                     isEditing ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">

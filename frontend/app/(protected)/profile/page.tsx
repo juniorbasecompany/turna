@@ -395,7 +395,6 @@ export default function ProfilePage() {
                 loading={loading}
                 loadingMessage="Carregando perfis..."
                 emptyMessage="Nenhum perfil cadastrado ainda."
-                countLabel="Total de perfis"
                 createCard={
                     <CreateCard
                         label="Criar novo perfil"

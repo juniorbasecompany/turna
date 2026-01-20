@@ -138,7 +138,6 @@ export default function HospitalPage() {
                 loading={loading}
                 loadingMessage="Carregando hospitais..."
                 emptyMessage="Nenhum hospital cadastrado ainda."
-                countLabel="Total de hospitais"
                 createCard={
                     <CreateCard
                         label="Criar novo hospital"
