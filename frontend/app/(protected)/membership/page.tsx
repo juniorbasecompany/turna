@@ -4,6 +4,7 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
@@ -496,36 +497,23 @@ export default function MembershipPage() {
                 })}
             </CardPanel>
 
-            {/* Paginação */}
-            {total > 0 && (
-                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-                    <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center justify-between">
-                        <div className="text-sm text-gray-700">
-                            Mostrando {pagination.offset + 1} a {Math.min(pagination.offset + pagination.limit, total)} de {total}
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
-                                disabled={pagination.offset === 0 || loading}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Anterior
-                            </button>
-                            <button
-                                onClick={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
-                                disabled={pagination.offset + pagination.limit >= total || loading}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Próxima
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <ActionBarSpacer />
 
             <ActionBar
+                pagination={
+                    total > 0 ? (
+                        <Pagination
+                            offset={pagination.offset}
+                            limit={pagination.limit}
+                            total={total}
+                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
+                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
+                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
+                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            disabled={loading}
+                        />
+                    ) : undefined
+                }
                 error={(() => {
                     // Se houver mensagem de email, não mostrar erro genérico
                     // A mensagem de email será exibida via prop 'message'

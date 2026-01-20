@@ -4,13 +4,14 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { Pagination } from '@/components/Pagination'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { FormCheckbox } from '@/components/FormCheckbox'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
-import { AccountResponse } from '@/types/api'
+import { AccountListResponse, AccountResponse } from '@/types/api'
 import { useEffect, useState } from 'react'
 
 export default function AccountPage() {
@@ -36,6 +37,8 @@ export default function AccountPage() {
     const [submitting, setSubmitting] = useState(false)
     const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
+    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
+    const [total, setTotal] = useState(0)
 
     // Carregar lista de contas
     const loadAccounts = async () => {
@@ -43,8 +46,13 @@ export default function AccountPage() {
             setLoading(true)
             setError(null)
 
-            const data = await protectedFetch<AccountResponse[]>('/api/account/list')
-            setAccounts(data)
+            const params = new URLSearchParams()
+            params.append('limit', String(pagination.limit))
+            params.append('offset', String(pagination.offset))
+
+            const data = await protectedFetch<AccountListResponse>(`/api/account/list?${params.toString()}`)
+            setAccounts(data.items)
+            setTotal(data.total)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar contas'
             setError(message)
@@ -56,7 +64,7 @@ export default function AccountPage() {
 
     useEffect(() => {
         loadAccounts()
-    }, [])
+    }, [pagination])
 
     const isEditing = showEditArea
 
@@ -488,6 +496,20 @@ export default function AccountPage() {
 
             {/* Barra inferior fixa com mensagens de erro */}
             <ActionBar
+                pagination={
+                    total > 0 ? (
+                        <Pagination
+                            offset={pagination.offset}
+                            limit={pagination.limit}
+                            total={total}
+                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
+                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
+                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
+                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            disabled={loading}
+                        />
+                    ) : undefined
+                }
                 error={(() => {
                     // Se houver mensagem de email, não mostrar erro genérico
                     // A mensagem de email será exibida via prop 'message'

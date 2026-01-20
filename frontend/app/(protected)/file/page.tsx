@@ -2,6 +2,7 @@
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
+import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
@@ -471,9 +472,10 @@ export default function FilesPage() {
         loadFiles()
     }, [startDate, endDate, selectedHospitalId, settings, limit, offset, refreshKey])
 
-    // Calcular página atual e total de páginas
-    const currentPage = Math.floor(offset / limit) + 1
-    const totalPages = Math.ceil(total / limit)
+    // Navegar para primeira página
+    const goToFirstPage = () => {
+        setOffset(0)
+    }
 
     // Navegar para página anterior
     const goToPreviousPage = () => {
@@ -487,6 +489,12 @@ export default function FilesPage() {
         if (offset + limit < total) {
             setOffset(offset + limit)
         }
+    }
+
+    // Navegar para última página
+    const goToLastPage = () => {
+        const lastOffset = Math.floor((total - 1) / limit) * limit
+        setOffset(lastOffset)
     }
 
     // Handlers para mudança de data no TenantDatePicker
@@ -1438,31 +1446,6 @@ export default function FilesPage() {
                                 )
                             })}
                         </div>
-
-                        {/* Paginação */}
-                        {total > limit && (
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0 bg-white rounded-lg border border-gray-200 px-4 sm:px-6 py-4">
-                                <div className="text-sm text-gray-700 text-center sm:text-left">
-                                    Página {currentPage} de {totalPages} ({total} arquivos{filteredTotal !== total ? `, ${filteredTotal} visíveis` : ''})
-                                </div>
-                                <div className="flex gap-2 justify-center sm:justify-end">
-                                    <button
-                                        onClick={goToPreviousPage}
-                                        disabled={offset === 0}
-                                        className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Anterior
-                                    </button>
-                                    <button
-                                        onClick={goToNextPage}
-                                        disabled={offset + limit >= total}
-                                        className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Próxima
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </>
                 )
             })()}
@@ -1472,7 +1455,20 @@ export default function FilesPage() {
 
             {/* Barra inferior fixa com ações */}
             <ActionBar
-                leftContent={<div></div>}
+                pagination={
+                    total > 0 ? (
+                        <Pagination
+                            offset={offset}
+                            limit={limit}
+                            total={total}
+                            onFirst={goToFirstPage}
+                            onPrevious={goToPreviousPage}
+                            onNext={goToNextPage}
+                            onLast={goToLastPage}
+                            disabled={loading}
+                        />
+                    ) : undefined
+                }
                 error={(() => {
                     // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0

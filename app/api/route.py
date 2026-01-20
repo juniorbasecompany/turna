@@ -158,6 +158,11 @@ class AccountResponse(PydanticBaseModel):
     updated_at: str
 
 
+class AccountListResponse(PydanticBaseModel):
+    items: list[AccountResponse]
+    total: int
+
+
 class AccountCreate(PydanticBaseModel):
     name: str
     email: str
@@ -257,25 +262,42 @@ def create_account(
         ) from e
 
 
-@router.get("/account/list", response_model=list[AccountResponse], tags=["Account"])
+@router.get("/account/list", response_model=AccountListResponse, tags=["Account"])
 def list_accounts(
     membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
 ):
     """
-    Lista accounts do tenant atual (via Membership ACTIVE).
+    Lista accounts do tenant atual (via Membership ACTIVE) com paginação.
     """
     try:
-        logger.info(f"Listando accounts para tenant_id={membership.tenant_id}")
-        # Buscar accounts via Membership
-        memberships = session.exec(
+        logger.info(f"Listando accounts para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
+        
+        # Query base para buscar
+        base_query = (
             select(Membership, Account)
             .join(Account, Membership.account_id == Account.id)
             .where(
                 Membership.tenant_id == membership.tenant_id,
                 Membership.status == MembershipStatus.ACTIVE,
             )
+        )
+
+        # Contar total
+        count_query = select(func.count(Membership.id)).where(
+            Membership.tenant_id == membership.tenant_id,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+        total = session.exec(count_query).one()
+
+        # Buscar accounts com paginação
+        memberships = session.exec(
+            base_query
             .order_by(Account.name)
+            .limit(limit)
+            .offset(offset)
         ).all()
 
         accounts = []
@@ -291,8 +313,11 @@ def list_accounts(
                 updated_at=_isoformat_utc(account.updated_at),
             ))
 
-        logger.info(f"Encontrados {len(accounts)} accounts")
-        return accounts
+        logger.info(f"Encontrados {total} accounts, retornando {len(accounts)}")
+        return AccountListResponse(
+            items=accounts,
+            total=total,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -611,17 +636,24 @@ def create_tenant(
 def list_tenants(
     membership: Membership = Depends(require_role("admin")),
     session: Session = Depends(get_session),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
 ):
     """
-    Lista todos os tenants (apenas admin).
+    Lista todos os tenants (apenas admin) com paginação.
     """
     try:
-        logger.info(f"Listando tenants")
+        logger.info(f"Listando tenants, limit={limit}, offset={offset}")
         query = select(Tenant)
-        items = session.exec(query.order_by(Tenant.name)).all()
-        total = len(items)
+
+        # Contar total antes de aplicar paginação
+        count_query = select(func.count(Tenant.id))
+        total = session.exec(count_query).one()
 
         logger.info(f"Encontrados {total} tenants")
+
+        # Aplicar ordenação e paginação
+        items = session.exec(query.order_by(Tenant.name).limit(limit).offset(offset)).all()
 
         response_items = []
         for t in items:
@@ -1938,15 +1970,19 @@ def create_hospital(
 def list_hospital(
     membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
+    limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
+    offset: int = Query(0, ge=0, description="Offset para paginação"),
 ):
     """
-    Lista todos os hospitais do tenant atual.
+    Lista todos os hospitais do tenant atual com paginação.
     """
     try:
-        logger.info(f"Listando hospitais para tenant_id={membership.tenant_id}")
+        logger.info(f"Listando hospitais para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
         query = select(Hospital).where(Hospital.tenant_id == membership.tenant_id)
-        items = session.exec(query.order_by(Hospital.name)).all()
-        total = len(items)
+
+        # Contar total antes de aplicar paginação
+        count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == membership.tenant_id)
+        total = session.exec(count_query).one()
 
         logger.info(f"Encontrados {total} hospitais")
 
@@ -1957,6 +1993,9 @@ def list_hospital(
                 items=[],
                 total=0,
             )
+
+        # Aplicar ordenação e paginação
+        items = session.exec(query.order_by(Hospital.name).limit(limit).offset(offset)).all()
 
         # Validar e converter itens
         response_items = []

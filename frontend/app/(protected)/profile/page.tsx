@@ -4,10 +4,13 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
+    AccountListResponse,
+    AccountResponse,
     HospitalListResponse,
     HospitalResponse,
     ProfileCreateRequest,
@@ -17,16 +20,10 @@ import {
 } from '@/types/api'
 import { useEffect, useState } from 'react'
 
-interface AccountOption {
-    id: number
-    email: string
-    name: string
-}
-
 export default function ProfilePage() {
     const { settings } = useTenantSettings()
     const [profiles, setProfiles] = useState<ProfileResponse[]>([])
-    const [accounts, setAccounts] = useState<AccountOption[]>([])
+    const [accounts, setAccounts] = useState<AccountResponse[]>([])
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [loadingAccounts, setLoadingAccounts] = useState(true)
@@ -43,31 +40,27 @@ export default function ProfilePage() {
     const [selectedProfiles, setSelectedProfiles] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
     const [jsonError, setJsonError] = useState<string | null>(null)
+    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
+    const [total, setTotal] = useState(0)
 
-    // Carregar todas as listas em paralelo
-    const loadAllData = async () => {
+    // Carregar accounts e hospitals (apenas uma vez, não dependem de paginação)
+    const loadAccountsAndHospitals = async () => {
         try {
-            setLoading(true)
             setLoadingAccounts(true)
             setLoadingHospitals(true)
             setError(null)
 
-            // Carregar todas as listas em paralelo
-            const [accountsResult, hospitalsResult, profilesResult] = await Promise.allSettled([
-                protectedFetch<AccountOption[]>('/api/account/list'),
+            const [accountsResult, hospitalsResult] = await Promise.allSettled([
+                protectedFetch<AccountListResponse>('/api/account/list'),
                 protectedFetch<HospitalListResponse>('/api/hospital/list'),
-                protectedFetch<ProfileListResponse>('/api/profile/list'),
             ])
 
-            // Processar resultados e capturar primeiro erro encontrado
-            let firstError: string | null = null
-
             if (accountsResult.status === 'fulfilled') {
-                setAccounts(accountsResult.value)
+                setAccounts(accountsResult.value.items)
             } else {
                 const error = accountsResult.reason
                 const message = error instanceof Error ? error.message : 'Erro ao carregar contas'
-                if (!firstError) firstError = message
+                setError(message)
                 console.error('Erro ao carregar accounts:', error)
             }
 
@@ -76,37 +69,50 @@ export default function ProfilePage() {
             } else {
                 const error = hospitalsResult.reason
                 const message = error instanceof Error ? error.message : 'Erro ao carregar hospitais'
-                if (!firstError) firstError = message
+                setError(message)
                 console.error('Erro ao carregar hospitals:', error)
-            }
-
-            if (profilesResult.status === 'fulfilled') {
-                setProfiles(profilesResult.value.items)
-            } else {
-                const error = profilesResult.reason
-                const message = error instanceof Error ? error.message : 'Erro ao carregar perfis'
-                if (!firstError) firstError = message
-                console.error('Erro ao carregar perfis:', error)
-            }
-
-            // Setar erro se houver algum
-            if (firstError) {
-                setError(firstError)
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
             setError(message)
             console.error('Erro ao carregar dados:', err)
         } finally {
-            setLoading(false)
             setLoadingAccounts(false)
             setLoadingHospitals(false)
         }
     }
 
+    // Carregar lista de perfis com paginação
+    const loadProfiles = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            const params = new URLSearchParams()
+            params.append('limit', String(pagination.limit))
+            params.append('offset', String(pagination.offset))
+
+            const data = await protectedFetch<ProfileListResponse>(`/api/profile/list?${params.toString()}`)
+            setProfiles(data.items)
+            setTotal(data.total)
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Erro ao carregar perfis'
+            setError(message)
+            console.error('Erro ao carregar perfis:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Carregar accounts e hospitals apenas uma vez ao montar
     useEffect(() => {
-        loadAllData()
+        loadAccountsAndHospitals()
     }, [])
+
+    // Carregar perfis quando paginação mudar
+    useEffect(() => {
+        loadProfiles()
+    }, [pagination])
 
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
@@ -232,7 +238,7 @@ export default function ProfilePage() {
             }
 
             // Recarregar lista e limpar formulário
-            await loadAllData()
+            await loadProfiles()
             setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
             setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
             setEditingProfile(null)
@@ -276,10 +282,9 @@ export default function ProfilePage() {
 
             await Promise.all(deletePromises)
 
-            setProfiles(profiles.filter((profile) => !selectedProfiles.has(profile.id)))
             setSelectedProfiles(new Set())
 
-            await loadAllData()
+            await loadProfiles()
         } catch (err) {
             setError(
                 err instanceof Error
@@ -385,7 +390,7 @@ export default function ProfilePage() {
             <CardPanel
                 title="Perfis"
                 description="Gerencie os perfis de usuários com atributos customizados"
-                totalCount={profiles.length}
+                totalCount={total}
                 selectedCount={selectedProfiles.size}
                 loading={loading}
                 loadingMessage="Carregando perfis..."
@@ -477,6 +482,20 @@ export default function ProfilePage() {
             <ActionBarSpacer />
 
             <ActionBar
+                pagination={
+                    total > 0 ? (
+                        <Pagination
+                            offset={pagination.offset}
+                            limit={pagination.limit}
+                            total={total}
+                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
+                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
+                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
+                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            disabled={loading}
+                        />
+                    ) : undefined
+                }
                 error={(() => {
                     // Mostra erro no ActionBar apenas se houver botões de ação
                     const hasButtons = isEditing || selectedProfiles.size > 0

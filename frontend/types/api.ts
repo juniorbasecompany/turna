@@ -46,6 +46,11 @@ export interface AccountResponse {
     updated_at: string
 }
 
+export interface AccountListResponse {
+    items: AccountResponse[]
+    total: number
+}
+
 export interface TenantResponse {
     id: number
     name: string

@@ -47,6 +47,10 @@ interface ActionBarProps {
      */
     buttons?: ActionBarButton[]
     /**
+     * Componente de paginação a ser exibido junto com os botões à direita
+     */
+    pagination?: ReactNode
+    /**
      * Se false, esconde a barra. Por padrão, a barra sempre aparece
      * (mesmo sem botões ou mensagem). Os botões aparecem/desaparecem
      * conforme o array de buttons.
@@ -79,6 +83,7 @@ export function ActionBar({
     leftContent,
     error,
     buttons = [],
+    pagination,
     show,
 }: ActionBarProps) {
     // Debug: log quando message mudar
@@ -151,8 +156,9 @@ export function ActionBar({
                         )
                     ) : null}
                 </div>
-                {/* Botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
+                {/* Botões de ação e paginação - alinhados à direita, podem quebrar para linha de baixo */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {pagination}
                     {renderButtons()}
                 </div>
             </div>
