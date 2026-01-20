@@ -274,7 +274,7 @@ def list_accounts(
     """
     try:
         logger.info(f"Listando accounts para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
-        
+
         # Query base para buscar
         base_query = (
             select(Membership, Account)
