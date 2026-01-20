@@ -11,131 +11,108 @@ import { FormCheckbox } from '@/components/FormCheckbox'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
-import { AccountListResponse, AccountResponse } from '@/types/api'
-import { useEffect, useState } from 'react'
+import { AccountResponse } from '@/types/api'
+import { useEntityPage } from '@/hooks/useEntityPage'
+import { useState, useCallback, useMemo } from 'react'
+import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+
+type AccountFormData = {
+    name: string
+    email: string
+    role: string
+}
 
 export default function AccountPage() {
     const { tenant, settings } = useTenantSettings()
-    const [accounts, setAccounts] = useState<AccountResponse[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const [sendInvite, setSendInvite] = useState(false)
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
-    const [showEditArea, setShowEditArea] = useState(false)
-    const [editingAccount, setEditingAccount] = useState<AccountResponse | null>(null)
-    const [formData, setFormData] = useState({
+
+    const initialFormData: AccountFormData = {
         name: '',
         email: '',
         role: 'account',
-    })
-    const [originalFormData, setOriginalFormData] = useState({
-        name: '',
-        email: '',
-        role: 'account',
-    })
-    const [sendInvite, setSendInvite] = useState(false)
-    const [submitting, setSubmitting] = useState(false)
-    const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(new Set())
-    const [deleting, setDeleting] = useState(false)
-    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
-    const [total, setTotal] = useState(0)
-
-    // Carregar lista de contas
-    const loadAccounts = async () => {
-        try {
-            setLoading(true)
-            setError(null)
-
-            const params = new URLSearchParams()
-            params.append('limit', String(pagination.limit))
-            params.append('offset', String(pagination.offset))
-
-            const data = await protectedFetch<AccountListResponse>(`/api/account/list?${params.toString()}`)
-            setAccounts(data.items)
-            setTotal(data.total)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar contas'
-            setError(message)
-            console.error('Erro ao carregar contas:', err)
-        } finally {
-            setLoading(false)
-        }
     }
 
-    useEffect(() => {
-        loadAccounts()
-    }, [pagination])
-
-    const isEditing = showEditArea
-
-    // Verificar se há mudanças nos campos
-    const hasChanges = () => {
-        if (!editingAccount) {
-            return formData.name.trim() !== '' && formData.email.trim() !== ''
-        }
-        return (
-            formData.name.trim() !== originalFormData.name.trim() ||
-            formData.email.trim() !== originalFormData.email.trim()
-        )
-    }
-
-    // Handlers
-    const handleCreateClick = () => {
-        setFormData({
-            name: '',
-            email: '',
-            role: 'account',
-        })
-        setOriginalFormData({
-            name: '',
-            email: '',
-            role: 'account',
-        })
-        setEditingAccount(null)
-        setSendInvite(false)
-        setShowEditArea(true)
-        setError(null)
-        setEmailMessage(null)
-    }
-
-    const handleEditClick = (account: AccountResponse) => {
-        setEditingAccount(account)
-        setFormData({
+    const {
+        items: accounts,
+        loading,
+        error,
+        setError,
+        submitting,
+        deleting,
+        formData,
+        setFormData,
+        editingItem: editingAccount,
+        isEditing,
+        hasChanges,
+        handleCreateClick: baseHandleCreateClick,
+        handleEditClick: baseHandleEditClick,
+        handleCancel: baseHandleCancel,
+        selectedItems: selectedAccounts,
+        toggleSelection: toggleAccountSelection,
+        selectedCount: selectedAccountsCount,
+        pagination,
+        total,
+        paginationHandlers,
+        handleDeleteSelected: baseHandleDeleteSelected,
+        loadItems,
+    } = useEntityPage<AccountFormData, AccountResponse, { name: string; email: string }, { name: string; email: string }>({
+        endpoint: '/api/account',
+        entityName: 'conta',
+        initialFormData,
+        isEmptyCheck: (data) => {
+            return data.name.trim() === '' && data.email.trim() === ''
+        },
+        mapEntityToFormData: (account) => ({
             name: account.name,
             email: account.email,
             role: account.role,
-        })
-        setOriginalFormData({
-            name: account.name,
-            email: account.email,
-            role: account.role,
-        })
-        setSendInvite(false)
-        setShowEditArea(true)
-        setError(null)
-        setEmailMessage(null)
-    }
+        }),
+        mapFormDataToCreateRequest: (formData) => ({
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+        }),
+        mapFormDataToUpdateRequest: (formData) => ({
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+        }),
+        validateFormData: (formData) => {
+            if (!formData.name.trim()) {
+                return 'Nome é obrigatório'
+            }
+            if (!formData.email.trim()) {
+                return 'Email é obrigatório'
+            }
+            return null
+        },
+    })
 
-    const handleCancel = () => {
-        setFormData({
-            name: '',
-            email: '',
-            role: 'account',
-        })
-        setOriginalFormData({
-            name: '',
-            email: '',
-            role: 'account',
-        })
-        setEditingAccount(null)
+    // Handlers customizados para preservar lógica específica
+    const handleCreateClick = useCallback(() => {
+        baseHandleCreateClick()
         setSendInvite(false)
-        setShowEditArea(false)
-        setSelectedAccounts(new Set())
-        setError(null)
         setEmailMessage(null)
-    }
+    }, [baseHandleCreateClick])
 
-    const handleSave = async () => {
+    const handleEditClick = useCallback(
+        (account: AccountResponse) => {
+            baseHandleEditClick(account)
+            setSendInvite(false)
+            setEmailMessage(null)
+        },
+        [baseHandleEditClick]
+    )
+
+    const handleCancel = useCallback(() => {
+        baseHandleCancel()
+        setSendInvite(false)
+        setEmailMessage(null)
+    }, [baseHandleCancel])
+
+    // Handler de salvar customizado com lógica de envio de convite
+    const handleSave = useCallback(async () => {
         if (!formData.name.trim()) {
             setError('Nome é obrigatório')
             setEmailMessage(null)
@@ -149,9 +126,10 @@ export default function AccountPage() {
         }
 
         try {
-            setSubmitting(true)
             setError(null)
             setEmailMessage(null)
+
+            let savedAccount: AccountResponse | null = null
 
             if (editingAccount) {
                 // Editar account existente
@@ -160,7 +138,7 @@ export default function AccountPage() {
                     email: formData.email.trim(),
                 }
 
-                const savedAccount = await protectedFetch<AccountResponse>(`/api/account/${editingAccount.id}`, {
+                savedAccount = await protectedFetch<AccountResponse>(`/api/account/${editingAccount.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -172,7 +150,8 @@ export default function AccountPage() {
                 if (sendInvite && savedAccount) {
                     // Buscar membership_id do account no tenant atual
                     const memberships = await protectedFetch<{ items: any[] }>('/api/membership/list')
-                    const membership = memberships.items.find((m: any) => m.account_id === savedAccount.id)
+                    const accountId = savedAccount.id
+                    const membership = memberships.items.find((m: any) => m.account_id === accountId)
 
                     if (membership) {
                         console.log(
@@ -185,7 +164,6 @@ export default function AccountPage() {
                                     'Content-Type': 'application/json',
                                 },
                             })
-                            // Definir mensagem de sucesso no ActionBar
                             const successMsg = `E-mail de convite foi enviado para ${formData.name} (${formData.email})`
                             console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
                             setEmailMessage(successMsg)
@@ -196,7 +174,6 @@ export default function AccountPage() {
                                 `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${membership.id}:`,
                                 inviteErr
                             )
-                            // Definir mensagem de erro no ActionBar
                             setEmailMessage(`E-mail de convite não foi enviado para ${formData.name} (${formData.email}). ${errorMsg}`)
                             setEmailMessageType('error')
                         }
@@ -209,7 +186,7 @@ export default function AccountPage() {
                     email: formData.email.trim(),
                 }
 
-                const savedAccount = await protectedFetch<AccountResponse>('/api/account', {
+                savedAccount = await protectedFetch<AccountResponse>('/api/account', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -227,7 +204,7 @@ export default function AccountPage() {
                 const membershipData = {
                     account_id: savedAccount.id,
                     role: formData.role,
-                    status: 'ACTIVE', // Sempre criar como ACTIVE, o invite atualiza para PENDING
+                    status: 'ACTIVE',
                 }
 
                 const savedMembership = await protectedFetch<{ id: number; account_id: number; status: string; role: string }>(
@@ -241,7 +218,7 @@ export default function AccountPage() {
                     }
                 )
 
-                // Se o checkbox "Enviar convite" estiver marcado, enviar email de convite (que atualiza status para PENDING)
+                // Se o checkbox "Enviar convite" estiver marcado, enviar email de convite
                 if (sendInvite && savedMembership) {
                     console.log(
                         `[INVITE-UI] Iniciando envio de convite para membership ID=${savedMembership.id} (${formData.email})`
@@ -253,7 +230,6 @@ export default function AccountPage() {
                                 'Content-Type': 'application/json',
                             },
                         })
-                        // Definir mensagem de sucesso no ActionBar
                         const successMsg = `E-mail de convite foi enviado para ${formData.name} (${formData.email})`
                         console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
                         setEmailMessage(successMsg)
@@ -264,7 +240,6 @@ export default function AccountPage() {
                             `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${savedMembership.id}:`,
                             inviteErr
                         )
-                        // Definir mensagem de erro no ActionBar
                         setEmailMessage(`E-mail de convite não foi enviado para ${formData.name} (${formData.email}). ${errorMsg}`)
                         setEmailMessageType('error')
                     }
@@ -272,86 +247,51 @@ export default function AccountPage() {
             }
 
             // Recarregar lista e limpar formulário
-            await loadAccounts()
-
-            setFormData({
-                name: '',
-                email: '',
-                role: 'account',
-            })
-            setOriginalFormData({
-                name: '',
-                email: '',
-                role: 'account',
-            })
-            setEditingAccount(null)
+            await loadItems()
+            baseHandleCancel()
             setSendInvite(false)
-            setShowEditArea(false)
-            // Mensagem de email permanece visível até o usuário fechar o formulário ou fazer nova ação
         } catch (err) {
             const message = err instanceof Error ? err.message : (editingAccount ? 'Erro ao atualizar conta' : 'Erro ao criar conta')
             setError(message)
             setEmailMessage(null)
             console.error('Erro ao salvar conta:', err)
-        } finally {
-            setSubmitting(false)
         }
-    }
+    }, [
+        formData,
+        editingAccount,
+        sendInvite,
+        tenant,
+        setError,
+        loadItems,
+        baseHandleCancel,
+    ])
 
-    // Toggle seleção de account para exclusão
-    const toggleAccountSelection = (accountId: number) => {
-        setSelectedAccounts((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(accountId)) {
-                newSet.delete(accountId)
-            } else {
-                newSet.add(accountId)
-            }
-            return newSet
-        })
-    }
+    // Handler de exclusão customizado com confirm
+    const handleDeleteSelectedWithConfirm = useCallback(async () => {
+        if (selectedAccountsCount === 0) return
 
-    // Excluir accounts selecionados
-    const handleDeleteSelected = async () => {
-        if (selectedAccounts.size === 0) return
-
-        if (!confirm(`Tem certeza que deseja remover ${selectedAccounts.size} conta(s)?`)) {
+        if (!confirm(`Tem certeza que deseja remover ${selectedAccountsCount} conta(s)?`)) {
             return
         }
 
-        try {
-            setDeleting(true)
-            setError(null)
+        await baseHandleDeleteSelected()
+    }, [selectedAccountsCount, baseHandleDeleteSelected])
 
-            const deletePromises = Array.from(selectedAccounts).map(async (accountId) => {
-                try {
-                    await protectedFetch(`/api/account/${accountId}`, {
-                        method: 'DELETE',
-                    })
-                    return { success: true, accountId }
-                } catch (err) {
-                    return { success: false, accountId, error: err }
-                }
-            })
+    // Botões do ActionBar customizados
+    const actionBarButtons = useActionBarButtons({
+        isEditing,
+        selectedCount: selectedAccountsCount,
+        hasChanges: hasChanges() || sendInvite, // Inclui sendInvite na verificação
+        submitting,
+        deleting,
+        onCancel: handleCancel,
+        onDelete: handleDeleteSelectedWithConfirm,
+        onSave: handleSave,
+        deleteLabel: 'Remover',
+    })
 
-            const results = await Promise.allSettled(deletePromises)
-            const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success))
-
-            if (failed.length > 0) {
-                throw new Error(`${failed.length} conta(s) não puderam ser removidas`)
-            }
-
-            // Recarregar lista
-            await loadAccounts()
-            setSelectedAccounts(new Set())
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao remover contas'
-            setError(message)
-            console.error('Erro ao remover contas:', err)
-        } finally {
-            setDeleting(false)
-        }
-    }
+    // Props de erro do ActionBar com suporte a emailMessage
+    const actionBarErrorProps = getActionBarErrorProps(error, isEditing, selectedAccountsCount, emailMessage, emailMessageType)
 
     return (
         <>
@@ -502,79 +442,18 @@ export default function AccountPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
-                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
-                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
-                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            onFirst={paginationHandlers.onFirst}
+                            onPrevious={paginationHandlers.onPrevious}
+                            onNext={paginationHandlers.onNext}
+                            onLast={paginationHandlers.onLast}
                             disabled={loading}
                         />
                     ) : undefined
                 }
-                error={(() => {
-                    // Se houver mensagem de email, não mostrar erro genérico
-                    // A mensagem de email será exibida via prop 'message'
-                    if (emailMessage) {
-                        console.log('[ACTIONBAR] Mensagem de email presente, não mostrando erro genérico')
-                        return undefined
-                    }
-                    const hasButtons = isEditing || selectedAccounts.size > 0
-                    return hasButtons ? error : undefined
-                })()}
-                message={(() => {
-                    // Priorizar mensagem de email se houver
-                    if (emailMessage) {
-                        return emailMessage
-                    }
-                    // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = isEditing || selectedAccounts.size > 0
-                    if (!hasButtons && error) {
-                        return error
-                    }
-                    return undefined
-                })()}
-                messageType={(() => {
-                    // Priorizar tipo de mensagem de email se houver
-                    if (emailMessage) {
-                        return emailMessageType
-                    }
-                    // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = isEditing || selectedAccounts.size > 0
-                    if (!hasButtons && error) {
-                        return 'error' as const
-                    }
-                    return undefined
-                })()}
-                buttons={(() => {
-                    const buttons = []
-                    if (isEditing || selectedAccounts.size > 0) {
-                        buttons.push({
-                            label: 'Cancelar',
-                            onClick: handleCancel,
-                            variant: 'secondary' as const,
-                            disabled: submitting || deleting,
-                        })
-                    }
-                    if (selectedAccounts.size > 0) {
-                        buttons.push({
-                            label: 'Remover',
-                            onClick: handleDeleteSelected,
-                            variant: 'primary' as const,
-                            disabled: deleting || submitting,
-                            loading: deleting,
-                        })
-                    }
-                    // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
-                    if (isEditing && (hasChanges() || sendInvite)) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    return buttons
-                })()}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtons}
             />
         </>
     )

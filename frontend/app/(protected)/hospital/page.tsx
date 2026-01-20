@@ -5,265 +5,130 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
+import { EditForm } from '@/components/EditForm'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
-    HospitalListResponse,
     HospitalResponse,
     HospitalUpdateRequest,
 } from '@/types/api'
-import { protectedFetch, extractErrorMessage } from '@/lib/api'
-import { useEffect, useState } from 'react'
+import { useEntityPage } from '@/hooks/useEntityPage'
+
+type HospitalFormData = {
+    name: string
+    prompt: string
+    color: string | null
+}
 
 export default function HospitalPage() {
     const { settings } = useTenantSettings()
-    const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
-    const [total, setTotal] = useState(0)
-    const [editingHospital, setEditingHospital] = useState<HospitalResponse | null>(null)
-    const [formData, setFormData] = useState({ name: '', prompt: '', color: null as string | null })
-    const [originalFormData, setOriginalFormData] = useState({ name: '', prompt: '', color: null as string | null })
-    const [submitting, setSubmitting] = useState(false)
-    const [selectedHospitals, setSelectedHospitals] = useState<Set<number>>(new Set())
-    const [deleting, setDeleting] = useState(false)
 
-    // Carregar lista de hospitais
-    const loadHospitals = async () => {
-        try {
-            setLoading(true)
-            setError(null)
+    const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
 
-            const params = new URLSearchParams()
-            params.append('limit', String(pagination.limit))
-            params.append('offset', String(pagination.offset))
-
-            const data = await protectedFetch<HospitalListResponse>(`/api/hospital/list?${params.toString()}`)
-            setHospitals(data.items)
-            setTotal(data.total)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar hospitais'
-            setError(message)
-            console.error('Erro ao carregar hospitais:', err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        loadHospitals()
-    }, [pagination])
-
-    const hasChanges = () => {
-        // Se está criando (não há editingHospital), qualquer campo preenchido é mudança
-        if (!editingHospital) {
-            return formData.name.trim() !== '' || (formData.prompt || '').trim() !== '' || formData.color !== null
-        }
-        // Se está editando, compara com os valores originais
-        return (
-            formData.name.trim() !== originalFormData.name.trim() ||
-            (formData.prompt || '').trim() !== (originalFormData.prompt || '').trim() ||
-            formData.color !== originalFormData.color
-        )
-    }
-
-    // Verificar se está em modo de edição/criação
-    // Estado separado para controlar quando mostrar a área de edição
-    const [showEditArea, setShowEditArea] = useState(false)
-    const isEditing = showEditArea
-
-    // Abrir modo de criação
-    const handleCreateClick = () => {
-        setFormData({ name: '', prompt: '', color: null })
-        setOriginalFormData({ name: '', prompt: '', color: null })
-        setEditingHospital(null)
-        setShowEditArea(true)
-        setError(null)
-    }
-
-    // Abrir modo de edição
-    const handleEditClick = (hospital: HospitalResponse) => {
-        const initialData = { name: hospital.name, prompt: hospital.prompt || '', color: hospital.color || null }
-        setFormData(initialData)
-        setOriginalFormData(initialData)
-        setEditingHospital(hospital)
-        setShowEditArea(true)
-        setError(null)
-    }
-
-    // Cancelar edição e/ou seleção
-    const handleCancel = () => {
-        setFormData({ name: '', prompt: '', color: null })
-        setOriginalFormData({ name: '', prompt: '', color: null })
-        setEditingHospital(null)
-        setShowEditArea(false)
-        setSelectedHospitals(new Set())
-        setError(null)
-    }
-
-    // Submeter formulário (criar ou editar)
-    const handleSave = async () => {
-        if (!formData.name.trim()) {
-            setError('Nome é obrigatório')
-            return
-        }
-
-        try {
-            setSubmitting(true)
-            setError(null)
-
-            if (editingHospital) {
-                // Editar hospital existente
-                const updateData: HospitalUpdateRequest = {
-                    name: formData.name.trim(),
-                    prompt: formData.prompt ? formData.prompt.trim() : undefined,
-                    color: formData.color || null,
-                }
-
-                await protectedFetch(`/api/hospital/${editingHospital.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(updateData),
-                })
-            } else {
-                // Criar novo hospital
-                const createData: HospitalCreateRequest = {
-                    name: formData.name.trim(),
-                    prompt: formData.prompt ? formData.prompt.trim() || undefined : undefined,
-                    color: formData.color || undefined,
-                }
-
-                await protectedFetch('/api/hospital', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(createData),
-                })
+    const {
+        items: hospitals,
+        loading,
+        error,
+        setError,
+        submitting,
+        deleting,
+        formData,
+        setFormData,
+        editingItem: editingHospital,
+        isEditing,
+        hasChanges,
+        handleCreateClick,
+        handleEditClick,
+        handleCancel,
+        selectedItems: selectedHospitals,
+        toggleSelection: toggleHospitalSelection,
+        selectedCount: selectedHospitalsCount,
+        pagination,
+        total,
+        paginationHandlers,
+        handleSave,
+        handleDeleteSelected,
+        actionBarButtons,
+        actionBarErrorProps,
+    } = useEntityPage<HospitalFormData, HospitalResponse, HospitalCreateRequest, HospitalUpdateRequest>({
+        endpoint: '/api/hospital',
+        entityName: 'hospital',
+        initialFormData,
+        isEmptyCheck: (data) => {
+            return data.name.trim() === '' && (data.prompt || '').trim() === '' && data.color === null
+        },
+        mapEntityToFormData: (hospital) => ({
+            name: hospital.name,
+            prompt: hospital.prompt || '',
+            color: hospital.color || null,
+        }),
+        mapFormDataToCreateRequest: (formData) => ({
+            name: formData.name.trim(),
+            prompt: formData.prompt ? formData.prompt.trim() || undefined : undefined,
+            color: formData.color || undefined,
+        }),
+        mapFormDataToUpdateRequest: (formData) => ({
+            name: formData.name.trim(),
+            prompt: formData.prompt ? formData.prompt.trim() : undefined,
+            color: formData.color || null,
+        }),
+        validateFormData: (formData) => {
+            if (!formData.name.trim()) {
+                return 'Nome é obrigatório'
             }
-
-            // Recarregar lista e limpar formulário
-            await loadHospitals()
-            setFormData({ name: '', prompt: '', color: null })
-            setOriginalFormData({ name: '', prompt: '', color: null })
-            setEditingHospital(null)
-            setShowEditArea(false)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao salvar hospital'
-            setError(message)
-            console.error('Erro ao salvar hospital:', err)
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
-    // Toggle seleção de hospital para exclusão
-    const toggleHospitalSelection = (hospitalId: number) => {
-        setSelectedHospitals((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(hospitalId)) {
-                newSet.delete(hospitalId)
-            } else {
-                newSet.add(hospitalId)
-            }
-            return newSet
-        })
-    }
-
-    // Excluir hospitais selecionados
-    const handleDeleteSelected = async () => {
-        if (selectedHospitals.size === 0) return
-
-        setDeleting(true)
-        setError(null)
-
-        try {
-            // Excluir todos os hospitais selecionados em paralelo
-            const deletePromises = Array.from(selectedHospitals).map(async (hospitalId) => {
-                await protectedFetch(`/api/hospital/${hospitalId}`, {
-                    method: 'DELETE',
-                })
-                return hospitalId
-            })
-
-            await Promise.all(deletePromises)
-
-            // Remover hospitais deletados da lista
-            setHospitals(hospitals.filter((hospital) => !selectedHospitals.has(hospital.id)))
-            setSelectedHospitals(new Set())
-
-            // Recarregar lista para garantir sincronização
-            await loadHospitals()
-        } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : 'Erro ao excluir hospitais. Tente novamente.'
-            )
-        } finally {
-            setDeleting(false)
-        }
-    }
+            return null
+        },
+    })
 
     return (
         <>
             {/* Área de edição */}
-            {isEditing && (
-                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-                <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                        {editingHospital ? 'Editar Hospital' : 'Criar Hospital'}
-                    </h2>
-                    <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row gap-4 items-start">
-                            <div className="flex-1 min-w-0">
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Nome <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    required
-                                    disabled={submitting}
-                                />
-                            </div>
-                            <div className="flex-shrink-0">
-                                <ColorPicker
-                                    value={formData.color}
-                                    onChange={(color) => setFormData({ ...formData, color })}
-                                    label="Cor"
-                                    disabled={submitting}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-2">
-                                Como os arquivos devem ser lidos?
+            <EditForm title="Hospital" isEditing={isEditing}>
+                <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                        <div className="flex-1 min-w-0">
+                            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                                Nome <span className="text-red-500">*</span>
                             </label>
-                            <textarea
-                                id="prompt"
-                                value={formData.prompt || ''}
-                                onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
-                                rows={15}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                            <input
+                                type="text"
+                                id="name"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                required
                                 disabled={submitting}
                             />
-                            <p className="mt-1 text-xs text-gray-500">
-                                Escreva o prompt com as instruções para a IA extrair as demandas dos arquivos deste hospital.
-                            </p>
+                        </div>
+                        <div className="flex-shrink-0">
+                            <ColorPicker
+                                value={formData.color}
+                                onChange={(color) => setFormData({ ...formData, color })}
+                                label="Cor"
+                                disabled={submitting}
+                            />
                         </div>
                     </div>
+                    <div>
+                        <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-2">
+                            Como os arquivos devem ser lidos?
+                        </label>
+                        <textarea
+                            id="prompt"
+                            value={formData.prompt || ''}
+                            onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
+                            rows={15}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                            disabled={submitting}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                            Escreva o prompt com as instruções para a IA extrair as demandas dos arquivos deste hospital.
+                        </p>
+                    </div>
                 </div>
-            </div>
-            )}
+            </EditForm>
 
             <CardPanel
                 title="Hospitais"
@@ -354,68 +219,18 @@ export default function HospitalPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
-                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
-                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
-                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            onFirst={paginationHandlers.onFirst}
+                            onPrevious={paginationHandlers.onPrevious}
+                            onNext={paginationHandlers.onNext}
+                            onLast={paginationHandlers.onLast}
                             disabled={loading}
                         />
                     ) : undefined
                 }
-                error={(() => {
-                    // Mostra erro no ActionBar apenas se houver botões de ação
-                    const hasButtons = isEditing || selectedHospitals.size > 0
-                    return hasButtons ? error : undefined
-                })()}
-                message={(() => {
-                    // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = isEditing || selectedHospitals.size > 0
-                    if (!hasButtons && error) {
-                        return error
-                    }
-                    return undefined
-                })()}
-                messageType={(() => {
-                    // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = isEditing || selectedHospitals.size > 0
-                    if (!hasButtons && error) {
-                        return 'error' as const
-                    }
-                    return undefined
-                })()}
-                buttons={(() => {
-                    const buttons = []
-                    // Botão Cancelar (aparece se houver edição OU seleção)
-                    if (isEditing || selectedHospitals.size > 0) {
-                        buttons.push({
-                            label: 'Cancelar',
-                            onClick: handleCancel,
-                            variant: 'secondary' as const,
-                            disabled: submitting || deleting,
-                        })
-                    }
-                    // Botão Excluir (aparece se houver seleção)
-                    if (selectedHospitals.size > 0) {
-                        buttons.push({
-                            label: 'Excluir',
-                            onClick: handleDeleteSelected,
-                            variant: 'primary' as const,
-                            disabled: deleting || submitting,
-                            loading: deleting,
-                        })
-                    }
-                    // Botão Salvar (aparece se houver edição com mudanças)
-                    if (isEditing && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    return buttons
-                })()}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtons}
             />
         </>
     )
