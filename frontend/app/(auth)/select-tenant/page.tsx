@@ -186,18 +186,26 @@ export default function SelectTenantPage() {
             setError(null)
 
             try {
-                // Primeiro, precisamos entrar em um tenant ativo para ter um token válido
-                // Vamos usar o primeiro tenant disponível
-                if (tenants.length === 0) {
-                    setError('É necessário ter acesso a pelo menos uma clínica ativa para aceitar convites')
-                    setProcessingInvite(null)
-                    return
+                // Usar o tenant do próprio invite para obter token
+                // Se não houver tenant ativo, usar o tenant do invite
+                const idToken = sessionStorage.getItem('login_id_token')
+                let tenantToUse: TenantOption | null = null
+
+                // Priorizar usar um tenant ativo se disponível (mais seguro)
+                if (tenants.length > 0) {
+                    tenantToUse = tenants[0]
+                } else {
+                    // Se não há tenant ativo, usar o tenant do próprio invite
+                    // Isso permite aceitar o primeiro convite mesmo sem tenant ativo
+                    tenantToUse = {
+                        tenant_id: invite.tenant_id,
+                        name: invite.name,
+                        slug: invite.slug,
+                        role: invite.role,
+                    }
                 }
 
-                const firstTenant = tenants[0]
-                const idToken = sessionStorage.getItem('login_id_token')
-
-                // 1. Entrar no primeiro tenant ativo para obter token
+                // 1. Obter token usando o tenant selecionado
                 // Tentar usar switch-tenant se não tiver id_token (mas estiver autenticado)
                 let selectResponse: Response
                 if (idToken) {
@@ -209,7 +217,7 @@ export default function SelectTenantPage() {
                         credentials: 'include',
                         body: JSON.stringify({
                             id_token: idToken,
-                            tenant_id: firstTenant.tenant_id,
+                            tenant_id: tenantToUse.tenant_id,
                         }),
                     })
                 } else {
@@ -221,7 +229,7 @@ export default function SelectTenantPage() {
                         },
                         credentials: 'include',
                         body: JSON.stringify({
-                            tenant_id: firstTenant.tenant_id,
+                            tenant_id: tenantToUse.tenant_id,
                         }),
                     })
 

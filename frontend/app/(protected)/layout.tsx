@@ -24,8 +24,8 @@ export const useDrawer = () => useContext(DrawerContext)
  * Inclui Header com nome do tenant e menu do usuário no topo,
  * Sidebar fixa à esquerda para navegação (drawer em mobile/tablet),
  * e área de conteúdo principal à direita.
- * NÃO faz proteção via middleware - cada página deve usar fetch() direto
- * seguindo o padrão de /dashboard.
+ * NÃO faz proteção via middleware - cada página deve usar protectedFetch()
+ * de lib/api.ts para garantir tratamento padronizado de erros 401.
  */
 export default function ProtectedLayout({
   children,

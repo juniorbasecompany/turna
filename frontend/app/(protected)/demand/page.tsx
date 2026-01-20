@@ -72,7 +72,9 @@ export default function DemandPage() {
             const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
             setHospitals(data.items)
         } catch (err) {
-            // Erro será tratado pela página principal (loadDemands)
+            // Exibir erro no ActionBar
+            const message = err instanceof Error ? err.message : 'Erro ao carregar hospitais'
+            setError(message)
             console.error('Erro ao carregar hospitais:', err)
         } finally {
             setLoadingHospitals(false)
@@ -361,7 +363,7 @@ export default function DemandPage() {
                             {editingDemand ? 'Editar Demanda' : 'Criar Demanda'}
                         </h2>
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="hospital_id" className="block text-sm font-medium text-gray-700 mb-2">
                                         Hospital
@@ -402,7 +404,7 @@ export default function DemandPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <TenantDateTimePicker
                                         id="start_time"
@@ -423,7 +425,7 @@ export default function DemandPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="room" className="block text-sm font-medium text-gray-700 mb-2">
                                         Sala/Quarto
@@ -460,7 +462,7 @@ export default function DemandPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="anesthesia_type" className="block text-sm font-medium text-gray-700 mb-2">
                                         Tipo de Anestesia

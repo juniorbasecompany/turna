@@ -649,21 +649,11 @@ export default function FilesPage() {
             const formData = new FormData()
             formData.append('file', pendingFile.file)
 
-            const uploadResponse = await fetch(`/api/file/upload?hospital_id=${selectedHospitalId}`, {
+            // Upload usa FormData - protectedFetch suporta FormData via options.body
+            const uploadData = await protectedFetch<FileUploadResponse>(`/api/file/upload?hospital_id=${selectedHospitalId}`, {
                 method: 'POST',
                 body: formData,
-                credentials: 'include',
             })
-
-            if (!uploadResponse.ok) {
-                if (uploadResponse.status === 401) {
-                    throw new Error('Sessão expirada. Por favor, faça login novamente.')
-                }
-                const errorData = await uploadResponse.json().catch(() => ({}))
-                throw new Error(extractErrorMessage(errorData, `Erro ao fazer upload: ${uploadResponse.status}`))
-            }
-
-            const uploadData: FileUploadResponse = await uploadResponse.json()
 
             // Remover arquivo pendente após upload bem-sucedido
             setPendingFiles((prev) => {

@@ -147,7 +147,117 @@ class AccountOption(PydanticBaseModel):
     name: str
 
 
-@router.get("/account/list", response_model=list[AccountOption], tags=["Account"])
+class AccountResponse(PydanticBaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+    tenant_id: int
+    auth_provider: str
+    created_at: str
+    updated_at: str
+
+
+class AccountCreate(PydanticBaseModel):
+    name: str
+    email: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Campo nome não pode estar vazio")
+        return v.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Campo email não pode estar vazio")
+        # Normalizar email para lowercase
+        return v.strip().lower()
+
+
+class AccountUpdate(PydanticBaseModel):
+    name: str | None = None
+    email: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("Campo nome não pode estar vazio")
+        return v.strip() if v else None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip() if isinstance(v, str) else v
+        if not stripped:
+            return None
+        # Normalizar email para lowercase
+        return stripped.lower()
+
+
+@router.post("/account", response_model=AccountResponse, status_code=201, tags=["Account"])
+def create_account(
+    body: AccountCreate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria um novo account (apenas admin).
+    """
+    try:
+        logger.info(f"Criando account: email={body.email}, tenant_id={membership.tenant_id}")
+
+        # Verificar se já existe account com este email
+        existing_account = session.exec(
+            select(Account).where(Account.email == body.email)
+        ).first()
+        if existing_account:
+            logger.warning(f"Account com email '{body.email}' já existe (id={existing_account.id})")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Account com email '{body.email}' já existe",
+            )
+
+        # Criar account
+        account = Account(
+            email=body.email,
+            name=body.name,
+            role="account",
+            auth_provider="invite",
+        )
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+
+        logger.info(f"Account criado com sucesso: id={account.id}")
+        return AccountResponse(
+            id=account.id,
+            email=account.email,
+            name=account.name,
+            role=account.role,
+            tenant_id=membership.tenant_id,
+            auth_provider=account.auth_provider,
+            created_at=_isoformat_utc(account.created_at),
+            updated_at=_isoformat_utc(account.updated_at),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao criar account: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar account: {str(e)}",
+        ) from e
+
+
+@router.get("/account/list", response_model=list[AccountResponse], tags=["Account"])
 def list_accounts(
     membership: Membership = Depends(get_current_membership),
     session: Session = Depends(get_session),
@@ -170,7 +280,16 @@ def list_accounts(
 
         accounts = []
         for membership_obj, account in memberships:
-            accounts.append(AccountOption(id=account.id, email=account.email, name=account.name))
+            accounts.append(AccountResponse(
+                id=account.id,
+                email=account.email,
+                name=account.name,
+                role=account.role,
+                tenant_id=membership.tenant_id,
+                auth_provider=account.auth_provider,
+                created_at=_isoformat_utc(account.created_at),
+                updated_at=_isoformat_utc(account.updated_at),
+            ))
 
         logger.info(f"Encontrados {len(accounts)} accounts")
         return accounts
@@ -181,6 +300,176 @@ def list_accounts(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao listar accounts: {str(e)}",
+        ) from e
+
+
+@router.put("/account/{account_id}", response_model=AccountResponse, tags=["Account"])
+def update_account(
+    account_id: int,
+    body: AccountUpdate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um account (apenas admin).
+    Valida que o account pertence ao tenant atual (via Membership ACTIVE).
+    """
+    try:
+        logger.info(f"Atualizando account: id={account_id}, tenant_id={membership.tenant_id}")
+
+        account = session.get(Account, account_id)
+        if not account:
+            logger.warning(f"Account não encontrado: id={account_id}")
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        # Validar que o account pertence ao tenant atual via Membership
+        account_membership = session.exec(
+            select(Membership).where(
+                Membership.account_id == account_id,
+                Membership.tenant_id == membership.tenant_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).first()
+        if not account_membership:
+            logger.warning(f"Account {account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Account {account_id} não pertence ao tenant atual",
+            )
+
+        # Verificar se email está sendo alterado e se já existe outro com o mesmo email
+        if body.email is not None and body.email != account.email:
+            existing = session.exec(
+                select(Account).where(
+                    Account.email == body.email,
+                    Account.id != account_id,
+                )
+            ).first()
+            if existing:
+                logger.warning(f"Account com email '{body.email}' já existe (id={existing.id})")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Account com email '{body.email}' já existe",
+                )
+
+        # Atualizar campos
+        if body.name is not None:
+            account.name = body.name
+        if body.email is not None:
+            account.email = body.email
+
+        account.updated_at = utc_now()
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+
+        logger.info(f"Account atualizado com sucesso: id={account.id}")
+        return AccountResponse(
+            id=account.id,
+            email=account.email,
+            name=account.name,
+            role=account.role,
+            tenant_id=membership.tenant_id,
+            auth_provider=account.auth_provider,
+            created_at=_isoformat_utc(account.created_at),
+            updated_at=_isoformat_utc(account.updated_at),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar account: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar account: {str(e)}",
+        ) from e
+
+
+@router.delete("/account/{account_id}", status_code=204, tags=["Account"])
+def delete_account(
+    account_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Remove um account do tenant atual removendo o Membership (apenas admin).
+    Valida que o account pertence ao tenant atual (via Membership ACTIVE).
+    """
+    try:
+        logger.info(f"Removendo account: id={account_id}, tenant_id={membership.tenant_id}")
+
+        account = session.get(Account, account_id)
+        if not account:
+            logger.warning(f"Account não encontrado: id={account_id}")
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        # Validar que o account pertence ao tenant atual via Membership
+        account_membership = session.exec(
+            select(Membership).where(
+                Membership.account_id == account_id,
+                Membership.tenant_id == membership.tenant_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).first()
+        if not account_membership:
+            logger.warning(f"Account {account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Account {account_id} não pertence ao tenant atual",
+            )
+
+        # Validar regra de segurança: não permitir remover o último membership ACTIVE de um account
+        active_count = session.exec(
+            select(func.count())
+            .select_from(Membership)
+            .where(
+                Membership.account_id == account_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).one()
+        if int(active_count or 0) <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Não é permitido remover o último membership ACTIVE da conta. "
+                    "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
+                ),
+            )
+
+        # Remover membership (soft-delete: status -> REMOVED)
+        prev_status = account_membership.status
+        account_membership.status = MembershipStatus.REMOVED
+        account_membership.updated_at = utc_now()
+        session.add(account_membership)
+        session.commit()
+        session.refresh(account_membership)
+
+        # Log de auditoria
+        _try_write_audit_log(
+            session,
+            AuditLog(
+                tenant_id=membership.tenant_id,
+                actor_account_id=membership.account_id,
+                membership_id=account_membership.id,
+                event_type="membership_status_changed",
+                data={
+                    "target_account_id": account_id,
+                    "from_status": prev_status.value,
+                    "to_status": account_membership.status.value,
+                },
+            ),
+        )
+
+        logger.info(f"Account removido com sucesso: id={account_id}")
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao remover account: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao remover account: {str(e)}",
         ) from e
 
 
@@ -220,6 +509,39 @@ class TenantResponse(PydanticBaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TenantUpdate(PydanticBaseModel):
+    name: str | None = None
+    slug: str | None = None
+    timezone: str | None = None
+    locale: str | None = None
+    currency: str | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        try:
+            ZoneInfo(v)
+        except Exception as e:
+            raise ValueError("timezone inválido (esperado IANA, ex: America/Sao_Paulo)") from e
+        return v
+
+    @field_validator("locale", "currency", "name", "slug")
+    @classmethod
+    def validate_string_not_empty(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if not v or not v.strip():
+            raise ValueError("campo não pode estar vazio")
+        return v.strip()
+
+
+class TenantListResponse(PydanticBaseModel):
+    items: list[TenantResponse]
+    total: int
 
 
 @router.get("/health", tags=["System"])
@@ -285,6 +607,49 @@ def create_tenant(
     return tenant
 
 
+@router.get("/tenant/list", response_model=TenantListResponse, tags=["Tenant"])
+def list_tenants(
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista todos os tenants (apenas admin).
+    """
+    try:
+        logger.info(f"Listando tenants")
+        query = select(Tenant)
+        items = session.exec(query.order_by(Tenant.name)).all()
+        total = len(items)
+
+        logger.info(f"Encontrados {total} tenants")
+
+        response_items = []
+        for t in items:
+            response_items.append(TenantResponse(
+                id=t.id,
+                name=t.name,
+                slug=t.slug,
+                timezone=t.timezone,
+                locale=t.locale,
+                currency=t.currency,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+            ))
+
+        return TenantListResponse(
+            items=response_items,
+            total=total,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar tenants: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar tenants: {str(e)}",
+        ) from e
+
+
 @router.get("/tenant/me", response_model=TenantResponse, tags=["Tenant"])
 def get_current_tenant_info(
     membership: Membership = Depends(get_current_membership),
@@ -297,6 +662,127 @@ def get_current_tenant_info(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant não encontrado")
     return tenant
+
+
+@router.put("/tenant/{tenant_id}", response_model=TenantResponse, tags=["Tenant"])
+def update_tenant(
+    tenant_id: int,
+    body: TenantUpdate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um tenant (apenas admin).
+    """
+    try:
+        logger.info(f"Atualizando tenant: id={tenant_id}")
+
+        tenant = session.get(Tenant, tenant_id)
+        if not tenant:
+            logger.warning(f"Tenant não encontrado: id={tenant_id}")
+            raise HTTPException(status_code=404, detail="Tenant não encontrado")
+
+        # Verificar se slug está sendo alterado e se já existe outro com o mesmo slug
+        if body.slug is not None and body.slug != tenant.slug:
+            existing = session.exec(
+                select(Tenant).where(
+                    Tenant.slug == body.slug,
+                    Tenant.id != tenant_id,
+                )
+            ).first()
+            if existing:
+                logger.warning(f"Tenant com slug '{body.slug}' já existe (id={existing.id})")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tenant com slug '{body.slug}' já existe",
+                )
+
+        # Atualizar campos
+        if body.name is not None:
+            tenant.name = body.name
+        if body.slug is not None:
+            tenant.slug = body.slug
+        if body.timezone is not None:
+            tenant.timezone = body.timezone
+        if body.locale is not None:
+            tenant.locale = body.locale
+        if body.currency is not None:
+            tenant.currency = body.currency
+
+        tenant.updated_at = utc_now()
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        logger.info(f"Tenant atualizado com sucesso: id={tenant_id}")
+        return TenantResponse(
+            id=tenant.id,
+            name=tenant.name,
+            slug=tenant.slug,
+            timezone=tenant.timezone,
+            locale=tenant.locale,
+            currency=tenant.currency,
+            created_at=tenant.created_at,
+            updated_at=tenant.updated_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar tenant: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar tenant: {str(e)}",
+        ) from e
+
+
+@router.delete("/tenant/{tenant_id}", status_code=204, tags=["Tenant"])
+def delete_tenant(
+    tenant_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Remove um tenant (apenas admin).
+    """
+    try:
+        logger.info(f"Removendo tenant: id={tenant_id}")
+
+        tenant = session.get(Tenant, tenant_id)
+        if not tenant:
+            logger.warning(f"Tenant não encontrado: id={tenant_id}")
+            raise HTTPException(status_code=404, detail="Tenant não encontrado")
+
+        # Verificar se há memberships ativos para este tenant
+        active_memberships = session.exec(
+            select(func.count())
+            .select_from(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.status == MembershipStatus.ACTIVE,
+            )
+        ).one()
+
+        if int(active_memberships or 0) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Não é permitido remover um tenant que possui memberships ativos. Remova ou desative os memberships primeiro.",
+            )
+
+        session.delete(tenant)
+        session.commit()
+
+        logger.info(f"Tenant removido com sucesso: id={tenant_id}")
+        return Response(status_code=204)
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao remover tenant: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao remover tenant: {str(e)}",
+        ) from e
 
 
 class TenantInviteRequest(PydanticBaseModel):
@@ -2874,6 +3360,29 @@ def send_professional_invite_email(
 # MEMBERSHIP ENDPOINTS
 # ============================================================================
 
+class MembershipCreate(PydanticBaseModel):
+    """Schema para criar membership."""
+    account_id: int
+    role: str
+    status: str = "ACTIVE"
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in {"admin", "account"}:
+            raise ValueError("role deve ser 'admin' ou 'account'")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        v = v.strip().upper()
+        if v not in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+            raise ValueError("status deve ser 'PENDING', 'ACTIVE', 'REJECTED' ou 'REMOVED'")
+        return v
+
+
 class MembershipUpdate(PydanticBaseModel):
     """Schema para atualizar membership."""
     role: Optional[str] = None
@@ -2918,6 +3427,99 @@ class MembershipListResponse(PydanticBaseModel):
     """Schema de resposta para listagem de memberships."""
     items: list[MembershipResponse]
     total: int
+
+
+@router.post("/membership", response_model=MembershipResponse, status_code=201, tags=["Membership"])
+def create_membership(
+    body: MembershipCreate,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Cria um novo membership (apenas admin).
+    Valida que o account existe e que não há membership duplicado.
+    """
+    try:
+        logger.info(f"Criando membership: account_id={body.account_id}, tenant_id={membership.tenant_id}, role={body.role}, status={body.status}")
+
+        # Verificar se account existe
+        account = session.get(Account, body.account_id)
+        if not account:
+            logger.warning(f"Account não encontrado: id={body.account_id}")
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        # Verificar se já existe membership para este account no tenant
+        existing_membership = session.exec(
+            select(Membership).where(
+                Membership.account_id == body.account_id,
+                Membership.tenant_id == membership.tenant_id,
+            )
+        ).first()
+        if existing_membership:
+            logger.warning(f"Membership já existe para account {body.account_id} no tenant {membership.tenant_id}")
+            raise HTTPException(
+                status_code=409,
+                detail="Já existe um membership para este account neste tenant",
+            )
+
+        # Criar membership
+        membership_obj = Membership(
+            tenant_id=membership.tenant_id,
+            account_id=body.account_id,
+            role=MembershipRole[body.role.upper()],
+            status=MembershipStatus[body.status.upper()],
+        )
+        session.add(membership_obj)
+        try:
+            session.commit()
+        except IntegrityError as e:
+            session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Membership duplicado (tenant_id, account_id) não permitido",
+            ) from e
+        session.refresh(membership_obj)
+
+        # Log de auditoria
+        _try_write_audit_log(
+            session,
+            AuditLog(
+                tenant_id=membership.tenant_id,
+                actor_account_id=membership.account_id,
+                membership_id=membership_obj.id,
+                event_type="membership_invited",
+                data={
+                    "target_account_id": body.account_id,
+                    "email": account.email,
+                    "from_status": None,
+                    "to_status": membership_obj.status.value,
+                    "from_role": None,
+                    "to_role": membership_obj.role.value,
+                },
+            ),
+        )
+
+        logger.info(f"Membership criado com sucesso: id={membership_obj.id}")
+        return MembershipResponse(
+            id=membership_obj.id,
+            tenant_id=membership_obj.tenant_id,
+            account_id=membership_obj.account_id,
+            account_email=account.email,
+            account_name=account.name,
+            role=membership_obj.role.value,
+            status=membership_obj.status.value,
+            created_at=membership_obj.created_at,
+            updated_at=membership_obj.updated_at,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao criar membership: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar membership: {str(e)}",
+        ) from e
 
 
 @router.get("/membership/list", response_model=MembershipListResponse, tags=["Membership"])
@@ -3229,4 +3831,114 @@ def delete_membership(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao remover membership: {str(e)}",
+        ) from e
+
+
+@router.post("/membership/{membership_id}/invite", status_code=200, tags=["Membership"])
+def send_membership_invite_email(
+    membership_id: int,
+    membership: Membership = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+):
+    """
+    Envia email de convite para um membership e atualiza status para PENDING.
+    Apenas admin pode enviar convites.
+    """
+    try:
+        membership_obj = session.get(Membership, membership_id)
+        if not membership_obj:
+            raise HTTPException(status_code=404, detail="Membership não encontrado")
+
+        if membership_obj.tenant_id != membership.tenant_id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        tenant = session.get(Tenant, membership.tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant não encontrado")
+
+        account = session.get(Account, membership_obj.account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account não encontrado")
+
+        logger.info(
+            f"[INVITE] Iniciando envio de convite para membership ID={membership_id} "
+            f"(email={account.email}, tenant_id={membership.tenant_id})"
+        )
+
+        # Atualizar status para PENDING antes de enviar o email
+        prev_status = membership_obj.status
+        if membership_obj.status != MembershipStatus.PENDING:
+            membership_obj.status = MembershipStatus.PENDING
+            membership_obj.updated_at = utc_now()
+            session.add(membership_obj)
+            session.commit()
+            session.refresh(membership_obj)
+
+            # Log de auditoria se status mudou
+            if prev_status != membership_obj.status:
+                _try_write_audit_log(
+                    session,
+                    AuditLog(
+                        tenant_id=membership.tenant_id,
+                        actor_account_id=membership.account_id,
+                        membership_id=membership_obj.id,
+                        event_type="membership_status_changed",
+                        data={
+                            "target_account_id": account.id,
+                            "from_status": prev_status.value,
+                            "to_status": membership_obj.status.value,
+                        },
+                    ),
+                )
+
+        # Enviar email de convite
+        try:
+            result = send_professional_invite(
+                to_email=account.email,
+                professional_name=account.name or account.email,
+                tenant_name=tenant.name,
+            )
+
+            # Garantir que o resultado é uma tupla
+            if isinstance(result, tuple) and len(result) == 2:
+                success, error_message = result
+            else:
+                # Fallback se a função retornar apenas bool (código antigo em cache)
+                logger.warning(
+                    f"[INVITE] Função retornou tipo inesperado: {type(result)}. "
+                    f"Esperado: tuple[bool, str]. Usando fallback."
+                )
+                success = bool(result) if isinstance(result, bool) else False
+                error_message = "Erro ao processar envio de email. Reinicie o servidor."
+        except ValueError as e:
+            # Erro de unpacking - função ainda retorna apenas bool
+            logger.error(
+                f"[INVITE] Erro ao desempacotar resultado: {e}. "
+                f"Função pode estar retornando apenas bool. Reinicie o servidor."
+            )
+            success = False
+            error_message = "Erro ao processar envio de email. Reinicie o servidor para aplicar atualizações."
+
+        if not success:
+            logger.error(
+                f"[INVITE] ❌ FALHA - Envio de convite falhou para membership ID={membership_id} "
+                f"(email={account.email}): {error_message}"
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=error_message or "Erro ao enviar email de convite. Tente novamente mais tarde."
+            )
+
+        logger.info(
+            f"[INVITE] ✅ SUCESSO - Convite enviado com sucesso para membership ID={membership_id} "
+            f"(email={account.email})"
+        )
+        return {"message": "Convite enviado com sucesso", "email": account.email}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao enviar convite para membership {membership_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao enviar convite: {str(e)}",
         ) from e

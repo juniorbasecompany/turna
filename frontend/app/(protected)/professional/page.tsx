@@ -227,40 +227,17 @@ export default function ProfessionalPage() {
                     `[INVITE-UI] Iniciando envio de convite para profissional ID=${savedProfessional.id} (${savedProfessional.name})`
                 )
                 try {
-                    const inviteResponse = await fetch(`/api/professional/${savedProfessional.id}/invite`, {
+                    await protectedFetch(`/api/professional/${savedProfessional.id}/invite`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        credentials: 'include',
                     })
-
-                    if (!inviteResponse.ok) {
-                        const errorData = await inviteResponse.json().catch(() => ({}))
-                        const errorMessage = extractErrorMessage(errorData, `Erro HTTP ${inviteResponse.status}`)
-                        console.error(
-                            `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para profissional ID=${savedProfessional.id}:`,
-                            errorMessage,
-                            'errorData:',
-                            errorData
-                        )
-                        // Definir mensagem de erro no ActionBar
-                        const errorMsg = `E-mail de convite não foi enviado para ${savedProfessional.name}. ${errorMessage}`
-                        console.log('[EMAIL-MESSAGE] Definindo mensagem de erro:', errorMsg)
-                        setEmailMessage(errorMsg)
-                        setEmailMessageType('error')
-                    } else {
-                        const responseData = await inviteResponse.json().catch(() => ({}))
-                        console.log(
-                            `[INVITE-UI] ✅ SUCESSO - Convite enviado com sucesso para profissional ID=${savedProfessional.id} (${savedProfessional.name})`,
-                            responseData
-                        )
-                        // Definir mensagem de sucesso no ActionBar
-                        const successMsg = `E-mail de convite foi enviado para ${savedProfessional.name}`
-                        console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
-                        setEmailMessage(successMsg)
-                        setEmailMessageType('success')
-                    }
+                    // Definir mensagem de sucesso no ActionBar
+                    const successMsg = `E-mail de convite foi enviado para ${savedProfessional.name}`
+                    console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
+                    setEmailMessage(successMsg)
+                    setEmailMessageType('success')
                 } catch (inviteErr) {
                     const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
                     console.error(
@@ -423,7 +400,7 @@ export default function ProfessionalPage() {
                                         disabled={submitting}
                                     />
                                 </div>
-                                <div className="space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="flex items-center">
                                         <input
                                             type="checkbox"

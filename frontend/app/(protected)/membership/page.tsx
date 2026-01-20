@@ -19,6 +19,8 @@ export default function MembershipPage() {
     const [memberships, setMemberships] = useState<MembershipResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [emailMessage, setEmailMessage] = useState<string | null>(null)
+    const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
     const [editingMembership, setEditingMembership] = useState<MembershipResponse | null>(null)
     const [formData, setFormData] = useState({
         role: 'account',
@@ -28,6 +30,7 @@ export default function MembershipPage() {
         role: 'account',
         status: 'ACTIVE',
     })
+    const [sendInvite, setSendInvite] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [selectedMemberships, setSelectedMemberships] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
@@ -37,6 +40,7 @@ export default function MembershipPage() {
     })
     const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
     const [total, setTotal] = useState(0)
+    const [showEditArea, setShowEditArea] = useState(false)
 
     // Carregar lista de memberships
     const loadMemberships = async () => {
@@ -77,18 +81,22 @@ export default function MembershipPage() {
         )
     }
 
-    const isEditing = editingMembership !== null
+    const isEditing = showEditArea
 
     // Handlers
     const handleCreateClick = () => {
-        console.log('[MEMBERSHIP] CreateCard clicado')
-        // Associação não pode ser criada diretamente, apenas via convite
-        // Limpar qualquer seleção e edição em andamento
+        setFormData({
+            role: 'account',
+            status: 'ACTIVE',
+        })
+        setOriginalFormData({
+            role: 'account',
+            status: 'ACTIVE',
+        })
         setEditingMembership(null)
-        setSelectedMemberships(new Set())
-        setError('Associação deve ser criada via convite. Use a opção de convidar usuário no menu de configurações.')
-        // Scroll para o topo para garantir que o erro seja visível
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        setSendInvite(false)
+        setShowEditArea(true)
+        setError(null)
     }
 
     const handleEditClick = (membership: MembershipResponse) => {
@@ -101,6 +109,7 @@ export default function MembershipPage() {
             role: membership.role,
             status: membership.status,
         })
+        setShowEditArea(true)
         setError(null)
     }
 
@@ -114,7 +123,10 @@ export default function MembershipPage() {
             role: 'account',
             status: 'ACTIVE',
         })
+        setSendInvite(false)
+        setShowEditArea(false)
         setError(null)
+        setEmailMessage(null)
     }
 
     const handleSave = async () => {
@@ -123,19 +135,49 @@ export default function MembershipPage() {
         try {
             setSubmitting(true)
             setError(null)
+            setEmailMessage(null) // Limpar mensagem de email anterior ao iniciar novo salvamento
 
             const updateData: MembershipUpdateRequest = {
                 role: formData.role,
                 status: formData.status,
             }
 
-            await protectedFetch(`/api/membership/${editingMembership.id}`, {
+            const savedMembership = await protectedFetch<MembershipResponse>(`/api/membership/${editingMembership.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(updateData),
             })
+
+            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
+            if (sendInvite && savedMembership) {
+                console.log(
+                    `[INVITE-UI] Iniciando envio de convite para membership ID=${savedMembership.id} (${savedMembership.account_name || savedMembership.account_email})`
+                )
+                try {
+                    await protectedFetch(`/api/membership/${savedMembership.id}/invite`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    })
+                    // Definir mensagem de sucesso no ActionBar
+                    const successMsg = `E-mail de convite foi enviado para ${savedMembership.account_name || savedMembership.account_email}`
+                    console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
+                    setEmailMessage(successMsg)
+                    setEmailMessageType('success')
+                } catch (inviteErr) {
+                    const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
+                    console.error(
+                        `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${savedMembership.id}:`,
+                        inviteErr
+                    )
+                    // Definir mensagem de erro no ActionBar
+                    setEmailMessage(`E-mail de convite não foi enviado para ${savedMembership.account_name || savedMembership.account_email}. ${errorMsg}`)
+                    setEmailMessageType('error')
+                }
+            }
 
             // Recarregar lista e limpar formulário
             await loadMemberships()
@@ -149,9 +191,13 @@ export default function MembershipPage() {
                 status: 'ACTIVE',
             })
             setEditingMembership(null)
+            setSendInvite(false)
+            setShowEditArea(false)
+            // Mensagem de email permanece visível até o usuário fechar o formulário ou fazer nova ação
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar membership'
             setError(message)
+            setEmailMessage(null) // Limpar mensagem de email se houver erro no salvamento
             console.error('Erro ao salvar membership:', err)
         } finally {
             setSubmitting(false)
@@ -257,53 +303,72 @@ export default function MembershipPage() {
                     isEditing ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                Editar Associação
+                                {editingMembership ? 'Editar Associação' : 'Criar Associação'}
                             </h2>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Conta
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={editingMembership.account_email || editingMembership.account_name || 'Não disponível'}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
-                                        disabled
-                                    />
+                                {editingMembership && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Conta
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editingMembership.account_email || editingMembership.account_name || 'Não disponível'}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
+                                            disabled
+                                        />
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+                                            Função <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            id="role"
+                                            value={formData.role}
+                                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            required
+                                            disabled={submitting}
+                                        >
+                                            <option value="account">Conta</option>
+                                            <option value="admin">Administrador</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+                                            Status <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            id="status"
+                                            value={formData.status}
+                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                            required
+                                            disabled={submitting}
+                                        >
+                                            <option value="PENDING">Pendente</option>
+                                            <option value="ACTIVE">Ativo</option>
+                                            <option value="REJECTED">Rejeitado</option>
+                                            <option value="REMOVED">Removido</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Função <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        id="role"
-                                        value={formData.role}
-                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        required
-                                        disabled={submitting}
-                                    >
-                                        <option value="account">Conta</option>
-                                        <option value="admin">Administrador</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Status <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        id="status"
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        required
-                                        disabled={submitting}
-                                    >
-                                        <option value="PENDING">Pendente</option>
-                                        <option value="ACTIVE">Ativo</option>
-                                        <option value="REJECTED">Rejeitado</option>
-                                        <option value="REMOVED">Removido</option>
-                                    </select>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="sendInvite"
+                                            checked={sendInvite}
+                                            onChange={(e) => setSendInvite(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            disabled={submitting}
+                                        />
+                                        <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
+                                            Enviar convite
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -462,22 +527,33 @@ export default function MembershipPage() {
 
             <ActionBar
                 error={(() => {
-                    const hasButtons = isEditing || selectedMemberships.size > 0
-                    // Se não há botões, mostrar erro via message para garantir que apareça
-                    if (!hasButtons && error) {
-                        return undefined // Usar message em vez de error
+                    // Se houver mensagem de email, não mostrar erro genérico
+                    // A mensagem de email será exibida via prop 'message'
+                    if (emailMessage) {
+                        console.log('[ACTIONBAR] Mensagem de email presente, não mostrando erro genérico')
+                        return undefined
                     }
+                    const hasButtons = isEditing || selectedMemberships.size > 0
                     return hasButtons ? error : undefined
                 })()}
                 message={(() => {
+                    // Priorizar mensagem de email se houver
+                    if (emailMessage) {
+                        return emailMessage
+                    }
+                    // Se não há botões mas há erro, mostrar via message
                     const hasButtons = isEditing || selectedMemberships.size > 0
-                    // Se não há botões e há erro, mostrar via message
                     if (!hasButtons && error) {
                         return error
                     }
                     return undefined
                 })()}
                 messageType={(() => {
+                    // Priorizar tipo de mensagem de email se houver
+                    if (emailMessage) {
+                        return emailMessageType
+                    }
+                    // Se não há botões mas há erro, usar tipo error
                     const hasButtons = isEditing || selectedMemberships.size > 0
                     if (!hasButtons && error) {
                         return 'error' as const
@@ -503,7 +579,8 @@ export default function MembershipPage() {
                             loading: deleting,
                         })
                     }
-                    if (isEditing && hasChanges()) {
+                    // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
+                    if (isEditing && (hasChanges() || sendInvite)) {
                         buttons.push({
                             label: submitting ? 'Salvando...' : 'Salvar',
                             onClick: handleSave,

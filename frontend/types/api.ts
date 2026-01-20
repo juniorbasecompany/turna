@@ -57,6 +57,27 @@ export interface TenantResponse {
     updated_at: string
 }
 
+export interface TenantListResponse {
+    items: TenantResponse[]
+    total: number
+}
+
+export interface TenantCreateRequest {
+    name: string
+    slug: string
+    timezone?: string
+    locale?: string
+    currency?: string
+}
+
+export interface TenantUpdateRequest {
+    name?: string
+    slug?: string
+    timezone?: string
+    locale?: string
+    currency?: string
+}
+
 export interface JobResponse {
     id: number
     tenant_id: number
