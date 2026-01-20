@@ -81,6 +81,11 @@ export function Pagination({
         return null
     }
 
+    // Ocultar componente se não houver possibilidade de navegação (anterior ou próxima)
+    if (!canGoPrevious && !canGoNext) {
+        return null
+    }
+
     return (
         <div className="flex items-center gap-2">
             <button
