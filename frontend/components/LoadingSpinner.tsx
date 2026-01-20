@@ -1,8 +1,10 @@
 export function LoadingSpinner() {
     return (
-        <div className="flex justify-center items-center">
+        <span className="inline" style={{ verticalAlign: 'baseline' }}>
             <svg
                 xmlns="http://www.w3.org/2000/svg"
+                className="inline"
+                style={{ verticalAlign: 'baseline', display: 'inline-block', margin: 0, padding: 0 }}
                 width="10mm"
                 height="1mm"
                 viewBox="0 0 10 1"
@@ -84,6 +86,7 @@ export function LoadingSpinner() {
                     />
                 </rect>
             </svg>
-        </div>
+            &nbsp;
+        </span>
     )
 }
