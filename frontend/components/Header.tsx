@@ -195,14 +195,14 @@ export function Header() {
 
     return (
         <header className="bg-white border-b border-gray-200 fixed top-0 left-0 lg:left-64 right-0 z-30">
-            <div className="max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between items-center h-16">
+            <div className="px-4 sm:px-6 lg:px-8 min-h-16 py-2">
+                <div className="flex flex-wrap items-center gap-2">
                     {/* Logo / Nome do tenant */}
-                    <div className="flex items-center">
+                    <div className="flex items-center flex-shrink-0 min-w-0 flex-1">
                         {/* Botão hambúrguer para mobile/tablet */}
                         <button
                             onClick={openDrawer}
-                            className="mr-3 lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                            className="mr-3 lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 flex-shrink-0"
                             aria-label="Abrir menu"
                         >
                             <svg
@@ -220,75 +220,73 @@ export function Header() {
                             </svg>
                         </button>
                         {tenant && (
-                            <h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
+                            <h1 className="text-xl font-bold text-gray-900 truncate">{tenant.name}</h1>
                         )}
                     </div>
 
-                    {/* Menu do usuário */}
-                    <div className="flex items-center">
-                        {account && (
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowUserMenu(!showUserMenu)}
-                                    className="flex items-center text-sm text-gray-700 hover:text-gray-900"
-                                >
-                                    <span className="mr-2">{account.name}</span>
-                                    <span className="text-gray-400">▼</span>
-                                </button>
+                    {/* Menu do usuário - alinhado à direita, quebra para linha de baixo quando necessário */}
+                    {account && (
+                        <div className="relative flex-shrink-0 ml-auto w-full sm:w-auto flex justify-end">
+                            <button
+                                onClick={() => setShowUserMenu(!showUserMenu)}
+                                className="flex items-center text-sm text-gray-700 hover:text-gray-900"
+                            >
+                                <span className="mr-2">{account.name}</span>
+                                <span className="text-gray-400">▼</span>
+                            </button>
 
-                                {/* Dropdown do menu do usuário */}
-                                {showUserMenu && (
-                                    <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
-                                        <div className="py-1" role="menu">
-                                            {/* Lista de tenants */}
-                                            {availableTenants.length > 0 && (
-                                                <>
-                                                    {availableTenants.map((t) => {
-                                                        const isCurrentTenant = tenant?.id === t.tenant_id
-                                                        return (
-                                                            <button
-                                                                key={t.tenant_id}
-                                                                onClick={() => handleSwitchTenant(t.tenant_id)}
-                                                                disabled={switchingTenant || isCurrentTenant}
-                                                                className={`block w-full text-left px-4 py-2 text-sm ${isCurrentTenant
-                                                                    ? 'bg-blue-50 text-blue-700 font-medium'
-                                                                    : 'text-gray-700 hover:bg-gray-50'
-                                                                    } ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                role="menuitem"
-                                                                title={isCurrentTenant ? 'Clínica atual' : `Trocar para ${t.name}`}
-                                                            >
-                                                                <div className="flex items-center justify-between">
-                                                                    <span>{t.name}</span>
-                                                                    {isCurrentTenant && (
-                                                                        <span className="text-xs text-blue-600">✓</span>
-                                                                    )}
-                                                                    {switchingTenant && !isCurrentTenant && (
-                                                                        <LoadingSpinner />
-                                                                    )}
-                                                                </div>
-                                                            </button>
-                                                        )
-                                                    })}
-                                                    <div className="border-t border-gray-200 my-1" />
-                                                </>
-                                            )}
+                            {/* Dropdown do menu do usuário */}
+                            {showUserMenu && (
+                                <div className="absolute right-0 top-full mt-1 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[60]">
+                                    <div className="py-1" role="menu">
+                                        {/* Lista de tenants */}
+                                        {availableTenants.length > 0 && (
+                                            <>
+                                                {availableTenants.map((t) => {
+                                                    const isCurrentTenant = tenant?.id === t.tenant_id
+                                                    return (
+                                                        <button
+                                                            key={t.tenant_id}
+                                                            onClick={() => handleSwitchTenant(t.tenant_id)}
+                                                            disabled={switchingTenant || isCurrentTenant}
+                                                            className={`block w-full text-left px-4 py-2 text-sm ${isCurrentTenant
+                                                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                                                : 'text-gray-700 hover:bg-gray-50'
+                                                                } ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            role="menuitem"
+                                                            title={isCurrentTenant ? 'Clínica atual' : `Trocar para ${t.name}`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span>{t.name}</span>
+                                                                {isCurrentTenant && (
+                                                                    <span className="text-xs text-blue-600">✓</span>
+                                                                )}
+                                                                {switchingTenant && !isCurrentTenant && (
+                                                                    <LoadingSpinner />
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    )
+                                                })}
+                                                <div className="border-t border-gray-200 my-1" />
+                                            </>
+                                        )}
 
-                                            {/* Botão Sair */}
-                                            <button
-                                                onClick={handleLogout}
-                                                disabled={switchingTenant}
-                                                className={`block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''
-                                                    }`}
-                                                role="menuitem"
-                                            >
-                                                Sair
-                                            </button>
-                                        </div>
+                                        {/* Botão Sair */}
+                                        <button
+                                            onClick={handleLogout}
+                                            disabled={switchingTenant}
+                                            className={`block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''
+                                                }`}
+                                            role="menuitem"
+                                        >
+                                            Sair
+                                        </button>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
