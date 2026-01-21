@@ -129,12 +129,12 @@ def get_me(
     Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
 
-    Retorna account_name (privado) e membership_name (público na clínica).
+    Retorna name (privado) e membership_name (público na clínica).
     """
     return {
         "id": account.id,
         "email": account.email,
-        "account_name": account.name,  # Nome privado do usuário
+        "name": account.name,  # Nome privado do usuário
         "membership_name": membership.name,  # Nome público na clínica (pode ser NULL)
         "role": membership.role.value,
         "tenant_id": membership.tenant_id,
