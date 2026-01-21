@@ -240,8 +240,14 @@ def auth_google(
         )
 
     tenants, invites = get_account_memberships(session, account_id=account.id)
-    if not tenants:
-        raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
+
+    # Se não há tenants ACTIVE nem invites PENDING, exige seleção (permite criar clínica)
+    if len(tenants) == 0 and len(invites) == 0:
+        return AuthResponse(requires_tenant_selection=True, tenants=[], invites=[])
+
+    # Se não há tenants ACTIVE mas há invites, exige seleção
+    if len(tenants) == 0:
+        return AuthResponse(requires_tenant_selection=True, tenants=[], invites=invites)
 
     # Se há múltiplos tenants ACTIVE ou convites PENDING, exige seleção
     if len(tenants) > 1 or len(invites) > 0:
@@ -588,6 +594,106 @@ def switch_tenant(
     except:
         pass  # Ignorar erro de auditoria se não houver current_membership
 
+    token = _issue_token_for_membership(account=account, membership=membership)
+    return TokenResponse(access_token=token)
+
+
+@router.post("/google/create-tenant", response_model=TokenResponse, tags=["Auth"])
+def auth_google_create_tenant(
+    body: GoogleTokenRequest,
+    session: Session = Depends(get_session),
+):
+    """
+    Cria um novo tenant automaticamente usando id_token do Google.
+    Usado quando o account não tem nenhum tenant ACTIVE.
+
+    Recebe: {"id_token": "<JWT do Google>"}
+    Retorna: {"access_token": "<JWT do sistema>", "token_type": "bearer"}
+    """
+    idinfo = verify_google_token(body.id_token)
+    email = idinfo["email"]
+    name = idinfo["name"]
+
+    # Busca conta no banco (email é globalmente único)
+    account = session.exec(
+        select(Account).where(Account.email == email)
+    ).first()
+
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conta não encontrada. Use a opção 'Cadastrar-se' para criar uma conta."
+        )
+
+    # Verificar se já tem tenants ACTIVE (não deve usar este endpoint se tiver)
+    tenants, invites = get_account_memberships(session, account_id=account.id)
+    if len(tenants) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account já possui tenants ACTIVE. Use o endpoint de seleção de tenant."
+        )
+
+    # Criar tenant com dados default
+    timestamp = int(utc_now().timestamp() * 1000)
+    slug = f"clinica-{timestamp}"
+
+    # Verificar se slug já existe (muito improvável, mas por segurança)
+    existing = session.exec(select(Tenant).where(Tenant.slug == slug)).first()
+    if existing:
+        # Tentar com sufixo aleatório
+        import random
+        slug = f"clinica-{timestamp}-{random.randint(1000, 9999)}"
+        existing = session.exec(select(Tenant).where(Tenant.slug == slug)).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao gerar slug único para o tenant"
+            )
+
+    tenant = Tenant(
+        name="Clínica",
+        slug=slug,
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        currency="BRL",
+    )
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+
+    # Criar hospital default para o tenant
+    create_default_hospital_for_tenant(session, tenant.id)
+
+    # Criar membership ADMIN/ACTIVE para o criador
+    membership = Membership(
+        tenant_id=tenant.id,
+        account_id=account.id,
+        role=MembershipRole.ADMIN,
+        status=MembershipStatus.ACTIVE,
+    )
+    session.add(membership)
+    session.commit()
+    session.refresh(membership)
+
+    # Criar professional automaticamente para o account criador do tenant
+    try:
+        from app.model.professional import Professional
+        from app.model.base import utc_now
+        professional = Professional(
+            tenant_id=tenant.id,
+            account_id=account.id,
+            name=account.name,
+            email=account.email,
+            active=True,
+        )
+        session.add(professional)
+        session.commit()
+    except Exception as e:
+        # Se falhar ao criar professional, logar mas não quebrar a criação do tenant
+        session.rollback()
+        pass  # Professional é opcional
+
+    # Emitir token para o novo tenant
     token = _issue_token_for_membership(account=account, membership=membership)
     return TokenResponse(access_token=token)
 

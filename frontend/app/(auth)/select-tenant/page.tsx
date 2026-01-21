@@ -5,11 +5,25 @@ import { InviteOption, TenantListResponse, TenantOption } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
+// Função utilitária para decidir navegação baseada em ACTIVE e PENDING
+function decideNavigation(tenants: TenantOption[], invites: InviteOption[]): 'dashboard' | 'create-tenant' | 'select' {
+    const activeCount = tenants.length
+    const pendingCount = invites.length
+
+    if (activeCount === 1 && pendingCount === 0) {
+        return 'dashboard'
+    }
+    if (activeCount === 0 && pendingCount === 0) {
+        return 'create-tenant'
+    }
+    return 'select'
+}
 
 export default function SelectTenantPage() {
     const router = useRouter()
     const [loading, setLoading] = useState(true)
     const [selecting, setSelecting] = useState(false)
+    const [creating, setCreating] = useState(false)
     const [processingInvite, setProcessingInvite] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [tenants, setTenants] = useState<TenantOption[]>([])
@@ -96,6 +110,12 @@ export default function SelectTenantPage() {
                 return
             }
 
+            // Verificação de segurança: não permitir seleção se não há tenants
+            if (tenants.length === 0) {
+                setError('Nenhuma clínica disponível para seleção')
+                return
+            }
+
             setSelecting(true)
             setError(null)
 
@@ -172,7 +192,66 @@ export default function SelectTenantPage() {
                 setSelecting(false)
             }
         },
-        [selecting, router]
+        [selecting, router, tenants]
+    )
+
+    // Handler para criar tenant automaticamente
+    const handleCreateTenant = useCallback(
+        async () => {
+            if (creating) {
+                return
+            }
+
+            setCreating(true)
+            setError(null)
+
+            try {
+                // Obter id_token do sessionStorage (salvo durante o login)
+                const idToken = sessionStorage.getItem('login_id_token')
+
+                // Se não temos id_token, precisamos autenticar primeiro
+                if (!idToken) {
+                    setError('Sessão expirada. Por favor, faça login novamente.')
+                    setCreating(false)
+                    setTimeout(() => {
+                        router.push('/login')
+                    }, 2000)
+                    return
+                }
+
+                // Criar tenant automaticamente usando endpoint especial
+                const createResponse = await fetch('/api/auth/google/create-tenant', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        id_token: idToken,
+                    }),
+                })
+
+                if (!createResponse.ok) {
+                    const createResult = await createResponse.json()
+                    setError(createResult.detail || 'Erro ao criar clínica')
+                    setCreating(false)
+                    return
+                }
+
+                // Sucesso: limpar sessionStorage e redirecionar para dashboard
+                sessionStorage.removeItem('login_id_token')
+                sessionStorage.removeItem('login_response')
+                router.push('/dashboard')
+            } catch (err: unknown) {
+                if (err instanceof Error) {
+                    setError(err.message || 'Erro ao criar clínica')
+                } else {
+                    setError('Erro desconhecido ao criar clínica')
+                }
+                setCreating(false)
+            }
+        },
+        [creating, router]
     )
 
     // Handler para aceitar convite
@@ -329,21 +408,21 @@ export default function SelectTenantPage() {
             setError(null)
 
             try {
-                // Primeiro, precisamos entrar em um tenant ativo para ter um token válido
-                if (tenants.length === 0) {
-                    setError('É necessário ter acesso a pelo menos uma clínica ativa para rejeitar convites')
-                    setProcessingInvite(null)
-                    return
-                }
-
-                const firstTenant = tenants[0]
                 const idToken = sessionStorage.getItem('login_id_token')
 
-                // 1. Entrar no primeiro tenant ativo para obter token
-                // Tentar usar switch-tenant se não tiver id_token (mas estiver autenticado)
-                let selectResponse: Response
-                if (idToken) {
-                    selectResponse = await fetch('/api/auth/google/select-tenant', {
+                // Se não há tenant ativo, precisamos obter token via id_token para rejeitar
+                if (tenants.length === 0) {
+                    if (!idToken) {
+                        setError('Sessão expirada. Por favor, faça login novamente.')
+                        setProcessingInvite(null)
+                        setTimeout(() => {
+                            router.push('/login')
+                        }, 2000)
+                        return
+                    }
+
+                    // Obter token temporário usando o tenant do próprio invite (PENDING)
+                    const tempSelectResponse = await fetch('/api/auth/google/select-tenant', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -351,39 +430,65 @@ export default function SelectTenantPage() {
                         credentials: 'include',
                         body: JSON.stringify({
                             id_token: idToken,
-                            tenant_id: firstTenant.tenant_id,
-                        }),
-                    })
-                } else {
-                    // Tentar usar switch-tenant (funciona apenas com cookie)
-                    selectResponse = await fetch('/api/auth/switch-tenant', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            tenant_id: firstTenant.tenant_id,
+                            tenant_id: invite.tenant_id,
                         }),
                     })
 
-                    // Se falhar por não estar autenticado, redirecionar para login
-                    if (selectResponse.status === 401) {
-                        const selectResult = await selectResponse.json()
-                        setError(selectResult.detail || 'Sessão expirada. Por favor, faça login novamente.')
+                    if (!tempSelectResponse.ok) {
+                        const tempResult = await tempSelectResponse.json()
+                        setError(tempResult.detail || 'Erro ao obter token de autenticação')
                         setProcessingInvite(null)
-                        setTimeout(() => {
-                            router.push('/login')
-                        }, 2000)
                         return
                     }
-                }
+                } else {
+                    // Se há tenant ativo, usar o primeiro para obter token
+                    const firstTenant = tenants[0]
 
-                if (!selectResponse.ok) {
-                    const selectResult = await selectResponse.json()
-                    setError(selectResult.detail || 'Erro ao obter token de autenticação')
-                    setProcessingInvite(null)
-                    return
+                    // 1. Entrar no primeiro tenant ativo para obter token
+                    let selectResponse: Response
+                    if (idToken) {
+                        selectResponse = await fetch('/api/auth/google/select-tenant', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                id_token: idToken,
+                                tenant_id: firstTenant.tenant_id,
+                            }),
+                        })
+                    } else {
+                        // Tentar usar switch-tenant (funciona apenas com cookie)
+                        selectResponse = await fetch('/api/auth/switch-tenant', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                tenant_id: firstTenant.tenant_id,
+                            }),
+                        })
+
+                        // Se falhar por não estar autenticado, redirecionar para login
+                        if (selectResponse.status === 401) {
+                            const selectResult = await selectResponse.json()
+                            setError(selectResult.detail || 'Sessão expirada. Por favor, faça login novamente.')
+                            setProcessingInvite(null)
+                            setTimeout(() => {
+                                router.push('/login')
+                            }, 2000)
+                            return
+                        }
+                    }
+
+                    if (!selectResponse.ok) {
+                        const selectResult = await selectResponse.json()
+                        setError(selectResult.detail || 'Erro ao obter token de autenticação')
+                        setProcessingInvite(null)
+                        return
+                    }
                 }
 
                 // 2. Rejeitar o convite
@@ -399,56 +504,9 @@ export default function SelectTenantPage() {
                     return
                 }
 
-                // Sucesso: remover convite da lista
-                const updatedInvites = invites.filter(inv => inv.membership_id !== invite.membership_id)
-                setInvites(updatedInvites)
+                // Sucesso: recarregar snapshot completo para aplicar regras de navegação
                 setProcessingInvite(null)
-
-                // Se após rejeitar só sobrar 1 tenant ativo e nenhum convite, entrar automaticamente
-                if (tenants.length === 1 && updatedInvites.length === 0) {
-                    // Entrar automaticamente no único tenant disponível
-                    const onlyTenant = tenants[0]
-                    const idToken = sessionStorage.getItem('login_id_token')
-
-                    try {
-                        let autoSelectResponse: Response
-                        if (idToken) {
-                            autoSelectResponse = await fetch('/api/auth/google/select-tenant', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                credentials: 'include',
-                                body: JSON.stringify({
-                                    id_token: idToken,
-                                    tenant_id: onlyTenant.tenant_id,
-                                }),
-                            })
-                        } else {
-                            // Usar switch-tenant se não tiver id_token mas estiver autenticado
-                            autoSelectResponse = await fetch('/api/auth/switch-tenant', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                credentials: 'include',
-                                body: JSON.stringify({
-                                    tenant_id: onlyTenant.tenant_id,
-                                }),
-                            })
-                        }
-
-                        if (autoSelectResponse.ok) {
-                            // Limpar sessionStorage e redirecionar para dashboard
-                            sessionStorage.removeItem('login_id_token')
-                            sessionStorage.removeItem('login_response')
-                            router.push('/dashboard')
-                            return
-                        }
-                    } catch (err) {
-                        // Se falhar, apenas continuar na página (não mostrar erro, pois o rejeitar já funcionou)
-                    }
-                }
+                await loadTenants()
             } catch (err: unknown) {
                 if (err instanceof Error) {
                     setError(err.message || 'Erro ao rejeitar convite')
@@ -458,8 +516,27 @@ export default function SelectTenantPage() {
                 setProcessingInvite(null)
             }
         },
-        [processingInvite, selecting, tenants, invites, router]
+        [processingInvite, selecting, tenants, router, loadTenants]
     )
+
+    // Aplicar decisão de navegação após carregar tenants/invites
+    useEffect(() => {
+        // Só aplicar decisão se não estiver carregando e não estiver processando ações
+        if (loading || selecting || creating || processingInvite !== null) {
+            return
+        }
+
+        const navigation = decideNavigation(tenants, invites)
+
+        if (navigation === 'dashboard' && tenants.length === 1) {
+            // Entrar direto no dashboard do único tenant
+            handleSelectTenant(tenants[0].tenant_id)
+        } else if (navigation === 'create-tenant') {
+            // Criar clínica automaticamente
+            handleCreateTenant()
+        }
+        // Caso contrário, mostrar tela de seleção (não fazer nada)
+    }, [loading, selecting, creating, processingInvite, tenants, invites, handleSelectTenant, handleCreateTenant])
 
     // Handler para logout
     const handleLogout = useCallback(async () => {
@@ -606,7 +683,26 @@ export default function SelectTenantPage() {
                             </div>
                         )}
 
-                        {tenants.length === 0 && invites.length === 0 && !loading && (
+                        {tenants.length === 0 && (
+                            <div>
+                                <button
+                                    onClick={handleCreateTenant}
+                                    disabled={creating || selecting || processingInvite !== null}
+                                    className="w-full px-4 py-3 text-center bg-blue-600 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {creating ? (
+                                        <>
+                                            <LoadingSpinner />
+                                            <span>Criando clínica...</span>
+                                        </>
+                                    ) : (
+                                        'Criar clínica'
+                                    )}
+                                </button>
+                            </div>
+                        )}
+
+                        {tenants.length === 0 && invites.length === 0 && !loading && !creating && (
                             <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
                                 <p className="text-sm text-gray-600">
                                     Nenhuma clínica disponível.
