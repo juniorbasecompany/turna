@@ -42,20 +42,81 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Account**: modelo de pessoa física (login Google), email único global, sem `tenant_id`.
   - **Privacidade**: `Account.name` é privado - apenas o próprio usuário vê.
   - **Criação**: Account é criado quando o usuário faz login/registro via Google OAuth pela primeira vez (sem precisar de convite). Também pode ser criado ao aceitar um convite se ainda não existir.
+  - **Atualização de nome**: `Account.name` sempre vem do Google OAuth, nunca de `Membership.name`. Atualiza apenas se NULL/vazio no login.
 - **Membership**: vínculo Account↔Tenant com `role` e `status` (um Account pode ter múltiplos memberships).
   - **Convites pendentes**: `account_id` pode ser `NULL` para convites pendentes (antes do usuário aceitar).
   - **Campo email**: quando `account_id` é `NULL`, o campo `email` identifica o convite pendente.
   - **Campo name**: `Membership.name` é o nome público na clínica (pode ser diferente de `Account.name`).
+    - **Atualização automática**: Preenchido apenas se NULL (ao aceitar convite ou primeiro login).
+    - **Edição manual**: Admin pode editar `Membership.name` via `PUT /membership/{id}`.
+    - **Fonte**: Pode vir do convite (placeholder), do Google ao aceitar/login (se NULL), ou edição manual.
   - **Vinculação**: ao aceitar convite ou fazer login, Memberships PENDING são vinculados ao Account pelo email.
+  - **Criação de convite**: Ao convidar usuário sem Account, cria Membership com `account_id=NULL` e `email`. Account é criado apenas quando usuário aceita convite ou faz login.
 - **Role e Status**: sempre usar do Membership, não do Account (Account.role é apenas legado/conveniência).
 - **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_membership()`).
 - **Dependencies**: usar `get_current_membership()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
 
+### Separação Account.name (privado) vs Membership.name (público)
+
+**Princípio fundamental**:
+- **`Account.name`**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `Membership.name`.
+- **`Membership.name`**: Público - nome na clínica, visível para admins do tenant. Pode ser editado por admin.
+
+**Regras de atualização**:
+- **`Account.name`**: Atualiza apenas se NULL/vazio no login via Google OAuth.
+- **`Membership.name`**: Atualiza automaticamente apenas se NULL (ao aceitar convite ou primeiro login). Depois pode ser editado manualmente por admin.
+
+**Uso em endpoints**:
+- **`GET /me`**: Retorna ambos `account_name` (privado) e `membership_name` (público).
+- **`GET /membership/list`**: Retorna apenas `membership_name` (não `account_name`).
+- **`PUT /membership/{id}`**: Permite editar `membership.name` (apenas admin).
+- **Email de convite**: Usa `membership.name` se existir, senão email.
+- **AuditLog**: Registra `membership.name` com fallback para email se NULL.
+
+**Painel de Accounts** (futuro):
+- Atualmente mostra `account.name`, mas terá regras de acesso restritas no futuro.
+- `Account.name` é privado - apenas o próprio usuário deve ver.
+
 ## API / FastAPI
 
 - **Contratos**: endpoints devem ter schemas claros de request/response.
 - **Erros**: padronize respostas de erro (mensagens e status codes).
+
+## Fluxo de Autenticação e Seleção de Clínica
+
+### Navegação Após Login Google OAuth
+
+**Regras de navegação automática** (implementadas no frontend):
+- **`ACTIVE == 1` e `PENDING == 0`**: Entra direto no dashboard (sem mostrar tela de seleção).
+- **`ACTIVE == 0` e `PENDING == 0`**: Cria clínica automaticamente com dados default e entra no dashboard.
+- **Caso contrário**: Mostra tela de seleção com clínicas ACTIVE e convites PENDING.
+
+**Criação automática de clínica**:
+- Quando usuário não tem nenhum tenant, sistema cria automaticamente:
+  - `name`: "Clínica"
+  - `slug`: Gerado automaticamente (`clinica-{timestamp}`)
+  - `timezone`: "America/Sao_Paulo"
+  - `locale`: "pt-BR"
+  - `currency`: "BRL"
+- Cria também Membership ADMIN ACTIVE para o criador.
+- Endpoint: `POST /auth/google/create-tenant` (cria tenant e retorna JWT diretamente).
+
+**Tela de seleção** (`/select-tenant`):
+- Mostra lista de clínicas ACTIVE (se houver).
+- Mostra lista de convites PENDING (se houver).
+- Botão "Criar clínica" aparece apenas se `ACTIVE == 0`.
+- Após rejeitar convite, recarrega snapshot e aplica regras de navegação automática.
+
+**Endpoints de autenticação**:
+- `POST /auth/google`: Login (retorna token direto ou `requires_tenant_selection=True`).
+- `POST /auth/google/register`: Cadastro (cria Account se não existir).
+- `POST /auth/google/select-tenant`: Seleciona tenant e emite JWT.
+- `POST /auth/google/create-tenant`: Cria clínica automaticamente e emite JWT.
+- `POST /auth/switch-tenant`: Troca de tenant (sem Google OAuth).
+- `GET /auth/tenant/list`: Lista tenants ACTIVE e convites PENDING.
+- `POST /auth/invites/{id}/accept`: Aceita convite.
+- `POST /auth/invites/{id}/reject`: Rejeita convite.
 
 ## Frontend / Autenticação
 

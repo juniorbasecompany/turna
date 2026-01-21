@@ -203,36 +203,60 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ### 2.4 JWT e Dependencies
 
-### 2.5 Separação Account.name (privado) vs Membership.name (público) - ⚠️ FUTURO
+### 2.5 Separação Account.name (privado) vs Membership.name (público) - ✅ IMPLEMENTADO
 
-**Documentação completa**: Ver `CHECKLIST_MEMBERSHIP_NAME.md` para checklist detalhado de implementação.
-- [ ] **Decisões documentadas**: Ver `DECISOES_MEMBERSHIP_NAME.md` para todas as decisões tomadas
-- [ ] **Migração Alembic**: Adicionar campo `name` em `Membership` (nullable)
-- [ ] **Migração de dados**: Copiar `account.name` → `membership.name` para memberships ACTIVE
-- [ ] **Atualizar modelo Membership**: Adicionar campo `name: str | None`
-- [ ] **Backend - Atualizar `accept_invite()`**: Preencher `membership.name` com nome do Google se NULL
-- [ ] **Backend - Atualizar `auth_google()` e `auth_google_register()`**:
+**Status**: Implementação completa realizada. Ver `DIRECTIVES.md` para decisões e regras.
+
+#### Fase 1: Backend - Modelo e Migração
+- [x] **Migração Alembic**: Adicionar campo `name` em `Membership` (nullable) - `0113ef012345_add_membership_name.py`
+- [x] **Migração de dados**: Copiar `account.name` → `membership.name` para memberships ACTIVE
+- [x] **Atualizar modelo Membership**: Adicionar campo `name: str | None`
+- [x] **Migração adicional**: Tornar `account_id` nullable e adicionar campo `email` - `0114gh012345_make_membership_account_id_nullable.py`
+
+#### Fase 2: Backend - Endpoints de Autenticação
+- [x] **Atualizar `accept_invite()`**: Preencher `membership.name` com nome do Google se NULL
+- [x] **Atualizar `auth_google()` e `auth_google_register()`**:
   - Atualizar `account.name` apenas se NULL/vazio (sempre do Google, nunca de membership)
   - Preencher `membership.name` com nome do Google se NULL (apenas se NULL)
-- [ ] **Backend - Atualizar JWT**: Incluir `membership.name` com fallback para `account.name` se NULL
-- [ ] **Backend - Atualizar endpoint `/me`**: Retornar ambos `account_name` e `membership_name`
-- [ ] **Backend - Atualizar `invite_to_tenant()`**: Aceitar `name` no body e salvar em `membership.name`
-- [ ] **Backend - Atualizar `list_memberships()`**: Retornar `membership.name` em vez de `account.name`
-- [ ] **Backend - Criar/atualizar `PUT /membership/{id}`**: Permitir editar `membership.name` (apenas admin)
-- [ ] **Backend - Atualizar email de convite**: Usar `membership.name` se existir, senão email
-- [ ] **Backend - Atualizar AuditLog**: Registrar `membership.name` com fallback para email se NULL
-- [ ] **Frontend - Atualizar tipos**: Adicionar `membership_name` nos tipos de API
-- [ ] **Frontend - Atualizar Header**: Usar `membership.name` (ou `account.name` se NULL) para exibição
-- [ ] **Frontend - Atualizar página de Accounts**:
-  - **⚠️ NOTA IMPORTANTE**: Atualmente mostra `account.name`, mas este painel terá **regras de acesso restritas no futuro**
-  - Por enquanto manter como está (mostrar `account.name`), mas documentar no código que será restringido
-  - Adicionar comentário `// TODO: Restringir acesso - account.name é privado, apenas o próprio usuário deve ver`
-  - **Decisão futura necessária**: Definir quem pode acessar este painel (apenas super-admin? apenas o próprio usuário?)
-- [ ] **Frontend - Atualizar página de Memberships**: Mostrar `membership.name` em vez de `account.name`
-- [ ] **Frontend - Atualizar endpoint `/me`**: Tratar ambos `account_name` e `membership_name`
-- [ ] **Testes**: Validar que `account.name` nunca é atualizado a partir de `membership.name`
-- [ ] **Testes**: Validar que `membership.name` é atualizado apenas se NULL
-- [ ] **Testes**: Validar privacidade (usuário só vê seu próprio `account.name`)
+  - Vincular Memberships PENDING por email quando `account_id` é NULL
+- [x] **Atualizar preenchimento de `membership.name` no login**: Preenche automaticamente se NULL
+
+#### Fase 3: Backend - JWT e Endpoints de Dados
+- [x] **Limpeza do JWT**: Removidos campos não utilizados (`email`, `name`, `role`, `membership_id`)
+  - JWT contém apenas: `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`
+  - Dados sempre vêm do banco via endpoints
+- [x] **Atualizar endpoint `/me`**: Retorna ambos `account_name` e `membership_name`
+- [x] **Atualizar `invite_to_tenant()`**: Aceita `name` no body e salva em `membership.name`
+  - Não cria Account se não existir (cria Membership com `account_id=NULL` e `email`)
+- [x] **Atualizar `list_memberships()`**: Retorna `membership.name` (não `account.name`)
+- [x] **Criar/atualizar `PUT /membership/{id}`**: Permite editar `membership.name` (apenas admin)
+
+#### Fase 4: Backend - Email e Auditoria
+- [x] **Atualizar email de convite**: Usa `membership.name` se existir, senão email
+- [x] **Atualizar AuditLog**: Registra `membership.name` com fallback para email se NULL
+
+#### Fase 5: Frontend - Tipos e Interfaces
+- [x] **Atualizar tipos TypeScript**: Adicionado `membership_name` em `MembershipResponse`
+- [x] **Atualizar endpoint `/me`**: Trata ambos `account_name` e `membership_name`
+
+#### Fase 6: Frontend - Componentes e Páginas
+- [x] **Atualizar página de Memberships**: Mostra `membership.name` em vez de `account.name`
+- [ ] **Atualizar Header**: Usar `membership.name` (ou `account.name` se NULL) para exibição (pendente)
+- [x] **Página de Accounts**: Mantida como está (mostra `account.name`)
+  - **⚠️ NOTA IMPORTANTE**: Este painel terá **regras de acesso restritas no futuro**
+  - `Account.name` é privado - apenas o próprio usuário deve ver
+
+#### Fase 7: Validações e Testes
+- [x] **Validações de Privacidade**: `Account.name` nunca é atualizado a partir de `membership.name`
+- [x] **Validações de Atualização Automática**: `membership.name` é atualizado apenas se NULL
+- [ ] **Testes de Integração**: Validar fluxos completos (pendente testes formais)
+
+#### Notas Importantes
+- **Privacidade**: `Account.name` é privado - apenas o próprio usuário vê
+- **Futuro**: Painel de Accounts terá regras de acesso restritas (anotado no código)
+- **Migração**: Dados existentes foram copiados de `account.name` para `membership.name`
+- **Membership.account_id**: Pode ser NULL para convites pendentes (antes do usuário aceitar)
+- **Membership.email**: Usado para identificar convites pendentes quando `account_id` é NULL
 - [x] `app/auth/jwt.py`:
   - [x] `create_access_token(account_id, tenant_id, role, email, name)` - role vem do Membership
   - [x] `verify_token(token)` retorna payload com account_id, tenant_id, role
