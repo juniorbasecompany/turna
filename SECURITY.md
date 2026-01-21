@@ -130,6 +130,9 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 - Criam/validam Accounts (sem tenant_id)
 - Gerenciam Memberships (que já têm tenant_id)
 - Emitem JWT com tenant_id
+- **Convites**: `POST /tenant/{tenant_id}/invite` cria Membership PENDING com `account_id=NULL` e `email` preenchido (não cria Account)
+- **Aceite**: `POST /auth/invites/{membership_id}/accept` vincula Account ao Membership pelo email
+- **Login**: `POST /auth/google` busca e vincula automaticamente Memberships PENDING pelo email
 
 ### Endpoints Públicos
 - `GET /health`: Não requer autenticação
@@ -245,8 +248,10 @@ Eventos de segurança são registrados na tabela `audit_log`:
 
 1. **Middleware não valida DB**: O middleware apenas extrai `tenant_id` do JWT para `request.state`. A validação real acontece em `get_current_membership()` que consulta o banco.
 
-2. **JWT contém tenant_id**: O token JWT contém `tenant_id` e `role` (do Membership). Isso permite validação rápida sem consultar DB em cada request.
+2. **JWT contém apenas dados mínimos**: O token JWT contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints (`/me`, `get_current_membership()`). Isso mantém o token menor e mais seguro.
 
 3. **Membership é a fonte da verdade**: Role e status vêm do Membership, não do Account. Um Account pode ter múltiplos Memberships (um por tenant).
 
-4. **Soft-delete em Memberships**: Memberships não são deletados, apenas marcados como REMOVED. Isso mantém histórico e permite auditoria.
+4. **Convites pendentes**: `Membership.account_id` pode ser `NULL` para convites pendentes. O campo `email` identifica o convite até o usuário aceitar. Account é criado quando o usuário faz login/registro via Google OAuth pela primeira vez (sem precisar de convite). Ao aceitar um convite, o Account é vinculado ao Membership pelo email (se o Account já existir) ou criado se ainda não existir.
+
+5. **Soft-delete em Memberships**: Memberships não são deletados, apenas marcados como REMOVED. Isso mantém histórico e permite auditoria.

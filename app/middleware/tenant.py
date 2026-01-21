@@ -15,7 +15,7 @@ async def tenant_context_middleware(
     Middleware de contexto (não-enforcement):
 
     - Se houver Authorization: Bearer <token>, decodifica via verify_token()
-    - Coloca {account_id, tenant_id, role, membership_id} em request.state
+    - Coloca {account_id, tenant_id} em request.state
     - NÃO consulta DB e NÃO bloqueia request em caso de token inválido
       (o enforcement real fica nas dependencies: get_current_membership()).
     """
@@ -35,18 +35,12 @@ async def tenant_context_middleware(
 
     account_id_raw = payload.get("sub")
     tenant_id_raw = payload.get("tenant_id")
-    role = payload.get("role")
-    membership_id_raw = payload.get("membership_id")
 
     try:
         if account_id_raw is not None:
             request.state.account_id = int(account_id_raw)
         if tenant_id_raw is not None:
             request.state.tenant_id = int(tenant_id_raw)
-        if role is not None:
-            request.state.role = str(role)
-        if membership_id_raw is not None:
-            request.state.membership_id = int(membership_id_raw)
     except Exception:
         # Se o token tiver formato inesperado, não setamos contexto.
         pass

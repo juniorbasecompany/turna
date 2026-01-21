@@ -317,7 +317,7 @@ export interface MembershipResponse {
     tenant_id: number
     account_id: number
     account_email: string | null
-    account_name: string | null
+    membership_name: string | null  // Nome público na clínica (pode ser NULL)
     role: string
     status: string
     created_at: string

@@ -6,7 +6,10 @@ Use este comando para iniciar todos os serviços (backend + frontend):
   ```
   docker compose up -d; cd frontend; npm run dev
   ```
-
+## Atualizar o banco de dados - Alembic
+  ```
+  alembic upgrade head
+  ```
 ## Auth Platform
 Console para administrar a forma de autenticação
 

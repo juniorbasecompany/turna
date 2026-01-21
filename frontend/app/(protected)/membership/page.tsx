@@ -154,7 +154,7 @@ export default function MembershipPage() {
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
             if (sendInvite && savedMembership) {
                 console.log(
-                    `[INVITE-UI] Iniciando envio de convite para membership ID=${savedMembership.id} (${savedMembership.account_name || savedMembership.account_email})`
+                    `[INVITE-UI] Iniciando envio de convite para membership ID=${savedMembership.id} (${savedMembership.membership_name || savedMembership.account_email})`
                 )
                 try {
                     await protectedFetch(`/api/membership/${savedMembership.id}/invite`, {
@@ -164,7 +164,7 @@ export default function MembershipPage() {
                         },
                     })
                     // Definir mensagem de sucesso no ActionBar
-                    const successMsg = `E-mail de convite foi enviado para ${savedMembership.account_name || savedMembership.account_email}`
+                    const successMsg = `E-mail de convite foi enviado para ${savedMembership.membership_name || savedMembership.account_email}`
                     console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
                     setEmailMessage(successMsg)
                     setEmailMessageType('success')
@@ -175,7 +175,7 @@ export default function MembershipPage() {
                         inviteErr
                     )
                     // Definir mensagem de erro no ActionBar
-                    setEmailMessage(`E-mail de convite não foi enviado para ${savedMembership.account_name || savedMembership.account_email}. ${errorMsg}`)
+                    setEmailMessage(`E-mail de convite não foi enviado para ${savedMembership.membership_name || savedMembership.account_email}. ${errorMsg}`)
                     setEmailMessageType('error')
                 }
             }
@@ -314,7 +314,7 @@ export default function MembershipPage() {
                                         </label>
                                         <input
                                             type="text"
-                                            value={editingMembership.account_email || editingMembership.account_name || 'Não disponível'}
+                                            value={editingMembership.account_email || 'Não disponível'}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
                                             disabled
                                         />
@@ -463,9 +463,9 @@ export default function MembershipPage() {
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
                                                 }`}
-                                            title={membership.account_name || membership.account_email || 'Não disponível'}
+                                            title={membership.membership_name || membership.account_email || 'Não disponível'}
                                         >
-                                            {membership.account_name || membership.account_email || 'Não disponível'}
+                                            {membership.membership_name || membership.account_email || 'Não disponível'}
                                         </h3>
                                         <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
                                             <span className={`text-xs px-2 py-1 rounded ${getStatusColor(membership.status)}`}>

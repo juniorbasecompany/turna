@@ -40,11 +40,17 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 ## Modelos e Multi-Tenant
 
 - **Account**: modelo de pessoa física (login Google), email único global, sem `tenant_id`.
+  - **Privacidade**: `Account.name` é privado - apenas o próprio usuário vê.
+  - **Criação**: Account é criado quando o usuário faz login/registro via Google OAuth pela primeira vez (sem precisar de convite). Também pode ser criado ao aceitar um convite se ainda não existir.
 - **Membership**: vínculo Account↔Tenant com `role` e `status` (um Account pode ter múltiplos memberships).
+  - **Convites pendentes**: `account_id` pode ser `NULL` para convites pendentes (antes do usuário aceitar).
+  - **Campo email**: quando `account_id` é `NULL`, o campo `email` identifica o convite pendente.
+  - **Campo name**: `Membership.name` é o nome público na clínica (pode ser diferente de `Account.name`).
+  - **Vinculação**: ao aceitar convite ou fazer login, Memberships PENDING são vinculados ao Account pelo email.
 - **Role e Status**: sempre usar do Membership, não do Account (Account.role é apenas legado/conveniência).
 - **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_membership()`).
 - **Dependencies**: usar `get_current_membership()` para validar acesso ao tenant, não `get_current_account()` diretamente.
-- **JWT**: `role` no token vem do Membership, não do Account.
+- **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
 
 ## API / FastAPI
 

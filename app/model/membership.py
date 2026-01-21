@@ -27,12 +27,18 @@ class Membership(BaseModel, table=True):
     Observações:
       - `role` e `status` vivem no Membership (não no Account).
       - Um Account pode ter múltiplos memberships (um por tenant).
+      - `account_id` pode ser NULL para convites pendentes (antes do usuário aceitar).
+      - Quando `account_id` é NULL, `email` identifica o convite pendente.
     """
 
     __tablename__ = "membership"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
-    account_id: int = Field(foreign_key="account.id", index=True)
+    account_id: int | None = Field(foreign_key="account.id", index=True, nullable=True, default=None)
+
+    # Email para identificar convites pendentes (quando account_id é NULL)
+    # Após aceitar, o email pode ser obtido via account.email
+    email: str | None = Field(default=None, nullable=True, index=True)
 
     # Importante: persistir enums pelos *values* ("admin"/"account", etc),
     # pois o banco usa strings.
@@ -56,4 +62,8 @@ class Membership(BaseModel, table=True):
         ),
         index=True,
     )
+
+    # Nome público na clínica (pode ser diferente do account.name privado)
+    # Preenchido automaticamente do account.name na primeira vez, mas pode ser editado por admin
+    name: str | None = Field(default=None, nullable=True)
 

@@ -128,11 +128,14 @@ def get_me(
     """
     Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
+
+    Retorna account_name (privado) e membership_name (público na clínica).
     """
     return {
         "id": account.id,
         "email": account.email,
-        "name": account.name,
+        "account_name": account.name,  # Nome privado do usuário
+        "membership_name": membership.name,  # Nome público na clínica (pode ser NULL)
         "role": membership.role.value,
         "tenant_id": membership.tenant_id,
         "auth_provider": account.auth_provider,
@@ -275,10 +278,10 @@ def list_accounts(
     try:
         logger.info(f"Listando accounts para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
 
-        # Query base para buscar
+        # Query base para buscar (LEFT JOIN para incluir memberships sem Account)
         base_query = (
             select(Membership, Account)
-            .join(Account, Membership.account_id == Account.id)
+            .outerjoin(Account, Membership.account_id == Account.id)
             .where(
                 Membership.tenant_id == membership.tenant_id,
                 Membership.status == MembershipStatus.ACTIVE,
@@ -293,8 +296,10 @@ def list_accounts(
         total = session.exec(count_query).one()
 
         # Buscar accounts com paginação
+        # Filtrar apenas memberships com Account (não mostrar convites pendentes sem Account)
         memberships = session.exec(
             base_query
+            .where(Account.id.isnot(None))  # Apenas memberships com Account vinculado
             .order_by(Account.name)
             .limit(limit)
             .offset(offset)
@@ -302,16 +307,18 @@ def list_accounts(
 
         accounts = []
         for membership_obj, account in memberships:
-            accounts.append(AccountResponse(
-                id=account.id,
-                email=account.email,
-                name=account.name,
-                role=account.role,
-                tenant_id=membership.tenant_id,
-                auth_provider=account.auth_provider,
-                created_at=_isoformat_utc(account.created_at),
-                updated_at=_isoformat_utc(account.updated_at),
-            ))
+            # Account não pode ser None aqui devido ao filtro acima
+            if account:
+                accounts.append(AccountResponse(
+                    id=account.id,
+                    email=account.email,
+                    name=account.name,
+                    role=account.role,
+                    tenant_id=membership.tenant_id,
+                    auth_provider=account.auth_provider,
+                    created_at=_isoformat_utc(account.created_at),
+                    updated_at=_isoformat_utc(account.updated_at),
+                ))
 
         logger.info(f"Encontrados {total} accounts, retornando {len(accounts)}")
         return AccountListResponse(
@@ -842,7 +849,8 @@ def invite_to_tenant(
 
     Regras:
       - O caller deve ser ADMIN e o tenant do token deve bater com o tenant_id do path.
-      - Idempotente por (tenant_id, account_id).
+      - NÃO cria Account - apenas cria Membership PENDING com account_id NULL.
+      - Idempotente por (tenant_id, email) quando account_id é NULL, ou (tenant_id, account_id) quando account existe.
     """
     if admin_membership.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
@@ -860,24 +868,27 @@ def invite_to_tenant(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
+    # Verificar se Account já existe (pode ter sido criado por outro tenant ou login anterior)
     account = session.exec(select(Account).where(Account.email == email)).first()
-    if not account:
-        account = Account(
-            email=email,
-            name=body.name or email,
-            role="account",
-            auth_provider="invite",
-        )
-        session.add(account)
-        session.commit()
-        session.refresh(account)
 
-    membership = session.exec(
-        select(Membership).where(
-            Membership.tenant_id == tenant.id,
-            Membership.account_id == account.id,
-        )
-    ).first()
+    # Buscar membership existente:
+    # - Se account existe: buscar por (tenant_id, account_id)
+    # - Se account não existe: buscar por (tenant_id, email) onde account_id IS NULL
+    if account:
+        membership = session.exec(
+            select(Membership).where(
+                Membership.tenant_id == tenant.id,
+                Membership.account_id == account.id,
+            )
+        ).first()
+    else:
+        membership = session.exec(
+            select(Membership).where(
+                Membership.tenant_id == tenant.id,
+                Membership.email == email,
+                Membership.account_id.is_(None),
+            )
+        ).first()
 
     if membership:
         # Não duplica. Se já estiver ACTIVE, apenas devolve.
@@ -887,6 +898,9 @@ def invite_to_tenant(
             membership.status = MembershipStatus.PENDING
         if membership.status == MembershipStatus.PENDING:
             membership.role = role
+        # Atualizar membership.name se fornecido no body (não sobrescrever se já existir)
+        if body.name and (membership.name is None or membership.name == ""):
+            membership.name = body.name
         membership.updated_at = utc_now()
         session.add(membership)
         session.commit()
@@ -922,6 +936,7 @@ def invite_to_tenant(
         account_id=account.id,
         role=role,
         status=MembershipStatus.PENDING,
+        name=body.name,  # Salvar name em membership.name (não em account.name)
     )
     session.add(membership)
     try:
@@ -930,7 +945,7 @@ def invite_to_tenant(
         session.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Membership duplicado (tenant_id, account_id) não permitido",
+            detail="Membership duplicado (tenant_id, email) não permitido",
         ) from e
     session.refresh(membership)
     _try_write_audit_log(
@@ -941,8 +956,8 @@ def invite_to_tenant(
             membership_id=membership.id,
             event_type="membership_invited",
             data={
-                "target_account_id": account.id,
-                "email": account.email,
+                "target_account_id": None,  # Ainda não existe Account
+                "email": email,
                 "from_status": None,
                 "to_status": membership.status.value,
                 "from_role": None,
@@ -952,7 +967,7 @@ def invite_to_tenant(
     )
     return TenantInviteResponse(
         membership_id=membership.id,
-        email=account.email,
+        email=email,
         status=membership.status.value,
         role=membership.role.value,
     )
@@ -3426,6 +3441,7 @@ class MembershipUpdate(PydanticBaseModel):
     """Schema para atualizar membership."""
     role: Optional[str] = None
     status: Optional[str] = None
+    name: Optional[str] = None  # Nome público na clínica (membership.name)
 
     @field_validator("role")
     @classmethod
@@ -3450,9 +3466,9 @@ class MembershipResponse(PydanticBaseModel):
     """Schema de resposta para membership."""
     id: int
     tenant_id: int
-    account_id: int
+    account_id: int | None  # Pode ser NULL para convites pendentes sem Account
     account_email: Optional[str] = None
-    account_name: Optional[str] = None
+    membership_name: Optional[str] = None  # Nome público na clínica (pode ser NULL)
     role: str
     status: str
     created_at: datetime
@@ -3544,7 +3560,7 @@ def create_membership(
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
             account_email=account.email,
-            account_name=account.name,
+            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
             created_at=membership_obj.created_at,
@@ -3577,10 +3593,10 @@ def list_memberships(
     try:
         logger.info(f"Listando memberships para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
 
-        # Query base: memberships do tenant com join em Account
+        # Query base: memberships do tenant com LEFT JOIN em Account (para incluir memberships sem Account)
         query = (
             select(Membership, Account)
-            .join(Account, Membership.account_id == Account.id)
+            .outerjoin(Account, Membership.account_id == Account.id)
             .where(Membership.tenant_id == membership.tenant_id)
         )
 
@@ -3594,10 +3610,9 @@ def list_memberships(
             if role_lower in {"admin", "account"}:
                 query = query.where(Membership.role == MembershipRole[role_lower.upper()])
 
-        # Contar total
+        # Contar total (sem JOIN, apenas contar memberships)
         count_query = (
             select(func.count(Membership.id))
-            .join(Account, Membership.account_id == Account.id)
             .where(Membership.tenant_id == membership.tenant_id)
         )
         if status:
@@ -3620,13 +3635,15 @@ def list_memberships(
         # Montar resposta
         items = []
         for membership_obj, account in results:
+            # Se account é None (membership sem Account), usar email do membership
+            account_email = account.email if account else membership_obj.email
             items.append(
                 MembershipResponse(
                     id=membership_obj.id,
                     tenant_id=membership_obj.tenant_id,
                     account_id=membership_obj.account_id,
-                    account_email=account.email,
-                    account_name=account.name,
+                    account_email=account_email,
+                    membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
                     role=membership_obj.role.value,
                     status=membership_obj.status.value,
                     created_at=membership_obj.created_at,
@@ -3665,17 +3682,20 @@ def get_membership(
             logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
-        # Buscar account
-        account = session.get(Account, membership_obj.account_id)
-        if not account:
-            raise HTTPException(status_code=404, detail="Account não encontrado")
+        # Buscar account (pode ser None se membership ainda não foi vinculado)
+        account = None
+        account_email = membership_obj.email  # Fallback para email do membership
+        if membership_obj.account_id:
+            account = session.get(Account, membership_obj.account_id)
+            if account:
+                account_email = account.email
 
         return MembershipResponse(
             id=membership_obj.id,
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
-            account_email=account.email,
-            account_name=account.name,
+            account_email=account_email,
+            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
             created_at=membership_obj.created_at,
@@ -3717,7 +3737,8 @@ def update_membership(
         # Validar regras de negócio
         if body.status and body.status.upper() == "REMOVED":
             # Não permitir remover o último membership ACTIVE de um account
-            if membership_obj.status == MembershipStatus.ACTIVE:
+            # Só validar se membership tem account_id (memberships ACTIVE sempre devem ter)
+            if membership_obj.status == MembershipStatus.ACTIVE and membership_obj.account_id:
                 active_count = session.exec(
                     select(func.count())
                     .select_from(Membership)
@@ -3743,6 +3764,9 @@ def update_membership(
             membership_obj.role = MembershipRole[body.role.upper()]
         if body.status is not None:
             membership_obj.status = MembershipStatus[body.status.upper()]
+        if body.name is not None:
+            # Permitir editar membership.name (não account.name)
+            membership_obj.name = body.name
 
         membership_obj.updated_at = utc_now()
         session.add(membership_obj)
@@ -3768,18 +3792,21 @@ def update_membership(
                 ),
             )
 
-        # Buscar account
-        account = session.get(Account, membership_obj.account_id)
-        if not account:
-            raise HTTPException(status_code=404, detail="Account não encontrado")
+        # Buscar account (pode ser None se membership ainda não foi vinculado)
+        account = None
+        account_email = membership_obj.email  # Fallback para email do membership
+        if membership_obj.account_id:
+            account = session.get(Account, membership_obj.account_id)
+            if account:
+                account_email = account.email
 
         logger.info(f"Membership atualizado com sucesso: id={membership_id}")
         return MembershipResponse(
             id=membership_obj.id,
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
-            account_email=account.email,
-            account_name=account.name,
+            account_email=account_email,
+            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
             created_at=membership_obj.created_at,
@@ -3819,7 +3846,8 @@ def delete_membership(
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Validar regra de segurança
-        if membership_obj.status == MembershipStatus.ACTIVE:
+        # Só validar se membership tem account_id (memberships ACTIVE sempre devem ter)
+        if membership_obj.status == MembershipStatus.ACTIVE and membership_obj.account_id:
             active_count = session.exec(
                 select(func.count())
                 .select_from(Membership)
@@ -3895,13 +3923,19 @@ def send_membership_invite_email(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        account = session.get(Account, membership_obj.account_id)
-        if not account:
-            raise HTTPException(status_code=404, detail="Account não encontrado")
+        # Buscar account (pode ser None se membership ainda não foi vinculado)
+        account = None
+        account_email = membership_obj.email  # Fallback para email do membership
+        if membership_obj.account_id:
+            account = session.get(Account, membership_obj.account_id)
+            if account:
+                account_email = account.email
+        elif not membership_obj.email:
+            raise HTTPException(status_code=400, detail="Membership não possui account_id nem email")
 
         logger.info(
             f"[INVITE] Iniciando envio de convite para membership ID={membership_id} "
-            f"(email={account.email}, tenant_id={membership.tenant_id})"
+            f"(email={account_email}, tenant_id={membership.tenant_id})"
         )
 
         # Atualizar status para PENDING antes de enviar o email
@@ -3923,7 +3957,8 @@ def send_membership_invite_email(
                         membership_id=membership_obj.id,
                         event_type="membership_status_changed",
                         data={
-                            "target_account_id": account.id,
+                            "target_account_id": membership_obj.account_id,
+                            "target_email": account_email,
                             "from_status": prev_status.value,
                             "to_status": membership_obj.status.value,
                         },
@@ -3932,9 +3967,11 @@ def send_membership_invite_email(
 
         # Enviar email de convite
         try:
+            # Usar account_email (já tem fallback para membership_obj.email)
+            professional_name = account.name if account else (membership_obj.name or account_email)
             result = send_professional_invite(
-                to_email=account.email,
-                professional_name=account.name or account.email,
+                to_email=account_email,
+                professional_name=professional_name,
                 tenant_name=tenant.name,
             )
 

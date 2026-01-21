@@ -142,16 +142,25 @@ def _list_active_tenants_for_account(session: Session, *, account_id: int) -> li
     return opts
 
 
-def _list_pending_invites_for_account(session: Session, *, account_id: int) -> list[InviteOption]:
-    rows = session.exec(
+def _list_pending_invites_for_account(session: Session, *, account_id: int, email: str | None = None) -> list[InviteOption]:
+    # Buscar invites por account_id OU por email (quando account_id é NULL)
+    query = (
         select(Tenant, Membership)
         .join(Membership, Membership.tenant_id == Tenant.id)
-        .where(
-            Membership.account_id == account_id,
-            Membership.status == MembershipStatus.PENDING,
+        .where(Membership.status == MembershipStatus.PENDING)
+    )
+
+    if email:
+        # Buscar por account_id OU por email (para memberships pendentes sem Account)
+        query = query.where(
+            (Membership.account_id == account_id) |
+            ((Membership.account_id.is_(None)) & (Membership.email == email.lower()))
         )
-        .order_by(Tenant.id.asc())
-    ).all()
+    else:
+        # Apenas por account_id
+        query = query.where(Membership.account_id == account_id)
+
+    rows = session.exec(query.order_by(Tenant.id.asc())).all()
 
     invites: list[InviteOption] = []
     for tenant, membership in rows:
@@ -168,12 +177,16 @@ def _list_pending_invites_for_account(session: Session, *, account_id: int) -> l
     return invites
 
 
-def get_account_memberships(session: Session, *, account_id: int) -> tuple[list[TenantOption], list[InviteOption]]:
+def get_account_memberships(session: Session, *, account_id: int, email: str | None = None) -> tuple[list[TenantOption], list[InviteOption]]:
     """
     Retorna (ACTIVE tenants, PENDING invites) para a conta.
+
+    Args:
+        account_id: ID do Account
+        email: Email do Account (opcional, usado para buscar invites pendentes sem Account)
     """
     tenants = _list_active_tenants_for_account(session, account_id=account_id)
-    invites = _list_pending_invites_for_account(session, account_id=account_id)
+    invites = _list_pending_invites_for_account(session, account_id=account_id, email=email)
     return tenants, invites
 
 
@@ -206,10 +219,6 @@ def _issue_token_for_membership(*, account: Account, membership: Membership) -> 
     return create_access_token(
         account_id=account.id,
         tenant_id=membership.tenant_id,
-        role=membership.role.value,
-        email=account.email,
-        name=account.name,
-        membership_id=membership.id,
     )
 
 
@@ -239,6 +248,34 @@ def auth_google(
             detail="Conta não encontrada. Use a opção 'Cadastrar-se' para criar uma conta."
         )
 
+    # Atualizar account.name apenas se estiver NULL/vazio (nunca sobrescrever edições manuais)
+    if not account.name or account.name == "":
+        if name and name != "":
+            account.name = name
+            session.add(account)
+            session.commit()
+            session.refresh(account)
+
+    # Buscar e vincular Memberships PENDING com account_id NULL pelo email
+    pending_memberships = session.exec(
+        select(Membership).where(
+            Membership.email == email.lower(),
+            Membership.account_id.is_(None),
+            Membership.status == MembershipStatus.PENDING,
+        )
+    ).all()
+
+    for pending_membership in pending_memberships:
+        # Vincular Account ao Membership
+        pending_membership.account_id = account.id
+        # Preencher membership.name se NULL
+        if (pending_membership.name is None or pending_membership.name == "") and account.name and account.name != "":
+            pending_membership.name = account.name
+        session.add(pending_membership)
+
+    if pending_memberships:
+        session.commit()
+
     tenants, invites = get_account_memberships(session, account_id=account.id)
 
     # Se não há tenants ACTIVE nem invites PENDING, exige seleção (permite criar clínica)
@@ -258,6 +295,14 @@ def auth_google(
     membership = _get_active_membership(session, account_id=account.id, tenant_id=only.tenant_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Membership ACTIVE não encontrado para o tenant selecionado")
+
+    # Preencher membership.name se NULL (usar account.name atualizado)
+    if (membership.name is None or membership.name == "") and account.name and account.name != "":
+        membership.name = account.name
+        session.add(membership)
+        session.commit()
+        session.refresh(membership)
+
     token = _issue_token_for_membership(account=account, membership=membership)
     return AuthResponse(access_token=token)
 
@@ -303,6 +348,7 @@ def auth_google_register(
             account_id=account.id,
             role=MembershipRole.ADMIN if role == "admin" else MembershipRole.ACCOUNT,
             status=MembershipStatus.ACTIVE,
+            name=name,  # Preencher membership.name com nome do Google na criação
         )
         session.add(membership)
         session.commit()
@@ -312,6 +358,24 @@ def auth_google_register(
         return AuthResponse(access_token=token)
 
     # Account já existe -> comportamento igual ao login (pode exigir seleção).
+    # Também buscar e vincular Memberships PENDING
+    pending_memberships = session.exec(
+        select(Membership).where(
+            Membership.email == email.lower(),
+            Membership.account_id.is_(None),
+            Membership.status == MembershipStatus.PENDING,
+        )
+    ).all()
+
+    for pending_membership in pending_memberships:
+        pending_membership.account_id = account.id
+        if (pending_membership.name is None or pending_membership.name == "") and account.name and account.name != "":
+            pending_membership.name = account.name
+        session.add(pending_membership)
+
+    if pending_memberships:
+        session.commit()
+
     return auth_google(body=body, session=session)
 
 
@@ -338,25 +402,32 @@ def auth_google_select_tenant(
     membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
 
     # Se não encontrar ACTIVE, verificar se há membership PENDING (para aceitar convites)
+    # Buscar por account_id OU por email (quando account_id é NULL)
     if not membership:
         membership_pending = session.exec(
             select(Membership).where(
-                Membership.account_id == account.id,
+                (Membership.account_id == account.id) |
+                ((Membership.account_id.is_(None)) & (Membership.email == email.lower())),
                 Membership.tenant_id == body.tenant_id,
                 Membership.status == MembershipStatus.PENDING,
             )
         ).first()
 
         if membership_pending:
+            # Se membership tem account_id NULL, vincular ao Account
+            if membership_pending.account_id is None:
+                membership_pending.account_id = account.id
+                if (membership_pending.name is None or membership_pending.name == "") and account.name and account.name != "":
+                    membership_pending.name = account.name
+                session.add(membership_pending)
+                session.commit()
+                session.refresh(membership_pending)
+
             # Permitir gerar token temporário para aceitar convite
             # O token será usado apenas para aceitar o convite, não para acessar o tenant
             token = create_access_token(
                 account_id=account.id,
                 tenant_id=body.tenant_id,
-                role=membership_pending.role.value,
-                email=account.email,
-                name=account.name,
-                membership_id=membership_pending.id,
             )
             return TokenResponse(access_token=token)
         else:
@@ -414,7 +485,7 @@ def auth_dev_token(
         token = _issue_token_for_membership(account=account, membership=membership)
         return AuthResponse(access_token=token)
 
-    tenants, invites = get_account_memberships(session, account_id=account.id)
+    tenants, invites = get_account_memberships(session, account_id=account.id, email=account.email)
     if not tenants:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (membership ACTIVE ausente)")
     if len(tenants) > 1:
@@ -434,7 +505,7 @@ def list_my_tenants(
     session: Session = Depends(get_session),
 ):
     """Lista tenants ACTIVE disponíveis e convites PENDING para a conta autenticada."""
-    tenants, invites = get_account_memberships(session, account_id=account.id)
+    tenants, invites = get_account_memberships(session, account_id=account.id, email=account.email)
     return TenantListResponse(tenants=tenants, invites=invites)
 
 
@@ -464,18 +535,37 @@ def accept_invite(
 
     Requer autenticação do account (via token JWT), mas não requer membership ACTIVE.
     Isso permite aceitar o primeiro convite mesmo sem ter nenhum tenant ativo.
+
+    Se membership.account_id for NULL, vincula o Account ao Membership pelo email.
     """
     membership = session.get(Membership, membership_id)
     if not membership:
         raise HTTPException(status_code=404, detail="Invite not found")
-    if membership.account_id != account.id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Verificar se o convite pertence ao account autenticado
+    # Se account_id é NULL, verificar pelo email
+    if membership.account_id is not None:
+        if membership.account_id != account.id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+    else:
+        # Membership pendente sem Account - verificar pelo email
+        if membership.email != account.email.lower():
+            raise HTTPException(status_code=403, detail="Acesso negado (email não corresponde)")
+        # Vincular Account ao Membership
+        membership.account_id = account.id
+
     if membership.status != MembershipStatus.PENDING:
         raise HTTPException(status_code=400, detail="Invite is not PENDING")
 
     prev_status = membership.status
     membership.status = MembershipStatus.ACTIVE
     membership.updated_at = utc_now()
+
+    # Preencher membership.name se NULL (usar account.name do Google)
+    if membership.name is None or membership.name == "":
+        if account.name and account.name != "":
+            membership.name = account.name
+
     session.add(membership)
     session.commit()
     _try_write_audit_log(
@@ -557,25 +647,32 @@ def switch_tenant(
     membership = _get_active_membership(session, account_id=account.id, tenant_id=body.tenant_id)
 
     # Se não encontrar ACTIVE, verificar se há membership PENDING (para aceitar convites)
+    # Buscar por account_id OU por email (quando account_id é NULL)
     if not membership:
         membership_pending = session.exec(
             select(Membership).where(
-                Membership.account_id == account.id,
+                (Membership.account_id == account.id) |
+                ((Membership.account_id.is_(None)) & (Membership.email == account.email.lower())),
                 Membership.tenant_id == body.tenant_id,
                 Membership.status == MembershipStatus.PENDING,
             )
         ).first()
 
         if membership_pending:
+            # Se membership tem account_id NULL, vincular ao Account
+            if membership_pending.account_id is None:
+                membership_pending.account_id = account.id
+                if (membership_pending.name is None or membership_pending.name == "") and account.name and account.name != "":
+                    membership_pending.name = account.name
+                session.add(membership_pending)
+                session.commit()
+                session.refresh(membership_pending)
+
             # Permitir gerar token temporário para aceitar convite
             # O token será usado apenas para aceitar o convite, não para acessar o tenant
             token = create_access_token(
                 account_id=account.id,
                 tenant_id=body.tenant_id,
-                role=membership_pending.role.value,
-                email=account.email,
-                name=account.name,
-                membership_id=membership_pending.id,
             )
             return TokenResponse(access_token=token)
         else:
@@ -626,7 +723,25 @@ def auth_google_create_tenant(
         )
 
     # Verificar se já tem tenants ACTIVE (não deve usar este endpoint se tiver)
-    tenants, invites = get_account_memberships(session, account_id=account.id)
+    # Também buscar e vincular Memberships PENDING
+    pending_memberships = session.exec(
+        select(Membership).where(
+            Membership.email == email.lower(),
+            Membership.account_id.is_(None),
+            Membership.status == MembershipStatus.PENDING,
+        )
+    ).all()
+
+    for pending_membership in pending_memberships:
+        pending_membership.account_id = account.id
+        if (pending_membership.name is None or pending_membership.name == "") and account.name and account.name != "":
+            pending_membership.name = account.name
+        session.add(pending_membership)
+
+    if pending_memberships:
+        session.commit()
+
+    tenants, invites = get_account_memberships(session, account_id=account.id, email=email)
     if len(tenants) > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -670,6 +785,7 @@ def auth_google_create_tenant(
         account_id=account.id,
         role=MembershipRole.ADMIN,
         status=MembershipStatus.ACTIVE,
+        name=account.name if account.name else None,  # Preencher membership.name com account.name
     )
     session.add(membership)
     session.commit()

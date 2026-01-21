@@ -202,6 +202,37 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Logs em endpoints relevantes (`app/api/auth.py`, `app/api/route.py`)
 
 ### 2.4 JWT e Dependencies
+
+### 2.5 Separação Account.name (privado) vs Membership.name (público) - ⚠️ FUTURO
+
+**Documentação completa**: Ver `CHECKLIST_MEMBERSHIP_NAME.md` para checklist detalhado de implementação.
+- [ ] **Decisões documentadas**: Ver `DECISOES_MEMBERSHIP_NAME.md` para todas as decisões tomadas
+- [ ] **Migração Alembic**: Adicionar campo `name` em `Membership` (nullable)
+- [ ] **Migração de dados**: Copiar `account.name` → `membership.name` para memberships ACTIVE
+- [ ] **Atualizar modelo Membership**: Adicionar campo `name: str | None`
+- [ ] **Backend - Atualizar `accept_invite()`**: Preencher `membership.name` com nome do Google se NULL
+- [ ] **Backend - Atualizar `auth_google()` e `auth_google_register()`**:
+  - Atualizar `account.name` apenas se NULL/vazio (sempre do Google, nunca de membership)
+  - Preencher `membership.name` com nome do Google se NULL (apenas se NULL)
+- [ ] **Backend - Atualizar JWT**: Incluir `membership.name` com fallback para `account.name` se NULL
+- [ ] **Backend - Atualizar endpoint `/me`**: Retornar ambos `account_name` e `membership_name`
+- [ ] **Backend - Atualizar `invite_to_tenant()`**: Aceitar `name` no body e salvar em `membership.name`
+- [ ] **Backend - Atualizar `list_memberships()`**: Retornar `membership.name` em vez de `account.name`
+- [ ] **Backend - Criar/atualizar `PUT /membership/{id}`**: Permitir editar `membership.name` (apenas admin)
+- [ ] **Backend - Atualizar email de convite**: Usar `membership.name` se existir, senão email
+- [ ] **Backend - Atualizar AuditLog**: Registrar `membership.name` com fallback para email se NULL
+- [ ] **Frontend - Atualizar tipos**: Adicionar `membership_name` nos tipos de API
+- [ ] **Frontend - Atualizar Header**: Usar `membership.name` (ou `account.name` se NULL) para exibição
+- [ ] **Frontend - Atualizar página de Accounts**:
+  - **⚠️ NOTA IMPORTANTE**: Atualmente mostra `account.name`, mas este painel terá **regras de acesso restritas no futuro**
+  - Por enquanto manter como está (mostrar `account.name`), mas documentar no código que será restringido
+  - Adicionar comentário `// TODO: Restringir acesso - account.name é privado, apenas o próprio usuário deve ver`
+  - **Decisão futura necessária**: Definir quem pode acessar este painel (apenas super-admin? apenas o próprio usuário?)
+- [ ] **Frontend - Atualizar página de Memberships**: Mostrar `membership.name` em vez de `account.name`
+- [ ] **Frontend - Atualizar endpoint `/me`**: Tratar ambos `account_name` e `membership_name`
+- [ ] **Testes**: Validar que `account.name` nunca é atualizado a partir de `membership.name`
+- [ ] **Testes**: Validar que `membership.name` é atualizado apenas se NULL
+- [ ] **Testes**: Validar privacidade (usuário só vê seu próprio `account.name`)
 - [x] `app/auth/jwt.py`:
   - [x] `create_access_token(account_id, tenant_id, role, email, name)` - role vem do Membership
   - [x] `verify_token(token)` retorna payload com account_id, tenant_id, role

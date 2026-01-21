@@ -26,37 +26,28 @@ def create_access_token(
     *,
     account_id: int,
     tenant_id: int,
-    role: str,
-    email: str,
-    name: str,
-    membership_id: int | None = None,
 ) -> str:
     """
-    Cria um token JWT com as informações da conta.
+    Cria um token JWT com as informações mínimas necessárias.
 
     Args:
         account_id: ID da conta no banco
         tenant_id: ID do tenant da conta
-        role: Role pública da conta (account, admin)
-        email: Email da conta
-        name: Nome da conta
 
     Returns:
         Token JWT codificado
+
+    Nota: Dados como email, name, role são obtidos do banco via endpoints,
+    não são incluídos no JWT para manter o token menor e mais seguro.
     """
     now = datetime.now(timezone.utc)
     payload: Dict[str, Any] = {
         "sub": str(account_id),  # Subject (account_id)
-        "email": email,
-        "name": name,
         "tenant_id": tenant_id,
-        "role": role,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=JWT_EXPIRATION_HOURS)).timestamp()),
         "iss": JWT_ISSUER,
     }
-    if membership_id is not None:
-        payload["membership_id"] = int(membership_id)
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
