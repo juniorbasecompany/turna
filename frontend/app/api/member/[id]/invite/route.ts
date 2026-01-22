@@ -3,19 +3,19 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
- * POST /api/membership/[id]/invite
+ * POST /api/member/[id]/invite
  *
- * Envia email de convite para um membership (apenas admin).
+ * Envia email de convite para um member (apenas admin).
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[INVITE-FRONTEND] Iniciando envio de convite para membership ID=${params.id}`)
+  console.log(`[INVITE-FRONTEND] Iniciando envio de convite para member ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
-    const response = await fetch(`${API_URL}/membership/${params.id}/invite`, {
+    const response = await fetch(`${API_URL}/member/${params.id}/invite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -29,7 +29,7 @@ export async function POST(
         detail: `Erro HTTP ${response.status}`,
       }))
       console.error(
-        `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para membership ID=${params.id}:`,
+        `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para member ID=${params.id}:`,
         errorData
       )
       return NextResponse.json(errorData, { status: response.status })
@@ -37,13 +37,13 @@ export async function POST(
 
     const data = await response.json()
     console.log(
-      `[INVITE-FRONTEND] ✅ SUCESSO - Convite enviado com sucesso para membership ID=${params.id}`,
+      `[INVITE-FRONTEND] ✅ SUCESSO - Convite enviado com sucesso para member ID=${params.id}`,
       data
     )
     return NextResponse.json(data)
   } catch (error) {
     console.error(
-      `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para membership ID=${params.id}:`,
+      `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para member ID=${params.id}:`,
       error
     )
     return NextResponse.json(

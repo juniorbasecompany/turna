@@ -12,7 +12,7 @@ interface CardActionButtonsProps {
 /**
  * Componente reutilizável para botões de ação em cards (excluir e editar).
  *
- * Usado em cards de Hospital, Profile, Demand, etc.
+ * Usado em cards de Hospital, Demand, etc.
  *
  * @example
  * ```tsx

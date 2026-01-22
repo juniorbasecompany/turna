@@ -3,6 +3,8 @@
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
 import { FilterButtons } from '@/components/FilterButtons'
+import { FormField } from '@/components/FormField'
+import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
@@ -1023,13 +1025,10 @@ export default function FilesPage() {
 
             {/* Filtro por período e hospital */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex flex-col gap-4">
+                <div className="space-y-4">
                     {/* Primeira linha: Hospital e Datas */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                        <div className="flex-1 sm:flex-initial sm:w-64">
-                            <label htmlFor="hospital-filter" className="block text-sm font-medium text-gray-700 mb-2">
-                                Hospital
-                            </label>
+                    <FormFieldGrid cols={1} smCols={3} gap={4}>
+                        <FormField label="Hospital">
                             {loadingHospitalList ? (
                                 <div className="flex justify-center py-2">
                                     <LoadingSpinner />
@@ -1052,24 +1051,22 @@ export default function FilesPage() {
                                     ))}
                                 </select>
                             )}
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1">
-                            <TenantDatePicker
-                                label="Cadastrados deste"
-                                value={startDate}
-                                onChange={handleStartDateChange}
-                                id="start_at"
-                                name="start_at"
-                            />
-                            <TenantDatePicker
-                                label="Cadastrados até"
-                                value={endDate}
-                                onChange={handleEndDateChange}
-                                id="end_at"
-                                name="end_at"
-                            />
-                        </div>
-                    </div>
+                        </FormField>
+                        <TenantDatePicker
+                            label="Cadastrados deste"
+                            value={startDate}
+                            onChange={handleStartDateChange}
+                            id="start_at"
+                            name="start_at"
+                        />
+                        <TenantDatePicker
+                            label="Cadastrados até"
+                            value={endDate}
+                            onChange={handleEndDateChange}
+                            id="end_at"
+                            name="end_at"
+                        />
+                    </FormFieldGrid>
 
                     {/* Segunda linha: Filtro de Status */}
                     <FilterButtons

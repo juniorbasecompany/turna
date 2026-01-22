@@ -4,6 +4,8 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardActionButtons } from '@/components/CardActionButtons'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { FormField } from '@/components/FormField'
+import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
@@ -374,11 +376,8 @@ export default function DemandPage() {
                             {editingDemand ? 'Editar Demanda' : 'Criar Demanda'}
                         </h2>
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="hospital_id" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Hospital
-                                    </label>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <FormField label="Hospital">
                                     <select
                                         id="hospital_id"
                                         value={formData.hospital_id || ''}
@@ -398,11 +397,8 @@ export default function DemandPage() {
                                             </option>
                                         ))}
                                     </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="procedure" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Procedimento <span className="text-red-500">*</span>
-                                    </label>
+                                </FormField>
+                                <FormField label="Procedimento" required>
                                     <input
                                         type="text"
                                         id="procedure"
@@ -412,35 +408,28 @@ export default function DemandPage() {
                                         required
                                         disabled={submitting}
                                     />
-                                </div>
-                            </div>
+                                </FormField>
+                            </FormFieldGrid>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <TenantDateTimePicker
-                                        id="start_time"
-                                        label="Data/Hora Início"
-                                        value={formData.start_time}
-                                        onChange={(date) => setFormData({ ...formData, start_time: date })}
-                                        disabled={submitting}
-                                    />
-                                </div>
-                                <div>
-                                    <TenantDateTimePicker
-                                        id="end_time"
-                                        label="Data/Hora Fim"
-                                        value={formData.end_time}
-                                        onChange={(date) => setFormData({ ...formData, end_time: date })}
-                                        disabled={submitting}
-                                    />
-                                </div>
-                            </div>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <TenantDateTimePicker
+                                    id="start_time"
+                                    label="Data/Hora Início"
+                                    value={formData.start_time}
+                                    onChange={(date) => setFormData({ ...formData, start_time: date })}
+                                    disabled={submitting}
+                                />
+                                <TenantDateTimePicker
+                                    id="end_time"
+                                    label="Data/Hora Fim"
+                                    value={formData.end_time}
+                                    onChange={(date) => setFormData({ ...formData, end_time: date })}
+                                    disabled={submitting}
+                                />
+                            </FormFieldGrid>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="room" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Sala/Quarto
-                                    </label>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <FormField label="Sala/Quarto">
                                     <input
                                         type="text"
                                         id="room"
@@ -449,11 +438,8 @@ export default function DemandPage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         disabled={submitting}
                                     />
-                                </div>
-                                <div>
-                                    <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Prioridade
-                                    </label>
+                                </FormField>
+                                <FormField label="Prioridade">
                                     <select
                                         id="priority"
                                         value={formData.priority || ''}
@@ -470,14 +456,11 @@ export default function DemandPage() {
                                         <option value="Urgente">Urgente</option>
                                         <option value="Emergência">Emergência</option>
                                     </select>
-                                </div>
-                            </div>
+                                </FormField>
+                            </FormFieldGrid>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="anesthesia_type" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tipo de Anestesia
-                                    </label>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <FormField label="Tipo de Anestesia">
                                     <input
                                         type="text"
                                         id="anesthesia_type"
@@ -486,11 +469,8 @@ export default function DemandPage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         disabled={submitting}
                                     />
-                                </div>
-                                <div>
-                                    <label htmlFor="complexity" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Complexidade
-                                    </label>
+                                </FormField>
+                                <FormField label="Complexidade">
                                     <input
                                         type="text"
                                         id="complexity"
@@ -499,13 +479,13 @@ export default function DemandPage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         disabled={submitting}
                                     />
-                                </div>
-                            </div>
+                                </FormField>
+                            </FormFieldGrid>
 
-                            <div>
-                                <label htmlFor="skills" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Habilidades (separadas por vírgula)
-                                </label>
+                            <FormField
+                                label="Habilidades (separadas por vírgula)"
+                                helperText="Ex: Obstétrica, Cardíaca"
+                            >
                                 <input
                                     type="text"
                                     id="skills"
@@ -515,7 +495,7 @@ export default function DemandPage() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     disabled={submitting}
                                 />
-                            </div>
+                            </FormField>
 
                             <div>
                                 <label className="flex items-center">
@@ -530,10 +510,7 @@ export default function DemandPage() {
                                 </label>
                             </div>
 
-                            <div>
-                                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Observações
-                                </label>
+                            <FormField label="Observações">
                                 <textarea
                                     id="notes"
                                     value={formData.notes}
@@ -542,7 +519,7 @@ export default function DemandPage() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     disabled={submitting}
                                 />
-                            </div>
+                            </FormField>
                         </div>
                     </div>
                 </div>

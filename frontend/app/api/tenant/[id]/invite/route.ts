@@ -5,7 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 /**
  * POST /api/tenant/[id]/invite
  *
- * Cria/atualiza um convite (Membership PENDING) para um email no tenant (apenas admin).
+ * Cria/atualiza um convite (Member PENDING) para um email no tenant (apenas admin).
  */
 export async function POST(
   request: NextRequest,

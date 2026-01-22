@@ -9,13 +9,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  */
 export async function POST(
     request: NextRequest,
-    { params }: { params: { membership_id: string } }
+    { params }: { params: { member_id: string } }
 ) {
     try {
-        const membershipId = parseInt(params.membership_id)
-        if (isNaN(membershipId)) {
+        const memberId = parseInt(params.member_id)
+        if (isNaN(memberId)) {
             return NextResponse.json(
-                { detail: 'membership_id inválido' },
+                { detail: 'member_id inválido' },
                 { status: 400 }
             )
         }
@@ -29,7 +29,7 @@ export async function POST(
         }
 
         // Chamar backend
-        const response = await fetch(`${API_URL}/auth/invites/${membershipId}/accept`, {
+        const response = await fetch(`${API_URL}/auth/invites/${memberId}/accept`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,

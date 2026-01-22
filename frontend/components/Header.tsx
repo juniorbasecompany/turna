@@ -1,7 +1,7 @@
 'use client'
 
 import { useDrawer } from '@/app/(protected)/layout'
-import { AccountResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
+import { AccountResponse, MeResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -9,7 +9,7 @@ export function Header() {
     const router = useRouter()
     const { openDrawer } = useDrawer()
     const [tenant, setTenant] = useState<TenantResponse | null>(null)
-    const [account, setAccount] = useState<AccountResponse | null>(null)
+    const [account, setAccount] = useState<MeResponse | null>(null)
     const [showUserMenu, setShowUserMenu] = useState(false)
     const [availableTenants, setAvailableTenants] = useState<TenantOption[]>([])
     const [switchingTenant, setSwitchingTenant] = useState(false)
@@ -41,7 +41,10 @@ export function Header() {
 
                 if (accountRes.ok) {
                     const accountData = await accountRes.json()
-                    setAccount(accountData.account || null)
+                    // O endpoint /me retorna name (account.name) e member_name (member.name)
+                    // Usar member_name se disponível, senão usar name
+                    const meData = accountData.account || accountData
+                    setAccount(meData || null)
                 }
             } catch (err) {
                 // Se API falhar, continuar (não quebrar Header)
@@ -231,7 +234,9 @@ export function Header() {
                                 onClick={() => setShowUserMenu(!showUserMenu)}
                                 className="flex items-center text-sm text-gray-700 hover:text-gray-900"
                             >
-                                <span className="mr-2">{account.name}</span>
+                                <span className="mr-2">
+                                    {account.member_name || account.name}
+                                </span>
                                 <span className="text-gray-400">▼</span>
                             </button>
 

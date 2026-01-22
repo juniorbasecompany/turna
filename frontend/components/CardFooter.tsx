@@ -27,7 +27,7 @@ interface CardFooterProps {
 /**
  * Componente reutilizável para o rodapé de cards selecionáveis.
  *
- * Padroniza o rodapé usado em Hospital e Profile:
+ * Padroniza o rodapé usado em Hospital, Demand, etc:
  * - Data formatada à esquerda
  * - Botões de ação (excluir/editar) à direita
  *

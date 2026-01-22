@@ -7,8 +7,8 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
 - **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
-- **Modelos**: ✅ Tenant, Account, Membership, Job, File, ScheduleVersion, AuditLog, Hospital, Profile, Demand criados e migrados
-- **Autenticação**: ✅ OAuth Google, JWT, Membership, convites, multi-tenant isolation
+- **Modelos**: ✅ Tenant, Account, Member, Job, File, ScheduleVersion, AuditLog, Hospital, Demand criados e migrados
+- **Autenticação**: ✅ OAuth Google, JWT, Member, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
 - **Implementação**: ~85% - Fundações completas, falta página de escalas e alguns itens opcionais
@@ -77,11 +77,11 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] Sem `tenant_id` (é a raiz do multi-tenant)
 - [x] Criar `app/model/account.py`:
   - [x] Modelo `Account` (id, email, name, role, auth_provider, created_at, updated_at)
-  - [x] Email único global (um Account pode participar de múltiplos tenants via Membership)
-- [x] Criar `app/model/membership.py`:
-  - [x] Modelo `Membership` (id, tenant_id, account_id, role, status, created_at, updated_at)
+  - [x] Email único global (um Account pode participar de múltiplos tenants via Member)
+- [x] Criar `app/model/member.py`:
+  - [x] Modelo `Member` (id, tenant_id, account_id, role, status, created_at, updated_at)
   - [x] UniqueConstraint em `(tenant_id, account_id)`
-  - [x] Role e status como Enums (MembershipRole, MembershipStatus)
+  - [x] Role e status como Enums (MemberRole, MemberStatus)
 - [x] Criar `app/model/job.py`:
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMAND`, `GENERATE_SCHEDULE`
@@ -125,22 +125,22 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] Função `verify_token(token)` retornando payload (account_id, tenant_id, role)
   - [x] Usar `JWT_SECRET` e `JWT_ISSUER` do ambiente
   - [x] Claims obrigatórios: `account_id`, `tenant_id`, `role`, `exp`, `iat`, `iss`
-  - [x] Role vem do Membership (implementado)
+  - [x] Role vem do Member (implementado)
 - [x] Criar `app/auth/dependencies.py`:
   - [x] Dependency `get_current_account(session, token)` retornando Account
-  - [x] Dependency `get_current_membership(session, token)` validando acesso via Membership ACTIVE
-  - [x] Dependency `require_role(role: str)` para verificar permissões (usa Membership)
-  - [x] Dependency `get_current_tenant(session, token)` retornando Tenant (usa Membership)
+  - [x] Dependency `get_current_member(session, token)` validando acesso via Member ACTIVE
+  - [x] Dependency `require_role(role: str)` para verificar permissões (usa Member)
+  - [x] Dependency `get_current_tenant(session, token)` retornando Tenant (usa Member)
 - [x] Migrar lógica do `login.py` para `app/auth/oauth.py`:
   - [x] Função `verify_google_token(token)` com clock_skew_in_seconds
 - [x] Criar `app/api/auth.py`:
-  - [x] Endpoint `POST /auth/google` (login - busca Account por email, valida memberships)
-  - [x] Endpoint `POST /auth/google/register` (cria Account sem tenant_id, cria Membership se necessário)
+  - [x] Endpoint `POST /auth/google` (login - busca Account por email, valida members)
+  - [x] Endpoint `POST /auth/google/register` (cria Account sem tenant_id, cria Member se necessário)
   - [x] Endpoint `POST /auth/switch-tenant` (trocar tenant quando já autenticado)
   - [x] Endpoint `GET /auth/tenant/list` (lista tenants disponíveis e convites pendentes)
   - [x] Endpoint `GET /auth/invites` (lista convites pendentes do usuário)
-  - [x] Endpoint `POST /auth/invites/{membership_id}/accept` (aceitar convite)
-  - [x] Endpoint `POST /auth/invites/{membership_id}/reject` (rejeitar convite)
+  - [x] Endpoint `POST /auth/invites/{member_id}/accept` (aceitar convite)
+  - [x] Endpoint `POST /auth/invites/{member_id}/reject` (rejeitar convite)
 - [x] Atualizar `app/api/routes.py`:
   - [x] Importar router de autenticação
   - [x] Incluir rotas de auth
@@ -152,83 +152,81 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] Função `create_tenant(name, slug)`
 - [x] Criar `app/middleware/tenant.py`:
   - [x] Middleware que extrai `tenant_id` do JWT e adiciona ao `request.state` (contexto, sem DB)
-  - [x] **Nota**: validação/enforcement real continua no `get_current_membership()` (não consultar DB no middleware)
+  - [x] **Nota**: validação/enforcement real continua no `get_current_member()` (não consultar DB no middleware)
 - [x] Aplicar middleware em `app/main.py`
 - [x] Criar helper `get_tenant_id(request)` para endpoints
-- [x] Documentar padrão: `tenant_id` nunca vem do body/querystring; sempre do contexto (membership/JWT/request.state)
+- [x] Documentar padrão: `tenant_id` nunca vem do body/querystring; sempre do contexto (member/JWT/request.state)
 
-### 2.3 Sistema de Membership e Convites
+### 2.3 Sistema de Member e Convites
 
 **Modelo implementado**:
 - **Tenant** = clínica (entidade organizacional)
 - **Account** = pessoa física (login Google, único global por email, sem tenant_id)
-- **Membership** = vínculo Account↔Tenant com role e status (um usuário pode estar em múltiplos tenants)
+- **Member** = vínculo Account↔Tenant com role e status (um usuário pode estar em múltiplos tenants)
 
-- [x] Modelo `Membership` implementado com:
+- [x] Modelo `Member` implementado com:
   - [x] UniqueConstraint em `(tenant_id, account_id)`
-  - [x] Role e status como Enums (MembershipRole, MembershipStatus)
+  - [x] Role e status como Enums (MemberRole, MemberStatus)
   - [x] Índices em `tenant_id`, `account_id`, `status`
 - [x] Endpoints de autenticação:
-  - [x] `POST /auth/google` (login - busca Account por email, valida memberships)
-  - [x] `POST /auth/google/register` (cria Account sem tenant_id, cria Membership se necessário)
+  - [x] `POST /auth/google` (login - busca Account por email, valida members)
+  - [x] `POST /auth/google/register` (cria Account sem tenant_id, cria Member se necessário)
   - [x] `POST /auth/switch-tenant` (trocar tenant quando já autenticado)
   - [x] `GET /auth/tenant/list` (lista tenants disponíveis e convites pendentes)
 - [x] Endpoints de convites:
-  - [x] `POST /tenant/{tenant_id}/invite` (admin convida email, cria Membership PENDING)
+  - [x] `POST /tenant/{tenant_id}/invite` (admin convida email, cria Member PENDING)
   - [x] `GET /auth/invites` (lista convites pendentes do usuário)
-  - [x] `POST /auth/invites/{membership_id}/accept` (aceitar convite)
-  - [x] `POST /auth/invites/{membership_id}/reject` (rejeitar convite)
+  - [x] `POST /auth/invites/{member_id}/accept` (aceitar convite)
+  - [x] `POST /auth/invites/{member_id}/reject` (rejeitar convite)
 - [x] Endpoint `POST /tenant` (criar clínica):
-  - [x] Cria Tenant e Membership ADMIN ACTIVE para o usuário
+  - [x] Cria Tenant e Member ADMIN ACTIVE para o usuário
 - [x] Validações de segurança:
-  - [x] Não permitir criar membership duplicado (constraint no banco + tratamento HTTP 409 na API)
-  - [x] Não permitir remover último membership ACTIVE de um account (soft-delete bloqueia)
+  - [x] Não permitir criar member duplicado (constraint no banco + tratamento HTTP 409 na API)
+  - [x] Não permitir remover último member ACTIVE de um account (soft-delete bloqueia)
   - [x] CHECK constraints no banco para validar role e status válidos
 - [x] Logs/auditoria:
-  - [x] Tabela `audit_log` para rastrear eventos (membership_invited, membership_status_changed, tenant_switched)
+  - [x] Tabela `audit_log` para rastrear eventos (member_invited, member_status_changed, tenant_switched)
   - [x] Logs em endpoints relevantes (`app/api/auth.py`, `app/api/route.py`)
 
 ### 2.4 JWT e Dependencies
 
-### 2.5 Separação Account.name (privado) vs Membership.name (público)
+### 2.5 Separação Account.name (privado) vs Member.name (público)
 
 Ver `DIRECTIVES.md` para decisões e regras completas.
 
 **Estado atual:**
-- **Account.name**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `Membership.name`
+- **Account.name**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `Member.name`
 - **Account.email**: Privado - usado apenas para login/autenticação
-- **Membership.name**: Público - nome na clínica, editável por admin. Preenchido automaticamente se NULL (ao aceitar convite ou primeiro login)
-- **Membership.email**: Público - email na clínica, editável por admin. Sincroniza uma vez com `account.email` se estiver vazio ao aceitar/rejeitar convite
-- **Membership.account_id**: Pode ser NULL para convites pendentes
+- **Member.name**: Público - nome na clínica, editável por admin. Preenchido automaticamente se NULL (ao aceitar convite ou primeiro login)
+- **Member.email**: Público - email na clínica, editável por admin. Sincroniza uma vez com `account.email` se estiver vazio ao aceitar/rejeitar convite
+- **Member.account_id**: Pode ser NULL para convites pendentes
 - **JWT**: Contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados sempre vêm do banco via endpoints
-- **Endpoint `/me`**: Retorna ambos `account_name` e `membership_name`
-- **Endpoint `/membership/list`**: Retorna apenas `membership_name` e `membership_email`
-- **Endpoint `PUT /membership/{id}`**: Permite editar `membership.name` e `membership.email` (apenas admin)
-- **Email de convite**: Usa `membership.email`
-- **AuditLog**: Registra `membership.name` e `membership.email`
-- **Profile**: Usa `membership_id` (não `account_id`)
+- **Endpoint `/me`**: Retorna ambos `account_name` e `member_name`
+- **Endpoint `/member/list`**: Retorna apenas `member_name` e `member_email`
+- **Endpoint `PUT /member/{id}`**: Permite editar `member.name` e `member.email` (apenas admin)
+- **Email de convite**: Usa `member.email`
+- **AuditLog**: Registra `member.name` e `member.email`
 
 **Pendente:**
-- [ ] Atualizar Header para usar `membership.name` (ou `account.name` se NULL) para exibição
+- [ ] Atualizar Header para usar `member.name` (ou `account.name` se NULL) para exibição
 
 **Futuro:**
 - Painel de Accounts terá regras de acesso restritas (apenas o próprio usuário vê seus dados)
 
-### 2.6 Membership Independente de Account (Painel)
+### 2.6 Member Independente de Account (Painel)
 
 **Estado atual:**
 - **Account (Privado)**: `account.email` e `account.name` são privados, usados apenas para autenticação
-- **Membership (Público)**: `membership.email` e `membership.name` são públicos, editáveis livremente pelo admin
-- **Painel de Membership**: Não tem relação com Account. Não usa `account_id` para criar ou editar membership
-- **Sincronização de email**: `accept_invite()`, `auth_google_select_tenant()` e `switch_tenant()` preenchem `membership.email` se vazio
-- **Schema `MembershipCreate`**: Aceita `email` e `name` (sem `account_id` obrigatório)
-- **Endpoint `POST /membership`**: Permite criar membership com `email` e `name` públicos
-- **Endpoint `PUT /membership/{id}`**: Permite atualizar `membership.email` (campo público)
-- **Endpoint de envio de convite**: Usa `membership.email` como principal
-- **`MembershipResponse`**: Inclui `membership_email`
-- **`list_memberships()`**: Retorna `membership_email` (não `account_email`)
-- **Frontend**: Painel permite criar e editar membership com `email` e `name` públicos, sem referência a Account
-- **Profile**: Usa `membership_id` (não `account_id`)
+- **Member (Público)**: `member.email` e `member.name` são públicos, editáveis livremente pelo admin
+- **Painel de Member**: Não tem relação com Account. Não usa `account_id` para criar ou editar member
+- **Sincronização de email**: `accept_invite()`, `auth_google_select_tenant()` e `switch_tenant()` preenchem `member.email` se vazio
+- **Schema `MemberCreate`**: Aceita `email` e `name` (sem `account_id` obrigatório)
+- **Endpoint `POST /member`**: Permite criar member com `email` e `name` públicos
+- **Endpoint `PUT /member/{id}`**: Permite atualizar `member.email` (campo público)
+- **Endpoint de envio de convite**: Usa `member.email` como principal
+- **`MemberResponse`**: Inclui `member_email`
+- **`list_members()`**: Retorna `member_email` (não `account_email`)
+- **Frontend**: Painel permite criar e editar member com `email` e `name` públicos, sem referência a Account
 
 ## FASE 3: Storage (S3/MinIO)
 
@@ -320,7 +318,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 ### 5.1 Endpoints de Tenants
 - [x] `POST /tenant` (criar tenant - já implementado em `app/api/route.py`)
-  - [x] Cria Tenant e Membership ADMIN ACTIVE para o criador
+  - [x] Cria Tenant e Member ADMIN ACTIVE para o criador
 - [x] `GET /tenant/me` (tenant atual do usuário - implementado em `app/api/route.py`)
 
 ### 5.2 Endpoints de Schedule
@@ -346,7 +344,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
     - [x] `limit` (padrão: 20, ge=1, le=100) - número máximo de itens
     - [x] `offset` (padrão: 0, ge=0) - offset para paginação
   - [x] Filtrar exclusivamente pelo campo `created_at` (não usar `uploaded_at` ou `updated_at`)
-  - [x] Sempre filtrar por `tenant_id` do JWT (via `get_current_membership()`)
+  - [x] Sempre filtrar por `tenant_id` do JWT (via `get_current_member()`)
   - [x] Não aceitar `tenant_id` via request (usar contexto do JWT)
   - [x] Ordenar por `created_at` (decrescente)
   - [x] Retornar total de registros para suporte à paginação
@@ -358,11 +356,11 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 ### 5.5 Validações e Segurança
 - [x] Garantir que TODOS os endpoints validam tenant_id:
-  - [x] Extrair de JWT via `get_current_membership()` (implementado em todos os endpoints)
-  - [x] Validar que tenant existe (validação implícita em `get_current_membership()`)
+  - [x] Extrair de JWT via `get_current_member()` (implementado em todos os endpoints)
+  - [x] Validar que tenant existe (validação implícita em `get_current_member()`)
   - [x] Filtrar queries por tenant_id (implementado em todos os endpoints de listagem)
 - [x] Garantir que endpoints de criação/atualização não permitem alterar tenant_id:
-  - [x] Endpoints de criação usam `membership.tenant_id` (não aceitam do body)
+  - [x] Endpoints de criação usam `member.tenant_id` (não aceitam do body)
   - [x] Endpoints de atualização validam `tenant_id` e não permitem alteração
 - [x] Documentar padrões de segurança:
   - [x] Criado `SECURITY.md` com padrões de validação multi-tenant
@@ -668,12 +666,12 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 Antes de considerar completo, verificar:
 
-- [x] Modelos SQLModel criados e migrados (Tenant, Account, Membership, Job, File, ScheduleVersion, AuditLog)
+- [x] Modelos SQLModel criados e migrados (Tenant, Account, Member, Job, File, ScheduleVersion, AuditLog)
 - [x] Modelo Account sem tenant_id (email único global)
-- [x] Modelo Membership implementado (vínculo Account↔Tenant com role e status)
-- [x] Autenticação funcionando com tenant_id no JWT (role do Membership)
+- [x] Modelo Member implementado (vínculo Account↔Tenant com role e status)
+- [x] Autenticação funcionando com tenant_id no JWT (role do Member)
 - [x] Fluxos de convites e seleção de tenant funcionando
-- [x] Multi-tenant enforcement ativo em todos os endpoints (via Membership)
+- [x] Multi-tenant enforcement ativo em todos os endpoints (via Member)
 - [x] Storage S3/MinIO funcionando (upload/download)
 - [x] Jobs Arq processando corretamente (PING, EXTRACT, GENERATE)
 - [x] API endpoints completos seguindo princípios arquiteturais
@@ -870,200 +868,6 @@ Antes de considerar completo, verificar:
   - [ ] Hospital como origem semântica das demandas
   - [ ] Prompt como contrato de extração
 
-## FASE 11: Tabela Profile - Perfis de Usuários
-
-### 11.1 Banco de Dados / Modelos
-
-- [x] Criar `app/model/profile.py`:
-  - [x] Modelo `Profile` (SQLModel) com:
-    - [x] `id` (PK)
-    - [x] `tenant_id` (FK `tenant.id`, obrigatório, index)
-    - [x] `membership_id` (FK `membership.id`, obrigatório, index) - migrado de `account_id`
-    - [x] `hospital_id` (FK `hospital.id`, opcional, index)
-    - [x] `attribute` (JSONB, obrigatório, default `{}`)
-    - [x] `created_at` (`timestamptz`)
-    - [x] `updated_at` (`timestamptz`)
-  - [x] Herdar de `BaseModel` para `created_at` e `updated_at`
-  - [x] Usar `Column(JSON)` do SQLAlchemy para campo JSONB
-  - [x] Constraint única `(tenant_id, account_id, hospital_id)` para garantir regras de negócio
-  - [x] Índice único parcial para garantir apenas um profile sem hospital por (tenant_id, account_id)
-
-- [x] Atualizar `app/model/__init__.py`:
-  - [x] Exportar `Profile`
-
-- [x] Atualizar `app/db/base.py`:
-  - [x] Adicionar `Profile` no import para Alembic detectar
-
-- [x] Criar migração Alembic:
-  - [x] Executar `alembic revision --autogenerate -m "add_profile_table"`
-  - [x] Revisar migração gerada:
-    - [x] Verificar criação da tabela `profile`
-    - [x] Verificar FKs para `tenant.id`, `membership.id`, `hospital.id`
-    - [x] Verificar índices em `tenant_id`, `membership_id`, `hospital_id`
-    - [x] Verificar campo `attribute` como JSONB com default `{}`
-    - [x] Verificar `created_at` e `updated_at` como `timestamptz`
-    - [x] Adicionar constraint única e índice único parcial para regras de negócio
-  - [x] Aplicar migração: `alembic upgrade head` (migração aplicada)
-
-### 11.2 Backend – Schemas Pydantic
-
-- [x] Criar schemas em `app/api/route.py`:
-  - [x] `ProfileCreate`:
-    - [x] `membership_id: int`
-    - [x] `hospital_id: Optional[int] = None`
-    - [x] `attribute: dict = {}`
-  - [x] `ProfileUpdate`:
-    - [x] `hospital_id: Optional[int] = None`
-    - [x] `attribute: Optional[dict] = None`
-  - [x] `ProfileResponse`:
-    - [x] `id: int`
-    - [x] `tenant_id: int`
-    - [x] `membership_id: int`
-    - [x] `hospital_id: Optional[int]`
-    - [x] `attribute: dict`
-    - [x] `created_at: datetime`
-    - [x] `updated_at: datetime`
-
-### 11.3 Backend – Endpoints API
-
-- [x] `POST /api/profile` (criar profile):
-  - [x] Usar `get_current_membership()` para obter `tenant_id`
-  - [x] Validar que `account_id` existe e pertence ao tenant (via Membership)
-  - [x] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
-  - [x] Criar profile com `tenant_id` do membership
-  - [x] Retornar `ProfileResponse`
-
-- [x] `GET /api/profile/list` (listar profiles):
-  - [x] Filtrar por `tenant_id` do membership
-  - [x] Retornar lista paginada: `{items: ProfileResponse[], total: int}`
-  - [x] Ordenar por `created_at` (decrescente)
-
-- [x] `GET /api/profile/{profile_id}` (buscar profile específico):
-  - [x] Validar que profile existe
-  - [x] Validar que `profile.tenant_id == membership.tenant_id`
-  - [x] Retornar `ProfileResponse` ou 403 se não pertencer ao tenant
-
-- [x] `PUT /api/profile/{profile_id}` (atualizar profile):
-  - [x] Validar que profile existe e pertence ao tenant
-  - [x] Validar que `hospital_id` (se fornecido) pertence ao tenant
-  - [x] Atualizar campos permitidos (nunca permitir alterar `tenant_id` ou `account_id`)
-  - [x] Atualizar `updated_at` automaticamente
-  - [x] Retornar `ProfileResponse`
-
-- [x] `DELETE /api/profile/{profile_id}` (excluir profile):
-  - [x] Validar que profile existe e pertence ao tenant
-  - [x] Excluir profile
-  - [x] Retornar 204 No Content
-
-- [x] Validações de segurança:
-  - [x] Todos os endpoints validam `tenant_id` via `get_current_membership()`
-  - [x] Queries sempre filtram por `tenant_id`
-  - [x] Endpoints de criação usam `membership.tenant_id` (nunca aceitar do body)
-  - [x] Endpoints de atualização não permitem alterar `tenant_id` ou `account_id`
-
-- [x] Endpoint adicional `GET /api/account/list`:
-  - [x] Listar accounts do tenant atual via Membership ACTIVE
-
-### 11.4 Frontend – Tipos TypeScript
-
-- [x] Atualizar `frontend/types/api.ts`:
-  - [x] `ProfileResponse`:
-    - [x] `id: number`
-    - [x] `tenant_id: number`
-    - [x] `account_id: number`
-    - [x] `hospital_id: number | null`
-    - [x] `attribute: Record<string, unknown>`
-    - [x] `created_at: string`
-    - [x] `updated_at: string`
-  - [x] `ProfileListResponse`:
-    - [x] `items: ProfileResponse[]`
-    - [x] `total: number`
-  - [x] `ProfileCreateRequest`:
-    - [x] `account_id: number`
-    - [x] `hospital_id?: number | null`
-    - [x] `attribute?: Record<string, unknown>`
-  - [x] `ProfileUpdateRequest`:
-    - [x] `hospital_id?: number | null`
-    - [x] `attribute?: Record<string, unknown>`
-
-### 11.5 Frontend – Rotas API (Next.js)
-
-- [x] Criar `frontend/app/api/profile/route.ts`:
-  - [x] `POST` - criar profile (proxy para backend)
-
-- [x] Criar `frontend/app/api/profile/list/route.ts`:
-  - [x] `GET` - listar profiles (proxy para backend)
-
-- [x] Criar `frontend/app/api/profile/[id]/route.ts`:
-  - [x] `GET` - buscar profile específico (proxy para backend)
-  - [x] `PUT` - atualizar profile (proxy para backend)
-  - [x] `DELETE` - excluir profile (proxy para backend)
-
-- [x] Criar `frontend/app/api/account/list/route.ts`:
-  - [x] `GET` - listar accounts do tenant (proxy para backend)
-
-### 11.6 Frontend – Página de Edição
-
-- [x] Criar `frontend/app/(protected)/profile/page.tsx`:
-  - [x] Lista de profiles em tabela:
-    - [x] Exibir: id, membership_id, hospital_id, created_at, updated_at
-    - [x] Botão "Criar Profile"
-    - [x] Botões de editar/excluir em cada linha
-  - [x] Área de edição (similar a `hospital/page.tsx` e `demand/page.tsx`):
-    - [x] Formulário com campos:
-      - [x] Select para `membership_id` (carregar memberships do tenant via API)
-      - [x] Select para `hospital_id` (opcional, carregar hospitals do tenant)
-      - [x] Editor JSON para `attribute` (textarea com validação JSON em tempo real)
-    - [x] Botões de salvar/cancelar
-    - [x] Feedback visual de sucesso/erro (via ActionBar)
-  - [x] Funcionalidades:
-    - [x] Criar novo profile
-    - [x] Editar profile existente
-    - [x] Excluir profile (seleção múltipla)
-    - [x] Validação de JSON antes de enviar
-    - [x] Tratamento de erros de validação
-
-### 11.7 Componentes Auxiliares (se necessário)
-
-- [x] Editor JSON para `attribute`:
-  - [x] Usar textarea com validação JSON em tempo real
-  - [x] Mostrar erros de sintaxe JSON
-  - [x] Validação antes de permitir salvar
-
-- [x] Select de accounts:
-  - [x] Carregar accounts do tenant via API
-  - [x] Endpoint: `GET /account/list` criado e funcionando
-
-- [x] Select de hospitals:
-  - [x] Carregar via `GET /hospital/list` (endpoint existente)
-
-### 11.8 Validações e Segurança
-
-- [x] Backend:
-  - [x] Validar que `membership_id` existe e pertence ao tenant
-  - [x] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
-  - [x] Validar formato JSON de `attribute` (via Pydantic)
-  - [x] Garantir isolamento multi-tenant em todas as operações
-  - [x] Constraint única e índice único parcial garantem regras de negócio no banco
-
-- [x] Frontend:
-  - [x] Validar JSON antes de enviar (usar `JSON.parse()`)
-  - [x] Mostrar erros de validação claramente
-  - [x] Tratamento de erros HTTP (401, 403, 404, 409, 500)
-  - [x] Adicionar exceção `/profile` no `lib/api.ts` para evitar redirecionamento indevido
-
-### 11.9 Documentação
-
-- [x] Atualizar `CHECKLIST.md` (esta seção)
-- [ ] Atualizar `SECURITY.md` (se necessário, com exemplos de validação de profile)
-- [ ] Documentar uso de `attribute` como campo JSONB flexível para usar com Pydantic
-
-**Regras de negócio:**
-- Um membership pode ter apenas um profile "geral" (sem hospital) por tenant
-- Um membership pode ter apenas um profile por hospital específico por tenant
-- Implementado via constraint única `(tenant_id, membership_id, hospital_id)` e índice único parcial para `hospital_id IS NULL`
-
-
 ## FASE 13: Envio de Emails com Resend
 
 ### 13.1 Dependências e Configuração
@@ -1082,7 +886,7 @@ Antes de considerar completo, verificar:
 
 - [x] Atualizar `app/services/email_service.py`:
   - [x] Importar `resend` e configurar API key via variável de ambiente
-  - [x] Modificar `send_membership_invite()` para usar Resend :
+  - [x] Modificar `send_member_invite()` para usar Resend :
     - [x] Usar `resend.Emails.send()` com parâmetros adequados
     - [x] Definir `from` usando `EMAIL_FROM`
     - [x] Definir `to` com email do profissional
@@ -1125,7 +929,7 @@ Antes de considerar completo, verificar:
   - [x] Capturar exceções do Resend (Exception genérica com sanitização de API key)
   - [x] Logar erros detalhados (sem expor API key - sanitização implementada)
   - [x] Retornar tupla `(bool, str)` com mensagem de erro específica (mantém compatibilidade)
-  - [x] Não quebrar o fluxo de criação/edição do membership se email falhar (já implementado no endpoint)
+  - [x] Não quebrar o fluxo de criação/edição do member se email falhar (já implementado no endpoint)
   - [x] Mensagens de erro específicas e úteis (ex: domínio não verificado, API key inválida, etc.)
 - [x] Melhorar logging:
   - [x] Logar quando email for enviado com sucesso (com Resend ID, sem dados sensíveis)
@@ -1147,9 +951,9 @@ Antes de considerar completo, verificar:
   - [x] Mensagens de erro exibidas (vermelho)
   - [x] Mesmo layout das mensagens de erro (sem bordas, apenas texto)
   - [x] Mensagens não desaparecem automaticamente
-- [x] Integração com formulário de membership:
+- [x] Integração com formulário de member:
   - [x] Checkbox "Enviar convite" funcional
-  - [x] Envio automático após salvar/editar membership
+  - [x] Envio automático após salvar/editar member
   - [x] Tratamento de erros sem quebrar fluxo de salvamento
 
 ### 13.9 Melhorias Adicionais Implementadas

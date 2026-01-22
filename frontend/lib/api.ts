@@ -69,7 +69,7 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
  * Esta função deve ser usada em todas as páginas protegidas para garantir
  * que erros 401 sempre retornem a mensagem padronizada e sejam exibidos no ActionBar.
  *
- * @param url - URL da API (relativa, ex: '/api/profile/list')
+ * @param url - URL da API (relativa, ex: '/api/hospital/list')
  * @param options - Opções do fetch (method, headers, body, etc)
  * @returns Promise com os dados da resposta
  * @throws Error com mensagem padronizada (401 sempre retorna "Sessão expirada...")
@@ -77,8 +77,8 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
  * @example
  * ```typescript
  * try {
- *   const data = await protectedFetch<ProfileListResponse>('/api/profile/list')
- *   setProfiles(data.items)
+ *   const data = await protectedFetch<HospitalListResponse>('/api/hospital/list')
+ *   setHospitals(data.items)
  * } catch (err) {
  *   setError(err instanceof Error ? err.message : 'Erro desconhecido')
  * }

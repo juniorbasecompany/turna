@@ -20,8 +20,8 @@ from app.model.tenant import Tenant
 from pydantic import BaseModel as PydanticBaseModel, field_validator, model_validator
 from app.api.auth import router as auth_router
 from app.api.schedule import router as schedule_router
-from app.auth.dependencies import get_current_account, get_current_membership, require_role
-from app.model.membership import Membership, MembershipRole, MembershipStatus
+from app.auth.dependencies import get_current_account, get_current_member, require_role
+from app.model.member import Member, MemberRole, MemberStatus
 from app.model.audit_log import AuditLog
 from app.model.account import Account
 from app.storage.service import StorageService
@@ -30,7 +30,6 @@ from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleVersion, ScheduleStatus
 from app.model.hospital import Hospital
 from app.model.demand import Demand
-from app.model.profile import Profile
 from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
@@ -121,21 +120,21 @@ def _sanitize_error_message(error: Exception, default_message: str = "Ocorreu um
 @router.get("/me", tags=["Auth"])
 def get_me(
     account: Account = Depends(get_current_account),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
 ):
     """
     Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
 
-    Retorna name (privado) e membership_name (público na clínica).
+    Retorna name (privado) e member_name (público na clínica).
     """
     return {
         "id": account.id,
         "email": account.email,
         "name": account.name,  # Nome privado do usuário
-        "membership_name": membership.name,  # Nome público na clínica (pode ser NULL)
-        "role": membership.role.value,
-        "tenant_id": membership.tenant_id,
+        "member_name": member.name,  # Nome público na clínica (pode ser NULL)
+        "role": member.role.value,
+        "tenant_id": member.tenant_id,
         "auth_provider": account.auth_provider,
         "created_at": _isoformat_utc(account.created_at),
         "updated_at": _isoformat_utc(account.updated_at),
@@ -210,14 +209,14 @@ class AccountUpdate(PydanticBaseModel):
 @router.post("/account", response_model=AccountResponse, status_code=201, tags=["Account"])
 def create_account(
     body: AccountCreate,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
     Cria um novo account (apenas admin).
     """
     try:
-        logger.info(f"Criando account: email={body.email}, tenant_id={membership.tenant_id}")
+        logger.info(f"Criando account: email={body.email}, tenant_id={member.tenant_id}")
 
         # Verificar se já existe account com este email
         existing_account = session.exec(
@@ -247,7 +246,7 @@ def create_account(
             email=account.email,
             name=account.name,
             role=account.role,
-            tenant_id=membership.tenant_id,
+            tenant_id=member.tenant_id,
             auth_provider=account.auth_provider,
             created_at=_isoformat_utc(account.created_at),
             updated_at=_isoformat_utc(account.updated_at),
@@ -265,46 +264,46 @@ def create_account(
 
 @router.get("/account/list", response_model=AccountListResponse, tags=["Account"])
 def list_accounts(
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
 ):
     """
-    Lista accounts do tenant atual (via Membership ACTIVE) com paginação.
+    Lista accounts do tenant atual (via Member ACTIVE) com paginação.
     """
     try:
-        logger.info(f"Listando accounts para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
+        logger.info(f"Listando accounts para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
 
-        # Query base para buscar (LEFT JOIN para incluir memberships sem Account)
+        # Query base para buscar (LEFT JOIN para incluir members sem Account)
         base_query = (
-            select(Membership, Account)
-            .outerjoin(Account, Membership.account_id == Account.id)
+            select(Member, Account)
+            .outerjoin(Account, Member.account_id == Account.id)
             .where(
-                Membership.tenant_id == membership.tenant_id,
-                Membership.status == MembershipStatus.ACTIVE,
+                Member.tenant_id == member.tenant_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         )
 
         # Contar total
-        count_query = select(func.count(Membership.id)).where(
-            Membership.tenant_id == membership.tenant_id,
-            Membership.status == MembershipStatus.ACTIVE,
+        count_query = select(func.count(Member.id)).where(
+            Member.tenant_id == member.tenant_id,
+            Member.status == MemberStatus.ACTIVE,
         )
         total = session.exec(count_query).one()
 
         # Buscar accounts com paginação
-        # Filtrar apenas memberships com Account (não mostrar convites pendentes sem Account)
-        memberships = session.exec(
+        # Filtrar apenas members com Account (não mostrar convites pendentes sem Account)
+        members = session.exec(
             base_query
-            .where(Account.id.isnot(None))  # Apenas memberships com Account vinculado
+            .where(Account.id.isnot(None))  # Apenas members com Account vinculado
             .order_by(Account.name)
             .limit(limit)
             .offset(offset)
         ).all()
 
         accounts = []
-        for membership_obj, account in memberships:
+        for member_obj, account in members:
             # Account não pode ser None aqui devido ao filtro acima
             if account:
                 accounts.append(AccountResponse(
@@ -312,7 +311,7 @@ def list_accounts(
                     email=account.email,
                     name=account.name,
                     role=account.role,
-                    tenant_id=membership.tenant_id,
+                    tenant_id=member.tenant_id,
                     auth_provider=account.auth_provider,
                     created_at=_isoformat_utc(account.created_at),
                     updated_at=_isoformat_utc(account.updated_at),
@@ -337,31 +336,31 @@ def list_accounts(
 def update_account(
     account_id: int,
     body: AccountUpdate,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
     Atualiza um account (apenas admin).
-    Valida que o account pertence ao tenant atual (via Membership ACTIVE).
+    Valida que o account pertence ao tenant atual (via Member ACTIVE).
     """
     try:
-        logger.info(f"Atualizando account: id={account_id}, tenant_id={membership.tenant_id}")
+        logger.info(f"Atualizando account: id={account_id}, tenant_id={member.tenant_id}")
 
         account = session.get(Account, account_id)
         if not account:
             logger.warning(f"Account não encontrado: id={account_id}")
             raise HTTPException(status_code=404, detail="Account não encontrado")
 
-        # Validar que o account pertence ao tenant atual via Membership
-        account_membership = session.exec(
-            select(Membership).where(
-                Membership.account_id == account_id,
-                Membership.tenant_id == membership.tenant_id,
-                Membership.status == MembershipStatus.ACTIVE,
+        # Validar que o account pertence ao tenant atual via Member
+        account_member = session.exec(
+            select(Member).where(
+                Member.account_id == account_id,
+                Member.tenant_id == member.tenant_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         ).first()
-        if not account_membership:
-            logger.warning(f"Account {account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+        if not account_member:
+            logger.warning(f"Account {account_id} não possui member ACTIVE no tenant {member.tenant_id}")
             raise HTTPException(
                 status_code=403,
                 detail=f"Account {account_id} não pertence ao tenant atual",
@@ -399,7 +398,7 @@ def update_account(
             email=account.email,
             name=account.name,
             role=account.role,
-            tenant_id=membership.tenant_id,
+            tenant_id=member.tenant_id,
             auth_provider=account.auth_provider,
             created_at=_isoformat_utc(account.created_at),
             updated_at=_isoformat_utc(account.updated_at),
@@ -418,74 +417,74 @@ def update_account(
 @router.delete("/account/{account_id}", status_code=204, tags=["Account"])
 def delete_account(
     account_id: int,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Remove um account do tenant atual removendo o Membership (apenas admin).
-    Valida que o account pertence ao tenant atual (via Membership ACTIVE).
+    Remove um account do tenant atual removendo o Member (apenas admin).
+    Valida que o account pertence ao tenant atual (via Member ACTIVE).
     """
     try:
-        logger.info(f"Removendo account: id={account_id}, tenant_id={membership.tenant_id}")
+        logger.info(f"Removendo account: id={account_id}, tenant_id={member.tenant_id}")
 
         account = session.get(Account, account_id)
         if not account:
             logger.warning(f"Account não encontrado: id={account_id}")
             raise HTTPException(status_code=404, detail="Account não encontrado")
 
-        # Validar que o account pertence ao tenant atual via Membership
-        account_membership = session.exec(
-            select(Membership).where(
-                Membership.account_id == account_id,
-                Membership.tenant_id == membership.tenant_id,
-                Membership.status == MembershipStatus.ACTIVE,
+        # Validar que o account pertence ao tenant atual via Member
+        account_member = session.exec(
+            select(Member).where(
+                Member.account_id == account_id,
+                Member.tenant_id == member.tenant_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         ).first()
-        if not account_membership:
-            logger.warning(f"Account {account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+        if not account_member:
+            logger.warning(f"Account {account_id} não possui member ACTIVE no tenant {member.tenant_id}")
             raise HTTPException(
                 status_code=403,
                 detail=f"Account {account_id} não pertence ao tenant atual",
             )
 
-        # Validar regra de segurança: não permitir remover o último membership ACTIVE de um account
+        # Validar regra de segurança: não permitir remover o último member ACTIVE de um account
         active_count = session.exec(
             select(func.count())
-            .select_from(Membership)
+            .select_from(Member)
             .where(
-                Membership.account_id == account_id,
-                Membership.status == MembershipStatus.ACTIVE,
+                Member.account_id == account_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         ).one()
         if int(active_count or 0) <= 1:
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Não é permitido remover o último membership ACTIVE da conta. "
+                    "Não é permitido remover o último member ACTIVE da conta. "
                     "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
                 ),
             )
 
-        # Remover membership (soft-delete: status -> REMOVED)
-        prev_status = account_membership.status
-        account_membership.status = MembershipStatus.REMOVED
-        account_membership.updated_at = utc_now()
-        session.add(account_membership)
+        # Remover member (soft-delete: status -> REMOVED)
+        prev_status = account_member.status
+        account_member.status = MemberStatus.REMOVED
+        account_member.updated_at = utc_now()
+        session.add(account_member)
         session.commit()
-        session.refresh(account_membership)
+        session.refresh(account_member)
 
         # Log de auditoria
         _try_write_audit_log(
             session,
             AuditLog(
-                tenant_id=membership.tenant_id,
-                actor_account_id=membership.account_id,
-                membership_id=account_membership.id,
-                event_type="membership_status_changed",
+                tenant_id=member.tenant_id,
+                actor_account_id=member.account_id,
+                member_id=account_member.id,
+                event_type="member_status_changed",
                 data={
                     "target_account_id": account_id,
                     "from_status": prev_status.value,
-                    "to_status": account_membership.status.value,
+                    "to_status": account_member.status.value,
                 },
             ),
         )
@@ -586,7 +585,7 @@ def create_tenant(
     account: Account = Depends(get_current_account),
     session: Session = Depends(get_session),
 ):
-    """Cria um novo tenant e cria Membership ADMIN para o criador."""
+    """Cria um novo tenant e cria Member ADMIN para o criador."""
     # Verifica se já existe um tenant com o mesmo slug
     existing = session.exec(select(Tenant).where(Tenant.slug == tenant_data.slug)).first()
     if existing:
@@ -603,13 +602,13 @@ def create_tenant(
     session.commit()
     session.refresh(tenant)
 
-    membership = Membership(
+    member = Member(
         tenant_id=tenant.id,
         account_id=account.id,
-        role=MembershipRole.ADMIN,
-        status=MembershipStatus.ACTIVE,
+        role=MemberRole.ADMIN,
+        status=MemberStatus.ACTIVE,
     )
-    session.add(membership)
+    session.add(member)
     session.commit()
 
     # Criar hospital default para o tenant
@@ -621,7 +620,7 @@ def create_tenant(
 
 @router.get("/tenant/list", response_model=TenantListResponse, tags=["Tenant"])
 def list_tenants(
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
@@ -671,13 +670,13 @@ def list_tenants(
 
 @router.get("/tenant/me", response_model=TenantResponse, tags=["Tenant"])
 def get_current_tenant_info(
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
     Retorna informações do tenant atual do usuário autenticado.
     """
-    tenant = session.get(Tenant, membership.tenant_id)
+    tenant = session.get(Tenant, member.tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant não encontrado")
     return tenant
@@ -687,7 +686,7 @@ def get_current_tenant_info(
 def update_tenant(
     tenant_id: int,
     body: TenantUpdate,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -758,7 +757,7 @@ def update_tenant(
 @router.delete("/tenant/{tenant_id}", status_code=204, tags=["Tenant"])
 def delete_tenant(
     tenant_id: int,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -772,20 +771,20 @@ def delete_tenant(
             logger.warning(f"Tenant não encontrado: id={tenant_id}")
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        # Verificar se há memberships ativos para este tenant
-        active_memberships = session.exec(
+        # Verificar se há members ativos para este tenant
+        active_members = session.exec(
             select(func.count())
-            .select_from(Membership)
+            .select_from(Member)
             .where(
-                Membership.tenant_id == tenant_id,
-                Membership.status == MembershipStatus.ACTIVE,
+                Member.tenant_id == tenant_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         ).one()
 
-        if int(active_memberships or 0) > 0:
+        if int(active_members or 0) > 0:
             raise HTTPException(
                 status_code=409,
-                detail="Não é permitido remover um tenant que possui memberships ativos. Remova ou desative os memberships primeiro.",
+                detail="Não é permitido remover um tenant que possui members ativos. Remova ou desative os members primeiro.",
             )
 
         session.delete(tenant)
@@ -811,7 +810,7 @@ class TenantInviteRequest(PydanticBaseModel):
 
 
 class TenantInviteResponse(PydanticBaseModel):
-    membership_id: int
+    member_id: int
     email: str
     status: str
     role: str
@@ -821,18 +820,18 @@ class TenantInviteResponse(PydanticBaseModel):
 def invite_to_tenant(
     tenant_id: int,
     body: TenantInviteRequest,
-    admin_membership: Membership = Depends(require_role("admin")),
+    admin_member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Cria/atualiza um convite (Membership PENDING) para um email no tenant atual.
+    Cria/atualiza um convite (Member PENDING) para um email no tenant atual.
 
     Regras:
       - O caller deve ser ADMIN e o tenant do token deve bater com o tenant_id do path.
-      - NÃO cria Account - apenas cria Membership PENDING com account_id NULL.
+      - NÃO cria Account - apenas cria Member PENDING com account_id NULL.
       - Idempotente por (tenant_id, email) quando account_id é NULL, ou (tenant_id, account_id) quando account existe.
     """
-    if admin_membership.tenant_id != tenant_id:
+    if admin_member.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     email = body.email.strip().lower()
@@ -842,7 +841,7 @@ def invite_to_tenant(
     role_raw = body.role.strip().lower()
     if role_raw not in {"account", "admin"}:
         raise HTTPException(status_code=400, detail="role inválida (esperado: account|admin)")
-    role = MembershipRole.ADMIN if role_raw == "admin" else MembershipRole.ACCOUNT
+    role = MemberRole.ADMIN if role_raw == "admin" else MemberRole.ACCOUNT
 
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
@@ -851,180 +850,180 @@ def invite_to_tenant(
     # Verificar se Account já existe (pode ter sido criado por outro tenant ou login anterior)
     account = session.exec(select(Account).where(Account.email == email)).first()
 
-    # Buscar membership existente:
+    # Buscar member existente:
     # - Se account existe: buscar por (tenant_id, account_id)
     # - Se account não existe: buscar por (tenant_id, email) onde account_id IS NULL
     if account:
-        membership = session.exec(
-            select(Membership).where(
-                Membership.tenant_id == tenant.id,
-                Membership.account_id == account.id,
+        member_existing = session.exec(
+            select(Member).where(
+                Member.tenant_id == tenant.id,
+                Member.account_id == account.id,
             )
         ).first()
     else:
-        membership = session.exec(
-            select(Membership).where(
-                Membership.tenant_id == tenant.id,
-                Membership.email == email,
-                Membership.account_id.is_(None),
+        member_existing = session.exec(
+            select(Member).where(
+                Member.tenant_id == tenant.id,
+                Member.email == email,
+                Member.account_id.is_(None),
             )
         ).first()
 
-    if membership:
+    if member_existing:
         # Não duplica. Se já estiver ACTIVE, apenas devolve.
-        prev_status = membership.status
-        prev_role = membership.role
-        if membership.status in {MembershipStatus.REJECTED, MembershipStatus.REMOVED}:
-            membership.status = MembershipStatus.PENDING
-        if membership.status == MembershipStatus.PENDING:
-            membership.role = role
-        # Atualizar membership.name se fornecido no body (não sobrescrever se já existir)
-        if body.name and (membership.name is None or membership.name == ""):
-            membership.name = body.name
-        membership.updated_at = utc_now()
-        session.add(membership)
+        prev_status = member_existing.status
+        prev_role = member_existing.role
+        if member_existing.status in {MemberStatus.REJECTED, MemberStatus.REMOVED}:
+            member_existing.status = MemberStatus.PENDING
+        if member_existing.status == MemberStatus.PENDING:
+            member_existing.role = role
+        # Atualizar member.name se fornecido no body (não sobrescrever se já existir)
+        if body.name and (member_existing.name is None or member_existing.name == ""):
+            member_existing.name = body.name
+        member_existing.updated_at = utc_now()
+        session.add(member_existing)
         session.commit()
-        session.refresh(membership)
+        session.refresh(member_existing)
 
-        if prev_status != membership.status or prev_role != membership.role:
+        if prev_status != member_existing.status or prev_role != member_existing.role:
             _try_write_audit_log(
                 session,
                 AuditLog(
                     tenant_id=tenant.id,
-                    actor_account_id=admin_membership.account_id,
-                    membership_id=membership.id,
-                    event_type="membership_invited",
+                    actor_account_id=admin_member.account_id,
+                    member_id=member_existing.id,
+                    event_type="member_invited",
                     data={
-                        "target_account_id": account.id,
-                        "email": account.email,
+                        "target_account_id": account.id if account else None,
+                        "email": account.email if account else email,
                         "from_status": prev_status.value,
-                        "to_status": membership.status.value,
+                        "to_status": member_existing.status.value,
                         "from_role": prev_role.value,
-                        "to_role": membership.role.value,
+                        "to_role": member_existing.role.value,
                     },
                 ),
             )
         return TenantInviteResponse(
-            membership_id=membership.id,
-            email=account.email,
-            status=membership.status.value,
-            role=membership.role.value,
+            member_id=member_existing.id,
+            email=account.email if account else email,
+            status=member_existing.status.value,
+            role=member_existing.role.value,
         )
 
-    membership = Membership(
+    member_new = Member(
         tenant_id=tenant.id,
-        account_id=account.id,
+        account_id=account.id if account else None,
         role=role,
-        status=MembershipStatus.PENDING,
-        name=body.name,  # Salvar name em membership.name (não em account.name)
-        email=account.email.lower() if account.email else None,  # Preencher email quando account existe
+        status=MemberStatus.PENDING,
+        name=body.name,  # Salvar name em member.name (não em account.name)
+        email=email,  # Sempre usar email do body
     )
-    session.add(membership)
+    session.add(member_new)
     try:
         session.commit()
     except IntegrityError as e:
         session.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Membership duplicado (tenant_id, email) não permitido",
+            detail="Member duplicado (tenant_id, email) não permitido",
         ) from e
-    session.refresh(membership)
+    session.refresh(member_new)
     _try_write_audit_log(
         session,
         AuditLog(
             tenant_id=tenant.id,
-            actor_account_id=admin_membership.account_id,
-            membership_id=membership.id,
-            event_type="membership_invited",
+            actor_account_id=admin_member.account_id,
+            member_id=member_new.id,
+            event_type="member_invited",
             data={
-                "target_account_id": None,  # Ainda não existe Account
+                "target_account_id": account.id if account else None,
                 "email": email,
                 "from_status": None,
-                "to_status": membership.status.value,
+                "to_status": member_new.status.value,
                 "from_role": None,
-                "to_role": membership.role.value,
+                "to_role": member_new.role.value,
             },
         ),
     )
     return TenantInviteResponse(
-        membership_id=membership.id,
+        member_id=member_new.id,
         email=email,
-        status=membership.status.value,
-        role=membership.role.value,
+        status=member_new.status.value,
+        role=member_new.role.value,
     )
 
 
-class MembershipRemoveResponse(PydanticBaseModel):
-    membership_id: int
+class MemberRemoveResponse(PydanticBaseModel):
+    member_id: int
     status: str
 
 
 @router.post(
-    "/tenant/{tenant_id}/memberships/{membership_id}/remove",
-    response_model=MembershipRemoveResponse,
+    "/tenant/{tenant_id}/members/{member_id}/remove",
+    response_model=MemberRemoveResponse,
     status_code=200,
     tags=["Tenant"],
 )
-def remove_membership(
+def remove_member(
     tenant_id: int,
-    membership_id: int,
-    admin_membership: Membership = Depends(require_role("admin")),
+    member_id: int,
+    admin_member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Remove (soft-delete) um membership do tenant (status -> REMOVED).
+    Remove (soft-delete) um member do tenant (status -> REMOVED).
 
     Regra de segurança:
-      - não permitir remover o último membership ACTIVE de um account.
+      - não permitir remover o último member ACTIVE de um account.
     """
-    if admin_membership.tenant_id != tenant_id:
+    if admin_member.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    membership = session.get(Membership, membership_id)
-    if not membership:
-        raise HTTPException(status_code=404, detail="Membership não encontrado")
-    if membership.tenant_id != tenant_id:
+    member_to_remove = session.get(Member, member_id)
+    if not member_to_remove:
+        raise HTTPException(status_code=404, detail="Member não encontrado")
+    if member_to_remove.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    if membership.status == MembershipStatus.ACTIVE:
+    if member_to_remove.status == MemberStatus.ACTIVE:
         active_count = session.exec(
             select(func.count())
-            .select_from(Membership)
+            .select_from(Member)
             .where(
-                Membership.account_id == membership.account_id,
-                Membership.status == MembershipStatus.ACTIVE,
+                Member.account_id == member_to_remove.account_id,
+                Member.status == MemberStatus.ACTIVE,
             )
         ).one()
         if int(active_count or 0) <= 1:
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Não é permitido remover o último membership ACTIVE da conta. "
+                    "Não é permitido remover o último member ACTIVE da conta. "
                     "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
                 ),
             )
 
-    prev_status = membership.status
-    membership.status = MembershipStatus.REMOVED
-    membership.updated_at = utc_now()
-    session.add(membership)
+    prev_status = member_to_remove.status
+    member_to_remove.status = MemberStatus.REMOVED
+    member_to_remove.updated_at = utc_now()
+    session.add(member_to_remove)
     session.commit()
-    session.refresh(membership)
+    session.refresh(member_to_remove)
     _try_write_audit_log(
         session,
         AuditLog(
             tenant_id=tenant_id,
-            actor_account_id=admin_membership.account_id,
-            membership_id=membership.id,
-            event_type="membership_status_changed",
+            actor_account_id=admin_member.account_id,
+            member_id=member_to_remove.id,
+            event_type="member_status_changed",
             data={
                 "from_status": prev_status.value,
-                "to_status": membership.status.value,
-                "target_account_id": membership.account_id,
+                "to_status": member_to_remove.status.value,
+                "target_account_id": member_to_remove.account_id,
             },
         ),
     )
-    return MembershipRemoveResponse(membership_id=membership.id, status=membership.status.value)
+    return MemberRemoveResponse(member_id=member_to_remove.id, status=member_to_remove.status.value)
 
 
 class JobPingResponse(PydanticBaseModel):
@@ -1102,11 +1101,11 @@ def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) ->
 
 @router.post("/job/ping", response_model=JobPingResponse, status_code=201, tags=["Job"])
 async def create_ping_job(
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     job = Job(
-        tenant_id=membership.tenant_id,
+                    tenant_id=member.tenant_id,
         job_type=JobType.PING,
         status=JobStatus.PENDING,
         input_data={"ping": True},
@@ -1131,17 +1130,17 @@ async def create_ping_job(
 @router.post("/job/extract", response_model=JobExtractResponse, status_code=201, tags=["Job"])
 async def create_extract_job(
     body: JobExtractRequest,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     file_model = session.get(File, body.file_id)
     if not file_model:
         raise HTTPException(status_code=404, detail="File não encontrado")
-    if file_model.tenant_id != membership.tenant_id:
+    if file_model.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     job = Job(
-        tenant_id=membership.tenant_id,
+                    tenant_id=member.tenant_id,
         job_type=JobType.EXTRACT_DEMAND,
         status=JobStatus.PENDING,
         input_data={"file_id": body.file_id},
@@ -1174,7 +1173,7 @@ def list_jobs(
     status: Optional[str] = Query(None, description="Filtrar por status (PENDING, RUNNING, COMPLETED, FAILED)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -1196,14 +1195,14 @@ def list_jobs(
             raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
 
     # Query base
-    query = select(Job).where(Job.tenant_id == membership.tenant_id)
+    query = select(Job).where(Job.tenant_id == member.tenant_id)
     if job_type_enum:
         query = query.where(Job.job_type == job_type_enum)
     if status_enum:
         query = query.where(Job.status == status_enum)
 
     # Contar total antes de aplicar paginação
-    count_query = select(func.count(Job.id)).where(Job.tenant_id == membership.tenant_id)
+    count_query = select(func.count(Job.id)).where(Job.tenant_id == member.tenant_id)
     if job_type_enum:
         count_query = count_query.where(Job.job_type == job_type_enum)
     if status_enum:
@@ -1223,13 +1222,13 @@ def list_jobs(
 @router.get("/job/{job_id}", response_model=JobResponse, tags=["Job"])
 def get_job(
     job_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job.tenant_id != membership.tenant_id:
+    if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return job
 
@@ -1238,7 +1237,7 @@ def get_job(
 async def requeue_job(
     job_id: int,
     body: JobRequeueRequest,
-    _admin: Membership = Depends(require_role("admin")),
+    _admin: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -1384,7 +1383,7 @@ class ScheduleGenerateResponse(PydanticBaseModel):
 def upload_file(
     file: UploadFile = FastAPIFile(...),
     hospital_id: int = Query(..., description="ID do hospital (obrigatório)"),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -1397,7 +1396,7 @@ def upload_file(
     hospital = session.get(Hospital, hospital_id)
     if not hospital:
         raise HTTPException(status_code=404, detail="Hospital não encontrado")
-    if hospital.tenant_id != membership.tenant_id:
+    if hospital.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
     storage_service = StorageService()
@@ -1406,7 +1405,7 @@ def upload_file(
         # Upload arquivo e criar registro
         file_model = storage_service.upload_imported_file(
             session=session,
-            tenant_id=membership.tenant_id,
+            tenant_id=member.tenant_id,
             hospital_id=hospital_id,
             file=file,
         )
@@ -1446,14 +1445,14 @@ def list_files(
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id (opcional)"),
     limit: int = Query(21, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
     Lista arquivos do tenant atual, com filtros opcionais por período, hospital e paginação.
 
     Filtra exclusivamente pelo campo created_at (não usa uploaded_at ou updated_at).
-    Sempre filtra por tenant_id do JWT (via membership).
+    Sempre filtra por tenant_id do JWT (via member).
     Ordena por created_at decrescente.
     Retorna hospital_id e hospital_name para cada arquivo.
     """
@@ -1462,11 +1461,11 @@ def list_files(
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             raise HTTPException(status_code=404, detail="Hospital não encontrado")
-        if hospital.tenant_id != membership.tenant_id:
+        if hospital.tenant_id != member.tenant_id:
             raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
     # Query base - sempre filtrar por tenant_id
-    query = select(File).where(File.tenant_id == membership.tenant_id)
+    query = select(File).where(File.tenant_id == member.tenant_id)
 
     # Aplicar filtros de período (created_at)
     if start_at is not None:
@@ -1489,7 +1488,7 @@ def list_files(
             raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
 
     # Contar total antes de aplicar paginação
-    count_query = select(func.count(File.id)).where(File.tenant_id == membership.tenant_id)
+    count_query = select(func.count(File.id)).where(File.tenant_id == member.tenant_id)
     if start_at is not None:
         count_query = count_query.where(File.created_at >= start_at)
     if end_at is not None:
@@ -1505,7 +1504,7 @@ def list_files(
 
     # Buscar todos os jobs EXTRACT_DEMAND COMPLETED do tenant para verificar quais arquivos podem ser deletados
     completed_jobs_query = select(Job).where(
-        Job.tenant_id == membership.tenant_id,
+        Job.tenant_id == member.tenant_id,
         Job.job_type == JobType.EXTRACT_DEMAND,
         Job.status == JobStatus.COMPLETED,
     )
@@ -1526,7 +1525,7 @@ def list_files(
 
     # Buscar todos os jobs EXTRACT_DEMAND do tenant para obter o status mais recente de cada arquivo
     all_jobs_query = select(Job).where(
-        Job.tenant_id == membership.tenant_id,
+        Job.tenant_id == member.tenant_id,
         Job.job_type == JobType.EXTRACT_DEMAND,
     ).order_by(Job.created_at.desc())
     all_jobs = session.exec(all_jobs_query).all()
@@ -1551,7 +1550,7 @@ def list_files(
     hospital_dict = {}
     if hospital_ids:
         hospital_query = select(Hospital).where(
-            Hospital.tenant_id == membership.tenant_id,
+            Hospital.tenant_id == member.tenant_id,
             Hospital.id.in_(hospital_ids),
         )
         hospital_list = session.exec(hospital_query).all()
@@ -1589,7 +1588,7 @@ def list_files(
 @router.get("/file/{file_id}", response_model=FileDownloadResponse, tags=["File"])
 def get_file(
     file_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -1601,7 +1600,7 @@ def get_file(
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
     # Validar tenant_id
-    if file_model.tenant_id != membership.tenant_id:
+    if file_model.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     # Gerar URL presignada
@@ -1622,7 +1621,7 @@ def get_file(
 @router.get("/file/{file_id}/download", tags=["File"])
 def download_file(
     file_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -1635,7 +1634,7 @@ def download_file(
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
     # Validar tenant_id
-    if file_model.tenant_id != membership.tenant_id:
+    if file_model.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     # Obter arquivo do MinIO
@@ -1666,7 +1665,7 @@ def download_file(
 @router.delete("/file/{file_id}", status_code=204, tags=["File"])
 def delete_file(
     file_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -1678,7 +1677,7 @@ def delete_file(
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
     # Validar tenant_id
-    if file_model.tenant_id != membership.tenant_id:
+    if file_model.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     # Excluir arquivo do S3/MinIO
@@ -1715,7 +1714,7 @@ def delete_file(
 @router.post("/schedule/generate", response_model=ScheduleGenerateResponse, status_code=201, tags=["Schedule"])
 async def schedule_generate(
     body: ScheduleGenerateRequest,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     # Validar período (intervalo meio-aberto [start, end))
@@ -1727,7 +1726,7 @@ async def schedule_generate(
     extract_job = session.get(Job, body.extract_job_id)
     if not extract_job:
         raise HTTPException(status_code=404, detail="Job de extração não encontrado")
-    if extract_job.tenant_id != membership.tenant_id:
+    if extract_job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if extract_job.status != JobStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Job de extração deve estar COMPLETED")
@@ -1735,7 +1734,7 @@ async def schedule_generate(
         raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
 
     sv = ScheduleVersion(
-        tenant_id=membership.tenant_id,
+                    tenant_id=member.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
         period_end_at=body.period_end_at,
@@ -1748,7 +1747,7 @@ async def schedule_generate(
     session.refresh(sv)
 
     job = Job(
-        tenant_id=membership.tenant_id,
+                    tenant_id=member.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
@@ -1888,25 +1887,25 @@ class HospitalListResponse(PydanticBaseModel):
 @router.post("/hospital", response_model=HospitalResponse, status_code=201, tags=["Hospital"])
 def create_hospital(
     body: HospitalCreate,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
     Cria um novo hospital (apenas admin).
-    Hospital sempre pertence ao tenant atual (do membership).
+    Hospital sempre pertence ao tenant atual (do member).
     """
     try:
-        logger.info(f"Criando hospital: name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={membership.tenant_id}")
+        logger.info(f"Criando hospital: name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={member.tenant_id}")
 
         # Verificar se já existe hospital com mesmo nome no tenant
         existing = session.exec(
             select(Hospital).where(
-                Hospital.tenant_id == membership.tenant_id,
+                Hospital.tenant_id == member.tenant_id,
                 Hospital.name == body.name,
             )
         ).first()
         if existing:
-            logger.warning(f"Hospital com nome '{body.name}' já existe no tenant {membership.tenant_id} (id={existing.id})")
+            logger.warning(f"Hospital com nome '{body.name}' já existe no tenant {member.tenant_id} (id={existing.id})")
             raise HTTPException(
                 status_code=409,
                 detail=f"Hospital com nome '{body.name}' já existe neste tenant",
@@ -1915,7 +1914,7 @@ def create_hospital(
         logger.info(f"Valor do prompt após validação Pydantic: {body.prompt}")
 
         hospital = Hospital(
-            tenant_id=membership.tenant_id,
+            tenant_id=member.tenant_id,
             name=body.name,
             prompt=body.prompt,
             color=body.color,
@@ -1964,7 +1963,7 @@ def create_hospital(
 
 @router.get("/hospital/list", response_model=HospitalListResponse, tags=["Hospital"])
 def list_hospital(
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
@@ -1973,11 +1972,11 @@ def list_hospital(
     Lista todos os hospitais do tenant atual com paginação.
     """
     try:
-        logger.info(f"Listando hospitais para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
-        query = select(Hospital).where(Hospital.tenant_id == membership.tenant_id)
+        logger.info(f"Listando hospitais para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
+        query = select(Hospital).where(Hospital.tenant_id == member.tenant_id)
 
         # Contar total antes de aplicar paginação
-        count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == membership.tenant_id)
+        count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == member.tenant_id)
         total = session.exec(count_query).one()
 
         logger.info(f"Encontrados {total} hospitais")
@@ -2021,7 +2020,7 @@ def list_hospital(
 @router.get("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
 def get_hospital(
     hospital_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -2029,13 +2028,13 @@ def get_hospital(
     Valida que o hospital pertence ao tenant atual.
     """
     try:
-        logger.info(f"Buscando hospital id={hospital_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Buscando hospital id={hospital_id} para tenant_id={member.tenant_id}")
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             logger.warning(f"Hospital não encontrado: id={hospital_id}")
             raise HTTPException(status_code=404, detail="Hospital não encontrado")
-        if hospital.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if hospital.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         logger.info(f"Hospital encontrado: id={hospital.id}, name={hospital.name}, prompt={'presente' if hospital.prompt else 'None'}")
@@ -2054,7 +2053,7 @@ def get_hospital(
 def update_hospital(
     hospital_id: int,
     body: HospitalUpdate,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -2062,21 +2061,21 @@ def update_hospital(
     Valida que o hospital pertence ao tenant atual.
     """
     try:
-        logger.info(f"Atualizando hospital: id={hospital_id}, name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={membership.tenant_id}")
+        logger.info(f"Atualizando hospital: id={hospital_id}, name={body.name}, prompt={'presente' if body.prompt else 'None/vazio'}, tenant_id={member.tenant_id}")
 
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             logger.warning(f"Hospital não encontrado: id={hospital_id}")
             raise HTTPException(status_code=404, detail="Hospital não encontrado")
-        if hospital.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if hospital.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Verificar se novo nome já existe (se estiver alterando)
         if body.name is not None and body.name != hospital.name:
             existing = session.exec(
                 select(Hospital).where(
-                    Hospital.tenant_id == membership.tenant_id,
+                    Hospital.tenant_id == member.tenant_id,
                     Hospital.name == body.name,
                     Hospital.id != hospital_id,
                 )
@@ -2145,7 +2144,7 @@ def update_hospital(
 @router.delete("/hospital/{hospital_id}", status_code=204, tags=["Hospital"])
 def delete_hospital(
     hospital_id: int,
-    membership: Membership = Depends(require_role("admin")),
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
@@ -2153,14 +2152,14 @@ def delete_hospital(
     Valida que o hospital pertence ao tenant atual.
     """
     try:
-        logger.info(f"Excluindo hospital id={hospital_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Excluindo hospital id={hospital_id} para tenant_id={member.tenant_id}")
 
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             logger.warning(f"Hospital não encontrado: id={hospital_id}")
             raise HTTPException(status_code=404, detail="Hospital não encontrado")
-        if hospital.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if hospital.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: hospital.tenant_id={hospital.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Verificar se há arquivos associados a este hospital
@@ -2317,53 +2316,10 @@ class DemandListResponse(PydanticBaseModel):
     total: int
 
 
-class ProfileCreate(PydanticBaseModel):
-    membership_id: int
-    hospital_id: int | None = None
-    attribute: dict = {}
-
-    @field_validator("attribute")
-    @classmethod
-    def validate_attribute(cls, v: dict) -> dict:
-        if not isinstance(v, dict):
-            raise ValueError("attribute deve ser um objeto JSON")
-        return v
-
-
-class ProfileUpdate(PydanticBaseModel):
-    hospital_id: int | None = None
-    attribute: dict | None = None
-
-    @field_validator("attribute")
-    @classmethod
-    def validate_attribute(cls, v: dict | None) -> dict | None:
-        if v is not None and not isinstance(v, dict):
-            raise ValueError("attribute deve ser um objeto JSON")
-        return v
-
-
-class ProfileResponse(PydanticBaseModel):
-    id: int
-    tenant_id: int
-    membership_id: int
-    hospital_id: int | None
-    attribute: dict
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ProfileListResponse(PydanticBaseModel):
-    items: list[ProfileResponse]
-    total: int
-
-
 @router.post("/demand", response_model=DemandResponse, status_code=201, tags=["Demand"])
 def create_demand(
     body: DemandCreate,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -2371,14 +2327,14 @@ def create_demand(
     Valida que hospital_id e job_id (se fornecidos) pertencem ao tenant atual.
     """
     try:
-        logger.info(f"Criando demanda: procedure={body.procedure}, tenant_id={membership.tenant_id}")
+        logger.info(f"Criando demanda: procedure={body.procedure}, tenant_id={member.tenant_id}")
 
         # Validar hospital_id se fornecido
         if body.hospital_id is not None:
             hospital = session.get(Hospital, body.hospital_id)
             if not hospital:
                 raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != membership.tenant_id:
+            if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
         # Validar job_id se fornecido
@@ -2386,11 +2342,11 @@ def create_demand(
             job = session.get(Job, body.job_id)
             if not job:
                 raise HTTPException(status_code=404, detail="Job não encontrado")
-            if job.tenant_id != membership.tenant_id:
+            if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
 
         demand = Demand(
-            tenant_id=membership.tenant_id,
+            tenant_id=member.tenant_id,
             hospital_id=body.hospital_id,
             job_id=body.job_id,
             room=body.room,
@@ -2432,26 +2388,26 @@ def list_demands(
     priority: Optional[str] = Query(None, description="Filtrar por priority (Urgente, Emergência)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
     Lista demandas do tenant atual, com filtros opcionais e paginação.
-    Sempre filtra por tenant_id do JWT (via membership).
+    Sempre filtra por tenant_id do JWT (via member).
     Ordena por start_time crescente.
     """
     try:
-        logger.info(f"Listando demandas para tenant_id={membership.tenant_id}")
+        logger.info(f"Listando demandas para tenant_id={member.tenant_id}")
 
         # Query base - sempre filtrar por tenant_id
-        query = select(Demand).where(Demand.tenant_id == membership.tenant_id)
+        query = select(Demand).where(Demand.tenant_id == member.tenant_id)
 
         # Aplicar filtros
         if hospital_id is not None:
             hospital = session.get(Hospital, hospital_id)
             if not hospital:
                 raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != membership.tenant_id:
+            if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
             query = query.where(Demand.hospital_id == hospital_id)
 
@@ -2459,7 +2415,7 @@ def list_demands(
             job = session.get(Job, job_id)
             if not job:
                 raise HTTPException(status_code=404, detail="Job não encontrado")
-            if job.tenant_id != membership.tenant_id:
+            if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
             query = query.where(Demand.job_id == job_id)
 
@@ -2487,7 +2443,7 @@ def list_demands(
                 raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
 
         # Contar total antes de aplicar paginação
-        count_query = select(func.count(Demand.id)).where(Demand.tenant_id == membership.tenant_id)
+        count_query = select(func.count(Demand.id)).where(Demand.tenant_id == member.tenant_id)
         if hospital_id is not None:
             count_query = count_query.where(Demand.hospital_id == hospital_id)
         if job_id is not None:
@@ -2525,7 +2481,7 @@ def list_demands(
 @router.get("/demand/{demand_id}", response_model=DemandResponse, tags=["Demand"])
 def get_demand(
     demand_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -2533,13 +2489,13 @@ def get_demand(
     Valida que a demanda pertence ao tenant atual.
     """
     try:
-        logger.info(f"Buscando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Buscando demanda id={demand_id} para tenant_id={member.tenant_id}")
         demand = session.get(Demand, demand_id)
         if not demand:
             logger.warning(f"Demanda não encontrada: id={demand_id}")
             raise HTTPException(status_code=404, detail="Demanda não encontrada")
-        if demand.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if demand.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         logger.info(f"Demanda encontrada: id={demand.id}, procedure={demand.procedure}")
@@ -2558,7 +2514,7 @@ def get_demand(
 def update_demand(
     demand_id: int,
     body: DemandUpdate,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -2567,14 +2523,14 @@ def update_demand(
     Valida que hospital_id e job_id (se fornecidos) pertencem ao tenant atual.
     """
     try:
-        logger.info(f"Atualizando demanda id={demand_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Atualizando demanda id={demand_id} para tenant_id={member.tenant_id}")
 
         demand = session.get(Demand, demand_id)
         if not demand:
             logger.warning(f"Demanda não encontrada: id={demand_id}")
             raise HTTPException(status_code=404, detail="Demanda não encontrada")
-        if demand.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if demand.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Validar hospital_id se fornecido
@@ -2582,7 +2538,7 @@ def update_demand(
             hospital = session.get(Hospital, body.hospital_id)
             if not hospital:
                 raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != membership.tenant_id:
+            if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
         # Validar job_id se fornecido
@@ -2590,7 +2546,7 @@ def update_demand(
             job = session.get(Job, body.job_id)
             if not job:
                 raise HTTPException(status_code=404, detail="Job não encontrado")
-            if job.tenant_id != membership.tenant_id:
+            if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
 
         # Validar end_time > start_time se ambos forem atualizados
@@ -2647,7 +2603,7 @@ def update_demand(
 @router.delete("/demand/{demand_id}", status_code=204, tags=["Demand"])
 def delete_demand(
     demand_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -2655,14 +2611,14 @@ def delete_demand(
     Valida que a demanda pertence ao tenant atual.
     """
     try:
-        logger.info(f"Excluindo demanda id={demand_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Excluindo demanda id={demand_id} para tenant_id={member.tenant_id}")
 
         demand = session.get(Demand, demand_id)
         if not demand:
             logger.warning(f"Demanda não encontrada: id={demand_id}")
             raise HTTPException(status_code=404, detail="Demanda não encontrada")
-        if demand.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        if demand.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         session.delete(demand)
@@ -2680,297 +2636,18 @@ def delete_demand(
         ) from e
 
 
-@router.post("/profile", response_model=ProfileResponse, status_code=201, tags=["Profile"])
-def create_profile(
-    body: ProfileCreate,
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-):
-    """
-    Cria um novo profile.
-    Valida que membership_id pertence ao tenant atual e que hospital_id (se fornecido) pertence ao tenant.
-    """
-    try:
-        logger.info(f"Criando profile: membership_id={body.membership_id}, hospital_id={body.hospital_id}, tenant_id={membership.tenant_id}")
-
-        # Validar que membership_id pertence ao tenant atual
-        target_membership = session.get(Membership, body.membership_id)
-        if not target_membership:
-            logger.warning(f"Membership não encontrado: id={body.membership_id}")
-            raise HTTPException(status_code=404, detail="Membership não encontrado")
-        if target_membership.tenant_id != membership.tenant_id:
-            logger.warning(f"Membership {body.membership_id} não pertence ao tenant {membership.tenant_id}")
-            raise HTTPException(
-                status_code=403,
-                detail=f"Membership não pertence ao tenant atual",
-            )
-        if target_membership.status != MembershipStatus.ACTIVE:
-            logger.warning(f"Membership {body.membership_id} não está ACTIVE")
-            raise HTTPException(
-                status_code=403,
-                detail=f"Membership deve estar ACTIVE",
-            )
-
-        # Validar hospital_id se fornecido
-        if body.hospital_id is not None:
-            hospital = session.get(Hospital, body.hospital_id)
-            if not hospital:
-                raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != membership.tenant_id:
-                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
-
-        profile = Profile(
-            tenant_id=membership.tenant_id,
-            membership_id=body.membership_id,
-            hospital_id=body.hospital_id,
-            attribute=body.attribute,
-        )
-
-        session.add(profile)
-        session.commit()
-        session.refresh(profile)
-        logger.info(f"Profile criado com sucesso: id={profile.id}")
-        return profile
-    except IntegrityError as e:
-        session.rollback()
-        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-        logger.error(f"Erro de integridade ao criar profile: {error_msg}", exc_info=True)
-
-        # Verificar se é erro de constraint única de profile
-        error_lower = error_msg.lower()
-        if "uq_profile_tenant_membership" in error_lower or "uq_profile_tenant_membership_no_hospital" in error_lower:
-            # Determinar mensagem baseada no hospital_id
-            if body.hospital_id is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Já existe um perfil para este membership sem hospital associado. Cada membership pode ter apenas um perfil geral (sem hospital).",
-                ) from e
-            else:
-                # Buscar nome do hospital para mensagem mais amigável
-                hospital = session.get(Hospital, body.hospital_id)
-                hospital_name = hospital.name if hospital else "este hospital"
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Já existe um perfil para este membership no hospital '{hospital_name}'. Cada membership pode ter apenas um perfil por hospital.",
-                ) from e
-        else:
-            # Outro tipo de erro de integridade
-            raise HTTPException(
-                status_code=409,
-                detail="Erro de integridade: os dados fornecidos violam uma regra de negócio. Verifique se já existe um perfil com essas informações.",
-            ) from e
-    except HTTPException:
-        raise
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Erro ao criar profile: {e}", exc_info=True)
-        sanitized_message = _sanitize_error_message(e, "Erro ao criar perfil. Tente novamente.")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao criar perfil: {sanitized_message}",
-        ) from e
-
-
-@router.get("/profile/list", response_model=ProfileListResponse, tags=["Profile"])
-def list_profile(
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-):
-    """
-    Lista profiles do tenant atual com paginação.
-    """
-    try:
-        logger.info(f"Listando profiles para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
-        query = select(Profile).where(Profile.tenant_id == membership.tenant_id)
-
-        # Contar total
-        total_query = select(func.count(Profile.id)).where(Profile.tenant_id == membership.tenant_id)
-        total = session.exec(total_query).one()
-
-        # Buscar itens com paginação
-        items = session.exec(query.order_by(Profile.created_at.desc()).offset(offset).limit(limit)).all()
-
-        logger.info(f"Encontrados {total} profiles, retornando {len(items)}")
-
-        return ProfileListResponse(
-            items=items,
-            total=total,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao listar profiles: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao listar profiles: {str(e)}",
-        ) from e
-
-
-@router.get("/profile/{profile_id}", response_model=ProfileResponse, tags=["Profile"])
-def get_profile(
-    profile_id: int,
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-):
-    """
-    Obtém detalhes de um profile específico.
-    Valida que o profile pertence ao tenant atual.
-    """
-    try:
-        logger.info(f"Buscando profile id={profile_id} para tenant_id={membership.tenant_id}")
-        profile = session.get(Profile, profile_id)
-        if not profile:
-            logger.warning(f"Profile não encontrado: id={profile_id}")
-            raise HTTPException(status_code=404, detail="Profile não encontrado")
-        if profile.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
-            raise HTTPException(status_code=403, detail="Acesso negado")
-
-        logger.info(f"Profile encontrado: id={profile.id}")
-        return profile
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro ao buscar profile: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao buscar profile: {str(e)}",
-        ) from e
-
-
-@router.put("/profile/{profile_id}", response_model=ProfileResponse, tags=["Profile"])
-def update_profile(
-    profile_id: int,
-    body: ProfileUpdate,
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-):
-    """
-    Atualiza um profile.
-    Valida que o profile pertence ao tenant atual.
-    Não permite alterar tenant_id ou membership_id.
-    """
-    try:
-        logger.info(f"Atualizando profile: id={profile_id}, tenant_id={membership.tenant_id}")
-
-        profile = session.get(Profile, profile_id)
-        if not profile:
-            logger.warning(f"Profile não encontrado: id={profile_id}")
-            raise HTTPException(status_code=404, detail="Profile não encontrado")
-        if profile.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
-            raise HTTPException(status_code=403, detail="Acesso negado")
-
-        # Validar hospital_id se fornecido
-        if body.hospital_id is not None:
-            hospital = session.get(Hospital, body.hospital_id)
-            if not hospital:
-                raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != membership.tenant_id:
-                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
-
-        # Atualizar campos permitidos (nunca permitir alterar tenant_id ou membership_id)
-        if body.hospital_id is not None:
-            profile.hospital_id = body.hospital_id
-        if body.attribute is not None:
-            profile.attribute = body.attribute
-        profile.updated_at = utc_now()
-
-        session.add(profile)
-        session.commit()
-        session.refresh(profile)
-        logger.info(f"Profile atualizado com sucesso: id={profile.id}")
-        return profile
-    except IntegrityError as e:
-        session.rollback()
-        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-        logger.error(f"Erro de integridade ao atualizar profile: {error_msg}", exc_info=True)
-
-        # Verificar se é erro de constraint única de profile
-        error_lower = error_msg.lower()
-        if "uq_profile_tenant_membership" in error_lower or "uq_profile_tenant_membership_no_hospital" in error_lower:
-            # Determinar mensagem baseada no hospital_id
-            new_hospital_id = body.hospital_id if body.hospital_id is not None else profile.hospital_id
-            if new_hospital_id is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Já existe um perfil para este membership sem hospital associado. Cada membership pode ter apenas um perfil geral (sem hospital).",
-                ) from e
-            else:
-                # Buscar nome do hospital para mensagem mais amigável
-                hospital = session.get(Hospital, new_hospital_id)
-                hospital_name = hospital.name if hospital else "este hospital"
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Já existe um perfil para este membership no hospital '{hospital_name}'. Cada membership pode ter apenas um perfil por hospital.",
-                ) from e
-        else:
-            # Outro tipo de erro de integridade
-            raise HTTPException(
-                status_code=409,
-                detail="Erro de integridade: os dados fornecidos violam uma regra de negócio. Verifique se já existe um perfil com essas informações.",
-            ) from e
-    except HTTPException:
-        raise
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Erro ao atualizar profile: {e}", exc_info=True)
-        sanitized_message = _sanitize_error_message(e, "Erro ao atualizar perfil. Tente novamente.")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao atualizar perfil: {sanitized_message}",
-        ) from e
-
-
-@router.delete("/profile/{profile_id}", status_code=204, tags=["Profile"])
-def delete_profile(
-    profile_id: int,
-    membership: Membership = Depends(get_current_membership),
-    session: Session = Depends(get_session),
-):
-    """
-    Exclui um profile.
-    Valida que o profile pertence ao tenant atual.
-    """
-    try:
-        logger.info(f"Deletando profile id={profile_id} para tenant_id={membership.tenant_id}")
-
-        profile = session.get(Profile, profile_id)
-        if not profile:
-            logger.warning(f"Profile não encontrado: id={profile_id}")
-            raise HTTPException(status_code=404, detail="Profile não encontrado")
-        if profile.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: profile.tenant_id={profile.tenant_id}, membership.tenant_id={membership.tenant_id}")
-            raise HTTPException(status_code=403, detail="Acesso negado")
-
-        session.delete(profile)
-        session.commit()
-        logger.info(f"Profile excluído com sucesso: id={profile_id}")
-        return Response(status_code=204)
-    except HTTPException:
-        raise
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Erro ao excluir profile: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao excluir profile: {str(e)}",
-        ) from e
-
-
 # ============================================================================
-# MEMBERSHIP ENDPOINTS
+# MEMBER ENDPOINTS
 # ============================================================================
 
-class MembershipCreate(PydanticBaseModel):
-    """Schema para criar membership."""
+class MemberCreate(PydanticBaseModel):
+    """Schema para criar member."""
     email: Optional[str] = None  # Email público (obrigatório se account_id não for fornecido)
     name: Optional[str] = None  # Nome público na clínica
     role: str
     status: str = "ACTIVE"
     account_id: Optional[int] = None  # Opcional (não usado no painel)
+    attribute: Optional[dict] = None  # Atributos customizados (JSON)
 
     @field_validator("email")
     @classmethod
@@ -3005,12 +2682,13 @@ class MembershipCreate(PydanticBaseModel):
         return self
 
 
-class MembershipUpdate(PydanticBaseModel):
-    """Schema para atualizar membership."""
+class MemberUpdate(PydanticBaseModel):
+    """Schema para atualizar member."""
     role: Optional[str] = None
     status: Optional[str] = None
-    name: Optional[str] = None  # Nome público na clínica (membership.name)
-    email: Optional[str] = None  # Email público na clínica (membership.email)
+    name: Optional[str] = None  # Nome público na clínica (member.name)
+    email: Optional[str] = None  # Email público na clínica (member.email)
+    attribute: Optional[dict] = None  # Atributos customizados (JSON)
 
     @field_validator("role")
     @classmethod
@@ -3031,16 +2709,17 @@ class MembershipUpdate(PydanticBaseModel):
         return v
 
 
-class MembershipResponse(PydanticBaseModel):
-    """Schema de resposta para membership."""
+class MemberResponse(PydanticBaseModel):
+    """Schema de resposta para member."""
     id: int
     tenant_id: int
     account_id: int | None  # Pode ser NULL para convites pendentes sem Account
     account_email: Optional[str] = None  # Privado, apenas para compatibilidade/auditoria
-    membership_email: Optional[str] = None  # Email público na clínica (pode ser editado)
-    membership_name: Optional[str] = None  # Nome público na clínica (pode ser editado)
+    member_email: Optional[str] = None  # Email público na clínica (pode ser editado)
+    member_name: Optional[str] = None  # Nome público na clínica (pode ser editado)
     role: str
     status: str
+    attribute: dict  # Atributos customizados (JSON)
     created_at: datetime
     updated_at: datetime
 
@@ -3048,25 +2727,25 @@ class MembershipResponse(PydanticBaseModel):
         from_attributes = True
 
 
-class MembershipListResponse(PydanticBaseModel):
-    """Schema de resposta para listagem de memberships."""
-    items: list[MembershipResponse]
+class MemberListResponse(PydanticBaseModel):
+    """Schema de resposta para listagem de members."""
+    items: list[MemberResponse]
     total: int
 
 
-@router.post("/membership", response_model=MembershipResponse, status_code=201, tags=["Membership"])
-def create_membership(
-    body: MembershipCreate,
-    membership: Membership = Depends(require_role("admin")),
+@router.post("/member", response_model=MemberResponse, status_code=201, tags=["Member"])
+def create_member(
+    body: MemberCreate,
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Cria um novo membership (apenas admin).
-    Permite criar membership com email e name públicos, sem necessidade de account_id.
+    Cria um novo member (apenas admin).
+    Permite criar member com email e name públicos, sem necessidade de account_id.
     """
     try:
         email_lower = body.email.lower() if body.email else None
-        logger.info(f"Criando membership: email={email_lower}, tenant_id={membership.tenant_id}, role={body.role}, status={body.status}")
+        logger.info(f"Criando member: email={email_lower}, tenant_id={member.tenant_id}, role={body.role}, status={body.status}")
 
         account = None
         account_id = None
@@ -3078,73 +2757,74 @@ def create_membership(
                 logger.warning(f"Account não encontrado: id={body.account_id}")
                 raise HTTPException(status_code=404, detail="Account não encontrado")
             account_id = account.id
-            # Verificar se já existe membership para este account no tenant
-            existing_membership = session.exec(
-                select(Membership).where(
-                    Membership.account_id == account_id,
-                    Membership.tenant_id == membership.tenant_id,
+            # Verificar se já existe member para este account no tenant
+            existing_member = session.exec(
+                select(Member).where(
+                    Member.account_id == account_id,
+                    Member.tenant_id == member.tenant_id,
                 )
             ).first()
-            if existing_membership:
-                logger.warning(f"Membership já existe para account {account_id} no tenant {membership.tenant_id}")
+            if existing_member:
+                logger.warning(f"Member já existe para account {account_id} no tenant {member.tenant_id}")
                 raise HTTPException(
                     status_code=409,
-                    detail="Já existe um membership para este account neste tenant",
+                    detail="Já existe um member para este account neste tenant",
                 )
         else:
             # Se account_id não foi fornecido, verificar unicidade por email
             if not email_lower:
                 raise HTTPException(status_code=400, detail="email é obrigatório quando account_id não é fornecido")
             
-            existing_membership = session.exec(
-                select(Membership).where(
-                    Membership.tenant_id == membership.tenant_id,
-                    Membership.email == email_lower,
-                    Membership.account_id.is_(None),
+            existing_member = session.exec(
+                select(Member).where(
+                    Member.tenant_id == member.tenant_id,
+                    Member.email == email_lower,
+                    Member.account_id.is_(None),
                 )
             ).first()
-            if existing_membership:
-                logger.warning(f"Membership já existe para email {email_lower} no tenant {membership.tenant_id}")
+            if existing_member:
+                logger.warning(f"Member já existe para email {email_lower} no tenant {member.tenant_id}")
                 raise HTTPException(
                     status_code=409,
-                    detail="Já existe um membership pendente para este email neste tenant",
+                    detail="Já existe um member pendente para este email neste tenant",
                 )
 
-        # Criar membership
-        membership_obj = Membership(
-            tenant_id=membership.tenant_id,
+        # Criar member
+        member_obj = Member(
+            tenant_id=member.tenant_id,
             account_id=account_id,
             email=email_lower,
             name=body.name,
-            role=MembershipRole[body.role.upper()],
-            status=MembershipStatus[body.status.upper()],
+            role=MemberRole[body.role.upper()],
+            status=MemberStatus[body.status.upper()],
+            attribute=body.attribute if body.attribute is not None else {},
         )
-        session.add(membership_obj)
+        session.add(member_obj)
         try:
             session.commit()
         except IntegrityError as e:
             session.rollback()
             raise HTTPException(
                 status_code=409,
-                detail="Membership duplicado não permitido",
+                detail="Member duplicado não permitido",
             ) from e
-        session.refresh(membership_obj)
+        session.refresh(member_obj)
 
         # Log de auditoria
         _try_write_audit_log(
             session,
             AuditLog(
-                tenant_id=membership.tenant_id,
-                actor_account_id=membership.account_id,
-                membership_id=membership_obj.id,
-                event_type="membership_invited",
+                tenant_id=member.tenant_id,
+                actor_account_id=member.account_id,
+                member_id=member_obj.id,
+                event_type="member_invited",
                 data={
                     "target_account_id": account_id,
                     "email": email_lower,
                     "from_status": None,
-                    "to_status": membership_obj.status.value,
+                    "to_status": member_obj.status.value,
                     "from_role": None,
-                    "to_role": membership_obj.role.value,
+                    "to_role": member_obj.role.value,
                 },
             ),
         )
@@ -3152,33 +2832,34 @@ def create_membership(
         # Buscar account_email para resposta (pode ser None)
         account_email = account.email if account else None
 
-        logger.info(f"Membership criado com sucesso: id={membership_obj.id}")
-        return MembershipResponse(
-            id=membership_obj.id,
-            tenant_id=membership_obj.tenant_id,
-            account_id=membership_obj.account_id,
+        logger.info(f"Member criado com sucesso: id={member_obj.id}")
+        return MemberResponse(
+            id=member_obj.id,
+            tenant_id=member_obj.tenant_id,
+            account_id=member_obj.account_id,
             account_email=account_email,
-            membership_email=membership_obj.email,
-            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
-            role=membership_obj.role.value,
-            status=membership_obj.status.value,
-            created_at=membership_obj.created_at,
-            updated_at=membership_obj.updated_at,
+            member_email=member_obj.email,
+            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            role=member_obj.role.value,
+            status=member_obj.status.value,
+            attribute=member_obj.attribute,
+            created_at=member_obj.created_at,
+            updated_at=member_obj.updated_at,
         )
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Erro ao criar membership: {e}", exc_info=True)
+        logger.error(f"Erro ao criar member: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao criar membership: {str(e)}",
+            detail=f"Erro ao criar member: {str(e)}",
         ) from e
 
 
-@router.get("/membership/list", response_model=MembershipListResponse, tags=["Membership"])
-def list_memberships(
-    membership: Membership = Depends(require_role("admin")),
+@router.get("/member/list", response_model=MemberListResponse, tags=["Member"])
+def list_members(
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -3186,397 +2867,403 @@ def list_memberships(
     role: Optional[str] = Query(default=None, description="Filtrar por role (admin, account)"),
 ):
     """
-    Lista memberships do tenant atual (apenas admin).
-    Sempre filtra por tenant_id do JWT (via membership).
+    Lista members do tenant atual (apenas admin).
+    Sempre filtra por tenant_id do JWT (via member).
     """
     try:
-        logger.info(f"Listando memberships para tenant_id={membership.tenant_id}, limit={limit}, offset={offset}")
+        logger.info(f"Listando members para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
 
-        # Query base: memberships do tenant com LEFT JOIN em Account (para incluir memberships sem Account)
+        # Query base: members do tenant com LEFT JOIN em Account (para incluir members sem Account)
         query = (
-            select(Membership, Account)
-            .outerjoin(Account, Membership.account_id == Account.id)
-            .where(Membership.tenant_id == membership.tenant_id)
+            select(Member, Account)
+            .outerjoin(Account, Member.account_id == Account.id)
+            .where(Member.tenant_id == member.tenant_id)
         )
 
         # Aplicar filtros
         if status:
             status_upper = status.strip().upper()
             if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
-                query = query.where(Membership.status == MembershipStatus[status_upper])
+                query = query.where(Member.status == MemberStatus[status_upper])
         if role:
             role_lower = role.strip().lower()
             if role_lower in {"admin", "account"}:
-                query = query.where(Membership.role == MembershipRole[role_lower.upper()])
+                query = query.where(Member.role == MemberRole[role_lower.upper()])
 
-        # Contar total (sem JOIN, apenas contar memberships)
+        # Contar total (sem JOIN, apenas contar members)
         count_query = (
-            select(func.count(Membership.id))
-            .where(Membership.tenant_id == membership.tenant_id)
+            select(func.count(Member.id))
+            .where(Member.tenant_id == member.tenant_id)
         )
         if status:
             status_upper = status.strip().upper()
             if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
-                count_query = count_query.where(Membership.status == MembershipStatus[status_upper])
+                count_query = count_query.where(Member.status == MemberStatus[status_upper])
         if role:
             role_lower = role.strip().lower()
             if role_lower in {"admin", "account"}:
-                count_query = count_query.where(Membership.role == MembershipRole[role_lower.upper()])
+                count_query = count_query.where(Member.role == MemberRole[role_lower.upper()])
 
         total = session.exec(count_query).one()
 
         # Aplicar paginação e ordenação
-        query = query.order_by(Membership.created_at.desc()).limit(limit).offset(offset)
+        query = query.order_by(Member.created_at.desc()).limit(limit).offset(offset)
 
         # Executar query
         results = session.exec(query).all()
 
         # Montar resposta
         items = []
-        for membership_obj, account in results:
+        for member_obj, account in results:
             # account_email é privado, apenas para compatibilidade/auditoria
             account_email = account.email if account else None
             items.append(
-                MembershipResponse(
-                    id=membership_obj.id,
-                    tenant_id=membership_obj.tenant_id,
-                    account_id=membership_obj.account_id,
+                MemberResponse(
+                    id=member_obj.id,
+                    tenant_id=member_obj.tenant_id,
+                    account_id=member_obj.account_id,
                     account_email=account_email,
-                    membership_email=membership_obj.email,  # Email público na clínica
-                    membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
-                    role=membership_obj.role.value,
-                    status=membership_obj.status.value,
-                    created_at=membership_obj.created_at,
-                    updated_at=membership_obj.updated_at,
+                    member_email=member_obj.email,  # Email público na clínica
+                    member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+                    role=member_obj.role.value,
+                    status=member_obj.status.value,
+                    attribute=member_obj.attribute,
+                    created_at=member_obj.created_at,
+                    updated_at=member_obj.updated_at,
                 )
             )
 
-        logger.info(f"Retornando {len(items)} memberships de {total} total")
-        return MembershipListResponse(items=items, total=total)
+        logger.info(f"Retornando {len(items)} members de {total} total")
+        return MemberListResponse(items=items, total=total)
     except Exception as e:
-        logger.error(f"Erro ao listar memberships: {e}", exc_info=True)
+        logger.error(f"Erro ao listar members: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao listar memberships: {str(e)}",
+            detail=f"Erro ao listar members: {str(e)}",
         ) from e
 
 
-@router.get("/membership/{membership_id}", response_model=MembershipResponse, tags=["Membership"])
-def get_membership(
-    membership_id: int,
-    membership: Membership = Depends(require_role("admin")),
+@router.get("/member/{member_id}", response_model=MemberResponse, tags=["Member"])
+def get_member(
+    member_id: int,
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Busca um membership específico (apenas admin).
-    Valida que o membership pertence ao tenant atual.
+    Busca um member específico (apenas admin).
+    Valida que o member pertence ao tenant atual.
     """
     try:
-        logger.info(f"Buscando membership id={membership_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Buscando member id={member_id} para tenant_id={member.tenant_id}")
 
-        membership_obj = session.get(Membership, membership_id)
-        if not membership_obj:
-            logger.warning(f"Membership não encontrado: id={membership_id}")
-            raise HTTPException(status_code=404, detail="Membership não encontrado")
-        if membership_obj.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        member_obj = session.get(Member, member_id)
+        if not member_obj:
+            logger.warning(f"Member não encontrado: id={member_id}")
+            raise HTTPException(status_code=404, detail="Member não encontrado")
+        if member_obj.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: member.tenant_id={member_obj.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
-        # Buscar account (pode ser None se membership ainda não foi vinculado)
+        # Buscar account (pode ser None se member ainda não foi vinculado)
         account = None
         account_email = None
-        if membership_obj.account_id:
-            account = session.get(Account, membership_obj.account_id)
+        if member_obj.account_id:
+            account = session.get(Account, member_obj.account_id)
             if account:
                 account_email = account.email
 
-        return MembershipResponse(
-            id=membership_obj.id,
-            tenant_id=membership_obj.tenant_id,
-            account_id=membership_obj.account_id,
+        return MemberResponse(
+            id=member_obj.id,
+            tenant_id=member_obj.tenant_id,
+            account_id=member_obj.account_id,
             account_email=account_email,
-            membership_email=membership_obj.email,  # Email público na clínica
-            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
-            role=membership_obj.role.value,
-            status=membership_obj.status.value,
-            created_at=membership_obj.created_at,
-            updated_at=membership_obj.updated_at,
+            member_email=member_obj.email,  # Email público na clínica
+            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            role=member_obj.role.value,
+            status=member_obj.status.value,
+            attribute=member_obj.attribute,
+            created_at=member_obj.created_at,
+            updated_at=member_obj.updated_at,
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro ao buscar membership: {e}", exc_info=True)
+        logger.error(f"Erro ao buscar member: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao buscar membership: {str(e)}",
+            detail=f"Erro ao buscar member: {str(e)}",
         ) from e
 
 
-@router.put("/membership/{membership_id}", response_model=MembershipResponse, tags=["Membership"])
-def update_membership(
-    membership_id: int,
-    body: MembershipUpdate,
-    membership: Membership = Depends(require_role("admin")),
+@router.put("/member/{member_id}", response_model=MemberResponse, tags=["Member"])
+def update_member(
+    member_id: int,
+    body: MemberUpdate,
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Atualiza um membership (apenas admin).
+    Atualiza um member (apenas admin).
     Permite alterar role e status.
-    Valida que o membership pertence ao tenant atual.
+    Valida que o member pertence ao tenant atual.
     """
     try:
-        logger.info(f"Atualizando membership id={membership_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Atualizando member id={member_id} para tenant_id={member.tenant_id}")
 
-        membership_obj = session.get(Membership, membership_id)
-        if not membership_obj:
-            logger.warning(f"Membership não encontrado: id={membership_id}")
-            raise HTTPException(status_code=404, detail="Membership não encontrado")
-        if membership_obj.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        member_obj = session.get(Member, member_id)
+        if not member_obj:
+            logger.warning(f"Member não encontrado: id={member_id}")
+            raise HTTPException(status_code=404, detail="Member não encontrado")
+        if member_obj.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: member.tenant_id={member_obj.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Validar regras de negócio
         if body.status and body.status.upper() == "REMOVED":
-            # Não permitir remover o último membership ACTIVE de um account
-            # Só validar se membership tem account_id (memberships ACTIVE sempre devem ter)
-            if membership_obj.status == MembershipStatus.ACTIVE and membership_obj.account_id:
+            # Não permitir remover o último member ACTIVE de um account
+            # Só validar se member tem account_id (members ACTIVE sempre devem ter)
+            if member_obj.status == MemberStatus.ACTIVE and member_obj.account_id:
                 active_count = session.exec(
                     select(func.count())
-                    .select_from(Membership)
+                    .select_from(Member)
                     .where(
-                        Membership.account_id == membership_obj.account_id,
-                        Membership.status == MembershipStatus.ACTIVE,
+                        Member.account_id == member_obj.account_id,
+                        Member.status == MemberStatus.ACTIVE,
                     )
                 ).one()
                 if int(active_count or 0) <= 1:
                     raise HTTPException(
                         status_code=409,
                         detail=(
-                            "Não é permitido remover o último membership ACTIVE da conta. "
+                            "Não é permitido remover o último member ACTIVE da conta. "
                             "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
                         ),
                     )
 
         # Atualizar campos
-        prev_status = membership_obj.status
-        prev_role = membership_obj.role
+        prev_status = member_obj.status
+        prev_role = member_obj.role
 
         if body.role is not None:
-            membership_obj.role = MembershipRole[body.role.upper()]
+            member_obj.role = MemberRole[body.role.upper()]
         if body.status is not None:
-            membership_obj.status = MembershipStatus[body.status.upper()]
+            member_obj.status = MemberStatus[body.status.upper()]
         if body.name is not None:
-            # Permitir editar membership.name (não account.name)
-            membership_obj.name = body.name
+            # Permitir editar member.name (não account.name)
+            member_obj.name = body.name
         if body.email is not None:
-            # Permitir editar membership.email (campo público, independente de account.email)
-            membership_obj.email = body.email.lower() if body.email else None
+            # Permitir editar member.email (campo público, independente de account.email)
+            member_obj.email = body.email.lower() if body.email else None
+        if body.attribute is not None:
+            # Permitir editar member.attribute
+            member_obj.attribute = body.attribute
 
-        membership_obj.updated_at = utc_now()
-        session.add(membership_obj)
+        member_obj.updated_at = utc_now()
+        session.add(member_obj)
         session.commit()
-        session.refresh(membership_obj)
+        session.refresh(member_obj)
 
         # Log de auditoria se houver mudanças
-        if prev_status != membership_obj.status or prev_role != membership_obj.role:
+        if prev_status != member_obj.status or prev_role != member_obj.role:
             _try_write_audit_log(
                 session,
                 AuditLog(
-                    tenant_id=membership.tenant_id,
-                    actor_account_id=membership.account_id,
-                    membership_id=membership_obj.id,
-                    event_type="membership_status_changed",
+                    tenant_id=member.tenant_id,
+                    actor_account_id=member.account_id,
+                    member_id=member_obj.id,
+                    event_type="member_status_changed",
                     data={
-                        "target_account_id": membership_obj.account_id,
+                        "target_account_id": member_obj.account_id,
                         "from_status": prev_status.value,
-                        "to_status": membership_obj.status.value,
+                        "to_status": member_obj.status.value,
                         "from_role": prev_role.value,
-                        "to_role": membership_obj.role.value,
+                        "to_role": member_obj.role.value,
                     },
                 ),
             )
 
-        # Buscar account (pode ser None se membership ainda não foi vinculado)
+        # Buscar account (pode ser None se member ainda não foi vinculado)
         account = None
         account_email = None
-        if membership_obj.account_id:
-            account = session.get(Account, membership_obj.account_id)
+        if member_obj.account_id:
+            account = session.get(Account, member_obj.account_id)
             if account:
                 account_email = account.email
 
-        logger.info(f"Membership atualizado com sucesso: id={membership_id}")
-        return MembershipResponse(
-            id=membership_obj.id,
-            tenant_id=membership_obj.tenant_id,
-            account_id=membership_obj.account_id,
+        logger.info(f"Member atualizado com sucesso: id={member_id}")
+        return MemberResponse(
+            id=member_obj.id,
+            tenant_id=member_obj.tenant_id,
+            account_id=member_obj.account_id,
             account_email=account_email,
-            membership_email=membership_obj.email,  # Email público na clínica
-            membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
-            role=membership_obj.role.value,
-            status=membership_obj.status.value,
-            created_at=membership_obj.created_at,
-            updated_at=membership_obj.updated_at,
+            member_email=member_obj.email,  # Email público na clínica
+            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            role=member_obj.role.value,
+            status=member_obj.status.value,
+            attribute=member_obj.attribute,
+            created_at=member_obj.created_at,
+            updated_at=member_obj.updated_at,
         )
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Erro ao atualizar membership: {e}", exc_info=True)
+        logger.error(f"Erro ao atualizar member: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao atualizar membership: {str(e)}",
+            detail=f"Erro ao atualizar member: {str(e)}",
         ) from e
 
 
-@router.delete("/membership/{membership_id}", status_code=204, tags=["Membership"])
-def delete_membership(
-    membership_id: int,
-    membership: Membership = Depends(require_role("admin")),
+@router.delete("/member/{member_id}", status_code=204, tags=["Member"])
+def delete_member(
+    member_id: int,
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Remove (soft-delete) um membership (status -> REMOVED) (apenas admin).
-    Valida que o membership pertence ao tenant atual.
-    Regra de segurança: não permitir remover o último membership ACTIVE de um account.
+    Remove (soft-delete) um member (status -> REMOVED) (apenas admin).
+    Valida que o member pertence ao tenant atual.
+    Regra de segurança: não permitir remover o último member ACTIVE de um account.
     """
     try:
-        logger.info(f"Removendo membership id={membership_id} para tenant_id={membership.tenant_id}")
+        logger.info(f"Removendo member id={member_id} para tenant_id={member.tenant_id}")
 
-        membership_obj = session.get(Membership, membership_id)
-        if not membership_obj:
-            logger.warning(f"Membership não encontrado: id={membership_id}")
-            raise HTTPException(status_code=404, detail="Membership não encontrado")
-        if membership_obj.tenant_id != membership.tenant_id:
-            logger.warning(f"Acesso negado: membership.tenant_id={membership_obj.tenant_id}, membership.tenant_id={membership.tenant_id}")
+        member_obj = session.get(Member, member_id)
+        if not member_obj:
+            logger.warning(f"Member não encontrado: id={member_id}")
+            raise HTTPException(status_code=404, detail="Member não encontrado")
+        if member_obj.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: member.tenant_id={member_obj.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         # Validar regra de segurança
-        # Só validar se membership tem account_id (memberships ACTIVE sempre devem ter)
-        if membership_obj.status == MembershipStatus.ACTIVE and membership_obj.account_id:
+        # Só validar se member tem account_id (members ACTIVE sempre devem ter)
+        if member_obj.status == MemberStatus.ACTIVE and member_obj.account_id:
             active_count = session.exec(
                 select(func.count())
-                .select_from(Membership)
+                .select_from(Member)
                 .where(
-                    Membership.account_id == membership_obj.account_id,
-                    Membership.status == MembershipStatus.ACTIVE,
+                    Member.account_id == member_obj.account_id,
+                    Member.status == MemberStatus.ACTIVE,
                 )
             ).one()
             if int(active_count or 0) <= 1:
                 raise HTTPException(
                     status_code=409,
                     detail=(
-                        "Não é permitido remover o último membership ACTIVE da conta. "
+                        "Não é permitido remover o último member ACTIVE da conta. "
                         "Antes, garanta outro acesso (ex.: outro tenant) ou transfira permissões."
                     ),
                 )
 
-        prev_status = membership_obj.status
-        membership_obj.status = MembershipStatus.REMOVED
-        membership_obj.updated_at = utc_now()
-        session.add(membership_obj)
+        prev_status = member_obj.status
+        member_obj.status = MemberStatus.REMOVED
+        member_obj.updated_at = utc_now()
+        session.add(member_obj)
         session.commit()
-        session.refresh(membership_obj)
+        session.refresh(member_obj)
 
         # Log de auditoria
         _try_write_audit_log(
             session,
             AuditLog(
-                tenant_id=membership.tenant_id,
-                actor_account_id=membership.account_id,
-                membership_id=membership_obj.id,
-                event_type="membership_status_changed",
+                tenant_id=member.tenant_id,
+                actor_account_id=member.account_id,
+                member_id=member_obj.id,
+                event_type="member_status_changed",
                 data={
-                    "target_account_id": membership_obj.account_id,
+                    "target_account_id": member_obj.account_id,
                     "from_status": prev_status.value,
-                    "to_status": membership_obj.status.value,
+                    "to_status": member_obj.status.value,
                 },
             ),
         )
 
-        logger.info(f"Membership removido com sucesso: id={membership_id}")
+        logger.info(f"Member removido com sucesso: id={member_id}")
         return Response(status_code=204)
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Erro ao remover membership: {e}", exc_info=True)
+        logger.error(f"Erro ao remover member: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao remover membership: {str(e)}",
+            detail=f"Erro ao remover member: {str(e)}",
         ) from e
 
 
-@router.post("/membership/{membership_id}/invite", status_code=200, tags=["Membership"])
-def send_membership_invite_email(
-    membership_id: int,
-    membership: Membership = Depends(require_role("admin")),
+@router.post("/member/{member_id}/invite", status_code=200, tags=["Member"])
+def send_member_invite_email(
+    member_id: int,
+    member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
 ):
     """
-    Envia email de convite para um membership e atualiza status para PENDING.
+    Envia email de convite para um member e atualiza status para PENDING.
     Apenas admin pode enviar convites.
     """
     try:
-        membership_obj = session.get(Membership, membership_id)
-        if not membership_obj:
-            raise HTTPException(status_code=404, detail="Membership não encontrado")
+        member_obj = session.get(Member, member_id)
+        if not member_obj:
+            raise HTTPException(status_code=404, detail="Member não encontrado")
 
-        if membership_obj.tenant_id != membership.tenant_id:
+        if member_obj.tenant_id != member.tenant_id:
             raise HTTPException(status_code=403, detail="Acesso negado")
 
-        tenant = session.get(Tenant, membership.tenant_id)
+        tenant = session.get(Tenant, member.tenant_id)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        # Usar membership.email como email de destino (campo público)
-        # Fallback para account.email apenas se membership.email estiver vazio e account_id estiver preenchido
-        account_email = membership_obj.email
-        if not account_email and membership_obj.account_id:
-            account = session.get(Account, membership_obj.account_id)
+        # Usar member.email como email de destino (campo público)
+        # Fallback para account.email apenas se member.email estiver vazio e account_id estiver preenchido
+        account_email = member_obj.email
+        if not account_email and member_obj.account_id:
+            account = session.get(Account, member_obj.account_id)
             if account and account.email:
                 account_email = account.email
         
         if not account_email:
-            raise HTTPException(status_code=400, detail="Membership não possui email para envio de convite")
+            raise HTTPException(status_code=400, detail="Member não possui email para envio de convite")
 
         logger.info(
-            f"[INVITE] Iniciando envio de convite para membership ID={membership_id} "
-            f"(email={account_email}, tenant_id={membership.tenant_id})"
+            f"[INVITE] Iniciando envio de convite para member ID={member_id} "
+            f"(email={account_email}, tenant_id={member.tenant_id})"
         )
 
         # Atualizar status para PENDING antes de enviar o email
-        prev_status = membership_obj.status
-        if membership_obj.status != MembershipStatus.PENDING:
-            membership_obj.status = MembershipStatus.PENDING
-            membership_obj.updated_at = utc_now()
-            session.add(membership_obj)
+        prev_status = member_obj.status
+        if member_obj.status != MemberStatus.PENDING:
+            member_obj.status = MemberStatus.PENDING
+            member_obj.updated_at = utc_now()
+            session.add(member_obj)
             session.commit()
-            session.refresh(membership_obj)
+            session.refresh(member_obj)
 
             # Log de auditoria se status mudou
-            if prev_status != membership_obj.status:
+            if prev_status != member_obj.status:
                 _try_write_audit_log(
                     session,
                     AuditLog(
-                        tenant_id=membership.tenant_id,
-                        actor_account_id=membership.account_id,
-                        membership_id=membership_obj.id,
-                        event_type="membership_status_changed",
+                        tenant_id=member.tenant_id,
+                        actor_account_id=member.account_id,
+                        member_id=member_obj.id,
+                        event_type="member_status_changed",
                         data={
-                            "target_account_id": membership_obj.account_id,
+                            "target_account_id": member_obj.account_id,
                             "target_email": account_email,
                             "from_status": prev_status.value,
-                            "to_status": membership_obj.status.value,
+                            "to_status": member_obj.status.value,
                         },
                     ),
                 )
 
         # Enviar email de convite
         try:
-            # Usar membership.name se existir, senão usar email
-            from app.services.email_service import send_membership_invite
-            member_name = membership_obj.name if membership_obj.name else account_email
-            result = send_membership_invite(
+            # Usar member.name se existir, senão usar email
+            from app.services.email_service import send_member_invite
+            member_name = member_obj.name if member_obj.name else account_email
+            result = send_member_invite(
                 to_email=account_email,
                 member_name=member_name,
                 tenant_name=tenant.name,
@@ -3604,7 +3291,7 @@ def send_membership_invite_email(
 
         if not success:
             logger.error(
-                f"[INVITE] ❌ FALHA - Envio de convite falhou para membership ID={membership_id} "
+                f"[INVITE] ❌ FALHA - Envio de convite falhou para member ID={member_id} "
                 f"(email={account_email}): {error_message}"
             )
             raise HTTPException(
@@ -3613,14 +3300,14 @@ def send_membership_invite_email(
             )
 
         logger.info(
-            f"[INVITE] ✅ SUCESSO - Convite enviado com sucesso para membership ID={membership_id} "
+            f"[INVITE] ✅ SUCESSO - Convite enviado com sucesso para member ID={member_id} "
             f"(email={account_email})"
         )
         return {"message": "Convite enviado com sucesso", "email": account_email}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro ao enviar convite para membership {membership_id}: {e}", exc_info=True)
+        logger.error(f"Erro ao enviar convite para member {member_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao enviar convite: {str(e)}",

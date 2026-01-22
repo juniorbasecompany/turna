@@ -9,11 +9,11 @@ from pydantic import BaseModel as PydanticBaseModel
 from sqlmodel import Session, select
 from sqlalchemy import func
 
-from app.auth.dependencies import get_current_membership
+from app.auth.dependencies import get_current_member
 from app.db.session import get_session
 from app.model.base import utc_now
 from app.model.file import File
-from app.model.membership import Membership
+from app.model.member import Member
 from app.model.schedule_version import ScheduleStatus, ScheduleVersion
 from app.storage.service import StorageService
 
@@ -206,13 +206,13 @@ def _day_schedules_from_result(*, sv: ScheduleVersion) -> list:
 @router.post("/{schedule_version_id}/publish", response_model=SchedulePublishResponse, tags=["Schedule"])
 def publish_schedule(
     schedule_version_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     sv = session.get(ScheduleVersion, schedule_version_id)
     if not sv:
         raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
-    if sv.tenant_id != membership.tenant_id:
+    if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     storage_service = StorageService()
@@ -239,7 +239,7 @@ def publish_schedule(
     pdf_bytes = render_multi_day_pdf_bytes(schedules)
     file_model = storage_service.upload_schedule_pdf(
         session=session,
-        tenant_id=membership.tenant_id,
+        tenant_id=member.tenant_id,
         schedule_version_id=sv.id,
         pdf_bytes=pdf_bytes,
     )
@@ -264,13 +264,13 @@ def publish_schedule(
 @router.get("/{schedule_version_id}/pdf", tags=["Schedule"])
 def download_schedule_pdf(
     schedule_version_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     sv = session.get(ScheduleVersion, schedule_version_id)
     if not sv:
         raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
-    if sv.tenant_id != membership.tenant_id:
+    if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if not sv.pdf_file_id:
         raise HTTPException(status_code=404, detail="PDF não encontrado (schedule_version ainda não publicada)")
@@ -288,7 +288,7 @@ def list_schedules(
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -303,12 +303,12 @@ def list_schedules(
             raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
 
     # Query base
-    query = select(ScheduleVersion).where(ScheduleVersion.tenant_id == membership.tenant_id)
+    query = select(ScheduleVersion).where(ScheduleVersion.tenant_id == member.tenant_id)
     if status_enum:
         query = query.where(ScheduleVersion.status == status_enum)
 
     # Contar total antes de aplicar paginação
-    count_query = select(func.count(ScheduleVersion.id)).where(ScheduleVersion.tenant_id == membership.tenant_id)
+    count_query = select(func.count(ScheduleVersion.id)).where(ScheduleVersion.tenant_id == member.tenant_id)
     if status_enum:
         count_query = count_query.where(ScheduleVersion.status == status_enum)
     total = session.exec(count_query).one()
@@ -326,7 +326,7 @@ def list_schedules(
 @router.get("/{schedule_version_id}", response_model=ScheduleVersionResponse, tags=["Schedule"])
 def get_schedule(
     schedule_version_id: int,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -335,7 +335,7 @@ def get_schedule(
     sv = session.get(ScheduleVersion, schedule_version_id)
     if not sv:
         raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
-    if sv.tenant_id != membership.tenant_id:
+    if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return ScheduleVersionResponse.model_validate(sv)
 
@@ -343,7 +343,7 @@ def get_schedule(
 @router.post("", response_model=ScheduleVersionResponse, status_code=201, tags=["Schedule"])
 def create_schedule(
     body: ScheduleCreateRequest,
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
@@ -357,7 +357,7 @@ def create_schedule(
         raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
 
     sv = ScheduleVersion(
-        tenant_id=membership.tenant_id,
+        tenant_id=member.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
         period_end_at=body.period_end_at,

@@ -17,7 +17,7 @@ export interface TenantOption {
 }
 
 export interface InviteOption {
-    membership_id: number
+    member_id: number
     tenant_id: number
     name: string
     slug: string
@@ -39,6 +39,19 @@ export interface AccountResponse {
     id: number
     email: string
     name: string
+    role: string
+    tenant_id: number
+    auth_provider: string
+    created_at: string
+    updated_at: string
+}
+
+// Resposta do endpoint /me (inclui member_name)
+export interface MeResponse {
+    id: number
+    email: string
+    name: string  // Nome privado (account.name)
+    member_name: string | null  // Nome público na clínica (member.name)
     role: string
     tenant_id: number
     auth_provider: string
@@ -268,63 +281,41 @@ export interface DemandUpdateRequest {
     source?: Record<string, unknown> | null
 }
 
-export interface ProfileResponse {
+
+export interface MemberResponse {
     id: number
     tenant_id: number
-    membership_id: number
-    hospital_id: number | null
+    account_id: number | null
+    account_email: string | null  // Privado, apenas para compatibilidade/auditoria
+    member_email: string | null  // Email público na clínica (pode ser editado)
+    member_name: string | null  // Nome público na clínica (pode ser editado)
+    role: string
+    status: string
     attribute: Record<string, unknown>
     created_at: string
     updated_at: string
 }
 
-export interface ProfileListResponse {
-    items: ProfileResponse[]
+export interface MemberListResponse {
+    items: MemberResponse[]
     total: number
 }
 
-export interface ProfileCreateRequest {
-    membership_id: number
-    hospital_id?: number | null
-    attribute?: Record<string, unknown>
-}
-
-export interface ProfileUpdateRequest {
-    hospital_id?: number | null
-    attribute?: Record<string, unknown>
-}
-
-export interface MembershipResponse {
-    id: number
-    tenant_id: number
-    account_id: number | null
-    account_email: string | null  // Privado, apenas para compatibilidade/auditoria
-    membership_email: string | null  // Email público na clínica (pode ser editado)
-    membership_name: string | null  // Nome público na clínica (pode ser editado)
-    role: string
-    status: string
-    created_at: string
-    updated_at: string
-}
-
-export interface MembershipListResponse {
-    items: MembershipResponse[]
-    total: number
-}
-
-export interface MembershipUpdateRequest {
+export interface MemberUpdateRequest {
     role?: string | null
     status?: string | null
     name?: string | null
     email?: string | null  // Email público editável
+    attribute?: Record<string, unknown> | null
 }
 
-export interface MembershipCreateRequest {
+export interface MemberCreateRequest {
     email?: string | null  // Email público (obrigatório se account_id não for fornecido)
     name?: string | null  // Nome público
     role: string
     status: string
     account_id?: number | null  // Opcional (não usado no painel)
+    attribute?: Record<string, unknown> | null
 }
 
 export interface AccountOption {

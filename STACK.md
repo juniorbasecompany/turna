@@ -41,8 +41,8 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 - **OAuth 2.0 (Google)** (login)
 - **JWT** (sessão/claims: account_id, tenant_id)
   - **Campos mínimos**: `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`
-  - **Dados do banco**: email, name, role são obtidos via endpoints (`/me`, `get_current_membership()`)
-  - **Privacidade**: Account é privado; Profile usa `membership_id` (não `account_id`)
+  - **Dados do banco**: email, name, role são obtidos via endpoints (`/me`, `get_current_member()`)
+  - **Privacidade**: Account é privado
 
 ### Email
 - **Resend** (envio de emails transacionais)

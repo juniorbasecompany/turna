@@ -6,6 +6,8 @@ import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
+import { FormField } from '@/components/FormField'
+import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { getCardContainerClasses } from '@/lib/cardStyles'
@@ -87,11 +89,8 @@ export default function HospitalPage() {
             {/* Área de edição */}
             <EditForm title="Hospital" isEditing={isEditing}>
                 <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row gap-4 items-start">
-                        <div className="flex-1 min-w-0">
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                                Nome <span className="text-red-500">*</span>
-                            </label>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Nome" required>
                             <input
                                 type="text"
                                 id="name"
@@ -101,20 +100,20 @@ export default function HospitalPage() {
                                 required
                                 disabled={submitting}
                             />
-                        </div>
-                        <div className="flex-shrink-0">
+                        </FormField>
+                        <FormField label="Cor">
                             <ColorPicker
                                 value={formData.color}
                                 onChange={(color) => setFormData({ ...formData, color })}
-                                label="Cor"
+                                label=""
                                 disabled={submitting}
                             />
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-2">
-                            Como os arquivos devem ser lidos?
-                        </label>
+                        </FormField>
+                    </FormFieldGrid>
+                    <FormField
+                        label="Como os arquivos devem ser lidos?"
+                        helperText="Escreva o prompt com as instruções para a IA extrair as demandas dos arquivos deste hospital."
+                    >
                         <textarea
                             id="prompt"
                             value={formData.prompt || ''}
@@ -123,10 +122,7 @@ export default function HospitalPage() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                             disabled={submitting}
                         />
-                        <p className="mt-1 text-xs text-gray-500">
-                            Escreva o prompt com as instruções para a IA extrair as demandas dos arquivos deste hospital.
-                        </p>
-                    </div>
+                    </FormField>
                 </div>
             </EditForm>
 

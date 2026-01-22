@@ -6,7 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 
 from app.db.session import get_session
-from app.model.membership import Membership, MembershipStatus
+from app.model.member import Member, MemberStatus
 from app.model.account import Account
 from app.model.tenant import Tenant
 from app.auth.jwt import verify_token
@@ -42,15 +42,15 @@ def get_current_account(
     return account
 
 
-def get_current_membership(
+def get_current_member(
     payload: dict[str, Any] = Depends(get_token_payload),
     session: Session = Depends(get_session),
-) -> Membership:
+) -> Member:
     """
-    Dependency que valida o acesso do account ao tenant do JWT via Membership.
+    Dependency que valida o acesso do account ao tenant do JWT via Member.
 
     Raises:
-        HTTPException: Se não existir membership ACTIVE para (account_id, tenant_id)
+        HTTPException: Se não existir member ACTIVE para (account_id, tenant_id)
     """
     account_id_raw = payload.get("sub")
     tenant_id_raw = payload.get("tenant_id")
@@ -60,26 +60,26 @@ def get_current_membership(
     account_id = int(account_id_raw)
     tenant_id = int(tenant_id_raw)
 
-    membership = session.exec(
-        select(Membership).where(
-            Membership.account_id == account_id,
-            Membership.tenant_id == tenant_id,
-            Membership.status == MembershipStatus.ACTIVE,
+    member = session.exec(
+        select(Member).where(
+            Member.account_id == account_id,
+            Member.tenant_id == tenant_id,
+            Member.status == MemberStatus.ACTIVE,
         )
     ).first()
-    if not membership:
+    if not member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso negado (membership ACTIVE não encontrado)",
+            detail="Acesso negado (member ACTIVE não encontrado)",
         )
-    return membership
+    return member
 
 
 def get_current_tenant(
-    membership: Membership = Depends(get_current_membership),
+    member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ) -> Tenant:
-    tenant = session.get(Tenant, membership.tenant_id)
+    tenant = session.get(Tenant, member.tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     return tenant
@@ -95,12 +95,12 @@ def require_role(required_role: str):
     Returns:
         Dependency function
     """
-    def role_checker(membership: Membership = Depends(get_current_membership)) -> Membership:
-        if membership.role.value != required_role:
+    def role_checker(member: Member = Depends(get_current_member)) -> Member:
+        if member.role.value != required_role:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Requires role: {required_role}"
             )
-        return membership
+        return member
 
     return role_checker

@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
- * GET /api/membership/[id]
+ * GET /api/member/[id]
  *
- * Obtém detalhes de um membership específico.
+ * Obtém detalhes de um member específico.
  */
 export async function GET(
   request: NextRequest,
@@ -14,7 +14,7 @@ export async function GET(
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
-    const response = await fetch(`${API_URL}/membership/${params.id}`, {
+    const response = await fetch(`${API_URL}/member/${params.id}`, {
       method: 'GET',
       headers: accessToken
         ? {
@@ -34,13 +34,13 @@ export async function GET(
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Erro ao obter membership:', error)
+    console.error('Erro ao obter member:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao obter membership',
+            : 'Erro desconhecido ao obter member',
       },
       { status: 500 }
     )
@@ -48,9 +48,9 @@ export async function GET(
 }
 
 /**
- * PUT /api/membership/[id]
+ * PUT /api/member/[id]
  *
- * Atualiza um membership (apenas admin).
+ * Atualiza um member (apenas admin).
  */
 export async function PUT(
   request: NextRequest,
@@ -60,7 +60,7 @@ export async function PUT(
     const body = await request.json()
     const accessToken = request.cookies.get('access_token')?.value
 
-    const response = await fetch(`${API_URL}/membership/${params.id}`, {
+    const response = await fetch(`${API_URL}/member/${params.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -80,13 +80,13 @@ export async function PUT(
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Erro ao atualizar membership:', error)
+    console.error('Erro ao atualizar member:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao atualizar membership',
+            : 'Erro desconhecido ao atualizar member',
       },
       { status: 500 }
     )
@@ -94,9 +94,9 @@ export async function PUT(
 }
 
 /**
- * DELETE /api/membership/[id]
+ * DELETE /api/member/[id]
  *
- * Remove um membership (apenas admin).
+ * Remove um member (apenas admin).
  */
 export async function DELETE(
   request: NextRequest,
@@ -105,7 +105,7 @@ export async function DELETE(
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
-    const response = await fetch(`${API_URL}/membership/${params.id}`, {
+    const response = await fetch(`${API_URL}/member/${params.id}`, {
       method: 'DELETE',
       headers: accessToken
         ? {
@@ -124,13 +124,13 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Erro ao remover membership:', error)
+    console.error('Erro ao remover member:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao remover membership',
+            : 'Erro desconhecido ao remover member',
       },
       { status: 500 }
     )

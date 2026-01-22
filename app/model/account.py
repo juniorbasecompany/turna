@@ -10,11 +10,11 @@ class Account(BaseModel, table=True):
 
     email: str = Field(index=True)
     name: str
-    # Observação: role "real" para autorização vive no Membership; aqui é legado/conveniência.
+    # Observação: role "real" para autorização vive no Member; aqui é legado/conveniência.
     role: str = Field(default="account")  # account, admin
     auth_provider: str = Field(default="google")  # google, etc.
 
-    # Email globalmente único (um Account pode participar de múltiplos tenants via Membership)
+    # Email globalmente único (um Account pode participar de múltiplos tenants via Member)
     __table_args__ = (
         UniqueConstraint("email", name="uq_account_email"),
     )

@@ -34,7 +34,7 @@ interface CreateCardProps {
 /**
  * Componente reutilizável para card de criação de novos itens.
  *
- * Usado em páginas CRUD (Profissionais, Hospitais, Perfis, etc.) para permitir
+ * Usado em páginas CRUD (Hospitais, Clínicas, Associados, etc.) para permitir
  * criar novos itens. O card aparece no grid junto com os itens existentes.
  *
  * Suporta funcionalidades avançadas como drag & drop para upload de arquivos.

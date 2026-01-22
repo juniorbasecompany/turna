@@ -258,11 +258,11 @@ export default function SelectTenantPage() {
     const handleAcceptInvite = useCallback(
         async (invite: InviteOption) => {
             // Prevenir múltiplos cliques no mesmo botão
-            if (processingInvite === invite.membership_id || selecting) {
+            if (processingInvite === invite.member_id || selecting) {
                 return
             }
 
-            setProcessingInvite(invite.membership_id)
+            setProcessingInvite(invite.member_id)
             setError(null)
 
             try {
@@ -333,7 +333,7 @@ export default function SelectTenantPage() {
                 }
 
                 // 2. Aceitar o convite
-                const acceptResponse = await fetch(`/api/auth/invites/${invite.membership_id}/accept`, {
+                const acceptResponse = await fetch(`/api/auth/invites/${invite.member_id}/accept`, {
                     method: 'POST',
                     credentials: 'include',
                 })
@@ -400,11 +400,11 @@ export default function SelectTenantPage() {
     const handleRejectInvite = useCallback(
         async (invite: InviteOption) => {
             // Prevenir múltiplos cliques no mesmo botão
-            if (processingInvite === invite.membership_id || selecting) {
+            if (processingInvite === invite.member_id || selecting) {
                 return
             }
 
-            setProcessingInvite(invite.membership_id)
+            setProcessingInvite(invite.member_id)
             setError(null)
 
             try {
@@ -492,7 +492,7 @@ export default function SelectTenantPage() {
                 }
 
                 // 2. Rejeitar o convite
-                const rejectResponse = await fetch(`/api/auth/invites/${invite.membership_id}/reject`, {
+                const rejectResponse = await fetch(`/api/auth/invites/${invite.member_id}/reject`, {
                     method: 'POST',
                     credentials: 'include',
                 })
@@ -650,7 +650,7 @@ export default function SelectTenantPage() {
                                 <div className="space-y-2">
                                     {invites.map((invite) => (
                                         <div
-                                            key={`invite-${invite.membership_id}`}
+                                            key={`invite-${invite.member_id}`}
                                             className="w-full px-4 py-3 bg-yellow-50 border border-yellow-300 rounded-md"
                                         >
                                             <div className="mb-2">
@@ -664,17 +664,17 @@ export default function SelectTenantPage() {
                                             <div className="flex gap-2">
                                                 <button
                                                     onClick={() => handleAcceptInvite(invite)}
-                                                    disabled={processingInvite === invite.membership_id || selecting}
+                                                    disabled={processingInvite === invite.member_id || selecting}
                                                     className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                                                 >
-                                                    {processingInvite === invite.membership_id ? <LoadingSpinner /> : 'Aceitar'}
+                                                    {processingInvite === invite.member_id ? <LoadingSpinner /> : 'Aceitar'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleRejectInvite(invite)}
-                                                    disabled={processingInvite === invite.membership_id || selecting}
+                                                    disabled={processingInvite === invite.member_id || selecting}
                                                     className="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                                                 >
-                                                    {processingInvite === invite.membership_id ? <LoadingSpinner /> : 'Rejeitar'}
+                                                    {processingInvite === invite.member_id ? <LoadingSpinner /> : 'Rejeitar'}
                                                 </button>
                                             </div>
                                         </div>

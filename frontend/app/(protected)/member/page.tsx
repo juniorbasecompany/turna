@@ -5,40 +5,45 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { FilterButtons, FilterOption } from '@/components/FilterButtons'
+import { FormField } from '@/components/FormField'
+import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
-    MembershipCreateRequest,
-    MembershipListResponse,
-    MembershipResponse,
-    MembershipUpdateRequest,
+    MemberCreateRequest,
+    MemberListResponse,
+    MemberResponse,
+    MemberUpdateRequest,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
-export default function MembershipPage() {
+export default function MemberPage() {
     const { settings } = useTenantSettings()
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
-    const [editingMembership, setEditingMembership] = useState<MembershipResponse | null>(null)
+    const [editingMember, setEditingMember] = useState<MemberResponse | null>(null)
     const [formData, setFormData] = useState({
         role: 'account',
         status: 'ACTIVE',
         name: '',
         email: '',
+        attribute: '{}',
     })
     const [originalFormData, setOriginalFormData] = useState({
         role: 'account',
         status: 'ACTIVE',
         name: '',
         email: '',
+        attribute: '{}',
     })
+    const [jsonError, setJsonError] = useState<string | null>(null)
     const [sendInvite, setSendInvite] = useState(false)
     const [submitting, setSubmitting] = useState(false)
-    const [selectedMemberships, setSelectedMemberships] = useState<Set<number>>(new Set())
+    const [selectedMembers, setSelectedMembers] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
     const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
         new Set(['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']) // Todos selecionados por padrão
@@ -49,15 +54,15 @@ export default function MembershipPage() {
     const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
     const [total, setTotal] = useState(0)
     const [showEditArea, setShowEditArea] = useState(false)
-    const [allMemberships, setAllMemberships] = useState<MembershipResponse[]>([])
+    const [allMembers, setAllMembers] = useState<MemberResponse[]>([])
 
-    // Carregar lista de memberships (faz múltiplas requisições para carregar todos)
-    const loadMemberships = async () => {
+    // Carregar lista de members (faz múltiplas requisições para carregar todos)
+    const loadMembers = async () => {
         try {
             setLoading(true)
             setError(null)
 
-            const allItems: MembershipResponse[] = []
+            const allItems: MemberResponse[] = []
             const limit = 100 // Limite máximo do backend
             let offset = 0
             let hasMore = true
@@ -68,7 +73,7 @@ export default function MembershipPage() {
                 params.append('limit', String(limit))
                 params.append('offset', String(offset))
 
-                const data = await protectedFetch<MembershipListResponse>(`/api/membership/list?${params.toString()}`)
+                const data = await protectedFetch<MemberListResponse>(`/api/member/list?${params.toString()}`)
                 allItems.push(...data.items)
 
                 // Verificar se há mais dados para carregar
@@ -79,44 +84,60 @@ export default function MembershipPage() {
                 }
             }
 
-            setAllMemberships(allItems)
+            setAllMembers(allItems)
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar associações'
+            const message = err instanceof Error ? err.message : 'Erro ao carregar associados'
             setError(message)
-            console.error('Erro ao carregar associações:', err)
+            console.error('Erro ao carregar associados:', err)
         } finally {
             setLoading(false)
         }
     }
 
     useEffect(() => {
-        loadMemberships()
+        loadMembers()
     }, [])
 
-    // Filtrar memberships no frontend
-    const memberships = useMemo(() => {
-        return allMemberships.filter((membership) => {
-            const statusMatch = selectedStatuses.has(membership.status)
-            const roleMatch = selectedRoles.has(membership.role)
+    // Filtrar members no frontend
+    const members = useMemo(() => {
+        return allMembers.filter((member) => {
+            const statusMatch = selectedStatuses.has(member.status)
+            const roleMatch = selectedRoles.has(member.role)
             return statusMatch && roleMatch
         })
-    }, [allMemberships, selectedStatuses, selectedRoles])
+    }, [allMembers, selectedStatuses, selectedRoles])
 
     // Aplicar paginação
-    const paginatedMemberships = useMemo(() => {
+    const paginatedMembers = useMemo(() => {
         const start = pagination.offset
         const end = start + pagination.limit
-        return memberships.slice(start, end)
-    }, [memberships, pagination])
+        return members.slice(start, end)
+    }, [members, pagination])
 
     // Atualizar total baseado nos filtros
     useEffect(() => {
-        setTotal(memberships.length)
-    }, [memberships.length])
+        setTotal(members.length)
+    }, [members.length])
+
+    // Validar JSON
+    const validateJson = (jsonString: string): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
+        try {
+            if (!jsonString.trim()) {
+                return { valid: false, error: 'JSON não pode estar vazio' }
+            }
+            const parsed = JSON.parse(jsonString)
+            if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return { valid: false, error: 'JSON deve ser um objeto' }
+            }
+            return { valid: true, parsed }
+        } catch (e) {
+            return { valid: false, error: `JSON inválido: ${e instanceof Error ? e.message : 'erro desconhecido'}` }
+        }
+    }
 
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
-        if (!editingMembership) {
+        if (!editingMember) {
             // Para criação, verificar se há dados preenchidos
             return formData.email.trim() !== '' || formData.name.trim() !== ''
         }
@@ -124,7 +145,8 @@ export default function MembershipPage() {
             formData.role !== originalFormData.role ||
             formData.status !== originalFormData.status ||
             formData.name !== originalFormData.name ||
-            formData.email !== originalFormData.email
+            formData.email !== originalFormData.email ||
+            formData.attribute !== originalFormData.attribute
         )
     }
 
@@ -137,55 +159,65 @@ export default function MembershipPage() {
             status: 'PENDING',
             name: '',
             email: '',
+            attribute: '{}',
         })
         setOriginalFormData({
             role: 'account',
             status: 'PENDING',
             name: '',
             email: '',
+            attribute: '{}',
         })
-        setEditingMembership(null)
+        setEditingMember(null)
         setSendInvite(false)
         setShowEditArea(true)
         setError(null)
+        setJsonError(null)
     }
 
-    const handleEditClick = (membership: MembershipResponse) => {
-        setEditingMembership(membership)
+    const handleEditClick = (member: MemberResponse) => {
+        setEditingMember(member)
+        const attributeJson = JSON.stringify(member.attribute || {}, null, 2)
         setFormData({
-            role: membership.role,
-            status: membership.status,
-            name: membership.membership_name || '',
-            email: membership.membership_email || '',
+            role: member.role,
+            status: member.status,
+            name: member.member_name || '',
+            email: member.member_email || '',
+            attribute: attributeJson,
         })
         setOriginalFormData({
-            role: membership.role,
-            status: membership.status,
-            name: membership.membership_name || '',
-            email: membership.membership_email || '',
+            role: member.role,
+            status: member.status,
+            name: member.member_name || '',
+            email: member.member_email || '',
+            attribute: attributeJson,
         })
         setShowEditArea(true)
         setError(null)
+        setJsonError(null)
     }
 
     const handleCancel = () => {
-        setEditingMembership(null)
+        setEditingMember(null)
         setFormData({
             role: 'account',
             status: 'ACTIVE',
             name: '',
             email: '',
+            attribute: '{}',
         })
         setOriginalFormData({
             role: 'account',
             status: 'ACTIVE',
             name: '',
             email: '',
+            attribute: '{}',
         })
         setSendInvite(false)
         setShowEditArea(false)
         setError(null)
         setEmailMessage(null)
+        setJsonError(null)
     }
 
     const handleCreate = async () => {
@@ -195,19 +227,29 @@ export default function MembershipPage() {
             return
         }
 
+        // Validar JSON
+        const jsonValidation = validateJson(formData.attribute)
+        if (!jsonValidation.valid) {
+            setError(jsonValidation.error || 'JSON inválido')
+            setJsonError(jsonValidation.error || 'JSON inválido')
+            return
+        }
+
         try {
             setSubmitting(true)
             setError(null)
             setEmailMessage(null)
+            setJsonError(null)
 
-            const createData: MembershipCreateRequest = {
+            const createData: MemberCreateRequest = {
                 email: formData.email.trim(),
                 name: formData.name.trim() || null,
                 role: formData.role,
                 status: formData.status,
+                attribute: jsonValidation.parsed || {},
             }
 
-            const savedMembership = await protectedFetch<MembershipResponse>(`/api/membership`, {
+            const savedMember = await protectedFetch<MemberResponse>(`/api/member`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -216,65 +258,75 @@ export default function MembershipPage() {
             })
 
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
-            if (sendInvite && savedMembership) {
-                await sendInviteEmail(savedMembership)
+            if (sendInvite && savedMember) {
+                await sendInviteEmail(savedMember)
             }
 
             // Recarregar lista e limpar formulário
-            await loadMemberships()
+            await loadMembers()
             handleCancel()
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao criar membership'
+            const message = err instanceof Error ? err.message : 'Erro ao criar member'
             setError(message)
             setEmailMessage(null)
-            console.error('Erro ao criar membership:', err)
+            console.error('Erro ao criar member:', err)
         } finally {
             setSubmitting(false)
         }
     }
 
-    const sendInviteEmail = async (membership: MembershipResponse) => {
+    const sendInviteEmail = async (member: MemberResponse) => {
         console.log(
-            `[INVITE-UI] Iniciando envio de convite para membership ID=${membership.id} (${membership.membership_name || membership.membership_email})`
+            `[INVITE-UI] Iniciando envio de convite para member ID=${member.id} (${member.member_name || member.member_email})`
         )
         try {
-            await protectedFetch(`/api/membership/${membership.id}/invite`, {
+            await protectedFetch(`/api/member/${member.id}/invite`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
             })
-            const successMsg = `E-mail de convite foi enviado para ${membership.membership_name || membership.membership_email}`
+            const successMsg = `E-mail de convite foi enviado para ${member.member_name || member.member_email}`
             console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
             setEmailMessage(successMsg)
             setEmailMessageType('success')
         } catch (inviteErr) {
             const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
             console.error(
-                `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${membership.id}:`,
+                `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para member ID=${member.id}:`,
                 inviteErr
             )
-            setEmailMessage(`E-mail de convite não foi enviado para ${membership.membership_name || membership.membership_email}. ${errorMsg}`)
+            setEmailMessage(`E-mail de convite não foi enviado para ${member.member_name || member.member_email}. ${errorMsg}`)
             setEmailMessageType('error')
         }
     }
 
     const handleSave = async () => {
-        if (!editingMembership) return
+        if (!editingMember) return
+
+        // Validar JSON
+        const jsonValidation = validateJson(formData.attribute)
+        if (!jsonValidation.valid) {
+            setError(jsonValidation.error || 'JSON inválido')
+            setJsonError(jsonValidation.error || 'JSON inválido')
+            return
+        }
 
         try {
             setSubmitting(true)
             setError(null)
             setEmailMessage(null)
+            setJsonError(null)
 
-            const updateData: MembershipUpdateRequest = {
+            const updateData: MemberUpdateRequest = {
                 role: formData.role,
                 status: formData.status,
                 name: formData.name.trim() || null,
                 email: formData.email.trim() || null,
+                attribute: jsonValidation.parsed || {},
             }
 
-            const savedMembership = await protectedFetch<MembershipResponse>(`/api/membership/${editingMembership.id}`, {
+            const savedMember = await protectedFetch<MemberResponse>(`/api/member/${editingMember.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -283,52 +335,52 @@ export default function MembershipPage() {
             })
 
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
-            if (sendInvite && savedMembership) {
-                await sendInviteEmail(savedMembership)
+            if (sendInvite && savedMember) {
+                await sendInviteEmail(savedMember)
             }
 
             // Recarregar lista e limpar formulário
-            await loadMemberships()
+            await loadMembers()
             handleCancel()
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao salvar membership'
+            const message = err instanceof Error ? err.message : 'Erro ao salvar member'
             setError(message)
             setEmailMessage(null)
-            console.error('Erro ao salvar membership:', err)
+            console.error('Erro ao salvar member:', err)
         } finally {
             setSubmitting(false)
         }
     }
 
-    // Toggle seleção de membership para exclusão
-    const toggleMembershipSelection = (membershipId: number) => {
-        setSelectedMemberships((prev) => {
+    // Toggle seleção de member para exclusão
+    const toggleMemberSelection = (memberId: number) => {
+        setSelectedMembers((prev) => {
             const newSet = new Set(prev)
-            if (newSet.has(membershipId)) {
-                newSet.delete(membershipId)
+            if (newSet.has(memberId)) {
+                newSet.delete(memberId)
             } else {
-                newSet.add(membershipId)
+                newSet.add(memberId)
             }
             return newSet
         })
     }
 
-    // Excluir memberships selecionados
+    // Excluir members selecionados
     const handleDeleteSelected = async () => {
-        if (selectedMemberships.size === 0) return
+        if (selectedMembers.size === 0) return
 
         try {
             setDeleting(true)
             setError(null)
 
-            const deletePromises = Array.from(selectedMemberships).map(async (membershipId) => {
+            const deletePromises = Array.from(selectedMembers).map(async (memberId) => {
                 try {
-                    await protectedFetch(`/api/membership/${membershipId}`, {
+                    await protectedFetch(`/api/member/${memberId}`, {
                         method: 'DELETE',
                     })
-                    return { success: true, membershipId }
+                    return { success: true, memberId }
                 } catch (err) {
-                    return { success: false, membershipId, error: err }
+                    return { success: false, memberId, error: err }
                 }
             })
 
@@ -340,12 +392,12 @@ export default function MembershipPage() {
             }
 
             // Recarregar lista
-            await loadMemberships()
-            setSelectedMemberships(new Set())
+            await loadMembers()
+            setSelectedMembers(new Set())
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao remover associações'
+            const message = err instanceof Error ? err.message : 'Erro ao remover associados'
             setError(message)
-            console.error('Erro ao remover associações:', err)
+            console.error('Erro ao remover associados:', err)
         } finally {
             setDeleting(false)
         }
@@ -382,6 +434,16 @@ export default function MembershipPage() {
                 return 'Removido'
             default:
                 return status
+        }
+    }
+
+    const handleAttributeChange = (value: string) => {
+        setFormData({ ...formData, attribute: value })
+        const validation = validateJson(value)
+        if (validation.valid) {
+            setJsonError(null)
+        } else {
+            setJsonError(validation.error || 'JSON inválido')
         }
     }
 
@@ -450,20 +512,17 @@ export default function MembershipPage() {
     return (
         <>
             <CardPanel
-                title="Associações"
+                title="Associados"
                 loading={loading}
                 error={undefined}
                 editContent={
                     isEditing ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                {editingMembership ? 'Editar Associação' : 'Criar Associação'}
+                                {editingMember ? 'Editar Associação' : 'Criar Associação'}
                             </h2>
                             <div className="space-y-4">
-                                <div>
-                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                                        E-mail <span className="text-red-500">*</span>
-                                    </label>
+                                <FormField label="E-mail" required>
                                     <input
                                         id="email"
                                         type="email"
@@ -471,10 +530,10 @@ export default function MembershipPage() {
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="E-mail público na clínica"
-                                        required={!editingMembership}
+                                        required={!editingMember}
                                         disabled={submitting}
                                     />
-                                </div>
+                                </FormField>
                                 <div>
                                     <div className="flex items-center">
                                         <input
@@ -490,10 +549,7 @@ export default function MembershipPage() {
                                         </label>
                                     </div>
                                 </div>
-                                <div>
-                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Nome
-                                    </label>
+                                <FormField label="Nome">
                                     <input
                                         id="name"
                                         type="text"
@@ -503,12 +559,9 @@ export default function MembershipPage() {
                                         placeholder="Nome público na clínica"
                                         disabled={submitting}
                                     />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                                            Função <span className="text-red-500">*</span>
-                                        </label>
+                                </FormField>
+                                <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                    <FormField label="Função" required>
                                         <select
                                             id="role"
                                             value={formData.role}
@@ -520,11 +573,8 @@ export default function MembershipPage() {
                                             <option value="account">Conta</option>
                                             <option value="admin">Administrador</option>
                                         </select>
-                                    </div>
-                                    <div>
-                                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                                            Situação <span className="text-red-500">*</span>
-                                        </label>
+                                    </FormField>
+                                    <FormField label="Situação" required>
                                         <select
                                             id="status"
                                             value={formData.status}
@@ -538,8 +588,23 @@ export default function MembershipPage() {
                                             <option value="REJECTED">Rejeitado</option>
                                             <option value="REMOVED">Removido</option>
                                         </select>
-                                    </div>
-                                </div>
+                                    </FormField>
+                                </FormFieldGrid>
+                                <FormField
+                                    label="Atributos (JSON)"
+                                    required
+                                    error={jsonError || undefined}
+                                >
+                                    <textarea
+                                        id="attribute"
+                                        value={formData.attribute}
+                                        onChange={(e) => handleAttributeChange(e.target.value)}
+                                        rows={10}
+                                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
+                                            }`}
+                                        disabled={submitting}
+                                    />
+                                </FormField>
                             </div>
                         </div>
                     ) : undefined
@@ -575,11 +640,11 @@ export default function MembershipPage() {
                     ) : undefined
                 }
             >
-                {paginatedMemberships.map((membership) => {
-                    const isSelected = selectedMemberships.has(membership.id)
+                {paginatedMembers.map((member) => {
+                    const isSelected = selectedMembers.has(member.id)
                     return (
                         <div
-                            key={membership.id}
+                            key={member.id}
                             className={getCardContainerClasses(isSelected)}
                         >
                             <div className="mb-3">
@@ -603,16 +668,16 @@ export default function MembershipPage() {
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
                                                 }`}
-                                            title={membership.membership_name || membership.membership_email || 'Não disponível'}
+                                            title={member.member_name || member.member_email || 'Não disponível'}
                                         >
-                                            {membership.membership_name || membership.membership_email || 'Não disponível'}
+                                            {member.member_name || member.member_email || 'Não disponível'}
                                         </h3>
                                         <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
-                                            <span className={`text-xs px-2 py-1 rounded ${getStatusColor(membership.status)}`}>
-                                                {getStatusLabel(membership.status)}
+                                            <span className={`text-xs px-2 py-1 rounded ${getStatusColor(member.status)}`}>
+                                                {getStatusLabel(member.status)}
                                             </span>
                                             <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                {getRoleLabel(membership.role)}
+                                                {getRoleLabel(member.role)}
                                             </span>
                                         </div>
                                     </div>
@@ -621,13 +686,13 @@ export default function MembershipPage() {
 
                             <CardFooter
                                 isSelected={isSelected}
-                                date={membership.created_at}
+                                date={member.created_at}
                                 settings={settings}
                                 onToggleSelection={(e) => {
                                     e.stopPropagation()
-                                    toggleMembershipSelection(membership.id)
+                                    toggleMemberSelection(member.id)
                                 }}
-                                onEdit={() => handleEditClick(membership)}
+                                onEdit={() => handleEditClick(member)}
                                 disabled={deleting}
                                 deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                 editTitle="Editar associação"
@@ -661,7 +726,7 @@ export default function MembershipPage() {
                         console.log('[ACTIONBAR] Mensagem de email presente, não mostrando erro genérico')
                         return undefined
                     }
-                    const hasButtons = isEditing || selectedMemberships.size > 0
+                    const hasButtons = isEditing || selectedMembers.size > 0
                     return hasButtons ? error : undefined
                 })()}
                 message={(() => {
@@ -670,7 +735,7 @@ export default function MembershipPage() {
                         return emailMessage
                     }
                     // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = isEditing || selectedMemberships.size > 0
+                    const hasButtons = isEditing || selectedMembers.size > 0
                     if (!hasButtons && error) {
                         return error
                     }
@@ -682,7 +747,7 @@ export default function MembershipPage() {
                         return emailMessageType
                     }
                     // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = isEditing || selectedMemberships.size > 0
+                    const hasButtons = isEditing || selectedMembers.size > 0
                     if (!hasButtons && error) {
                         return 'error' as const
                     }
@@ -690,7 +755,7 @@ export default function MembershipPage() {
                 })()}
                 buttons={(() => {
                     const buttons = []
-                    if (isEditing || selectedMemberships.size > 0) {
+                    if (isEditing || selectedMembers.size > 0) {
                         buttons.push({
                             label: 'Cancelar',
                             onClick: handleCancel,
@@ -698,7 +763,7 @@ export default function MembershipPage() {
                             disabled: submitting || deleting,
                         })
                     }
-                    if (selectedMemberships.size > 0) {
+                    if (selectedMembers.size > 0) {
                         buttons.push({
                             label: 'Remover',
                             onClick: handleDeleteSelected,
@@ -710,8 +775,8 @@ export default function MembershipPage() {
                     // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
                     if (isEditing && (hasChanges() || sendInvite)) {
                         buttons.push({
-                            label: submitting ? (editingMembership ? 'Salvando...' : 'Criando...') : (editingMembership ? 'Salvar' : 'Criar'),
-                            onClick: editingMembership ? handleSave : handleCreate,
+                            label: submitting ? (editingMember ? 'Salvando...' : 'Criando...') : (editingMember ? 'Salvar' : 'Criar'),
+                            onClick: editingMember ? handleSave : handleCreate,
                             variant: 'primary' as const,
                             disabled: submitting,
                             loading: submitting,

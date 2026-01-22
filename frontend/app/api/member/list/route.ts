@@ -3,22 +3,28 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
- * GET /api/profile/list
+ * GET /api/member/list
  *
- * Lista todos os profiles do tenant atual.
+ * Lista todos os members do tenant atual.
  */
 export async function GET(request: NextRequest) {
   try {
     // Obter access_token do cookie
     const accessToken = request.cookies.get('access_token')?.value
 
-    // Obter query params para paginação
+    // Obter query params
     const { searchParams } = new URL(request.url)
-    const limit = searchParams.get('limit') || '20'
-    const offset = searchParams.get('offset') || '0'
+    const params = new URLSearchParams()
+    if (searchParams.get('status')) params.append('status', searchParams.get('status')!)
+    if (searchParams.get('role')) params.append('role', searchParams.get('role')!)
+    if (searchParams.get('limit')) params.append('limit', searchParams.get('limit')!)
+    if (searchParams.get('offset')) params.append('offset', searchParams.get('offset')!)
+
+    const queryString = params.toString()
+    const url = `${API_URL}/member/list${queryString ? `?${queryString}` : ''}`
 
     // Chamar backend
-    const response = await fetch(`${API_URL}/profile/list?limit=${limit}&offset=${offset}`, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: accessToken
         ? {
@@ -38,13 +44,13 @@ export async function GET(request: NextRequest) {
     const data = await response.json()
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Erro ao listar profiles:', error)
+    console.error('Erro ao listar members:', error)
     return NextResponse.json(
       {
         detail:
           error instanceof Error
             ? error.message
-            : 'Erro desconhecido ao listar profiles',
+            : 'Erro desconhecido ao listar members',
       },
       { status: 500 }
     )

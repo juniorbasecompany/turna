@@ -42,57 +42,56 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Account**: modelo de pessoa física (login Google), email único global, sem `tenant_id`.
   - **Privacidade**: `Account.name` é privado - apenas o próprio usuário vê.
   - **Criação**: Account é criado quando o usuário faz login/registro via Google OAuth pela primeira vez (sem precisar de convite). Também pode ser criado ao aceitar um convite se ainda não existir.
-  - **Atualização de nome**: `Account.name` sempre vem do Google OAuth, nunca de `Membership.name`. Atualiza apenas se NULL/vazio no login.
-- **Membership**: vínculo Account↔Tenant com `role` e `status` (um Account pode ter múltiplos memberships).
+  - **Atualização de nome**: `Account.name` sempre vem do Google OAuth, nunca de `member.name`. Atualiza apenas se NULL/vazio no login.
+- **member**: vínculo Account↔Tenant com `role` e `status` (um Account pode ter múltiplos members).
   - **Convites pendentes**: `account_id` pode ser `NULL` para convites pendentes (antes do usuário aceitar).
-  - **Campo email**: `Membership.email` é o email público na clínica (pode ser diferente de `Account.email`).
+  - **Campo email**: `member.email` é o email público na clínica (pode ser diferente de `Account.email`).
     - **Uso inicial**: Quando `account_id` é `NULL`, o campo `email` identifica o convite pendente e é usado para vincular ao Account na aceitação.
-    - **Sincronização**: Após aceitar/rejeitar convite, se `membership.email` estiver vazio, é preenchido uma vez com `account.email`.
-    - **Independência**: Depois da sincronização inicial, `membership.email` é completamente independente e pode ser editado/apagado livremente pelo admin.
-    - **Edição manual**: Admin pode editar `Membership.email` via `PUT /membership/{id}` sem restrições.
-    - **Privacidade**: `Account.email` permanece privado; apenas `membership.email` é exposto no painel e endpoints de tenant.
-  - **Campo name**: `Membership.name` é o nome público na clínica (pode ser diferente de `Account.name`).
+    - **Sincronização**: Após aceitar/rejeitar convite, se `member.email` estiver vazio, é preenchido uma vez com `account.email`.
+    - **Independência**: Depois da sincronização inicial, `member.email` é completamente independente e pode ser editado/apagado livremente pelo admin.
+    - **Edição manual**: Admin pode editar `member.email` via `PUT /member/{id}` sem restrições.
+    - **Privacidade**: `Account.email` permanece privado; apenas `member.email` é exposto no painel e endpoints de tenant.
+  - **Campo name**: `member.name` é o nome público na clínica (pode ser diferente de `Account.name`).
     - **Atualização automática**: Preenchido apenas se NULL (ao aceitar convite ou primeiro login).
-    - **Edição manual**: Admin pode editar `Membership.name` via `PUT /membership/{id}` sem restrições.
+    - **Edição manual**: Admin pode editar `member.name` via `PUT /member/{id}` sem restrições.
     - **Fonte**: Pode vir do convite (placeholder), do Google ao aceitar/login (se NULL), ou edição manual.
-  - **Vinculação**: ao aceitar convite ou fazer login, Memberships PENDING são vinculados ao Account pelo email.
-  - **Criação de convite**: Ao convidar usuário sem Account, cria Membership com `account_id=NULL` e `email`. Account é criado apenas quando usuário aceita convite ou faz login.
-  - **Painel de Membership**: Não deve ter relação com Account. Não usa `account_id` para criar ou editar membership. Nome e email são editáveis livremente.
-- **Role e Status**: sempre usar do Membership, não do Account (Account.role é apenas legado/conveniência).
-- **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_membership()`).
-- **Dependencies**: usar `get_current_membership()` para validar acesso ao tenant, não `get_current_account()` diretamente.
+  - **Vinculação**: ao aceitar convite ou fazer login, members PENDING são vinculados ao Account pelo email.
+  - **Criação de convite**: Ao convidar usuário sem Account, cria member com `account_id=NULL` e `email`. Account é criado apenas quando usuário aceita convite ou faz login.
+  - **Painel de member**: Não deve ter relação com Account. Não usa `account_id` para criar ou editar member. Nome e email são editáveis livremente.
+- **Role e Status**: sempre usar do member, não do Account (Account.role é apenas legado/conveniência).
+- **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_member()`).
+- **Dependencies**: usar `get_current_member()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
-- **Outras tabelas**: Profile usa `membership_id` (não `account_id`) para garantir que Account permaneça privado.
 
-### Separação Account (privado) vs Membership (público)
+### Separação Account (privado) vs member (público)
 
 **Princípio fundamental**:
 - **`Account.*`**: Privado - dados de autenticação, não devem ser expostos ou editados por administradores de tenant.
-  - **`Account.name`**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `Membership.name`.
+  - **`Account.name`**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `member.name`.
   - **`Account.email`**: Privado - usado apenas para login/autenticação, não deve ser exposto em endpoints de tenant.
-- **`Membership.*`**: Público - dados da clínica, visíveis para admins do tenant, podem ser editados livremente.
-  - **`Membership.name`**: Público - nome na clínica, visível para admins do tenant. Pode ser editado por admin.
-  - **`Membership.email`**: Público - email na clínica, visível para admins do tenant. Pode ser editado por admin.
+- **`member.*`**: Público - dados da clínica, visíveis para admins do tenant, podem ser editados livremente.
+  - **`member.name`**: Público - nome na clínica, visível para admins do tenant. Pode ser editado por admin.
+  - **`member.email`**: Público - email na clínica, visível para admins do tenant. Pode ser editado por admin.
 
 **Regras de atualização**:
 - **`Account.name`**: Atualiza apenas se NULL/vazio no login via Google OAuth.
-- **`Account.email`**: Nunca atualizado a partir de `membership.email`.
-- **`Membership.name`**: Atualiza automaticamente apenas se NULL (ao aceitar convite ou primeiro login). Depois pode ser editado manualmente por admin.
-- **`Membership.email`**: Sincroniza uma vez com `account.email` se estiver vazio ao aceitar/rejeitar convite. Depois é completamente independente e pode ser editado/apagado.
+- **`Account.email`**: Nunca atualizado a partir de `member.email`.
+- **`member.name`**: Atualiza automaticamente apenas se NULL (ao aceitar convite ou primeiro login). Depois pode ser editado manualmente por admin.
+- **`member.email`**: Sincroniza uma vez com `account.email` se estiver vazio ao aceitar/rejeitar convite. Depois é completamente independente e pode ser editado/apagado.
 
 **Uso em endpoints**:
-- **`GET /me`**: Retorna ambos `account_name` (privado) e `membership_name` (público).
-- **`GET /membership/list`**: Retorna apenas `membership_name` e `membership_email` (não `account_name` nem `account_email`). ✅ Implementado
-- **`POST /membership`**: Cria membership com `email` e `name` públicos (não requer `account_id`). ✅ Implementado
-- **`PUT /membership/{id}`**: Permite editar `membership.name` e `membership.email` (apenas admin). ✅ Implementado
-- **Email de convite**: Usa `membership.email` (não `account.email`). ✅ Implementado
-- **AuditLog**: Registra `membership.name` e `membership.email` (não dados do account).
+- **`GET /me`**: Retorna ambos `account_name` (privado) e `member_name` (público).
+- **`GET /member/list`**: Retorna apenas `member_name` e `member_email` (não `account_name` nem `account_email`). ✅ Implementado
+- **`POST /member`**: Cria member com `email` e `name` públicos (não requer `account_id`). ✅ Implementado
+- **`PUT /member/{id}`**: Permite editar `member.name` e `member.email` (apenas admin). ✅ Implementado
+- **Email de convite**: Usa `member.email` (não `account.email`). ✅ Implementado
+- **AuditLog**: Registra `member.name` e `member.email` (não dados do account).
 
-**Painel de Membership**: ✅ Implementado
+**Painel de member**: ✅ Implementado
 - Não exibe ou usa dados do Account (`account_email`, `account_name`).
-- Permite criar membership sem `account_id` (apenas com `email` e `name`).
-- Permite editar `membership.email` e `membership.name` livremente.
-- Checkbox "Enviar convite" funciona tanto para membership novo quanto existente.
+- Permite criar member sem `account_id` (apenas com `email` e `name`).
+- Permite editar `member.email` e `member.name` livremente.
+- Checkbox "Enviar convite" funciona tanto para member novo quanto existente.
 
 **Painel de Accounts** (futuro):
 - Atualmente mostra `account.name`, mas terá regras de acesso restritas no futuro.
@@ -119,7 +118,7 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
   - `timezone`: "America/Sao_Paulo"
   - `locale`: "pt-BR"
   - `currency`: "BRL"
-- Cria também Membership ADMIN ACTIVE para o criador.
+- Cria também member ADMIN ACTIVE para o criador.
 - Endpoint: `POST /auth/google/create-tenant` (cria tenant e retorna JWT diretamente).
 
 **Tela de seleção** (`/select-tenant`):

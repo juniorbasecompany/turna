@@ -111,7 +111,7 @@ Este é um email automático do sistema Turna. Por favor, não responda este ema
     """.strip()
 
 
-def send_membership_invite(
+def send_member_invite(
     to_email: str,
     member_name: str,
     tenant_name: str,

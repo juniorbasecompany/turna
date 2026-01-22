@@ -17,7 +17,7 @@ async def tenant_context_middleware(
     - Se houver Authorization: Bearer <token>, decodifica via verify_token()
     - Coloca {account_id, tenant_id} em request.state
     - NÃO consulta DB e NÃO bloqueia request em caso de token inválido
-      (o enforcement real fica nas dependencies: get_current_membership()).
+      (o enforcement real fica nas dependencies: get_current_member()).
     """
     auth = request.headers.get("authorization") or request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
@@ -51,7 +51,7 @@ async def tenant_context_middleware(
 def get_tenant_id(request: Request) -> int | None:
     """
     Helper leve para extrair tenant_id do contexto.
-    Preferir enforcement via get_current_membership().
+    Preferir enforcement via get_current_member().
     """
     v = getattr(request.state, "tenant_id", None)
     return int(v) if v is not None else None

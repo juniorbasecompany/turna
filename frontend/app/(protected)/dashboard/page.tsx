@@ -5,11 +5,10 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { protectedFetch } from '@/lib/api'
 import {
   HospitalListResponse,
-  MembershipListResponse,
+  MemberListResponse,
   DemandListResponse,
   FileListResponse,
   JobListResponse,
-  ProfileListResponse,
 } from '@/types/api'
 
 export default function DashboardPage() {
@@ -17,12 +16,11 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [totals, setTotals] = useState({
     hospitals: 0,
-    memberships: 0,
+    members: 0,
     demands: 0,
     files: 0,
     jobs: 0,
     jobsRunning: 0,
-    profiles: 0,
   })
 
   useEffect(() => {
@@ -34,30 +32,27 @@ export default function DashboardPage() {
         // Carregar todos os totais em paralelo
         const [
           hospitalsData,
-          membershipsData,
+          membersData,
           demandsData,
           filesData,
           jobsData,
           jobsRunningData,
-          profilesData,
         ] = await Promise.all([
           protectedFetch<HospitalListResponse>('/api/hospital/list'),
-          protectedFetch<MembershipListResponse>('/api/membership/list'),
+          protectedFetch<MemberListResponse>('/api/member/list'),
           protectedFetch<DemandListResponse>('/api/demand/list'),
           protectedFetch<FileListResponse>('/api/file/list'),
           protectedFetch<JobListResponse>('/api/job/list'),
           protectedFetch<JobListResponse>('/api/job/list?status=RUNNING'),
-          protectedFetch<ProfileListResponse>('/api/profile/list'),
         ])
 
         setTotals({
           hospitals: hospitalsData.total,
-          memberships: membershipsData.total,
+          members: membersData.total,
           demands: demandsData.total,
           files: filesData.total,
           jobs: jobsData.total,
           jobsRunning: jobsRunningData.total,
-          profiles: profilesData.total,
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao carregar dados do dashboard'
@@ -85,7 +80,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="text-sm font-medium text-gray-600 mb-2">Total de Membros</div>
           <div className="text-3xl font-semibold text-gray-900">
-            {loading ? <LoadingSpinner /> : totals.memberships}
+            {loading ? <LoadingSpinner /> : totals.members}
           </div>
         </div>
 
@@ -117,13 +112,6 @@ export default function DashboardPage() {
           <div className="text-sm font-medium text-gray-600 mb-2">Jobs em Processamento</div>
           <div className="text-3xl font-semibold text-yellow-600">
             {loading ? <LoadingSpinner /> : totals.jobsRunning}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Total de Perfis</div>
-          <div className="text-3xl font-semibold text-gray-900">
-            {loading ? <LoadingSpinner /> : totals.profiles}
           </div>
         </div>
       </div>
