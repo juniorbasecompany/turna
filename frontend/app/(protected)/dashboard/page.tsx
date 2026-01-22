@@ -9,7 +9,6 @@ import {
   DemandListResponse,
   FileListResponse,
   JobListResponse,
-  ProfessionalListResponse,
   ProfileListResponse,
 } from '@/types/api'
 
@@ -23,7 +22,6 @@ export default function DashboardPage() {
     files: 0,
     jobs: 0,
     jobsRunning: 0,
-    professionals: 0,
     profiles: 0,
   })
 
@@ -41,7 +39,6 @@ export default function DashboardPage() {
           filesData,
           jobsData,
           jobsRunningData,
-          professionalsData,
           profilesData,
         ] = await Promise.all([
           protectedFetch<HospitalListResponse>('/api/hospital/list'),
@@ -50,7 +47,6 @@ export default function DashboardPage() {
           protectedFetch<FileListResponse>('/api/file/list'),
           protectedFetch<JobListResponse>('/api/job/list'),
           protectedFetch<JobListResponse>('/api/job/list?status=RUNNING'),
-          protectedFetch<ProfessionalListResponse>('/api/professional/list'),
           protectedFetch<ProfileListResponse>('/api/profile/list'),
         ])
 
@@ -61,7 +57,6 @@ export default function DashboardPage() {
           files: filesData.total,
           jobs: jobsData.total,
           jobsRunning: jobsRunningData.total,
-          professionals: professionalsData.total,
           profiles: profilesData.total,
         })
       } catch (err) {
@@ -122,13 +117,6 @@ export default function DashboardPage() {
           <div className="text-sm font-medium text-gray-600 mb-2">Jobs em Processamento</div>
           <div className="text-3xl font-semibold text-yellow-600">
             {loading ? <LoadingSpinner /> : totals.jobsRunning}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-sm font-medium text-gray-600 mb-2">Total de Profissionais</div>
-          <div className="text-3xl font-semibold text-gray-900">
-            {loading ? <LoadingSpinner /> : totals.professionals}
           </div>
         </div>
 

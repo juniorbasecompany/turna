@@ -294,24 +294,6 @@ export interface ProfileUpdateRequest {
     attribute?: Record<string, unknown>
 }
 
-export interface ProfessionalResponse {
-    id: number
-    tenant_id: number
-    membership_id: number | null
-    name: string
-    email: string
-    phone: string | null
-    notes: string | null
-    active: boolean
-    created_at: string
-    updated_at: string
-}
-
-export interface ProfessionalListResponse {
-    items: ProfessionalResponse[]
-    total: number
-}
-
 export interface MembershipResponse {
     id: number
     tenant_id: number
@@ -343,22 +325,6 @@ export interface MembershipCreateRequest {
     role: string
     status: string
     account_id?: number | null  // Opcional (não usado no painel)
-}
-
-export interface ProfessionalCreateRequest {
-    name: string
-    email: string
-    phone?: string | null
-    notes?: string | null
-    active?: boolean
-}
-
-export interface ProfessionalUpdateRequest {
-    name?: string | null
-    email?: string | null
-    phone?: string | null
-    notes?: string | null
-    active?: boolean | null
 }
 
 export interface AccountOption {

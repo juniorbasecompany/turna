@@ -248,6 +248,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] **Atualizar endpoints**: Todos os endpoints de Profile e Professional atualizados ✅
 - [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` ✅
 - [x] **Atualizar tipos TypeScript**: ProfileResponse e ProfessionalResponse atualizados ✅
+- [x] **Remoção de Professional**: Tabela Professional removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
 
 #### Fase 5: Frontend - Tipos e Interfaces
 - [x] **Atualizar tipos TypeScript**: Adicionado `membership_name` em `MembershipResponse`

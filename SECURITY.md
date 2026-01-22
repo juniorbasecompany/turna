@@ -136,10 +136,10 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 - **Criação de Membership**: `POST /membership` permite criar membership com `email` e `name` públicos, sem `account_id` obrigatório ✅
 - **Edição de Membership**: `PUT /membership/{id}` permite editar `membership.email` e `membership.name` livremente (campos públicos) ✅
 - **Privacidade**: `Account.email` e `Account.name` não são expostos em endpoints de tenant; apenas `membership.email` e `membership.name` são retornados ✅
-- **Outras tabelas**: Profile e Professional usam `membership_id` (não `account_id`) para garantir que Account permaneça privado em todo o sistema ✅
+- **Outras tabelas**: Profile usa `membership_id` (não `account_id`) para garantir que Account permaneça privado em todo o sistema ✅
   - **Profile**: Migrado de `account_id` para `membership_id` (FASE 7) ✅
-  - **Professional**: Migrado de `account_id` para `membership_id` (nullable) (FASE 7) ✅
-  - **Migrações**: `0116kl012345_migrate_profile_to_membership_id.py` e `0117mn012345_migrate_professional_to_membership_id.py` ✅
+  - **Professional**: Tabela removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
+  - **Migrações**: `0116kl012345_migrate_profile_to_membership_id.py` e `0118op012345_remove_professional_table.py` ✅
 
 ### Endpoints Públicos
 - `GET /health`: Não requer autenticação

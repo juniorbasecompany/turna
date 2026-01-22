@@ -62,7 +62,8 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Tenant isolation**: todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_membership()`).
 - **Dependencies**: usar `get_current_membership()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
-- **Outras tabelas**: Profile e Professional usam `membership_id` (não `account_id`) para garantir que Account permaneça privado. ✅ Implementado (FASE 7)
+- **Outras tabelas**: Profile usa `membership_id` (não `account_id`) para garantir que Account permaneça privado. ✅ Implementado (FASE 7)
+- **Professional**: Tabela removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
 
 ### Separação Account (privado) vs Membership (público)
 

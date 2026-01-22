@@ -804,23 +804,6 @@ def auth_google_create_tenant(
     session.commit()
     session.refresh(membership)
 
-    # Criar professional automaticamente para o membership criador do tenant
-    try:
-        from app.model.professional import Professional
-        from app.model.base import utc_now
-        professional = Professional(
-            tenant_id=tenant.id,
-            membership_id=membership.id,
-            name=membership.name if membership.name else account.name,
-            email=membership.email if membership.email else account.email,
-            active=True,
-        )
-        session.add(professional)
-        session.commit()
-    except Exception as e:
-        # Se falhar ao criar professional, logar mas não quebrar a criação do tenant
-        session.rollback()
-        pass  # Professional é opcional
 
     # Emitir token para o novo tenant
     token = _issue_token_for_membership(account=account, membership=membership)
