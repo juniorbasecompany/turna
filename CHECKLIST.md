@@ -909,7 +909,7 @@ Antes de considerar completo, verificar:
 
 - [x] Criar schemas em `app/api/route.py`:
   - [x] `ProfileCreate`:
-    - [x] `membership_id: int` (não `account_id` - migrado para membership_id)
+    - [x] `membership_id: int`
     - [x] `hospital_id: Optional[int] = None`
     - [x] `attribute: dict = {}`
   - [x] `ProfileUpdate`:
@@ -918,7 +918,7 @@ Antes de considerar completo, verificar:
   - [x] `ProfileResponse`:
     - [x] `id: int`
     - [x] `tenant_id: int`
-    - [x] `membership_id: int` (não `account_id` - migrado para membership_id)
+    - [x] `membership_id: int`
     - [x] `hospital_id: Optional[int]`
     - [x] `attribute: dict`
     - [x] `created_at: datetime`
