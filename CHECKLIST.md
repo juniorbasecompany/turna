@@ -1,6 +1,6 @@
 # Checklist de Implementação - Stack Fase 1
 
-Este checklist organiza as tarefas necessárias para aderir completamente à stack definida em `stack.md`, seguindo uma abordagem **incremental e testável** em cada etapa.
+Este checklist organiza as tarefas necessárias para aderir completamente à stack definida em `stack.md`, seguindo uma abordagem **incremental** em cada etapa.
 
 ## Status Geral
 
@@ -11,11 +11,11 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Autenticação**: ✅ OAuth Google, JWT, Membership, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
-- **Implementação**: ~70% - Fundações completas, falta completar endpoints e testes
+- **Implementação**: ~70% - Fundações completas, falta completar endpoints
 
 ## Caminho Mínimo Incremental
 
-Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou curl, sem quebrar o que já funciona.
+Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou curl, sem quebrar o que já funciona.
 
 ### Etapa 0: Base (Já feito)
 - [x] Docker Compose sobe sem erros
@@ -26,46 +26,39 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] Modelos: Tenant, Account, Job
 - [x] Alembic configurado e migração aplicada
 - [x] Endpoint `POST /tenant` (criar tenant simples)
-- [x] Testar: criar tenant via `/docs`, verificar no banco
 
 ### Etapa 2: OAuth + JWT + `/me`
 - [x] OAuth Google integrado
 - [x] JWT com `tenant_id` no token
 - [x] Endpoint `GET /me` retorna Account do banco
-- [x] Testar: login via Google, verificar JWT, chamar `/me`
 
 ### Etapa 3: Upload + File + MinIO
 - [x] Modelo File
 - [x] StorageService básico (upload/download)
 - [x] Endpoint `POST /file/upload` retorna URL/presigned
-- [x] Testar: upload arquivo, verificar MinIO e banco
 
 ### Etapa 4: Arq - Job fake primeiro
 - [x] WorkerSettings configurado
 - [x] Job `PING_JOB` (fake, só valida fila)
 - [x] Endpoint `POST /job/ping` cria Job e enfileira
 - [x] Endpoint `GET /job/{job_id}` retorna status/resultado (validando tenant)
-- [x] Testar: criar job, ver worker processar, ver status
 
 ### Etapa 5: Arq - EXTRACT_DEMAND
 - [x] Job `EXTRACT_DEMAND` com OpenAI (adaptar `demand/read.py`)
 - [x] Salvar resultado como JSON no `Job.result_data`
 - [x] Endpoint `POST /job/extract` (recebe file_id)
-- [x] Testar: upload → extract → ver resultado no Job
 
 ### Etapa 6: ScheduleVersion + GenerateSchedule
 - [x] Modelo ScheduleVersion
 - [x] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
 - [x] Salvar resultado no ScheduleVersion
 - [x] Endpoint `POST /schedule/generate`
-- [x] Testar: gerar escala, ver ScheduleVersion criado (script `script_test_schedule_generate.py`)
 
 ### Etapa 7: PDF + Publicação
 - [x] Gerar PDF (adaptar `output/day.py`)
 - [x] Upload PDF para S3
 - [x] Endpoint `POST /schedule/{id}/publish`
 - [x] Endpoint `GET /schedule/{id}/pdf` (download)
-- [x] Testar: publicar → download PDF (ok no container, gerou `output_test_schedule.pdf`)
 
 ## FASE 1: Fundações - Modelos e Banco de Dados
 
@@ -112,7 +105,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Garantir que `compare_type=True` está ativo
 - [x] Criar migração inicial: `alembic revision --autogenerate -m "Initial schema - Tenant, Account, Job"`
 - [x] Revisar migração gerada (verificar se 3 tabelas foram incluídas)
-- [x] Testar migração: `alembic upgrade head`
 - [x] Verificar se tabelas foram criadas no PostgreSQL
 
 ### 1.3 Utilitários de Banco
@@ -122,7 +114,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Configurar engine do SQLModel com `DATABASE_URL`
   - [x] Criar engine singleton
 - [x] Criar `app/db/base.py`:
-  - [x] Função para criar todas as tabelas (útil para testes)
+  - [x] Função para criar todas as tabelas
 
 ## FASE 2: Autenticação e Multi-Tenant
 
@@ -153,11 +145,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Importar router de autenticação
   - [x] Incluir rotas de auth
   - [x] Endpoint `GET /me` na raiz
-- [x] Testar autenticação:
-  - [x] Login com Google retorna JWT válido
-  - [x] JWT contém `tenant_id` e `role` (do Membership)
-  - [x] `GET /me` retorna dados do usuário do banco (com role do Membership)
-  - [x] Multi-tenant isolation funcionando (usuário só vê dados do seu tenant)
 
 ### 2.2 Multi-Tenant Enforcement
 - [x] Criar `app/services/tenant_service.py`:
@@ -203,137 +190,45 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ### 2.4 JWT e Dependencies
 
-### 2.5 Separação Account.name (privado) vs Membership.name (público) - ✅ IMPLEMENTADO
+### 2.5 Separação Account.name (privado) vs Membership.name (público)
 
-**Status**: Implementação completa realizada. Ver `DIRECTIVES.md` para decisões e regras.
+Ver `DIRECTIVES.md` para decisões e regras completas.
 
-#### Fase 1: Backend - Modelo e Migração
-- [x] **Migração Alembic**: Adicionar campo `name` em `Membership` (nullable) - `0113ef012345_add_membership_name.py`
-- [x] **Migração de dados**: Copiar `account.name` → `membership.name` para memberships ACTIVE
-- [x] **Atualizar modelo Membership**: Adicionar campo `name: str | None`
-- [x] **Migração adicional**: Tornar `account_id` nullable e adicionar campo `email` - `0114gh012345_make_membership_account_id_nullable.py`
+**Estado atual:**
+- **Account.name**: Privado - apenas o próprio usuário vê. Sempre vem do Google OAuth, nunca de `Membership.name`
+- **Account.email**: Privado - usado apenas para login/autenticação
+- **Membership.name**: Público - nome na clínica, editável por admin. Preenchido automaticamente se NULL (ao aceitar convite ou primeiro login)
+- **Membership.email**: Público - email na clínica, editável por admin. Sincroniza uma vez com `account.email` se estiver vazio ao aceitar/rejeitar convite
+- **Membership.account_id**: Pode ser NULL para convites pendentes
+- **JWT**: Contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados sempre vêm do banco via endpoints
+- **Endpoint `/me`**: Retorna ambos `account_name` e `membership_name`
+- **Endpoint `/membership/list`**: Retorna apenas `membership_name` e `membership_email`
+- **Endpoint `PUT /membership/{id}`**: Permite editar `membership.name` e `membership.email` (apenas admin)
+- **Email de convite**: Usa `membership.email`
+- **AuditLog**: Registra `membership.name` e `membership.email`
+- **Profile**: Usa `membership_id` (não `account_id`)
 
-#### Fase 2: Backend - Endpoints de Autenticação
-- [x] **Atualizar `accept_invite()`**: Preencher `membership.name` com nome do Google se NULL
-- [x] **Atualizar `auth_google()` e `auth_google_register()`**:
-  - Atualizar `account.name` apenas se NULL/vazio (sempre do Google, nunca de membership)
-  - Preencher `membership.name` com nome do Google se NULL (apenas se NULL)
-  - Vincular Memberships PENDING por email quando `account_id` é NULL
-- [x] **Atualizar preenchimento de `membership.name` no login**: Preenche automaticamente se NULL
+**Pendente:**
+- [ ] Atualizar Header para usar `membership.name` (ou `account.name` se NULL) para exibição
 
-#### Fase 3: Backend - JWT e Endpoints de Dados
-- [x] **Limpeza do JWT**: Removidos campos não utilizados (`email`, `name`, `role`, `membership_id`)
-  - JWT contém apenas: `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`
-  - Dados sempre vêm do banco via endpoints
-- [x] **Atualizar endpoint `/me`**: Retorna ambos `account_name` e `membership_name`
-- [x] **Atualizar `invite_to_tenant()`**: Aceita `name` no body e salva em `membership.name`
-  - Não cria Account se não existir (cria Membership com `account_id=NULL` e `email`)
-- [x] **Atualizar `list_memberships()`**: Retorna `membership.name` (não `account.name`)
-- [x] **Criar/atualizar `PUT /membership/{id}`**: Permite editar `membership.name` (apenas admin)
+**Futuro:**
+- Painel de Accounts terá regras de acesso restritas (apenas o próprio usuário vê seus dados)
 
-#### Fase 4: Backend - Email e Auditoria
-- [x] **Atualizar email de convite**: Usa `membership.email` (não `account.email`) para envio de convites ✅
-- [x] **Atualizar AuditLog**: Registra `membership.name` e `membership.email` (não dados do account)
+### 2.6 Membership Independente de Account (Painel)
 
-#### Fase 5: Frontend - Route Handler
-- [x] **Validação no route handler**: Adicionada validação básica para garantir que `email` é obrigatório quando `account_id` não é fornecido ✅
-
-#### Fase 6: Migração de Dados
-- [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
-
-#### Fase 7: Outras Tabelas (Profile)
-- [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
-- [x] **Atualizar modelo**: Profile agora usa `membership_id` ✅
-- [x] **Atualizar endpoints**: Todos os endpoints de Profile atualizados ✅
-- [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` ✅
-- [x] **Atualizar tipos TypeScript**: ProfileResponse atualizado ✅
-- [x] **Nota**: Tabela Professional foi removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
-
-#### Fase 5: Frontend - Tipos e Interfaces
-- [x] **Atualizar tipos TypeScript**: Adicionado `membership_name` em `MembershipResponse`
-- [x] **Atualizar endpoint `/me`**: Trata ambos `account_name` e `membership_name`
-
-#### Fase 6: Frontend - Componentes e Páginas
-- [x] **Atualizar página de Memberships**: Mostra `membership.name` em vez de `account.name`
-- [ ] **Refatorar painel de Memberships**: Remover referências a `account_email`, adicionar campo editável para `membership.email` (ver seção 2.6)
-- [ ] **Atualizar Header**: Usar `membership.name` (ou `account.name` se NULL) para exibição (pendente)
-- [x] **Página de Accounts**: Mantida como está (mostra `account.name`)
-  - **⚠️ NOTA IMPORTANTE**: Este painel terá **regras de acesso restritas no futuro**
-  - `Account.name` e `Account.email` são privados - apenas o próprio usuário deve ver
-
-#### Fase 7: Validações e Testes
-- [x] **Validações de Privacidade**: `Account.name` nunca é atualizado a partir de `membership.name`
-- [x] **Validações de Atualização Automática**: `membership.name` é atualizado apenas se NULL
-- [ ] **Testes de Integração**: Validar fluxos completos (pendente testes formais)
-
-#### Notas Importantes
-- **Privacidade**: `Account.name` e `Account.email` são privados - apenas o próprio usuário vê ✅
-- **Futuro**: Painel de Accounts terá regras de acesso restritas (anotado no código)
-- **Migração**: Dados existentes foram copiados de `account.name` para `membership.name`
-- **Membership.account_id**: Pode ser NULL para convites pendentes (antes do usuário aceitar) ✅
-- **Membership.email**: Campo público editável. Usado inicialmente para identificar convites pendentes quando `account_id` é NULL. Após sincronização inicial, é independente de `account.email` ✅ Implementado
-- **Membership.name**: Campo público editável. Pode ser diferente de `account.name` ✅
-- **Painel de Membership**: Não usa dados do Account. Permite criar e editar membership com `email` e `name` públicos ✅ Implementado
-
-### 2.6 Refatoração: Membership Independente de Account (Painel) - ✅ IMPLEMENTADO
-
-**Status**: Implementação completa realizada. Ver `MEMBERSHIP_REFACTOR_CHECKLIST.md` para detalhes.
-
-**Objetivo**: Garantir que o Account seja completamente privado e que o Membership seja independente no painel de edição.
-
-#### Princípios
+**Estado atual:**
 - **Account (Privado)**: `account.email` e `account.name` são privados, usados apenas para autenticação
 - **Membership (Público)**: `membership.email` e `membership.name` são públicos, editáveis livremente pelo admin
-- **Painel**: Não deve ter relação com Account. Não usa `account_id` para criar ou editar membership
-
-#### Fase 1: Backend - Sincronização de Email
-- [x] **Ajustar sincronização na aceitação de convite**: `accept_invite()` preenche `membership.email` se vazio
-- [x] **Ajustar sincronização no login/select tenant**: `auth_google_select_tenant()` e `switch_tenant()` preenchem `membership.email` se vazio
-- [x] **Ajustar criação de convite**: `invite_to_tenant()` preenche `membership.email` quando account existe
-
-#### Fase 2: Backend - Endpoints de Criação/Edição
-- [x] **Modificar schema de criação**: `MembershipCreate` aceita `email` e `name` (sem `account_id` obrigatório)
-- [x] **Modificar endpoint POST /membership**: Permite criar membership com `email` e `name` públicos
-- [x] **Modificar schema de atualização**: `MembershipUpdate` permite editar `email`
-- [x] **Modificar endpoint PUT /membership/{id}**: Permite atualizar `membership.email` (campo público)
-- [x] **Ajustar endpoint de envio de convite**: Usa `membership.email` como principal (com fallback)
-- [x] **Ajustar resposta de membership**: `MembershipResponse` inclui `membership_email`
-- [x] **Ajustar listagem**: `list_memberships()` retorna `membership_email` (não `account_email`)
-
-#### Fase 3: Frontend - Tipos TypeScript
-- [x] **Atualizar MembershipResponse**: Adicionado campo `membership_email`
-- [x] **Atualizar MembershipUpdateRequest**: Adicionado campo `email`
-- [x] **Criar MembershipCreateRequest**: Interface para criação com `email` e `name`
-
-#### Fase 4: Frontend - Painel de Membership
-- [x] **Adicionar campo de email editável**: Campo de input para `email` no formulário
-- [x] **Remover referências a account_email**: Removidas todas as referências a `account_email` na UI
-- [x] **Criar função handleCreate()**: Função separada para criar membership novo
-- [x] **Ajustar checkbox "Enviar convite"**: Funciona tanto para criação quanto edição
-- [x] **Atualizar exibição dos cards**: Usa `membership_email` e `membership_name`
-
-#### Fase 5: Frontend - Route Handler
-- [x] **Validação no route handler**: Adicionada validação básica para garantir que `email` é obrigatório quando `account_id` não é fornecido
-
-#### Fase 6: Migração de Dados
-- [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
-
-#### Fase 7: Outras Tabelas (Profile)
-- [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
-- [x] **Atualizar modelo**: Profile agora usa `membership_id` ✅
-- [x] **Atualizar schemas Pydantic**: `ProfileCreate` e `ProfileResponse` atualizados ✅
-- [x] **Ajustar endpoints**: Todos os endpoints de Profile atualizados para usar `membership_id` ✅
-- [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` e carregar memberships ✅
-- [x] **Atualizar tipos TypeScript**: `ProfileResponse` e `ProfileCreateRequest` atualizados ✅
-- [x] **Nota**: Tabela Professional foi removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
-- [x] `app/auth/jwt.py`:
-  - [x] `create_access_token(account_id, tenant_id, role, email, name)` - role vem do Membership
-  - [x] `verify_token(token)` retorna payload com account_id, tenant_id, role
-- [x] `app/auth/dependencies.py`:
-  - [x] `get_current_account()` - busca Account por account_id do JWT (sem filtro de tenant)
-  - [x] `get_current_membership()` - valida acesso via Membership ACTIVE
-  - [x] `get_current_tenant()` - usa Membership para validar e retornar Tenant
-  - [x] `require_role(required_role)` - verifica role do Membership
+- **Painel de Membership**: Não tem relação com Account. Não usa `account_id` para criar ou editar membership
+- **Sincronização de email**: `accept_invite()`, `auth_google_select_tenant()` e `switch_tenant()` preenchem `membership.email` se vazio
+- **Schema `MembershipCreate`**: Aceita `email` e `name` (sem `account_id` obrigatório)
+- **Endpoint `POST /membership`**: Permite criar membership com `email` e `name` públicos
+- **Endpoint `PUT /membership/{id}`**: Permite atualizar `membership.email` (campo público)
+- **Endpoint de envio de convite**: Usa `membership.email` como principal
+- **`MembershipResponse`**: Inclui `membership_email`
+- **`list_memberships()`**: Retorna `membership_email` (não `account_email`)
+- **Frontend**: Painel permite criar e editar membership com `email` e `name` públicos, sem referência a Account
+- **Profile**: Usa `membership_id` (não `account_id`)
 
 ## FASE 3: Storage (S3/MinIO)
 
@@ -362,10 +257,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Upload para S3 (StorageService)
   - [x] Criar File no banco
   - [x] Retornar `{file_id, s3_url, presigned_url}`
-- [x] Testar upload/download:
-  - [x] Upload de arquivo cria registro no banco e arquivo no MinIO
-  - [x] Download retorna arquivo correto
-  - [x] URLs presignadas funcionam
 
 ## FASE 4: Job Assíncrono (Arq) - Incremental
 
@@ -385,7 +276,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Retornar `{job_id}`
 - [x] Criar endpoint `GET /job/{job_id}`:
   - [x] Retornar status e resultado do Job (validando tenant)
-- [x] Testar: criar job ping, ver worker processar, verificar status COMPLETED
 
 ### 4.3 Job EXTRACT_DEMAND (OpenAI)
 - [x] Implementar `extract_demand_job(ctx, job_id)` no worker (Arq):
@@ -399,7 +289,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Criar Job (tipo EXTRACT_DEMAND, status PENDING)
   - [x] Enfileirar job no Arq
   - [x] Retornar `{job_id}`
-- [x] Testar: upload arquivo → extract → ver demandas no `Job.result_data`
 - [x] Job robustness (órfãos):
   - [x] Campo `Job.started_at` (migration Alembic)
   - [x] Worker marca `started_at` ao entrar em RUNNING
@@ -422,9 +311,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [x] Receber `extract_job_id`, `period_start_at`, `period_end_at`, `allocation_mode`, `pros_by_sequence` (opcional)
   - [x] Criar `ScheduleVersion` (DRAFT) e vincular `job_id`
   - [x] Criar Job (tipo GENERATE_SCHEDULE, status PENDING)
-  - [x] Enfileirar `generate_schedule_job` no Arq
-  - [x] Retornar `{job_id, schedule_version_id}`
-- [x] Testar: gerar escala, ver `schedule_version.result_data` preenchido (script `script_test_schedule_generate.py --db-check`)
+- [x] Enfileirar `generate_schedule_job` no Arq
+- [x] Retornar `{job_id, schedule_version_id}`
 
 **Nota**: Abstração completa de AI Provider (interface formal) fica para depois, quando precisar plugar outro provedor.
 
@@ -505,32 +393,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### 6.3 Manutenção de Compatibilidade
 - [ ] Manter `app.py` funcionando (não quebrar código legado)
 
-## FASE 7: Testes e Validação
-
-### 7.1 Testes Básicos
-- [x] Script de teste end-to-end criado (`script_test_e2e.py`):
-  - [x] Testa fluxo completo automatizado
-  - [x] Cria tenant e autentica
-  - [x] Faz upload de arquivo
-  - [x] Aguarda job de extração processar
-  - [x] Cria ScheduleVersion via `/schedule/generate` (pula se não houver demandas)
-  - [x] Aguarda job de geração processar
-  - [x] Publica escala (`POST /schedule/{id}/publish`) (pula se schedule não gerado)
-  - [x] Faz download do PDF (`GET /schedule/{id}/pdf`) (pula se schedule não gerado)
-  - [x] Testa endpoints independentes (`/job/list`, `/schedule/list`, `/tenant/me`)
-  - [x] Testa isolamento multi-tenant (cria segundo tenant, valida isolamento de jobs/schedules/files)
-  - [x] Valida princípios arquiteturais (passo 9)
-- [ ] Testar fluxo completo via `/docs` manualmente (validação adicional)
-- [x] Testar multi-tenant isolation (usuário de tenant A não vê dados de tenant B) - implementado no script
-- [x] Testar que jobs respeitam tenant_id - implementado no script
-
-### 7.2 Validação de Princípios
-- [x] Princípio 1: Requests HTTP nunca rodam solver/IA (sempre criam Job)
-- [x] Princípio 2: ScheduleVersion imutável, publicação separada (estrutura validada; requer schedule gerado para teste completo)
-- [x] Princípio 3: Multi-tenant por tenant_id em todas as tabelas
-- [x] Princípio 4: Storage fora do banco (S3, banco só metadados)
-
-## FASE 8: Frontend e Mobile
+## FASE 7: Frontend e Mobile
 
 ### 8.1 Organização do Repositório (Monorepo)
 - [x] Manter **um único repositório `turna`** (monorepo)
@@ -758,19 +621,7 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
   - [ ] Habilitar credentials
   - [ ] Origin configurável via variável de ambiente
 
-### 8.13 Testes e Validação
-- [ ] Fluxos principais:
-  - [ ] Login com token direto
-  - [ ] Login com seleção de tenant
-  - [ ] Troca de tenant pós-login
-  - [ ] Logout e re-login
-- [ ] Proteção de rotas:
-  - [ ] Acesso sem cookie → redirect `/login`
-  - [ ] Token inválido → redirect `/login`
-- [ ] Refresh em `/select-tenant` não quebra o fluxo
-- [ ] Cookies e CORS funcionando corretamente
-
-### 8.14 Mobile (React Native) - Futuro
+### 8.13 Mobile (React Native) - Futuro
 - [ ] Criar projeto React Native
 - [ ] Configurar autenticação (OAuth Google)
 - [ ] Telas: Login, Lista de Escalas, Detalhes de Escala
@@ -778,9 +629,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 ## 📝 Notas de Implementação
 
-### Filosofia: Mínimo Testável
-- Cada etapa entrega algo **visível e testável**
-- Testar via Swagger (`/docs`) ou curl antes de avançar
+### Filosofia: Mínimo Incremental
+- Cada etapa entrega algo **visível e funcional**
 - Não criar abstrações antes da hora (ex: AI Provider interface completa)
 - Evoluir domínio quando realmente precisar (ex: Demand como tabela)
 
@@ -788,9 +638,8 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 1. **Crítico**: Fases 1-4 (fundações, auth, storage, jobs básicos)
 2. **Importante**: Fase 5 (API endpoints)
 3. **Necessário**: Fase 6 (integração)
-4. **Desejável**: Fase 7 (testes)
-5. **Em Andamento**: Fase 8.1-8.14 (frontend web)
-6. **Futuro**: Fase 8.13 (mobile)
+4. **Em Andamento**: Fase 7.1-7.13 (frontend web)
+5. **Futuro**: Fase 7.13 (mobile)
 
 ### Boas Práticas
 - Sempre validar `tenant_id` em queries
@@ -798,7 +647,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - Sempre usar StorageService para arquivos (nunca salvar no banco)
 - Manter código legado funcionando durante migração
 - Commits pequenos e frequentes
-- Testar cada etapa antes de avançar
 
 ### Pontos de Atenção
 - Não quebrar `app.py` (código legado ainda pode ser usado)
@@ -829,9 +677,8 @@ Antes de considerar completo, verificar:
 - [x] Padrões de segurança documentados (`SECURITY.md`)
 - [x] Docker Compose sobe sem erros (script de validação criado: `script_validate_docker_compose.py`)
 - [x] Migrações Alembic aplicam sem erros
-- [x] Fluxo completo testável via `/docs` (login → selecionar tenant → usar API)
 
-**Última atualização**: Refatorado para abordagem incremental e testável.
+**Última atualização**: Refatorado para abordagem incremental.
 
 ## FASE 9: Hospital como Origem das Demandas
 
@@ -904,11 +751,6 @@ Antes de considerar completo, verificar:
 - [ ] Confirmar uso de `timestamptz` em todos os campos de data
 - [ ] Confirmar padrão multi-tenant em todas as queries
 - [ ] Atualizar documentação / checklist do projeto
-- [ ] Testar fluxo completo:
-  - [ ] Criar hospital
-  - [ ] Upload com hospital
-  - [ ] Processar arquivo usando prompt do hospital
-  - [ ] Filtrar arquivos por hospital
 
 ## FASE 10: CRUD de Hospitais + Hospital Default por Tenant
 
@@ -1013,17 +855,6 @@ Antes de considerar completo, verificar:
   - [x] O hospital default pode ser usado no upload sem ajustes
   - [x] O filtro por hospital no painel de arquivos lista este hospital
 
-### 10.7 Testes Essenciais
-
-- [ ] Criar tenant novo
-  - [ ] Confirmar hospital "Hospital" criado automaticamente
-- [ ] Acessar menu **Hospitais**
-  - [ ] Hospital default aparece na lista
-- [ ] Criar hospital adicional
-- [ ] Editar prompt de um hospital
-- [ ] Upload de arquivo usando hospital default
-- [ ] Upload usando hospital customizado
-- [ ] Processamento usa o prompt correto do hospital
 
 ### 10.8 Documentação
 
@@ -1203,7 +1034,7 @@ Antes de considerar completo, verificar:
 ### 11.8 Validações e Segurança
 
 - [x] Backend:
-  - [x] Validar que `membership_id` existe e pertence ao tenant (FASE 7 - migrado de `account_id`)
+  - [x] Validar que `membership_id` existe e pertence ao tenant
   - [x] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
   - [x] Validar formato JSON de `attribute` (via Pydantic)
   - [x] Garantir isolamento multi-tenant em todas as operações
@@ -1215,47 +1046,17 @@ Antes de considerar completo, verificar:
   - [x] Tratamento de erros HTTP (401, 403, 404, 409, 500)
   - [x] Adicionar exceção `/profile` no `lib/api.ts` para evitar redirecionamento indevido
 
-### 11.9 Testes Essenciais
-
-- [ ] Criar profile via API:
-  - [ ] Validar criação com `membership_id` e `hospital_id` (FASE 7 - migrado de `account_id`)
-  - [ ] Validar criação apenas com `membership_id` (sem hospital)
-  - [ ] Validar que `attribute` default é `{}`
-- [ ] Listar profiles:
-  - [ ] Validar que retorna apenas profiles do tenant atual
-  - [ ] Validar paginação
-- [ ] Atualizar profile:
-  - [ ] Validar atualização de `hospital_id`
-  - [ ] Validar atualização de `attribute`
-  - [ ] Validar que não permite alterar `tenant_id` ou `membership_id` (FASE 7 - migrado de `account_id`)
-- [ ] Excluir profile:
-  - [ ] Validar exclusão
-- [ ] Frontend:
-  - [ ] Testar criação via formulário
-  - [ ] Testar edição via formulário
-  - [ ] Testar validação de JSON
-  - [ ] Testar exclusão
-
-### 11.10 Documentação
+### 11.9 Documentação
 
 - [x] Atualizar `CHECKLIST.md` (esta seção)
 - [ ] Atualizar `SECURITY.md` (se necessário, com exemplos de validação de profile)
 - [ ] Documentar uso de `attribute` como campo JSONB flexível para usar com Pydantic
 
-**Nota**: Regras de negócio implementadas:
+**Regras de negócio:**
 - Um membership pode ter apenas um profile "geral" (sem hospital) por tenant
 - Um membership pode ter apenas um profile por hospital específico por tenant
-- Implementado via constraint única `(tenant_id, membership_id, hospital_id)` e índice único parcial para `hospital_id IS NULL` (FASE 7 - migrado de `account_id`)
+- Implementado via constraint única `(tenant_id, membership_id, hospital_id)` e índice único parcial para `hospital_id IS NULL`
 
-## FASE 12: CRUD de Profissionais — ⚠️ REMOVIDA
-
-**Status**: Esta fase foi implementada e posteriormente removida do sistema.
-
-A tabela `professional` foi completamente removida do projeto através da migração `0118op012345_remove_professional_table.py`. Todos os endpoints, schemas, modelos e código relacionado foram removidos.
-
-**Motivo da remoção**: A funcionalidade não era mais necessária no sistema atual.
-
-**Nota**: A função foi renomeada para `send_membership_invite()` em `app/services/email_service.py` e é usada para envio de convites de membership.
 
 ## FASE 13: Envio de Emails com Resend
 
@@ -1265,7 +1066,7 @@ A tabela `professional` foi completamente removida do projeto através da migra�
   - [x] Versão: `resend>=2.0.0` (suporta type hints e melhorias)
 - [ ] Criar conta no Resend (https://resend.com):
   - [ ] Obter API key do dashboard
-  - [ ] Verificar domínio (ou usar domínio de teste inicialmente)
+  - [ ] Verificar domínio
 - [x] Configurar variáveis de ambiente:
   - [x] `RESEND_API_KEY` (API key do Resend)
   - [x] `EMAIL_FROM` (endereço remetente, ex: `noreply@seudominio.com`)
@@ -1326,23 +1127,7 @@ A tabela `professional` foi completamente removida do projeto através da migra�
   - [x] Logar quando Resend não estiver configurado (modo dev com fallback)
   - [x] Logs detalhados em todo o fluxo (frontend, handler Next.js, backend, email service)
 
-### 13.6 Testes
-
-- [x] Testar envio real de email:
-  - [x] Criar/editar membership via frontend com checkbox "Enviar convite" marcado
-  - [x] Verificar recebimento do email na caixa de entrada (testado com domínio verificado)
-  - [x] Verificar que email chega corretamente formatado
-  - [ ] Testar com diferentes provedores de email (Gmail, Outlook, etc.) - pendente testes adicionais
-- [x] Testar tratamento de erros:
-  - [x] Simular API key inválida (mensagem específica implementada)
-  - [x] Simular domínio não verificado (mensagem específica com domínio extraído implementada)
-  - [x] Verificar que erro não quebra criação/edição do membership (implementado e testado)
-  - [x] Mensagens de erro exibidas no ActionBar do frontend
-- [x] Testar em ambiente de desenvolvimento:
-  - [x] Verificar que funciona sem `RESEND_API_KEY` (modo log - implementado e testado)
-  - [x] Verificar que funciona com `RESEND_API_KEY` configurado (implementado e testado)
-
-### 13.7 Documentação
+### 13.6 Documentação
 
 - [x] Atualizar `STACK.md`:
   - [x] Adicionar informações sobre Resend
@@ -1392,48 +1177,3 @@ A tabela `professional` foi completamente removida do projeto através da migra�
   - [ ] Email de notificação de escala publicada
   - [ ] Email de recuperação de senha (se implementar)
 
-## Scripts de Teste
-
-### `script_validate_docker_compose.py`
-Script de validação da infraestrutura Docker Compose:
-
-**Uso:**
-```bash
-python script_validate_docker_compose.py [--base-url BASE_URL] [--skip-worker]
-```
-
-**Validações:**
-- Verifica se todos os serviços estão rodando (`docker compose ps`)
-- Testa conectividade com PostgreSQL (porta 5433)
-- Testa conectividade com Redis (porta 6379)
-- Verifica acesso ao MinIO (porta 9000)
-- Valida resposta da API (`GET /health`)
-- Opcionalmente testa worker criando um job PING
-
-### `script_test_e2e.py`
-Script automatizado para teste end-to-end do fluxo completo:
-
-**Uso:**
-```bash
-python script_test_e2e.py [--base-url BASE_URL] [--test-file FILE_PATH]
-```
-
-**Exemplo:**
-```bash
-python script_test_e2e.py --base-url http://localhost:8000 --test-file test/escala_dia1.pdf
-```
-
-**O que testa:**
-1. Criar tenant e autenticar (via `/auth/dev/token`)
-2. Upload de arquivo (`POST /file/upload`)
-3. Criação e processamento de job de extração (`POST /job/extract`)
-4. Criação de ScheduleVersion e job de geração (`POST /schedule/generate`)
-5. Processamento de job de geração
-6. Publicação de escala (`POST /schedule/{id}/publish`)
-7. Download do PDF (`GET /schedule/{id}/pdf`)
-
-**Requisitos:**
-- API rodando (Docker Compose ou local)
-- Worker rodando (para processar jobs)
-- Redis disponível
-- Arquivo de teste (PDF)
