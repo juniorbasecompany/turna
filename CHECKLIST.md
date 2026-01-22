@@ -7,11 +7,11 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
 - **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
-- **Modelos**: ✅ Tenant, Account, Membership, Job, File, ScheduleVersion, AuditLog criados e migrados
+- **Modelos**: ✅ Tenant, Account, Membership, Job, File, ScheduleVersion, AuditLog, Hospital, Profile, Demand criados e migrados
 - **Autenticação**: ✅ OAuth Google, JWT, Membership, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
-- **Implementação**: ~70% - Fundações completas, falta completar endpoints
+- **Implementação**: ~85% - Fundações completas, falta página de escalas e alguns itens opcionais
 
 ## Caminho Mínimo Incremental
 
@@ -96,7 +96,7 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
 
 **Evolução futura (quando necessário):**
 - [ ] Criar `app/model/schedule.py` (quando precisar de múltiplas versões por schedule)
-- [ ] Criar `app/model/demand.py` (quando precisar queryar demandas diretamente)
+- [x] Criar `app/model/demand.py` (modelo Demand criado e implementado)
 
 ### 1.2 Configuração do Alembic
 - [x] Atualizar `alembic/env.py`:
@@ -373,25 +373,25 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 ## FASE 6: Integração de Código Existente
 
 ### 6.1 Adaptação de Solvers
-- [ ] Revisar `strategy/greedy/solve.py`:
-  - [ ] Adaptar para receber demandas como List[dict] (do JSON)
-  - [ ] Adaptar para receber profissionais como List[dict]
-  - [ ] Retornar resultado como dict (compatível com ScheduleVersion.result_data)
+- [x] Revisar `strategy/greedy/solve.py`:
+  - [x] Adaptar para receber demandas como List[dict] (do JSON) - já recebe `demands: list[dict]`
+  - [x] Adaptar para receber profissionais como List[dict] - já recebe `pros_by_sequence: list[dict]`
+  - [x] Retornar resultado como dict (compatível com ScheduleVersion.result_data) - retorna `tuple[list[dict], int]` que é usado diretamente
 - [ ] Revisar `strategy/cd_sat/solve.py`:
-  - [ ] Mesma adaptação acima
+  - [ ] Mesma adaptação acima (CP-SAT ainda não integrado no worker, apenas greedy)
 - [ ] Criar `app/services/schedule_service.py`:
-  - [ ] Função `generate_schedule(demands, professionals, allocation_mode) -> dict`
-  - [ ] Chama solver apropriado (greedy ou CP-SAT)
+  - [ ] Função `generate_schedule(demands, professionals, allocation_mode) -> dict` (atualmente chamado diretamente no worker)
 
 ### 6.2 Adaptação de Geração de PDF
 - [x] Revisar `output/day.py`:
   - [x] Retornar bytes do PDF (helpers `render_pdf_bytes()` e `render_multi_day_pdf_bytes()`)
-- [ ] Integrar no job `generate_schedule_job`:
-  - [ ] Gerar PDF em memória
-  - [ ] Upload para S3 via StorageService
+- [x] Integrar geração de PDF (via endpoint `POST /schedule/{id}/publish`):
+  - [x] Gerar PDF em memória (`render_multi_day_pdf_bytes()`)
+  - [x] Upload para S3 via StorageService (`upload_schedule_pdf()`)
+  - [x] **Nota**: PDF é gerado no endpoint de publicação, não no job de geração (conforme arquitetura: ScheduleVersion imutável, publicação separada)
 
 ### 6.3 Manutenção de Compatibilidade
-- [ ] Manter `app.py` funcionando (não quebrar código legado)
+- [x] Manter `app.py` funcionando (código legado mantido e funcional)
 
 ## FASE 7: Frontend e Mobile
 
@@ -597,29 +597,32 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Job é criado apenas ao clicar em "Ler conteúdo"
 
 ### 8.11 UX Essencial e Tratamento de Erros
-- [ ] Loading states:
-  - [ ] Login OAuth
-  - [ ] Seleção de tenant
-  - [ ] Upload e processamento
-- [ ] Mensagens claras:
-  - [ ] 401 → “Sessão expirada”
-  - [ ] 403 → “Sem acesso a este tenant”
-  - [ ] Erros de upload e job
-- [ ] Feedback visual:
-  - [ ] Toasts de sucesso/erro
-  - [ ] Indicadores de status
+- [x] Loading states:
+  - [x] Login OAuth
+  - [x] Seleção de tenant
+  - [x] Upload e processamento
+- [x] Mensagens claras:
+  - [x] 401 → “Sessão expirada”
+  - [x] 403 → “Sem acesso a este tenant”
+  - [x] Erros de upload e job (exibidos no ActionBar)
+- [x] Indicadores de status:
+  - [x] LoadingSpinner em todas as páginas
+  - [x] Estados visuais de botões e ações (loading states nos botões do ActionBar)
+  - [x] Estados visuais de arquivos (PENDING, RUNNING, COMPLETED, FAILED)
+- [ ] Feedback visual (opcional):
+  - [ ] Toasts de sucesso/erro (atualmente usando ActionBar para feedback persistente)
 
 ### 8.12 Integração com Docker Compose (pós-MVP)
-- [ ] Rodar frontend local sem Docker durante desenvolvimento inicial
-- [ ] Criar Dockerfile para frontend
-- [ ] Adicionar serviço frontend no `docker-compose.yml`:
+- [x] Rodar frontend local sem Docker durante desenvolvimento inicial
+- [ ] Criar Dockerfile para frontend (opcional - frontend roda localmente)
+- [ ] Adicionar serviço frontend no `docker-compose.yml` (opcional - frontend roda localmente):
   - [ ] Porta 3000
   - [ ] Variáveis de ambiente
   - [ ] Hot-reload em desenvolvimento
-- [ ] Configurar CORS no backend:
-  - [ ] Permitir `http://localhost:3000`
-  - [ ] Habilitar credentials
-  - [ ] Origin configurável via variável de ambiente
+- [x] Configurar CORS no backend:
+  - [x] Permitir `http://localhost:3000` (e `http://localhost:3001` por padrão)
+  - [x] Habilitar credentials (`allow_credentials=True`)
+  - [x] Origin configurável via variável de ambiente `CORS_ORIGINS` (implementado em `app/main.py`)
 
 ### 8.13 Mobile (React Native) - Futuro
 - [ ] Criar projeto React Native
@@ -683,74 +686,77 @@ Antes de considerar completo, verificar:
 ## FASE 9: Hospital como Origem das Demandas
 
 ### 9.1 Banco de Dados / Modelos
-- [ ] Criar tabela `hospital`
-  - [ ] `id` (PK)
-  - [ ] `tenant_id` (FK, obrigatório)
-  - [ ] `name` (obrigatório)
-  - [ ] `prompt` (obrigatório)
-  - [ ] `created_at` (`timestamptz`)
-  - [ ] `updated_at` (`timestamptz`)
-  - [ ] Índice por `tenant_id`
-  - [ ] Constraint `unique (tenant_id, name)`
+- [x] Criar tabela `hospital`
+  - [x] `id` (PK)
+  - [x] `tenant_id` (FK, obrigatório)
+  - [x] `name` (obrigatório)
+  - [x] `prompt` (nullable, pode ser None)
+  - [x] `color` (nullable, formato hexadecimal)
+  - [x] `created_at` (`timestamptz`)
+  - [x] `updated_at` (`timestamptz`)
+  - [x] Índice por `tenant_id`
+  - [x] Constraint `unique (tenant_id, name)`
 
-- [ ] Alterar tabela `file`
-  - [ ] Adicionar coluna `hospital_id` (FK para `hospital.id`)
-  - [ ] Definir `hospital_id` como `NOT NULL`
-  - [ ] Criar índice `(tenant_id, hospital_id)`
+- [x] Alterar tabela `file`
+  - [x] Adicionar coluna `hospital_id` (FK para `hospital.id`)
+  - [x] Definir `hospital_id` como `NOT NULL`
+  - [x] Criar índice em `hospital_id`
 
-- [ ] Criar migration Alembic
-  - [ ] Revisar FKs, `NOT NULL` e índices
-  - [ ] Aplicar migration (`alembic upgrade head`)
+- [x] Criar migration Alembic
+  - [x] Migração `0105op678901_add_hospital_table_and_hospital_id_to_file.py` criada e aplicada
+  - [x] Migração `0106qr789012_make_hospital_prompt_nullable.py` (prompt nullable)
+  - [x] Migração `0107st890123_add_hospital_color.py` (campo color)
 
 ### 9.2 API – Hospital
-- [ ] Criar endpoints de Hospital (escopo do tenant)
-  - [ ] `POST /hospital` (admin)
-  - [ ] `GET /hospital/list`
-  - [ ] `GET /hospital/{id}`
-  - [ ] `PUT /hospital/{id}` (admin)
+- [x] Criar endpoints de Hospital (escopo do tenant)
+  - [x] `POST /hospital` (admin)
+  - [x] `GET /hospital/list`
+  - [x] `GET /hospital/{id}`
+  - [x] `PUT /hospital/{id}` (admin)
+  - [x] `DELETE /hospital/{id}` (admin, com validação de arquivos associados)
 
-- [ ] Validações obrigatórias
-  - [ ] Hospital sempre pertence ao tenant atual
-  - [ ] Nome e prompt obrigatórios
+- [x] Validações obrigatórias
+  - [x] Hospital sempre pertence ao tenant atual
+  - [x] Nome obrigatório (prompt pode ser nullable)
 
 ### 9.3 Upload de Arquivos
-- [ ] Ajustar endpoint de upload
-  - [ ] Exigir `hospital_id`
-  - [ ] Validar existência do hospital
-  - [ ] Validar que o hospital pertence ao tenant
-  - [ ] Criar `file` sempre com `hospital_id`
+- [x] Ajustar endpoint de upload
+  - [x] Exigir `hospital_id` (Query parameter obrigatório)
+  - [x] Validar existência do hospital
+  - [x] Validar que o hospital pertence ao tenant
+  - [x] Criar `file` sempre com `hospital_id`
 
-- [ ] Garantir erro claro
-  - [ ] Upload sem hospital → erro
-  - [ ] Hospital de outro tenant → erro
+- [x] Garantir erro claro
+  - [x] Upload sem hospital → erro 400 ("hospital_id é obrigatório")
+  - [x] Hospital de outro tenant → erro 403 ("Hospital não pertence ao tenant atual")
 
 ### 9.4 Processamento / IA
-- [ ] Ao processar arquivo
-  - [ ] Carregar hospital via `file.hospital_id`
-  - [ ] Usar `hospital.prompt` como prompt base da leitura
-  - [ ] Registrar `hospital_id` no job (input/meta)
+- [x] Ao processar arquivo
+  - [x] Carregar hospital via `file.hospital_id` (implementado em `app/worker/job.py`)
+  - [x] Usar `hospital.prompt` como prompt base da leitura (passado para `extract_demand()`)
+  - [x] Registrar `hospital_id` no job (input/meta) - salvo em `meta["hospital_id"]` e `meta["hospital_name"]`
 
 ### 9.5 Painel de Arquivos – Filtro por Hospital
-- [ ] Backend
-  - [ ] Listagem de arquivos aceita filtro opcional `hospital_id`
-  - [ ] Validar hospital pertence ao tenant
-  - [ ] Retornar `hospital_id` e `hospital_name`
+- [x] Backend
+  - [x] Listagem de arquivos aceita filtro opcional `hospital_id` (Query parameter)
+  - [x] Validar hospital pertence ao tenant
+  - [x] Retornar `hospital_id` e `hospital_name` (e `hospital_color`) em cada arquivo
 
-- [ ] Frontend
-  - [ ] Dropdown de hospital (opção vazia = todos)
-  - [ ] Aplicar filtro ao listar arquivos
-  - [ ] Mostrar hospital em cada card de arquivo
+- [x] Frontend
+  - [x] Dropdown de hospital (opção vazia = todos)
+  - [x] Aplicar filtro ao listar arquivos
+  - [x] Mostrar hospital em cada card de arquivo (com cor do hospital)
 
 ### 9.6 Tela de Upload – Hospital Obrigatório
-- [ ] Dropdown de hospital obrigatório
-- [ ] Botão de upload desabilitado sem hospital selecionado
-- [ ] Enviar `hospital_id` junto com o arquivo
-- [ ] Mensagem clara ao usuário quando não selecionado
+- [x] Dropdown de hospital obrigatório
+- [x] Botão de upload desabilitado sem hospital selecionado (flash visual quando tenta fazer upload sem selecionar)
+- [x] Enviar `hospital_id` junto com o arquivo (via query parameter)
+- [x] Mensagem clara ao usuário quando não selecionado (flash visual vermelho no card e no campo)
 
 ### 9.7 Consistência e Revisão Final
-- [ ] Confirmar uso de `timestamptz` em todos os campos de data
-- [ ] Confirmar padrão multi-tenant em todas as queries
-- [ ] Atualizar documentação / checklist do projeto
+- [x] Confirmar uso de `timestamptz` em todos os campos de data
+- [x] Confirmar padrão multi-tenant em todas as queries
+- [x] Atualizar documentação / checklist do projeto
 
 ## FASE 10: CRUD de Hospitais + Hospital Default por Tenant
 
@@ -872,7 +878,7 @@ Antes de considerar completo, verificar:
   - [x] Modelo `Profile` (SQLModel) com:
     - [x] `id` (PK)
     - [x] `tenant_id` (FK `tenant.id`, obrigatório, index)
-    - [x] `account_id` (FK `account.id`, obrigatório, index)
+    - [x] `membership_id` (FK `membership.id`, obrigatório, index) - migrado de `account_id`
     - [x] `hospital_id` (FK `hospital.id`, opcional, index)
     - [x] `attribute` (JSONB, obrigatório, default `{}`)
     - [x] `created_at` (`timestamptz`)
@@ -892,31 +898,31 @@ Antes de considerar completo, verificar:
   - [x] Executar `alembic revision --autogenerate -m "add_profile_table"`
   - [x] Revisar migração gerada:
     - [x] Verificar criação da tabela `profile`
-    - [x] Verificar FKs para `tenant.id`, `account.id`, `hospital.id`
-    - [x] Verificar índices em `tenant_id`, `account_id`, `hospital_id`
+    - [x] Verificar FKs para `tenant.id`, `membership.id`, `hospital.id`
+    - [x] Verificar índices em `tenant_id`, `membership_id`, `hospital_id`
     - [x] Verificar campo `attribute` como JSONB com default `{}`
     - [x] Verificar `created_at` e `updated_at` como `timestamptz`
     - [x] Adicionar constraint única e índice único parcial para regras de negócio
-  - [ ] Aplicar migração: `alembic upgrade head` (pendente execução)
+  - [x] Aplicar migração: `alembic upgrade head` (migração aplicada)
 
 ### 11.2 Backend – Schemas Pydantic
 
-- [ ] Criar schemas em `app/api/route.py` (ou arquivo separado):
-  - [ ] `ProfileCreate`:
-    - [ ] `account_id: int`
-    - [ ] `hospital_id: Optional[int] = None`
-    - [ ] `attribute: dict = {}`
-  - [ ] `ProfileUpdate`:
-    - [ ] `hospital_id: Optional[int] = None`
-    - [ ] `attribute: Optional[dict] = None`
-  - [ ] `ProfileResponse`:
-    - [ ] `id: int`
-    - [ ] `tenant_id: int`
-    - [ ] `account_id: int`
-    - [ ] `hospital_id: Optional[int]`
-    - [ ] `attribute: dict`
-    - [ ] `created_at: datetime`
-    - [ ] `updated_at: datetime`
+- [x] Criar schemas em `app/api/route.py`:
+  - [x] `ProfileCreate`:
+    - [x] `membership_id: int` (não `account_id` - migrado para membership_id)
+    - [x] `hospital_id: Optional[int] = None`
+    - [x] `attribute: dict = {}`
+  - [x] `ProfileUpdate`:
+    - [x] `hospital_id: Optional[int] = None`
+    - [x] `attribute: Optional[dict] = None`
+  - [x] `ProfileResponse`:
+    - [x] `id: int`
+    - [x] `tenant_id: int`
+    - [x] `membership_id: int` (não `account_id` - migrado para membership_id)
+    - [x] `hospital_id: Optional[int]`
+    - [x] `attribute: dict`
+    - [x] `created_at: datetime`
+    - [x] `updated_at: datetime`
 
 ### 11.3 Backend – Endpoints API
 
@@ -998,24 +1004,24 @@ Antes de considerar completo, verificar:
 
 ### 11.6 Frontend – Página de Edição
 
-- [ ] Criar `frontend/app/(protected)/profile/page.tsx`:
-  - [ ] Lista de profiles em tabela:
-    - [ ] Exibir: id, account_id, hospital_id, created_at, updated_at
-    - [ ] Botão "Criar Profile"
-    - [ ] Botões de editar/excluir em cada linha
-  - [ ] Área de edição (similar a `hospital/page.tsx` e `demand/page.tsx`):
-    - [ ] Formulário com campos:
-      - [ ] Select para `account_id` (carregar accounts do tenant via API)
-      - [ ] Select para `hospital_id` (opcional, carregar hospitals do tenant)
-      - [ ] Editor JSON para `attribute` (textarea com validação ou editor JSON)
-    - [ ] Botões de salvar/cancelar
-    - [ ] Feedback visual de sucesso/erro
-  - [ ] Funcionalidades:
-    - [ ] Criar novo profile
-    - [ ] Editar profile existente
-    - [ ] Excluir profile
-    - [ ] Validação de JSON antes de enviar
-    - [ ] Tratamento de erros de validação
+- [x] Criar `frontend/app/(protected)/profile/page.tsx`:
+  - [x] Lista de profiles em tabela:
+    - [x] Exibir: id, membership_id, hospital_id, created_at, updated_at
+    - [x] Botão "Criar Profile"
+    - [x] Botões de editar/excluir em cada linha
+  - [x] Área de edição (similar a `hospital/page.tsx` e `demand/page.tsx`):
+    - [x] Formulário com campos:
+      - [x] Select para `membership_id` (carregar memberships do tenant via API)
+      - [x] Select para `hospital_id` (opcional, carregar hospitals do tenant)
+      - [x] Editor JSON para `attribute` (textarea com validação JSON em tempo real)
+    - [x] Botões de salvar/cancelar
+    - [x] Feedback visual de sucesso/erro (via ActionBar)
+  - [x] Funcionalidades:
+    - [x] Criar novo profile
+    - [x] Editar profile existente
+    - [x] Excluir profile (seleção múltipla)
+    - [x] Validação de JSON antes de enviar
+    - [x] Tratamento de erros de validação
 
 ### 11.7 Componentes Auxiliares (se necessário)
 
