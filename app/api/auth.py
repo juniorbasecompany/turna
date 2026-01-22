@@ -419,6 +419,10 @@ def auth_google_select_tenant(
                 membership_pending.account_id = account.id
                 if (membership_pending.name is None or membership_pending.name == "") and account.name and account.name != "":
                     membership_pending.name = account.name
+                # Preencher membership.email se NULL (sincronizar uma vez com account.email)
+                if membership_pending.email is None or membership_pending.email == "":
+                    if account.email:
+                        membership_pending.email = account.email.lower()
                 session.add(membership_pending)
                 session.commit()
                 session.refresh(membership_pending)
@@ -566,6 +570,11 @@ def accept_invite(
         if account.name and account.name != "":
             membership.name = account.name
 
+    # Preencher membership.email se NULL (sincronizar uma vez com account.email)
+    if membership.email is None or membership.email == "":
+        if account.email:
+            membership.email = account.email.lower()
+
     session.add(membership)
     session.commit()
     _try_write_audit_log(
@@ -664,6 +673,10 @@ def switch_tenant(
                 membership_pending.account_id = account.id
                 if (membership_pending.name is None or membership_pending.name == "") and account.name and account.name != "":
                     membership_pending.name = account.name
+                # Preencher membership.email se NULL (sincronizar uma vez com account.email)
+                if membership_pending.email is None or membership_pending.email == "":
+                    if account.email:
+                        membership_pending.email = account.email.lower()
                 session.add(membership_pending)
                 session.commit()
                 session.refresh(membership_pending)
@@ -791,15 +804,15 @@ def auth_google_create_tenant(
     session.commit()
     session.refresh(membership)
 
-    # Criar professional automaticamente para o account criador do tenant
+    # Criar professional automaticamente para o membership criador do tenant
     try:
         from app.model.professional import Professional
         from app.model.base import utc_now
         professional = Professional(
             tenant_id=tenant.id,
-            account_id=account.id,
-            name=account.name,
-            email=account.email,
+            membership_id=membership.id,
+            name=membership.name if membership.name else account.name,
+            email=membership.email if membership.email else account.email,
             active=True,
         )
         session.add(professional)

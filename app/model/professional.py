@@ -10,8 +10,8 @@ class Professional(BaseModel, table=True):
     __tablename__ = "professional"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True, nullable=False)
-    account_id: int | None = Field(
-        foreign_key="account.id",
+    membership_id: int | None = Field(
+        foreign_key="membership.id",
         index=True,
         nullable=True,
         default=None

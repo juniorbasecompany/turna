@@ -271,7 +271,7 @@ export interface DemandUpdateRequest {
 export interface ProfileResponse {
     id: number
     tenant_id: number
-    account_id: number
+    membership_id: number
     hospital_id: number | null
     attribute: Record<string, unknown>
     created_at: string
@@ -284,7 +284,7 @@ export interface ProfileListResponse {
 }
 
 export interface ProfileCreateRequest {
-    account_id: number
+    membership_id: number
     hospital_id?: number | null
     attribute?: Record<string, unknown>
 }
@@ -297,7 +297,7 @@ export interface ProfileUpdateRequest {
 export interface ProfessionalResponse {
     id: number
     tenant_id: number
-    account_id: number | null
+    membership_id: number | null
     name: string
     email: string
     phone: string | null
@@ -315,9 +315,10 @@ export interface ProfessionalListResponse {
 export interface MembershipResponse {
     id: number
     tenant_id: number
-    account_id: number
-    account_email: string | null
-    membership_name: string | null  // Nome público na clínica (pode ser NULL)
+    account_id: number | null
+    account_email: string | null  // Privado, apenas para compatibilidade/auditoria
+    membership_email: string | null  // Email público na clínica (pode ser editado)
+    membership_name: string | null  // Nome público na clínica (pode ser editado)
     role: string
     status: string
     created_at: string
@@ -332,6 +333,16 @@ export interface MembershipListResponse {
 export interface MembershipUpdateRequest {
     role?: string | null
     status?: string | null
+    name?: string | null
+    email?: string | null  // Email público editável
+}
+
+export interface MembershipCreateRequest {
+    email?: string | null  // Email público (obrigatório se account_id não for fornecido)
+    name?: string | null  // Nome público
+    role: string
+    status: string
+    account_id?: number | null  // Opcional (não usado no painel)
 }
 
 export interface ProfessionalCreateRequest {

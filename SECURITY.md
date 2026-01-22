@@ -131,8 +131,15 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 - Gerenciam Memberships (que já têm tenant_id)
 - Emitem JWT com tenant_id
 - **Convites**: `POST /tenant/{tenant_id}/invite` cria Membership PENDING com `account_id=NULL` e `email` preenchido (não cria Account)
-- **Aceite**: `POST /auth/invites/{membership_id}/accept` vincula Account ao Membership pelo email
-- **Login**: `POST /auth/google` busca e vincula automaticamente Memberships PENDING pelo email
+- **Aceite**: `POST /auth/invites/{membership_id}/accept` vincula Account ao Membership pelo email e sincroniza `membership.email` se vazio ✅
+- **Login**: `POST /auth/google` busca e vincula automaticamente Memberships PENDING pelo email e sincroniza `membership.email` se vazio ✅
+- **Criação de Membership**: `POST /membership` permite criar membership com `email` e `name` públicos, sem `account_id` obrigatório ✅
+- **Edição de Membership**: `PUT /membership/{id}` permite editar `membership.email` e `membership.name` livremente (campos públicos) ✅
+- **Privacidade**: `Account.email` e `Account.name` não são expostos em endpoints de tenant; apenas `membership.email` e `membership.name` são retornados ✅
+- **Outras tabelas**: Profile e Professional usam `membership_id` (não `account_id`) para garantir que Account permaneça privado em todo o sistema ✅
+  - **Profile**: Migrado de `account_id` para `membership_id` (FASE 7) ✅
+  - **Professional**: Migrado de `account_id` para `membership_id` (nullable) (FASE 7) ✅
+  - **Migrações**: `0116kl012345_migrate_profile_to_membership_id.py` e `0117mn012345_migrate_professional_to_membership_id.py` ✅
 
 ### Endpoints Públicos
 - `GET /health`: Não requer autenticação

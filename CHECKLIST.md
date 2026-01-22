@@ -232,8 +232,22 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [x] **Criar/atualizar `PUT /membership/{id}`**: Permite editar `membership.name` (apenas admin)
 
 #### Fase 4: Backend - Email e Auditoria
-- [x] **Atualizar email de convite**: Usa `membership.name` se existir, senão email
-- [x] **Atualizar AuditLog**: Registra `membership.name` com fallback para email se NULL
+- [x] **Atualizar email de convite**: Usa `membership.email` (não `account.email`) para envio de convites ✅
+- [x] **Atualizar AuditLog**: Registra `membership.name` e `membership.email` (não dados do account)
+
+#### Fase 5: Frontend - Route Handler
+- [x] **Validação no route handler**: Adicionada validação básica para garantir que `email` é obrigatório quando `account_id` não é fornecido ✅
+
+#### Fase 6: Migração de Dados
+- [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
+
+#### Fase 7: Outras Tabelas (Profile e Professional)
+- [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
+- [x] **Migração Professional**: Criada migração `0117mn012345_migrate_professional_to_membership_id.py` para migrar Professional de `account_id` para `membership_id` ✅
+- [x] **Atualizar modelos**: Profile e Professional agora usam `membership_id` ✅
+- [x] **Atualizar endpoints**: Todos os endpoints de Profile e Professional atualizados ✅
+- [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` ✅
+- [x] **Atualizar tipos TypeScript**: ProfileResponse e ProfessionalResponse atualizados ✅
 
 #### Fase 5: Frontend - Tipos e Interfaces
 - [x] **Atualizar tipos TypeScript**: Adicionado `membership_name` em `MembershipResponse`
@@ -241,10 +255,11 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 
 #### Fase 6: Frontend - Componentes e Páginas
 - [x] **Atualizar página de Memberships**: Mostra `membership.name` em vez de `account.name`
+- [ ] **Refatorar painel de Memberships**: Remover referências a `account_email`, adicionar campo editável para `membership.email` (ver seção 2.6)
 - [ ] **Atualizar Header**: Usar `membership.name` (ou `account.name` se NULL) para exibição (pendente)
 - [x] **Página de Accounts**: Mantida como está (mostra `account.name`)
   - **⚠️ NOTA IMPORTANTE**: Este painel terá **regras de acesso restritas no futuro**
-  - `Account.name` é privado - apenas o próprio usuário deve ver
+  - `Account.name` e `Account.email` são privados - apenas o próprio usuário deve ver
 
 #### Fase 7: Validações e Testes
 - [x] **Validações de Privacidade**: `Account.name` nunca é atualizado a partir de `membership.name`
@@ -252,11 +267,66 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 - [ ] **Testes de Integração**: Validar fluxos completos (pendente testes formais)
 
 #### Notas Importantes
-- **Privacidade**: `Account.name` é privado - apenas o próprio usuário vê
+- **Privacidade**: `Account.name` e `Account.email` são privados - apenas o próprio usuário vê ✅
 - **Futuro**: Painel de Accounts terá regras de acesso restritas (anotado no código)
 - **Migração**: Dados existentes foram copiados de `account.name` para `membership.name`
-- **Membership.account_id**: Pode ser NULL para convites pendentes (antes do usuário aceitar)
-- **Membership.email**: Usado para identificar convites pendentes quando `account_id` é NULL
+- **Membership.account_id**: Pode ser NULL para convites pendentes (antes do usuário aceitar) ✅
+- **Membership.email**: Campo público editável. Usado inicialmente para identificar convites pendentes quando `account_id` é NULL. Após sincronização inicial, é independente de `account.email` ✅ Implementado
+- **Membership.name**: Campo público editável. Pode ser diferente de `account.name` ✅
+- **Painel de Membership**: Não usa dados do Account. Permite criar e editar membership com `email` e `name` públicos ✅ Implementado
+
+### 2.6 Refatoração: Membership Independente de Account (Painel) - ✅ IMPLEMENTADO
+
+**Status**: Implementação completa realizada. Ver `MEMBERSHIP_REFACTOR_CHECKLIST.md` para detalhes.
+
+**Objetivo**: Garantir que o Account seja completamente privado e que o Membership seja independente no painel de edição.
+
+#### Princípios
+- **Account (Privado)**: `account.email` e `account.name` são privados, usados apenas para autenticação
+- **Membership (Público)**: `membership.email` e `membership.name` são públicos, editáveis livremente pelo admin
+- **Painel**: Não deve ter relação com Account. Não usa `account_id` para criar ou editar membership
+
+#### Fase 1: Backend - Sincronização de Email
+- [x] **Ajustar sincronização na aceitação de convite**: `accept_invite()` preenche `membership.email` se vazio
+- [x] **Ajustar sincronização no login/select tenant**: `auth_google_select_tenant()` e `switch_tenant()` preenchem `membership.email` se vazio
+- [x] **Ajustar criação de convite**: `invite_to_tenant()` preenche `membership.email` quando account existe
+
+#### Fase 2: Backend - Endpoints de Criação/Edição
+- [x] **Modificar schema de criação**: `MembershipCreate` aceita `email` e `name` (sem `account_id` obrigatório)
+- [x] **Modificar endpoint POST /membership**: Permite criar membership com `email` e `name` públicos
+- [x] **Modificar schema de atualização**: `MembershipUpdate` permite editar `email`
+- [x] **Modificar endpoint PUT /membership/{id}**: Permite atualizar `membership.email` (campo público)
+- [x] **Ajustar endpoint de envio de convite**: Usa `membership.email` como principal (com fallback)
+- [x] **Ajustar resposta de membership**: `MembershipResponse` inclui `membership_email`
+- [x] **Ajustar listagem**: `list_memberships()` retorna `membership_email` (não `account_email`)
+
+#### Fase 3: Frontend - Tipos TypeScript
+- [x] **Atualizar MembershipResponse**: Adicionado campo `membership_email`
+- [x] **Atualizar MembershipUpdateRequest**: Adicionado campo `email`
+- [x] **Criar MembershipCreateRequest**: Interface para criação com `email` e `name`
+
+#### Fase 4: Frontend - Painel de Membership
+- [x] **Adicionar campo de email editável**: Campo de input para `email` no formulário
+- [x] **Remover referências a account_email**: Removidas todas as referências a `account_email` na UI
+- [x] **Criar função handleCreate()**: Função separada para criar membership novo
+- [x] **Ajustar checkbox "Enviar convite"**: Funciona tanto para criação quanto edição
+- [x] **Atualizar exibição dos cards**: Usa `membership_email` e `membership_name`
+
+#### Fase 5: Frontend - Route Handler
+- [x] **Validação no route handler**: Adicionada validação básica para garantir que `email` é obrigatório quando `account_id` não é fornecido
+
+#### Fase 6: Migração de Dados
+- [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
+
+#### Fase 7: Outras Tabelas (Profile e Professional)
+- [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
+- [x] **Migração Professional**: Criada migração `0117mn012345_migrate_professional_to_membership_id.py` para migrar Professional de `account_id` para `membership_id` ✅
+- [x] **Atualizar modelos**: Profile e Professional agora usam `membership_id` ✅
+- [x] **Atualizar schemas Pydantic**: `ProfileCreate`, `ProfileResponse` e `ProfessionalResponse` atualizados ✅
+- [x] **Ajustar endpoints**: Todos os endpoints de Profile e Professional atualizados para usar `membership_id` ✅
+- [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` e carregar memberships ✅
+- [x] **Atualizar tipos TypeScript**: `ProfileResponse`, `ProfileCreateRequest` e `ProfessionalResponse` atualizados ✅
+- [x] **Endpoint de criação automática**: Endpoint em `auth.py` que cria Professional automaticamente atualizado ✅
 - [x] `app/auth/jwt.py`:
   - [x] `create_access_token(account_id, tenant_id, role, email, name)` - role vem do Membership
   - [x] `verify_token(token)` retorna payload com account_id, tenant_id, role
@@ -1135,7 +1205,7 @@ Antes de considerar completo, verificar:
 ### 11.8 Validações e Segurança
 
 - [x] Backend:
-  - [x] Validar que `account_id` existe e pertence ao tenant (via Membership)
+  - [x] Validar que `membership_id` existe e pertence ao tenant (FASE 7 - migrado de `account_id`)
   - [x] Validar que `hospital_id` (se fornecido) existe e pertence ao tenant
   - [x] Validar formato JSON de `attribute` (via Pydantic)
   - [x] Garantir isolamento multi-tenant em todas as operações
@@ -1150,8 +1220,8 @@ Antes de considerar completo, verificar:
 ### 11.9 Testes Essenciais
 
 - [ ] Criar profile via API:
-  - [ ] Validar criação com `account_id` e `hospital_id`
-  - [ ] Validar criação apenas com `account_id` (sem hospital)
+  - [ ] Validar criação com `membership_id` e `hospital_id` (FASE 7 - migrado de `account_id`)
+  - [ ] Validar criação apenas com `membership_id` (sem hospital)
   - [ ] Validar que `attribute` default é `{}`
 - [ ] Listar profiles:
   - [ ] Validar que retorna apenas profiles do tenant atual
@@ -1159,7 +1229,7 @@ Antes de considerar completo, verificar:
 - [ ] Atualizar profile:
   - [ ] Validar atualização de `hospital_id`
   - [ ] Validar atualização de `attribute`
-  - [ ] Validar que não permite alterar `tenant_id` ou `account_id`
+  - [ ] Validar que não permite alterar `tenant_id` ou `membership_id` (FASE 7 - migrado de `account_id`)
 - [ ] Excluir profile:
   - [ ] Validar exclusão
 - [ ] Frontend:
@@ -1175,9 +1245,9 @@ Antes de considerar completo, verificar:
 - [ ] Documentar uso de `attribute` como campo JSONB flexível para usar com Pydantic
 
 **Nota**: Regras de negócio implementadas:
-- Um account pode ter apenas um profile "geral" (sem hospital) por tenant
-- Um account pode ter apenas um profile por hospital específico por tenant
-- Implementado via constraint única `(tenant_id, account_id, hospital_id)` e índice único parcial para `hospital_id IS NULL`
+- Um membership pode ter apenas um profile "geral" (sem hospital) por tenant
+- Um membership pode ter apenas um profile por hospital específico por tenant
+- Implementado via constraint única `(tenant_id, membership_id, hospital_id)` e índice único parcial para `hospital_id IS NULL` (FASE 7 - migrado de `account_id`)
 
 ## FASE 12: CRUD de Profissionais
 

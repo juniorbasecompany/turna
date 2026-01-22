@@ -12,6 +12,7 @@ import {
     MembershipListResponse,
     MembershipResponse,
     MembershipUpdateRequest,
+    MembershipCreateRequest,
 } from '@/types/api'
 import { useEffect, useState } from 'react'
 
@@ -26,10 +27,14 @@ export default function MembershipPage() {
     const [formData, setFormData] = useState({
         role: 'account',
         status: 'ACTIVE',
+        name: '',
+        email: '',
     })
     const [originalFormData, setOriginalFormData] = useState({
         role: 'account',
         status: 'ACTIVE',
+        name: '',
+        email: '',
     })
     const [sendInvite, setSendInvite] = useState(false)
     const [submitting, setSubmitting] = useState(false)
@@ -74,11 +79,14 @@ export default function MembershipPage() {
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
         if (!editingMembership) {
-            return false
+            // Para criação, verificar se há dados preenchidos
+            return formData.email.trim() !== '' || formData.name.trim() !== ''
         }
         return (
             formData.role !== originalFormData.role ||
-            formData.status !== originalFormData.status
+            formData.status !== originalFormData.status ||
+            formData.name !== originalFormData.name ||
+            formData.email !== originalFormData.email
         )
     }
 
@@ -88,11 +96,15 @@ export default function MembershipPage() {
     const handleCreateClick = () => {
         setFormData({
             role: 'account',
-            status: 'ACTIVE',
+            status: 'PENDING',
+            name: '',
+            email: '',
         })
         setOriginalFormData({
             role: 'account',
-            status: 'ACTIVE',
+            status: 'PENDING',
+            name: '',
+            email: '',
         })
         setEditingMembership(null)
         setSendInvite(false)
@@ -105,10 +117,14 @@ export default function MembershipPage() {
         setFormData({
             role: membership.role,
             status: membership.status,
+            name: membership.membership_name || '',
+            email: membership.membership_email || '',
         })
         setOriginalFormData({
             role: membership.role,
             status: membership.status,
+            name: membership.membership_name || '',
+            email: membership.membership_email || '',
         })
         setShowEditArea(true)
         setError(null)
@@ -119,15 +135,90 @@ export default function MembershipPage() {
         setFormData({
             role: 'account',
             status: 'ACTIVE',
+            name: '',
+            email: '',
         })
         setOriginalFormData({
             role: 'account',
             status: 'ACTIVE',
+            name: '',
+            email: '',
         })
         setSendInvite(false)
         setShowEditArea(false)
         setError(null)
         setEmailMessage(null)
+    }
+
+    const handleCreate = async () => {
+        // Validar que email está preenchido
+        if (!formData.email || formData.email.trim() === '') {
+            setError('E-mail é obrigatório')
+            return
+        }
+
+        try {
+            setSubmitting(true)
+            setError(null)
+            setEmailMessage(null)
+
+            const createData: MembershipCreateRequest = {
+                email: formData.email.trim(),
+                name: formData.name.trim() || null,
+                role: formData.role,
+                status: formData.status,
+            }
+
+            const savedMembership = await protectedFetch<MembershipResponse>(`/api/membership`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(createData),
+            })
+
+            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
+            if (sendInvite && savedMembership) {
+                await sendInviteEmail(savedMembership)
+            }
+
+            // Recarregar lista e limpar formulário
+            await loadMemberships()
+            handleCancel()
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Erro ao criar membership'
+            setError(message)
+            setEmailMessage(null)
+            console.error('Erro ao criar membership:', err)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    const sendInviteEmail = async (membership: MembershipResponse) => {
+        console.log(
+            `[INVITE-UI] Iniciando envio de convite para membership ID=${membership.id} (${membership.membership_name || membership.membership_email})`
+        )
+        try {
+            await protectedFetch(`/api/membership/${membership.id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            const successMsg = `E-mail de convite foi enviado para ${membership.membership_name || membership.membership_email}`
+            console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
+            setEmailMessage(successMsg)
+            setEmailMessageType('success')
+        } catch (inviteErr) {
+            const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
+            console.error(
+                `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${membership.id}:`,
+                inviteErr
+            )
+            setEmailMessage(`E-mail de convite não foi enviado para ${membership.membership_name || membership.membership_email}. ${errorMsg}`)
+            setEmailMessageType('error')
+        }
     }
 
     const handleSave = async () => {
@@ -136,11 +227,13 @@ export default function MembershipPage() {
         try {
             setSubmitting(true)
             setError(null)
-            setEmailMessage(null) // Limpar mensagem de email anterior ao iniciar novo salvamento
+            setEmailMessage(null)
 
             const updateData: MembershipUpdateRequest = {
                 role: formData.role,
                 status: formData.status,
+                name: formData.name.trim() || null,
+                email: formData.email.trim() || null,
             }
 
             const savedMembership = await protectedFetch<MembershipResponse>(`/api/membership/${editingMembership.id}`, {
@@ -153,52 +246,16 @@ export default function MembershipPage() {
 
             // Se o checkbox "Enviar convite" estiver marcado, enviar convite
             if (sendInvite && savedMembership) {
-                console.log(
-                    `[INVITE-UI] Iniciando envio de convite para membership ID=${savedMembership.id} (${savedMembership.membership_name || savedMembership.account_email})`
-                )
-                try {
-                    await protectedFetch(`/api/membership/${savedMembership.id}/invite`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                    })
-                    // Definir mensagem de sucesso no ActionBar
-                    const successMsg = `E-mail de convite foi enviado para ${savedMembership.membership_name || savedMembership.account_email}`
-                    console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
-                    setEmailMessage(successMsg)
-                    setEmailMessageType('success')
-                } catch (inviteErr) {
-                    const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
-                    console.error(
-                        `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para membership ID=${savedMembership.id}:`,
-                        inviteErr
-                    )
-                    // Definir mensagem de erro no ActionBar
-                    setEmailMessage(`E-mail de convite não foi enviado para ${savedMembership.membership_name || savedMembership.account_email}. ${errorMsg}`)
-                    setEmailMessageType('error')
-                }
+                await sendInviteEmail(savedMembership)
             }
 
             // Recarregar lista e limpar formulário
             await loadMemberships()
-
-            setFormData({
-                role: 'account',
-                status: 'ACTIVE',
-            })
-            setOriginalFormData({
-                role: 'account',
-                status: 'ACTIVE',
-            })
-            setEditingMembership(null)
-            setSendInvite(false)
-            setShowEditArea(false)
-            // Mensagem de email permanece visível até o usuário fechar o formulário ou fazer nova ação
+            handleCancel()
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar membership'
             setError(message)
-            setEmailMessage(null) // Limpar mensagem de email se houver erro no salvamento
+            setEmailMessage(null)
             console.error('Erro ao salvar membership:', err)
         } finally {
             setSubmitting(false)
@@ -307,19 +364,35 @@ export default function MembershipPage() {
                                 {editingMembership ? 'Editar Associação' : 'Criar Associação'}
                             </h2>
                             <div className="space-y-4">
-                                {editingMembership && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Conta
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editingMembership.account_email || 'Não disponível'}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
-                                            disabled
-                                        />
-                                    </div>
-                                )}
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                                        E-mail <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="E-mail público na clínica"
+                                        required={!editingMembership}
+                                        disabled={submitting}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Nome
+                                    </label>
+                                    <input
+                                        id="name"
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="Nome público na clínica"
+                                        disabled={submitting}
+                                    />
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
@@ -463,9 +536,9 @@ export default function MembershipPage() {
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
                                                 }`}
-                                            title={membership.membership_name || membership.account_email || 'Não disponível'}
+                                            title={membership.membership_name || membership.membership_email || 'Não disponível'}
                                         >
-                                            {membership.membership_name || membership.account_email || 'Não disponível'}
+                                            {membership.membership_name || membership.membership_email || 'Não disponível'}
                                         </h3>
                                         <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
                                             <span className={`text-xs px-2 py-1 rounded ${getStatusColor(membership.status)}`}>
@@ -570,8 +643,8 @@ export default function MembershipPage() {
                     // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
                     if (isEditing && (hasChanges() || sendInvite)) {
                         buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
+                            label: submitting ? (editingMembership ? 'Salvando...' : 'Criando...') : (editingMembership ? 'Salvar' : 'Criar'),
+                            onClick: editingMembership ? handleSave : handleCreate,
                             variant: 'primary' as const,
                             disabled: submitting,
                             loading: submitting,

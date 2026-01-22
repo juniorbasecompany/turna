@@ -13,6 +13,14 @@ export async function POST(request: NextRequest) {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
 
+    // Validação básica: email é obrigatório se account_id não for fornecido
+    if (!body.account_id && (!body.email || body.email.trim() === '')) {
+      return NextResponse.json(
+        { detail: 'email é obrigatório quando account_id não é fornecido' },
+        { status: 400 }
+      )
+    }
+
     const response = await fetch(`${API_URL}/membership`, {
       method: 'POST',
       headers: {

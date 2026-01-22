@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from app.db.session import get_session
 from app.model.tenant import Tenant
-from pydantic import BaseModel as PydanticBaseModel, field_validator
+from pydantic import BaseModel as PydanticBaseModel, field_validator, model_validator
 from app.api.auth import router as auth_router
 from app.api.schedule import router as schedule_router
 from app.auth.dependencies import get_current_account, get_current_membership, require_role
@@ -617,22 +617,22 @@ def create_tenant(
     # Criar hospital default para o tenant
     create_default_hospital_for_tenant(session, tenant.id)
 
-    # Criar professional automaticamente para o account criador do tenant
-    # Usa dados do account (nome e email) para criar o professional
+    # Criar professional automaticamente para o membership criador do tenant
+    # Usa dados do membership (nome e email) para criar o professional
     try:
         professional = Professional(
             tenant_id=tenant.id,
-            account_id=account.id,
-            name=account.name,
-            email=account.email,
+            membership_id=membership.id,
+            name=membership.name if membership.name else account.name,
+            email=membership.email if membership.email else account.email,
             active=True,
         )
         session.add(professional)
         session.commit()
-        logger.info(f"Professional criado automaticamente para account {account.id} no tenant {tenant.id}")
+        logger.info(f"Professional criado automaticamente para membership {membership.id} no tenant {tenant.id}")
     except Exception as e:
         # Se falhar ao criar professional, logar mas não quebrar a criação do tenant
-        logger.warning(f"Erro ao criar professional automaticamente para account {account.id}: {e}")
+        logger.warning(f"Erro ao criar professional automaticamente para membership {membership.id}: {e}")
         session.rollback()
         # Continuar mesmo se falhar (professional é opcional)
 
@@ -937,6 +937,7 @@ def invite_to_tenant(
         role=role,
         status=MembershipStatus.PENDING,
         name=body.name,  # Salvar name em membership.name (não em account.name)
+        email=account.email.lower() if account.email else None,  # Preencher email quando account existe
     )
     session.add(membership)
     try:
@@ -2337,7 +2338,7 @@ class DemandListResponse(PydanticBaseModel):
 
 
 class ProfileCreate(PydanticBaseModel):
-    account_id: int
+    membership_id: int
     hospital_id: int | None = None
     attribute: dict = {}
 
@@ -2364,7 +2365,7 @@ class ProfileUpdate(PydanticBaseModel):
 class ProfileResponse(PydanticBaseModel):
     id: int
     tenant_id: int
-    account_id: int
+    membership_id: int
     hospital_id: int | None
     attribute: dict
     created_at: datetime
@@ -2431,7 +2432,7 @@ class ProfessionalUpdate(PydanticBaseModel):
 class ProfessionalResponse(PydanticBaseModel):
     id: int
     tenant_id: int
-    account_id: int | None
+    membership_id: int | None
     name: str
     email: str | None
     phone: str | None
@@ -2777,24 +2778,27 @@ def create_profile(
 ):
     """
     Cria um novo profile.
-    Valida que account_id pertence ao tenant atual (via Membership) e que hospital_id (se fornecido) pertence ao tenant.
+    Valida que membership_id pertence ao tenant atual e que hospital_id (se fornecido) pertence ao tenant.
     """
     try:
-        logger.info(f"Criando profile: account_id={body.account_id}, hospital_id={body.hospital_id}, tenant_id={membership.tenant_id}")
+        logger.info(f"Criando profile: membership_id={body.membership_id}, hospital_id={body.hospital_id}, tenant_id={membership.tenant_id}")
 
-        # Validar que account_id pertence ao tenant via Membership
-        account_membership = session.exec(
-            select(Membership).where(
-                Membership.account_id == body.account_id,
-                Membership.tenant_id == membership.tenant_id,
-                Membership.status == MembershipStatus.ACTIVE,
-            )
-        ).first()
-        if not account_membership:
-            logger.warning(f"Account {body.account_id} não possui membership ACTIVE no tenant {membership.tenant_id}")
+        # Validar que membership_id pertence ao tenant atual
+        target_membership = session.get(Membership, body.membership_id)
+        if not target_membership:
+            logger.warning(f"Membership não encontrado: id={body.membership_id}")
+            raise HTTPException(status_code=404, detail="Membership não encontrado")
+        if target_membership.tenant_id != membership.tenant_id:
+            logger.warning(f"Membership {body.membership_id} não pertence ao tenant {membership.tenant_id}")
             raise HTTPException(
                 status_code=403,
-                detail=f"Account {body.account_id} não pertence ao tenant atual",
+                detail=f"Membership não pertence ao tenant atual",
+            )
+        if target_membership.status != MembershipStatus.ACTIVE:
+            logger.warning(f"Membership {body.membership_id} não está ACTIVE")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Membership deve estar ACTIVE",
             )
 
         # Validar hospital_id se fornecido
@@ -2807,7 +2811,7 @@ def create_profile(
 
         profile = Profile(
             tenant_id=membership.tenant_id,
-            account_id=body.account_id,
+            membership_id=body.membership_id,
             hospital_id=body.hospital_id,
             attribute=body.attribute,
         )
@@ -2824,12 +2828,12 @@ def create_profile(
 
         # Verificar se é erro de constraint única de profile
         error_lower = error_msg.lower()
-        if "uq_profile_tenant_account" in error_lower or "uq_profile_tenant_account_no_hospital" in error_lower:
+        if "uq_profile_tenant_membership" in error_lower or "uq_profile_tenant_membership_no_hospital" in error_lower:
             # Determinar mensagem baseada no hospital_id
             if body.hospital_id is None:
                 raise HTTPException(
                     status_code=409,
-                    detail="Já existe um perfil para esta conta sem hospital associado. Cada conta pode ter apenas um perfil geral (sem hospital).",
+                    detail="Já existe um perfil para este membership sem hospital associado. Cada membership pode ter apenas um perfil geral (sem hospital).",
                 ) from e
             else:
                 # Buscar nome do hospital para mensagem mais amigável
@@ -2837,7 +2841,7 @@ def create_profile(
                 hospital_name = hospital.name if hospital else "este hospital"
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Já existe um perfil para esta conta no hospital '{hospital_name}'. Cada conta pode ter apenas um perfil por hospital.",
+                    detail=f"Já existe um perfil para este membership no hospital '{hospital_name}'. Cada membership pode ter apenas um perfil por hospital.",
                 ) from e
         else:
             # Outro tipo de erro de integridade
@@ -2936,7 +2940,7 @@ def update_profile(
     """
     Atualiza um profile.
     Valida que o profile pertence ao tenant atual.
-    Não permite alterar tenant_id ou account_id.
+    Não permite alterar tenant_id ou membership_id.
     """
     try:
         logger.info(f"Atualizando profile: id={profile_id}, tenant_id={membership.tenant_id}")
@@ -2957,7 +2961,7 @@ def update_profile(
             if hospital.tenant_id != membership.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
-        # Atualizar campos permitidos (nunca permitir alterar tenant_id ou account_id)
+        # Atualizar campos permitidos (nunca permitir alterar tenant_id ou membership_id)
         if body.hospital_id is not None:
             profile.hospital_id = body.hospital_id
         if body.attribute is not None:
@@ -2976,13 +2980,13 @@ def update_profile(
 
         # Verificar se é erro de constraint única de profile
         error_lower = error_msg.lower()
-        if "uq_profile_tenant_account" in error_lower or "uq_profile_tenant_account_no_hospital" in error_lower:
+        if "uq_profile_tenant_membership" in error_lower or "uq_profile_tenant_membership_no_hospital" in error_lower:
             # Determinar mensagem baseada no hospital_id
             new_hospital_id = body.hospital_id if body.hospital_id is not None else profile.hospital_id
             if new_hospital_id is None:
                 raise HTTPException(
                     status_code=409,
-                    detail="Já existe um perfil para esta conta sem hospital associado. Cada conta pode ter apenas um perfil geral (sem hospital).",
+                    detail="Já existe um perfil para este membership sem hospital associado. Cada membership pode ter apenas um perfil geral (sem hospital).",
                 ) from e
             else:
                 # Buscar nome do hospital para mensagem mais amigável
@@ -2990,7 +2994,7 @@ def update_profile(
                 hospital_name = hospital.name if hospital else "este hospital"
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Já existe um perfil para esta conta no hospital '{hospital_name}'. Cada conta pode ter apenas um perfil por hospital.",
+                    detail=f"Já existe um perfil para este membership no hospital '{hospital_name}'. Cada membership pode ter apenas um perfil por hospital.",
                 ) from e
         else:
             # Outro tipo de erro de integridade
@@ -3416,9 +3420,20 @@ def send_professional_invite_email(
 
 class MembershipCreate(PydanticBaseModel):
     """Schema para criar membership."""
-    account_id: int
+    email: Optional[str] = None  # Email público (obrigatório se account_id não for fornecido)
+    name: Optional[str] = None  # Nome público na clínica
     role: str
     status: str = "ACTIVE"
+    account_id: Optional[int] = None  # Opcional (não usado no painel)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip().lower()
+            if not v:
+                return None
+        return v
 
     @field_validator("role")
     @classmethod
@@ -3436,12 +3451,20 @@ class MembershipCreate(PydanticBaseModel):
             raise ValueError("status deve ser 'PENDING', 'ACTIVE', 'REJECTED' ou 'REMOVED'")
         return v
 
+    @model_validator(mode="after")
+    def validate_email_or_account_id(self):
+        """Validar que email é fornecido se account_id não for fornecido."""
+        if self.account_id is None and (self.email is None or self.email == ""):
+            raise ValueError("email é obrigatório quando account_id não é fornecido")
+        return self
+
 
 class MembershipUpdate(PydanticBaseModel):
     """Schema para atualizar membership."""
     role: Optional[str] = None
     status: Optional[str] = None
     name: Optional[str] = None  # Nome público na clínica (membership.name)
+    email: Optional[str] = None  # Email público na clínica (membership.email)
 
     @field_validator("role")
     @classmethod
@@ -3467,8 +3490,9 @@ class MembershipResponse(PydanticBaseModel):
     id: int
     tenant_id: int
     account_id: int | None  # Pode ser NULL para convites pendentes sem Account
-    account_email: Optional[str] = None
-    membership_name: Optional[str] = None  # Nome público na clínica (pode ser NULL)
+    account_email: Optional[str] = None  # Privado, apenas para compatibilidade/auditoria
+    membership_email: Optional[str] = None  # Email público na clínica (pode ser editado)
+    membership_name: Optional[str] = None  # Nome público na clínica (pode ser editado)
     role: str
     status: str
     created_at: datetime
@@ -3492,35 +3516,60 @@ def create_membership(
 ):
     """
     Cria um novo membership (apenas admin).
-    Valida que o account existe e que não há membership duplicado.
+    Permite criar membership com email e name públicos, sem necessidade de account_id.
     """
     try:
-        logger.info(f"Criando membership: account_id={body.account_id}, tenant_id={membership.tenant_id}, role={body.role}, status={body.status}")
+        email_lower = body.email.lower() if body.email else None
+        logger.info(f"Criando membership: email={email_lower}, tenant_id={membership.tenant_id}, role={body.role}, status={body.status}")
 
-        # Verificar se account existe
-        account = session.get(Account, body.account_id)
-        if not account:
-            logger.warning(f"Account não encontrado: id={body.account_id}")
-            raise HTTPException(status_code=404, detail="Account não encontrado")
+        account = None
+        account_id = None
 
-        # Verificar se já existe membership para este account no tenant
-        existing_membership = session.exec(
-            select(Membership).where(
-                Membership.account_id == body.account_id,
-                Membership.tenant_id == membership.tenant_id,
-            )
-        ).first()
-        if existing_membership:
-            logger.warning(f"Membership já existe para account {body.account_id} no tenant {membership.tenant_id}")
-            raise HTTPException(
-                status_code=409,
-                detail="Já existe um membership para este account neste tenant",
-            )
+        # Se account_id foi fornecido, validar que existe
+        if body.account_id is not None:
+            account = session.get(Account, body.account_id)
+            if not account:
+                logger.warning(f"Account não encontrado: id={body.account_id}")
+                raise HTTPException(status_code=404, detail="Account não encontrado")
+            account_id = account.id
+            # Verificar se já existe membership para este account no tenant
+            existing_membership = session.exec(
+                select(Membership).where(
+                    Membership.account_id == account_id,
+                    Membership.tenant_id == membership.tenant_id,
+                )
+            ).first()
+            if existing_membership:
+                logger.warning(f"Membership já existe para account {account_id} no tenant {membership.tenant_id}")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Já existe um membership para este account neste tenant",
+                )
+        else:
+            # Se account_id não foi fornecido, verificar unicidade por email
+            if not email_lower:
+                raise HTTPException(status_code=400, detail="email é obrigatório quando account_id não é fornecido")
+            
+            existing_membership = session.exec(
+                select(Membership).where(
+                    Membership.tenant_id == membership.tenant_id,
+                    Membership.email == email_lower,
+                    Membership.account_id.is_(None),
+                )
+            ).first()
+            if existing_membership:
+                logger.warning(f"Membership já existe para email {email_lower} no tenant {membership.tenant_id}")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Já existe um membership pendente para este email neste tenant",
+                )
 
         # Criar membership
         membership_obj = Membership(
             tenant_id=membership.tenant_id,
-            account_id=body.account_id,
+            account_id=account_id,
+            email=email_lower,
+            name=body.name,
             role=MembershipRole[body.role.upper()],
             status=MembershipStatus[body.status.upper()],
         )
@@ -3531,7 +3580,7 @@ def create_membership(
             session.rollback()
             raise HTTPException(
                 status_code=409,
-                detail="Membership duplicado (tenant_id, account_id) não permitido",
+                detail="Membership duplicado não permitido",
             ) from e
         session.refresh(membership_obj)
 
@@ -3544,8 +3593,8 @@ def create_membership(
                 membership_id=membership_obj.id,
                 event_type="membership_invited",
                 data={
-                    "target_account_id": body.account_id,
-                    "email": account.email,
+                    "target_account_id": account_id,
+                    "email": email_lower,
                     "from_status": None,
                     "to_status": membership_obj.status.value,
                     "from_role": None,
@@ -3554,12 +3603,16 @@ def create_membership(
             ),
         )
 
+        # Buscar account_email para resposta (pode ser None)
+        account_email = account.email if account else None
+
         logger.info(f"Membership criado com sucesso: id={membership_obj.id}")
         return MembershipResponse(
             id=membership_obj.id,
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
-            account_email=account.email,
+            account_email=account_email,
+            membership_email=membership_obj.email,
             membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
@@ -3635,14 +3688,15 @@ def list_memberships(
         # Montar resposta
         items = []
         for membership_obj, account in results:
-            # Se account é None (membership sem Account), usar email do membership
-            account_email = account.email if account else membership_obj.email
+            # account_email é privado, apenas para compatibilidade/auditoria
+            account_email = account.email if account else None
             items.append(
                 MembershipResponse(
                     id=membership_obj.id,
                     tenant_id=membership_obj.tenant_id,
                     account_id=membership_obj.account_id,
                     account_email=account_email,
+                    membership_email=membership_obj.email,  # Email público na clínica
                     membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
                     role=membership_obj.role.value,
                     status=membership_obj.status.value,
@@ -3684,7 +3738,7 @@ def get_membership(
 
         # Buscar account (pode ser None se membership ainda não foi vinculado)
         account = None
-        account_email = membership_obj.email  # Fallback para email do membership
+        account_email = None
         if membership_obj.account_id:
             account = session.get(Account, membership_obj.account_id)
             if account:
@@ -3695,6 +3749,7 @@ def get_membership(
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
             account_email=account_email,
+            membership_email=membership_obj.email,  # Email público na clínica
             membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
@@ -3767,6 +3822,9 @@ def update_membership(
         if body.name is not None:
             # Permitir editar membership.name (não account.name)
             membership_obj.name = body.name
+        if body.email is not None:
+            # Permitir editar membership.email (campo público, independente de account.email)
+            membership_obj.email = body.email.lower() if body.email else None
 
         membership_obj.updated_at = utc_now()
         session.add(membership_obj)
@@ -3794,7 +3852,7 @@ def update_membership(
 
         # Buscar account (pode ser None se membership ainda não foi vinculado)
         account = None
-        account_email = membership_obj.email  # Fallback para email do membership
+        account_email = None
         if membership_obj.account_id:
             account = session.get(Account, membership_obj.account_id)
             if account:
@@ -3806,6 +3864,7 @@ def update_membership(
             tenant_id=membership_obj.tenant_id,
             account_id=membership_obj.account_id,
             account_email=account_email,
+            membership_email=membership_obj.email,  # Email público na clínica
             membership_name=membership_obj.name,  # Nome público na clínica (pode ser NULL)
             role=membership_obj.role.value,
             status=membership_obj.status.value,
@@ -3923,15 +3982,16 @@ def send_membership_invite_email(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        # Buscar account (pode ser None se membership ainda não foi vinculado)
-        account = None
-        account_email = membership_obj.email  # Fallback para email do membership
-        if membership_obj.account_id:
+        # Usar membership.email como email de destino (campo público)
+        # Fallback para account.email apenas se membership.email estiver vazio e account_id estiver preenchido
+        account_email = membership_obj.email
+        if not account_email and membership_obj.account_id:
             account = session.get(Account, membership_obj.account_id)
-            if account:
+            if account and account.email:
                 account_email = account.email
-        elif not membership_obj.email:
-            raise HTTPException(status_code=400, detail="Membership não possui account_id nem email")
+        
+        if not account_email:
+            raise HTTPException(status_code=400, detail="Membership não possui email para envio de convite")
 
         logger.info(
             f"[INVITE] Iniciando envio de convite para membership ID={membership_id} "
@@ -3967,8 +4027,8 @@ def send_membership_invite_email(
 
         # Enviar email de convite
         try:
-            # Usar account_email (já tem fallback para membership_obj.email)
-            professional_name = account.name if account else (membership_obj.name or account_email)
+            # Usar membership.name se existir, senão usar email
+            professional_name = membership_obj.name if membership_obj.name else account_email
             result = send_professional_invite(
                 to_email=account_email,
                 professional_name=professional_name,
@@ -3998,7 +4058,7 @@ def send_membership_invite_email(
         if not success:
             logger.error(
                 f"[INVITE] ❌ FALHA - Envio de convite falhou para membership ID={membership_id} "
-                f"(email={account.email}): {error_message}"
+                f"(email={account_email}): {error_message}"
             )
             raise HTTPException(
                 status_code=500,
@@ -4007,9 +4067,9 @@ def send_membership_invite_email(
 
         logger.info(
             f"[INVITE] ✅ SUCESSO - Convite enviado com sucesso para membership ID={membership_id} "
-            f"(email={account.email})"
+            f"(email={account_email})"
         )
-        return {"message": "Convite enviado com sucesso", "email": account.email}
+        return {"message": "Convite enviado com sucesso", "email": account_email}
     except HTTPException:
         raise
     except Exception as e:

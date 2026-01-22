@@ -9,8 +9,8 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
-    AccountListResponse,
-    AccountResponse,
+    MembershipListResponse,
+    MembershipResponse,
     HospitalListResponse,
     HospitalResponse,
     ProfileCreateRequest,
@@ -23,15 +23,15 @@ import { useEffect, useState } from 'react'
 export default function ProfilePage() {
     const { settings } = useTenantSettings()
     const [profiles, setProfiles] = useState<ProfileResponse[]>([])
-    const [accounts, setAccounts] = useState<AccountResponse[]>([])
+    const [memberships, setMemberships] = useState<MembershipResponse[]>([])
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loading, setLoading] = useState(true)
-    const [loadingAccounts, setLoadingAccounts] = useState(true)
+    const [loadingMemberships, setLoadingMemberships] = useState(true)
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [editingProfile, setEditingProfile] = useState<ProfileResponse | null>(null)
     const [formData, setFormData] = useState({
-        account_id: null as number | null,
+        membership_id: null as number | null,
         hospital_id: null as number | null,
         attribute: '{}',
     })
@@ -117,10 +117,10 @@ export default function ProfilePage() {
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
         if (!editingProfile) {
-            return formData.account_id !== null || formData.hospital_id !== null || formData.attribute.trim() !== '{}'
+            return formData.membership_id !== null || formData.hospital_id !== null || formData.attribute.trim() !== '{}'
         }
         return (
-            formData.account_id !== originalFormData.account_id ||
+            formData.membership_id !== originalFormData.membership_id ||
             formData.hospital_id !== originalFormData.hospital_id ||
             formData.attribute.trim() !== originalFormData.attribute.trim()
         )
@@ -148,8 +148,8 @@ export default function ProfilePage() {
 
     // Abrir modo de criação
     const handleCreateClick = () => {
-        setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
-        setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
+        setFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
+        setOriginalFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
         setEditingProfile(null)
         setShowEditArea(true)
         setError(null)
@@ -159,7 +159,7 @@ export default function ProfilePage() {
     // Abrir modo de edição
     const handleEditClick = (profile: ProfileResponse) => {
         const initialData = {
-            account_id: profile.account_id,
+            membership_id: profile.membership_id,
             hospital_id: profile.hospital_id,
             attribute: JSON.stringify(profile.attribute, null, 2),
         }
@@ -173,8 +173,8 @@ export default function ProfilePage() {
 
     // Cancelar edição e/ou seleção
     const handleCancel = () => {
-        setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
-        setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
+        setFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
+        setOriginalFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
         setEditingProfile(null)
         setShowEditArea(false)
         setSelectedProfiles(new Set())
@@ -184,9 +184,9 @@ export default function ProfilePage() {
 
     // Submeter formulário (criar ou editar)
     const handleSave = async () => {
-        // Validar account_id
-        if (!formData.account_id) {
-            setError('Conta é obrigatória')
+        // Validar membership_id
+        if (!formData.membership_id) {
+            setError('Associação é obrigatória')
             return
         }
 
@@ -223,7 +223,7 @@ export default function ProfilePage() {
             } else {
                 // Criar novo profile
                 const createData: ProfileCreateRequest = {
-                    account_id: formData.account_id,
+                    membership_id: formData.membership_id,
                     hospital_id: formData.hospital_id || null,
                     attribute: attributeObj,
                 }
@@ -239,8 +239,8 @@ export default function ProfilePage() {
 
             // Recarregar lista e limpar formulário
             await loadProfiles()
-            setFormData({ account_id: null, hospital_id: null, attribute: '{}' })
-            setOriginalFormData({ account_id: null, hospital_id: null, attribute: '{}' })
+            setFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
+            setOriginalFormData({ membership_id: null, hospital_id: null, attribute: '{}' })
             setEditingProfile(null)
             setShowEditArea(false)
         } catch (err) {
@@ -319,23 +319,23 @@ export default function ProfilePage() {
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label htmlFor="account_id" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Conta <span className="text-red-500">*</span>
+                                    <label htmlFor="membership_id" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Associação <span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        id="account_id"
-                                        value={formData.account_id || ''}
+                                        id="membership_id"
+                                        value={formData.membership_id || ''}
                                         onChange={(e) =>
-                                            setFormData({ ...formData, account_id: e.target.value ? parseInt(e.target.value) : null })
+                                            setFormData({ ...formData, membership_id: e.target.value ? parseInt(e.target.value) : null })
                                         }
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         required
-                                        disabled={submitting || editingProfile !== null || loadingAccounts}
+                                        disabled={submitting || editingProfile !== null || loadingMemberships}
                                     >
                                         <option value=""></option>
-                                        {accounts.map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.name} ({account.email})
+                                        {memberships.map((membership) => (
+                                            <option key={membership.id} value={membership.id}>
+                                                {membership.membership_name || membership.membership_email || 'Sem nome'} ({membership.role === 'admin' ? 'Admin' : 'Conta'})
                                             </option>
                                         ))}
                                     </select>
@@ -405,7 +405,7 @@ export default function ProfilePage() {
             >
                 {profiles.map((profile) => {
                     const isSelected = selectedProfiles.has(profile.id)
-                    const account = accounts.find((a) => a.id === profile.account_id)
+                    const membership = memberships.find((m) => m.id === profile.membership_id)
                     const hospital = hospitals.find((h) => h.id === profile.hospital_id)
                     return (
                         <div
@@ -439,14 +439,14 @@ export default function ProfilePage() {
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
                                                 }`}
-                                            title={account ? account.name : `ID: ${profile.id}`}
+                                            title={membership ? (membership.membership_name || membership.membership_email) : `ID: ${profile.id}`}
                                         >
-                                            {account ? account.name : `Perfil ${profile.id}`}
+                                            {membership ? (membership.membership_name || membership.membership_email) : `Perfil ${profile.id}`}
                                         </h3>
-                                        {account && (
+                                        {membership && (
                                             <p className={`text-xs text-center px-2 mt-1 truncate w-full ${isSelected ? 'text-red-700' : 'text-gray-500'
                                                 }`}>
-                                                {account.email}
+                                                {membership.membership_email || 'Sem email'}
                                             </p>
                                         )}
                                         {hospital && (
