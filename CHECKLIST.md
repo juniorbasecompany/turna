@@ -1082,7 +1082,7 @@ Antes de considerar completo, verificar:
 
 - [x] Atualizar `app/services/email_service.py`:
   - [x] Importar `resend` e configurar API key via variável de ambiente
-  - [x] Modificar `send_membership_invite()` para usar Resend (função renomeada de `send_professional_invite()`):
+  - [x] Modificar `send_membership_invite()` para usar Resend :
     - [x] Usar `resend.Emails.send()` com parâmetros adequados
     - [x] Definir `from` usando `EMAIL_FROM`
     - [x] Definir `to` com email do profissional

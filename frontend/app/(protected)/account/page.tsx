@@ -4,18 +4,18 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
-import { Pagination } from '@/components/Pagination'
+import { FormCheckbox } from '@/components/FormCheckbox'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
-import { FormCheckbox } from '@/components/FormCheckbox'
+import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
-import { AccountResponse } from '@/types/api'
-import { useEntityPage } from '@/hooks/useEntityPage'
-import { useState, useCallback, useMemo } from 'react'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { AccountResponse } from '@/types/api'
+import { useCallback, useState } from 'react'
 
 type AccountFormData = {
     name: string
@@ -269,10 +269,6 @@ export default function AccountPage() {
     // Handler de exclusão customizado com confirm
     const handleDeleteSelectedWithConfirm = useCallback(async () => {
         if (selectedAccountsCount === 0) return
-
-        if (!confirm(`Tem certeza que deseja remover ${selectedAccountsCount} conta(s)?`)) {
-            return
-        }
 
         await baseHandleDeleteSelected()
     }, [selectedAccountsCount, baseHandleDeleteSelected])

@@ -7,13 +7,13 @@ import { CreateCard } from '@/components/CreateCard'
 import { FilterButtons, FilterOption } from '@/components/FilterButtons'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { protectedFetch, extractErrorMessage } from '@/lib/api'
+import { protectedFetch } from '@/lib/api'
 import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
+    MembershipCreateRequest,
     MembershipListResponse,
     MembershipResponse,
     MembershipUpdateRequest,
-    MembershipCreateRequest,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -316,10 +316,6 @@ export default function MembershipPage() {
     // Excluir memberships selecionados
     const handleDeleteSelected = async () => {
         if (selectedMemberships.size === 0) return
-
-        if (!confirm(`Tem certeza que deseja remover ${selectedMemberships.size} associação(ões)?`)) {
-            return
-        }
 
         try {
             setDeleting(true)
