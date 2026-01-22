@@ -136,6 +136,7 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 - **Criação de member**: `POST /member` permite criar member com `email` e `name` públicos, sem `account_id` obrigatório ✅
 - **Edição de member**: `PUT /member/{id}` permite editar `member.email` e `member.name` livremente (campos públicos) ✅
 - **Privacidade**: `Account.email` e `Account.name` não são expostos em endpoints de tenant; apenas `member.email` e `member.name` são retornados ✅
+- **Endpoints de Account**: Endpoints de Account (`/account/*`) são admin-only e expõem dados privados. Devem ser usados com cuidado e apenas por administradores do sistema.
 
 ### Endpoints Públicos
 - `GET /health`: Não requer autenticação
@@ -143,8 +144,25 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 
 ### Endpoints Admin
 Alguns endpoints requerem role ADMIN:
+- `POST /tenant`: Requer admin (criação de tenant)
+- `GET /tenant/list`: Requer admin
+- `PUT /tenant/{tenant_id}`: Requer admin
+- `DELETE /tenant/{tenant_id}`: Requer admin
 - `POST /tenant/{tenant_id}/invite`: Requer admin no tenant
 - `POST /job/{job_id}/requeue`: Requer admin no tenant
+- `POST /member`: Requer admin
+- `GET /member/list`: Requer admin
+- `GET /member/{member_id}`: Requer admin
+- `PUT /member/{member_id}`: Requer admin
+- `DELETE /member/{member_id}`: Requer admin
+- `POST /member/{member_id}/invite`: Requer admin
+- `POST /account`: Requer admin
+- `GET /account/list`: Requer admin
+- `PUT /account/{account_id}`: Requer admin
+- `DELETE /account/{account_id}`: Requer admin
+- `POST /hospital`: Requer admin
+- `PUT /hospital/{hospital_id}`: Requer admin
+- `DELETE /hospital/{hospital_id}`: Requer admin
 
 ## Checklist de Validação
 

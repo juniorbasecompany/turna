@@ -11,7 +11,7 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Autenticação**: ✅ OAuth Google, JWT, Member, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
-- **Implementação**: ~85% - Fundações completas, falta página de escalas e alguns itens opcionais
+- **Implementação**: ~90% - Fundações completas, CRUDs implementados, falta página de escalas e alguns itens opcionais
 
 ## Caminho Mínimo Incremental
 
@@ -136,6 +136,8 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
 - [x] Criar `app/api/auth.py`:
   - [x] Endpoint `POST /auth/google` (login - busca Account por email, valida members)
   - [x] Endpoint `POST /auth/google/register` (cria Account sem tenant_id, cria Member se necessário)
+  - [x] Endpoint `POST /auth/google/select-tenant` (seleciona tenant e emite JWT)
+  - [x] Endpoint `POST /auth/google/create-tenant` (cria tenant automaticamente quando account não tem nenhum tenant ACTIVE)
   - [x] Endpoint `POST /auth/switch-tenant` (trocar tenant quando já autenticado)
   - [x] Endpoint `GET /auth/tenant/list` (lista tenants disponíveis e convites pendentes)
   - [x] Endpoint `GET /auth/invites` (lista convites pendentes do usuário)
@@ -189,6 +191,8 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] Logs em endpoints relevantes (`app/api/auth.py`, `app/api/route.py`)
 
 ### 2.4 JWT e Dependencies
+- [x] JWT implementado com campos mínimos (`sub`, `tenant_id`, `iat`, `exp`, `iss`)
+- [x] Dependencies implementadas (`get_current_account`, `get_current_member`, `require_role`, `get_current_tenant`)
 
 ### 2.5 Separação Account.name (privado) vs Member.name (público)
 
@@ -208,7 +212,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - **AuditLog**: Registra `member.name` e `member.email`
 
 **Pendente:**
-- [ ] Atualizar Header para usar `member.name` (ou `account.name` se NULL) para exibição
+- [x] Header implementado com nome do tenant e menu do usuário
 
 **Futuro:**
 - Painel de Accounts terá regras de acesso restritas (apenas o próprio usuário vê seus dados)
@@ -319,7 +323,11 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 ### 5.1 Endpoints de Tenants
 - [x] `POST /tenant` (criar tenant - já implementado em `app/api/route.py`)
   - [x] Cria Tenant e Member ADMIN ACTIVE para o criador
+  - [x] Cria hospital default automaticamente
+- [x] `GET /tenant/list` (listar tenants - apenas admin)
 - [x] `GET /tenant/me` (tenant atual do usuário - implementado em `app/api/route.py`)
+- [x] `PUT /tenant/{tenant_id}` (atualizar tenant - apenas admin)
+- [x] `DELETE /tenant/{tenant_id}` (excluir tenant - apenas admin)
 
 ### 5.2 Endpoints de Schedule
 - [x] Criar `app/api/schedule.py`:
@@ -332,10 +340,37 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 ### 5.3 Endpoint de Job
 - [x] Endpoints implementados em `app/api/route.py`:
+  - [x] `POST /job/ping` (criar job PING para teste)
+  - [x] `POST /job/extract` (criar job EXTRACT_DEMAND)
   - [x] `GET /job/list` (listar jobs do tenant, com paginação e filtros por tipo/status)
   - [x] `GET /job/{job_id}` (detalhes - validar tenant)
+  - [x] `POST /job/{job_id}/requeue` (re-enfileirar job - apenas admin)
 
-### 5.4 Endpoints de File
+### 5.4 Endpoints de Member
+- [x] Endpoints implementados em `app/api/route.py`:
+  - [x] `POST /member` (criar member - apenas admin)
+  - [x] `GET /member/list` (listar members do tenant - apenas admin)
+  - [x] `GET /member/{member_id}` (detalhes - apenas admin)
+  - [x] `PUT /member/{member_id}` (atualizar member - apenas admin)
+  - [x] `DELETE /member/{member_id}` (excluir member - apenas admin)
+  - [x] `POST /member/{member_id}/invite` (enviar email de convite - apenas admin)
+
+### 5.5 Endpoints de Account
+- [x] Endpoints implementados em `app/api/route.py`:
+  - [x] `POST /account` (criar account - apenas admin)
+  - [x] `GET /account/list` (listar accounts - apenas admin)
+  - [x] `PUT /account/{account_id}` (atualizar account - apenas admin)
+  - [x] `DELETE /account/{account_id}` (excluir account - apenas admin)
+
+### 5.6 Endpoints de Demand
+- [x] Endpoints implementados em `app/api/route.py`:
+  - [x] `POST /demand` (criar demand)
+  - [x] `GET /demand/list` (listar demands do tenant)
+  - [x] `GET /demand/{demand_id}` (detalhes - validar tenant)
+  - [x] `PUT /demand/{demand_id}` (atualizar demand - validar tenant)
+  - [x] `DELETE /demand/{demand_id}` (excluir demand - validar tenant)
+
+### 5.7 Endpoints de File
 - [x] `POST /file/upload` (upload de arquivo - já implementado em `app/api/route.py`)
 - [x] `GET /file/list` (listar arquivos do tenant com paginação e filtros):
   - [x] Parâmetros de query:
@@ -354,7 +389,12 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] `GET /file/{file_id}/download` (download direto do arquivo)
 - [x] `DELETE /file/{file_id}` (excluir arquivo do banco e S3/MinIO - sem restrições)
 
-### 5.5 Validações e Segurança
+### 5.8 Endpoints de Autenticação Adicionais
+- [x] Endpoints implementados em `app/api/auth.py`:
+  - [x] `POST /auth/google/create-tenant` (criar tenant automaticamente quando account não tem nenhum tenant ACTIVE)
+  - [x] `POST /auth/dev/token` (endpoint de desenvolvimento para gerar token)
+
+### 5.9 Validações e Segurança
 - [x] Garantir que TODOS os endpoints validam tenant_id:
   - [x] Extrair de JWT via `get_current_member()` (implementado em todos os endpoints)
   - [x] Validar que tenant existe (validação implícita em `get_current_member()`)
@@ -492,13 +532,19 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 ### 8.7 Dashboard
 - [x] Implementar página Dashboard (`app/(protected)/dashboard/page.tsx`):
   - [x] Layout simples e direto
+  - [x] Cards informativos com totais:
+    - [x] Total de hospitais
+    - [x] Total de associados
+    - [x] Total de demandas
+    - [x] Total de arquivos
+    - [x] Total de jobs
+    - [x] Jobs em execução
   - [x] Links rápidos:
     - [x] Nova Importação (link para `/import`)
     - [x] Ver Escalas (link para `/schedules`)
-  - [ ] Cards informativos (opcional - não implementado)
 
-### 8.8 Página de Importação
-- [x] Implementar página de importação (`app/(protected)/import/page.tsx`):
+### 8.8 Página de Importação (Integrada em Arquivos)
+- [x] Upload integrado na página de arquivos (`app/(protected)/file/page.tsx`):
   - [x] Upload de arquivo (PDF, JPEG, PNG, XLSX, XLS, CSV)
   - [x] Validação de tipo (extensão e MIME type)
   - [x] Chamar `POST /file/upload` (via `/api/file/upload`)
@@ -523,7 +569,36 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
     - Download PDF (PUBLISHED)
   - [ ] Loading e tratamento de erros
 
-### 8.10 Página de Arquivos
+### 8.10 Página de Demandas
+- [x] Implementar página de demandas (`app/(protected)/demand/page.tsx`):
+  - [x] Listagem de demandas do tenant
+  - [x] CRUD completo (criar, editar, excluir)
+  - [x] Filtros e paginação
+  - [x] Validação de tenant_id
+
+### 8.11 Página de Associados
+- [x] Implementar página de associados (`app/(protected)/member/page.tsx`):
+  - [x] Listagem de members do tenant (apenas admin)
+  - [x] CRUD completo (criar, editar, excluir)
+  - [x] Envio de convite por email
+  - [x] Seleção múltipla para exclusão em lote
+  - [x] Validação de tenant_id e permissões
+
+### 8.12 Página de Clínicas
+- [x] Implementar página de clínicas (`app/(protected)/tenant/page.tsx`):
+  - [x] Listagem de tenants (apenas admin)
+  - [x] CRUD completo (criar, editar, excluir)
+  - [x] Envio de convites
+  - [x] Validação de permissões
+
+### 8.13 Menu Lateral
+- [x] Implementar menu lateral (`frontend/components/Sidebar.tsx`):
+  - [x] Ordem: Dashboard, Hospitais, Clínicas, Associados, Arquivos, Demandas
+  - [x] Itens admin-only (Clínicas, Associados)
+  - [x] Ícones e navegação
+  - [x] Responsivo com drawer em mobile/tablet
+
+### 8.14 Página de Arquivos
 - [x] Navegação:
   - [x] Adicionar opção **Arquivos** no menu principal (Sidebar)
   - [x] Ao clicar, redirecionar para `/file`
@@ -594,7 +669,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Upload não cria job automaticamente (apenas faz upload)
   - [x] Job é criado apenas ao clicar em "Ler conteúdo"
 
-### 8.11 UX Essencial e Tratamento de Erros
+### 8.15 UX Essencial e Tratamento de Erros
 - [x] Loading states:
   - [x] Login OAuth
   - [x] Seleção de tenant
@@ -610,7 +685,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [ ] Feedback visual (opcional):
   - [ ] Toasts de sucesso/erro (atualmente usando ActionBar para feedback persistente)
 
-### 8.12 Integração com Docker Compose (pós-MVP)
+### 8.16 Integração com Docker Compose (pós-MVP)
 - [x] Rodar frontend local sem Docker durante desenvolvimento inicial
 - [ ] Criar Dockerfile para frontend (opcional - frontend roda localmente)
 - [ ] Adicionar serviço frontend no `docker-compose.yml` (opcional - frontend roda localmente):
@@ -622,7 +697,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Habilitar credentials (`allow_credentials=True`)
   - [x] Origin configurável via variável de ambiente `CORS_ORIGINS` (implementado em `app/main.py`)
 
-### 8.13 Mobile (React Native) - Futuro
+### 8.17 Mobile (React Native) - Futuro
 - [ ] Criar projeto React Native
 - [ ] Configurar autenticação (OAuth Google)
 - [ ] Telas: Login, Lista de Escalas, Detalhes de Escala
@@ -679,7 +754,7 @@ Antes de considerar completo, verificar:
 - [x] Docker Compose sobe sem erros (script de validação criado: `script_validate_docker_compose.py`)
 - [x] Migrações Alembic aplicam sem erros
 
-**Última atualização**: Refatorado para abordagem incremental.
+**Última atualização**: Revisado e atualizado com todas as funcionalidades implementadas. Menu atualizado: Dashboard, Hospitais, Clínicas, Associados, Arquivos, Demandas.
 
 ## FASE 9: Hospital como Origem das Demandas
 
@@ -867,6 +942,45 @@ Antes de considerar completo, verificar:
   - [ ] Conceito de hospital
   - [ ] Hospital como origem semântica das demandas
   - [ ] Prompt como contrato de extração
+
+## FASE 11: CRUD de Demandas
+
+### 11.1 Modelo Demand
+- [x] Modelo `Demand` criado e migrado
+- [x] Campos: id, tenant_id, hospital_id, room, start_time, end_time, procedure, etc.
+- [x] Relacionamento com Hospital
+
+### 11.2 API – Demand
+- [x] Endpoints CRUD completos:
+  - [x] `POST /demand` (criar)
+  - [x] `GET /demand/list` (listar com filtros)
+  - [x] `GET /demand/{id}` (detalhes)
+  - [x] `PUT /demand/{id}` (atualizar)
+  - [x] `DELETE /demand/{id}` (excluir)
+- [x] Validação de tenant_id em todos os endpoints
+
+### 11.3 Frontend – Página de Demandas
+- [x] Página `/demand` implementada
+- [x] CRUD completo com interface
+- [x] Filtros e paginação
+
+## FASE 12: Menu e Navegação
+
+### 12.1 Menu Lateral
+- [x] Componente Sidebar implementado
+- [x] Ordem: Dashboard, Hospitais, Clínicas, Associados, Arquivos, Demandas
+- [x] Itens admin-only (Clínicas, Associados)
+- [x] Responsivo com drawer em mobile/tablet
+- [x] Ícones SVG para cada item
+
+### 12.2 Navegação
+- [x] Todas as páginas principais implementadas:
+  - [x] Dashboard (`/dashboard`)
+  - [x] Hospitais (`/hospital`)
+  - [x] Clínicas (`/tenant`)
+  - [x] Associados (`/member`)
+  - [x] Arquivos (`/file`)
+  - [x] Demandas (`/demand`)
 
 ## FASE 13: Envio de Emails com Resend
 

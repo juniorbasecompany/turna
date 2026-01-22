@@ -131,13 +131,27 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - `POST /auth/google`: Login (retorna token direto ou `requires_tenant_selection=True`).
 - `POST /auth/google/register`: Cadastro (cria Account se não existir).
 - `POST /auth/google/select-tenant`: Seleciona tenant e emite JWT.
-- `POST /auth/google/create-tenant`: Cria clínica automaticamente e emite JWT.
+- `POST /auth/google/create-tenant`: Cria clínica automaticamente e emite JWT (quando account não tem nenhum tenant ACTIVE).
 - `POST /auth/switch-tenant`: Troca de tenant (sem Google OAuth).
 - `GET /auth/tenant/list`: Lista tenants ACTIVE e convites PENDING.
+- `GET /auth/invites`: Lista convites pendentes do usuário.
 - `POST /auth/invites/{id}/accept`: Aceita convite.
 - `POST /auth/invites/{id}/reject`: Rejeita convite.
+- `POST /auth/dev/token`: Endpoint de desenvolvimento para gerar token (apenas em dev).
 
 ## Frontend / Autenticação
+
+## Menu e Navegação
+
+**Ordem do menu lateral** (implementado em `frontend/components/Sidebar.tsx`):
+1. Dashboard
+2. Hospitais
+3. Clínicas (admin-only)
+4. Associados (admin-only)
+5. Arquivos
+6. Demandas
+
+**Itens admin-only**: Clínicas e Associados são visíveis apenas para usuários com role `admin`.
 
 ## Padrão de carregamento em páginas protegidas
 
