@@ -51,18 +51,35 @@ export default function MembershipPage() {
     const [showEditArea, setShowEditArea] = useState(false)
     const [allMemberships, setAllMemberships] = useState<MembershipResponse[]>([])
 
-    // Carregar lista de memberships
+    // Carregar lista de memberships (faz múltiplas requisições para carregar todos)
     const loadMemberships = async () => {
         try {
             setLoading(true)
             setError(null)
 
-            const params = new URLSearchParams()
-            params.append('limit', String(1000)) // Carregar todos para filtrar no frontend
-            params.append('offset', String(0))
+            const allItems: MembershipResponse[] = []
+            const limit = 100 // Limite máximo do backend
+            let offset = 0
+            let hasMore = true
 
-            const data = await protectedFetch<MembershipListResponse>(`/api/membership/list?${params.toString()}`)
-            setAllMemberships(data.items)
+            // Fazer requisições paginadas até carregar todos os dados
+            while (hasMore) {
+                const params = new URLSearchParams()
+                params.append('limit', String(limit))
+                params.append('offset', String(offset))
+
+                const data = await protectedFetch<MembershipListResponse>(`/api/membership/list?${params.toString()}`)
+                allItems.push(...data.items)
+
+                // Verificar se há mais dados para carregar
+                if (data.items.length < limit || allItems.length >= data.total) {
+                    hasMore = false
+                } else {
+                    offset += limit
+                }
+            }
+
+            setAllMemberships(allItems)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar associações'
             setError(message)
@@ -421,10 +438,10 @@ export default function MembershipPage() {
         setPagination({ ...pagination, offset: 0 })
     }
 
-    // Opções para os filtros
+    // Opções para os filtros (ordenadas automaticamente pelo componente)
     const statusOptions: FilterOption<string>[] = [
-        { value: 'PENDING', label: 'Pendente', color: 'text-yellow-600' },
         { value: 'ACTIVE', label: 'Ativo', color: 'text-green-600' },
+        { value: 'PENDING', label: 'Pendente', color: 'text-yellow-600' },
         { value: 'REJECTED', label: 'Rejeitado', color: 'text-red-600' },
         { value: 'REMOVED', label: 'Removido', color: 'text-gray-600' },
     ]

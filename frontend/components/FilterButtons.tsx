@@ -29,10 +29,15 @@ export function FilterButtons<T = string>({
     allOptionLabel = 'Todos',
     disabled = false,
 }: FilterButtonsProps<T>) {
+    // Ordenar opções alfabeticamente por label
+    const sortedOptions = useMemo(() => {
+        return [...options].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+    }, [options])
+
     // Verificar se todos estão selecionados
     const allSelected = useMemo(() => {
-        return options.every((option) => selectedValues.has(option.value))
-    }, [options, selectedValues])
+        return sortedOptions.every((option) => selectedValues.has(option.value))
+    }, [sortedOptions, selectedValues])
 
     // Handler para toggle all
     const handleToggleAll = () => {
@@ -42,14 +47,14 @@ export function FilterButtons<T = string>({
             // Se não há handler customizado, usar lógica padrão
             if (allSelected) {
                 // Deselecionar todos
-                options.forEach((option) => {
+                sortedOptions.forEach((option) => {
                     if (selectedValues.has(option.value)) {
                         onToggle(option.value)
                     }
                 })
             } else {
                 // Selecionar todos
-                options.forEach((option) => {
+                sortedOptions.forEach((option) => {
                     if (!selectedValues.has(option.value)) {
                         onToggle(option.value)
                     }
@@ -92,7 +97,7 @@ export function FilterButtons<T = string>({
                     </button>
                 )}
 
-                {options.map((option, index) => {
+                {sortedOptions.map((option, index) => {
                     const isSelected = selectedValues.has(option.value)
                     // Usar index como fallback para key quando value é null ou undefined
                     const key = option.value !== null && option.value !== undefined 

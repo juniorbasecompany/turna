@@ -43,25 +43,25 @@ export default function ProfilePage() {
     const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
     const [total, setTotal] = useState(0)
 
-    // Carregar accounts e hospitals (apenas uma vez, não dependem de paginação)
+    // Carregar memberships e hospitals (apenas uma vez, não dependem de paginação)
     const loadAccountsAndHospitals = async () => {
         try {
-            setLoadingAccounts(true)
+            setLoadingMemberships(true)
             setLoadingHospitals(true)
             setError(null)
 
-            const [accountsResult, hospitalsResult] = await Promise.allSettled([
-                protectedFetch<AccountListResponse>('/api/account/list'),
+            const [membershipsResult, hospitalsResult] = await Promise.allSettled([
+                protectedFetch<MembershipListResponse>('/api/membership/list'),
                 protectedFetch<HospitalListResponse>('/api/hospital/list'),
             ])
 
-            if (accountsResult.status === 'fulfilled') {
-                setAccounts(accountsResult.value.items)
+            if (membershipsResult.status === 'fulfilled') {
+                setMemberships(membershipsResult.value.items)
             } else {
-                const error = accountsResult.reason
-                const message = error instanceof Error ? error.message : 'Erro ao carregar contas'
+                const error = membershipsResult.reason
+                const message = error instanceof Error ? error.message : 'Erro ao carregar associações'
                 setError(message)
-                console.error('Erro ao carregar accounts:', error)
+                console.error('Erro ao carregar memberships:', error)
             }
 
             if (hospitalsResult.status === 'fulfilled') {
@@ -77,7 +77,7 @@ export default function ProfilePage() {
             setError(message)
             console.error('Erro ao carregar dados:', err)
         } finally {
-            setLoadingAccounts(false)
+            setLoadingMemberships(false)
             setLoadingHospitals(false)
         }
     }
