@@ -241,14 +241,13 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 #### Fase 6: Migração de Dados
 - [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
 
-#### Fase 7: Outras Tabelas (Profile e Professional)
+#### Fase 7: Outras Tabelas (Profile)
 - [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
-- [x] **Migração Professional**: Criada migração `0117mn012345_migrate_professional_to_membership_id.py` para migrar Professional de `account_id` para `membership_id` ✅
-- [x] **Atualizar modelos**: Profile e Professional agora usam `membership_id` ✅
-- [x] **Atualizar endpoints**: Todos os endpoints de Profile e Professional atualizados ✅
+- [x] **Atualizar modelo**: Profile agora usa `membership_id` ✅
+- [x] **Atualizar endpoints**: Todos os endpoints de Profile atualizados ✅
 - [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` ✅
-- [x] **Atualizar tipos TypeScript**: ProfileResponse e ProfessionalResponse atualizados ✅
-- [x] **Remoção de Professional**: Tabela Professional removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
+- [x] **Atualizar tipos TypeScript**: ProfileResponse atualizado ✅
+- [x] **Nota**: Tabela Professional foi removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
 
 #### Fase 5: Frontend - Tipos e Interfaces
 - [x] **Atualizar tipos TypeScript**: Adicionado `membership_name` em `MembershipResponse`
@@ -319,15 +318,14 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 #### Fase 6: Migração de Dados
 - [x] **Migração Alembic**: Criada migração `0115ij012345_ensure_membership_email_filled.py` para garantir que todos os memberships existentes tenham email preenchido ✅
 
-#### Fase 7: Outras Tabelas (Profile e Professional)
+#### Fase 7: Outras Tabelas (Profile)
 - [x] **Migração Profile**: Criada migração `0116kl012345_migrate_profile_to_membership_id.py` para migrar Profile de `account_id` para `membership_id` ✅
-- [x] **Migração Professional**: Criada migração `0117mn012345_migrate_professional_to_membership_id.py` para migrar Professional de `account_id` para `membership_id` ✅
-- [x] **Atualizar modelos**: Profile e Professional agora usam `membership_id` ✅
-- [x] **Atualizar schemas Pydantic**: `ProfileCreate`, `ProfileResponse` e `ProfessionalResponse` atualizados ✅
-- [x] **Ajustar endpoints**: Todos os endpoints de Profile e Professional atualizados para usar `membership_id` ✅
+- [x] **Atualizar modelo**: Profile agora usa `membership_id` ✅
+- [x] **Atualizar schemas Pydantic**: `ProfileCreate` e `ProfileResponse` atualizados ✅
+- [x] **Ajustar endpoints**: Todos os endpoints de Profile atualizados para usar `membership_id` ✅
 - [x] **Atualizar frontend**: Painel de Profile atualizado para usar `membership_id` e carregar memberships ✅
-- [x] **Atualizar tipos TypeScript**: `ProfileResponse`, `ProfileCreateRequest` e `ProfessionalResponse` atualizados ✅
-- [x] **Endpoint de criação automática**: Endpoint em `auth.py` que cria Professional automaticamente atualizado ✅
+- [x] **Atualizar tipos TypeScript**: `ProfileResponse` e `ProfileCreateRequest` atualizados ✅
+- [x] **Nota**: Tabela Professional foi removida do sistema (migração `0118op012345_remove_professional_table.py`) ✅
 - [x] `app/auth/jwt.py`:
   - [x] `create_access_token(account_id, tenant_id, role, email, name)` - role vem do Membership
   - [x] `verify_token(token)` retorna payload com account_id, tenant_id, role
@@ -812,7 +810,6 @@ Cada etapa abaixo entrega algo **visível e testável** via Swagger (`/docs`) ou
 ### Evolução Futura (Quando Necessário)
 - [ ] Promover Demand de JSON para tabela (quando precisar queryar diretamente)
 - [ ] Criar modelo Schedule (quando precisar múltiplas versões por schedule)
-- [ ] Criar modelo Professional (quando precisar CRUD de profissionais)
 - [ ] Abstração completa de AI Provider (quando precisar plugar outro provedor)
 - [ ] Endpoints mobile específicos (quando criar app React Native)
 
@@ -1250,132 +1247,15 @@ Antes de considerar completo, verificar:
 - Um membership pode ter apenas um profile por hospital específico por tenant
 - Implementado via constraint única `(tenant_id, membership_id, hospital_id)` e índice único parcial para `hospital_id IS NULL` (FASE 7 - migrado de `account_id`)
 
-## FASE 12: CRUD de Profissionais
+## FASE 12: CRUD de Profissionais — ⚠️ REMOVIDA
 
-### 12.1 Banco de Dados (SQLModel) — criar `Professional`
+**Status**: Esta fase foi implementada e posteriormente removida do sistema.
 
-- [x] Criar `app/model/professional.py`
-- [x] Definir `Professional(BaseModel, table=True)` com `__tablename__ = "professional"`
-- [x] Campos mínimos (MVP)
-  - [x] `tenant_id: int` (FK `tenant.id`, index, obrigatório)
-  - [x] `account_id: int | None` (FK `account.id`, index, opcional) - vincula profissional ao account
-  - [x] `name: str` (obrigatório, index)
-  - [x] `email: str` (obrigatório, index) - usado para envio de convites
-  - [x] `phone: str | None` (opcional)
-  - [x] `notes: str | None` (opcional)
-  - [x] `active: bool` (default `True`, index)
-  - [x] **Nota**: Campos `is_pediatric` e `skills` foram removidos conforme solicitado
-- [x] Constraints / índices (escolha simples e segura)
-  - [x] `UniqueConstraint("tenant_id", "name", name="uq_professional_tenant_name")`
-  - [x] Índices já via `index=True` nos campos acima
+A tabela `professional` foi completamente removida do projeto através da migração `0118op012345_remove_professional_table.py`. Todos os endpoints, schemas, modelos e código relacionado foram removidos.
 
-### 12.2 Migration (Alembic)
+**Motivo da remoção**: A funcionalidade não era mais necessária no sistema atual.
 
-- [x] Garantir que `Professional` está importado no local onde o Alembic descobre metadata (ex.: `app/db/base.py` ou `app/model/__init__.py`)
-- [x] Criar migration: `alembic revision --autogenerate -m "add_professional_table"` (0110yz012345)
-- [x] Revisar migration gerada:
-  - [x] `tenant_id` FK + index
-  - [x] `created_at` e `updated_at` como `timestamptz`
-  - [x] Unique constraint
-- [x] Migration adicional: adicionar `account_id` (0111ab012345)
-  - [x] Campo `account_id` (FK `account.id`, nullable=True, index)
-- [x] Migration adicional: tornar `email` obrigatório (0112cd012345)
-  - [x] Campo `email` alterado para `nullable=False`
-- [x] Aplicar migrations: `alembic upgrade head`
-- [x] Teste rápido no banco: tabela existe e constraints ok
-
-### 12.3 Backend (FastAPI) — schemas Pydantic
-
-- [x] Criar schemas (em `app/api/route.py` junto do router existente):
-  - [x] `ProfessionalCreate`
-    - [x] `name: str`
-    - [x] `email: str` (obrigatório)
-    - [x] `phone: str | None = None`
-    - [x] `notes: str | None = None`
-    - [x] `active: bool = True`
-  - [x] `ProfessionalUpdate` (todos opcionais)
-  - [x] `ProfessionalResponse` (inclui `id`, `tenant_id`, `account_id`, `email`, `created_at`, `updated_at`)
-- [x] Validar normalizações simples:
-  - [x] `email`: obrigatório; sempre manter lowercase
-
-### 12.4 Backend — endpoints CRUD (isolamento por tenant)
-
-> Todos usando `membership = Depends(get_current_membership)` e **NUNCA** aceitando `tenant_id` do request.
-
-- [x] Endpoints implementados em `app/api/route.py` (não criado router separado)
-- [x] Endpoints (MVP)
-  - [x] `POST /professional` (admin)
-  - [x] `GET /professional/list` (com `limit`, `offset`, filtros opcionais `active`, `q=...`)
-  - [x] `PUT /professional/{id}` (admin)
-  - [x] `DELETE /professional/{id}` (admin) *(hard delete no MVP, igual arquivos; evolui depois se precisar)*
-- [x] Regras obrigatórias
-  - [x] **Create**: `tenant_id = membership.tenant_id`
-  - [x] **Get/Put/Delete**: validar `professional.tenant_id == membership.tenant_id` (403 se não bater)
-  - [x] **List**: query sempre filtra por `tenant_id == membership.tenant_id`
-- [ ] Testes rápidos via Swagger
-  - [ ] Criar 1 profissional
-  - [ ] Listar (paginado)
-  - [ ] Editar
-  - [ ] Excluir
-  - [ ] Validar isolamento criando outro tenant e confirmando que não vaza dados
-
-### 12.5 Frontend (Next.js) — rotas API (proxy)
-
-- [x] Criar handlers:
-  - [x] `frontend/app/api/professional/route.ts` (POST)
-  - [x] `frontend/app/api/professional/list/route.ts` (GET)
-  - [x] `frontend/app/api/professional/[id]/route.ts` (GET/PUT/DELETE)
-- [x] Atualizar `frontend/types/api.ts` com:
-  - [x] `ProfessionalResponse`
-  - [x] `ProfessionalListResponse { items, total }`
-  - [x] `ProfessionalCreateRequest`, `ProfessionalUpdateRequest`
-
-### 12.6 Frontend — página CRUD `/professional`
-
-- [x] Criar menu lateral "Profissionais"
-- [x] Criar página `frontend/app/(protected)/professional/page.tsx`
-- [x] IMPORTANTE: adicionar exceção `/professional` no `frontend/lib/api.ts` para não redirecionar no F5 (mesma regra do `/dashboard`/`/file`)
-- [x] UI (simples e funcional)
-  - [x] Lista (cards) com: `name`, `active`, `created_at`
-  - [x] Filtros: texto (`q`), `active` (todos/ativos/inativos)
-  - [x] Paginação com `limit/offset`
-  - [x] Usar o padrão do card panel.
-- [x] Form (lado direito, estilo do CRUD de Hospitais/Profile)
-  - [x] Campos: nome (obrigatório), email (obrigatório), telefone, ativo, observações
-  - [x] Validações: nome obrigatório; email obrigatório
-  - [x] Feedback: sucesso/erro em português
-
-### 12.7 Ajustes finais e consistência
-
-- [x] Garantir que não mexeu em fluxos já definidos (auth, membership, hospital, file, jobs)
-- [x] Criação automática de Professional ao criar Tenant:
-  - [x] Ao criar tenant, cria automaticamente Professional para o account criador
-  - [x] Usa dados do account (nome e email)
-  - [x] Vincula com `account_id` e `tenant_id`
-- [ ] Teste de regressão rápido:
-  - [ ] Login + select-tenant ok
-  - [ ] Dashboard ok
-  - [ ] File/Hospital/Profile continuam ok
-  - [ ] Profissionais CRUD ok
-
-### 12.8 Envio de Convite por Email
-
-- [x] Campo `email` implementado e obrigatório no Professional
-- [x] Serviço de email criado (`app/services/email_service.py`):
-  - [x] Função `send_professional_invite()` para enviar convite
-  - [x] Por enquanto apenas loga o email (pode ser expandido para SMTP, SendGrid, AWS SES, etc.)
-- [x] Endpoint de convite criado:
-  - [x] `POST /professional/{professional_id}/invite` (admin)
-  - [x] Valida que profissional pertence ao tenant
-  - [x] Envia email de convite com link do aplicativo
-- [x] Frontend implementado:
-  - [x] Checkbox "Enviar convite" no formulário de criação/edição
-  - [x] Checkbox vem desmarcado por padrão
-  - [x] Após salvar, se checkbox marcado, chama endpoint de convite
-  - [x] Tratamento de erro não quebra o fluxo de salvamento
-- [ ] (Futuro) Implementar envio real de email:
-  - [ ] Integrar com SMTP, SendGrid, AWS SES, etc.
-  - [ ] Configurar variáveis de ambiente para credenciais
+**Nota**: A função foi renomeada para `send_membership_invite()` em `app/services/email_service.py` e é usada para envio de convites de membership.
 
 ## FASE 13: Envio de Emails com Resend
 
@@ -1395,7 +1275,7 @@ Antes de considerar completo, verificar:
 
 - [x] Atualizar `app/services/email_service.py`:
   - [x] Importar `resend` e configurar API key via variável de ambiente
-  - [x] Modificar `send_professional_invite()` para usar Resend:
+  - [x] Modificar `send_membership_invite()` para usar Resend (função renomeada de `send_professional_invite()`):
     - [x] Usar `resend.Emails.send()` com parâmetros adequados
     - [x] Definir `from` usando `EMAIL_FROM`
     - [x] Definir `to` com email do profissional
@@ -1438,7 +1318,7 @@ Antes de considerar completo, verificar:
   - [x] Capturar exceções do Resend (Exception genérica com sanitização de API key)
   - [x] Logar erros detalhados (sem expor API key - sanitização implementada)
   - [x] Retornar tupla `(bool, str)` com mensagem de erro específica (mantém compatibilidade)
-  - [x] Não quebrar o fluxo de criação/edição do profissional se email falhar (já implementado no endpoint)
+  - [x] Não quebrar o fluxo de criação/edição do membership se email falhar (já implementado no endpoint)
   - [x] Mensagens de erro específicas e úteis (ex: domínio não verificado, API key inválida, etc.)
 - [x] Melhorar logging:
   - [x] Logar quando email for enviado com sucesso (com Resend ID, sem dados sensíveis)
@@ -1449,14 +1329,14 @@ Antes de considerar completo, verificar:
 ### 13.6 Testes
 
 - [x] Testar envio real de email:
-  - [x] Criar profissional via frontend com checkbox "Enviar convite" marcado
+  - [x] Criar/editar membership via frontend com checkbox "Enviar convite" marcado
   - [x] Verificar recebimento do email na caixa de entrada (testado com domínio verificado)
   - [x] Verificar que email chega corretamente formatado
   - [ ] Testar com diferentes provedores de email (Gmail, Outlook, etc.) - pendente testes adicionais
 - [x] Testar tratamento de erros:
   - [x] Simular API key inválida (mensagem específica implementada)
   - [x] Simular domínio não verificado (mensagem específica com domínio extraído implementada)
-  - [x] Verificar que erro não quebra criação do profissional (implementado e testado)
+  - [x] Verificar que erro não quebra criação/edição do membership (implementado e testado)
   - [x] Mensagens de erro exibidas no ActionBar do frontend
 - [x] Testar em ambiente de desenvolvimento:
   - [x] Verificar que funciona sem `RESEND_API_KEY` (modo log - implementado e testado)
@@ -1471,17 +1351,14 @@ Antes de considerar completo, verificar:
 
 ### 13.8 Integração Frontend
 
-- [x] Criar handler Next.js para endpoint de convite:
-  - [x] `frontend/app/api/professional/[id]/invite/route.ts` criado
-  - [x] Proxy para backend com tratamento de erros
 - [x] Exibir mensagens de sucesso/erro no ActionBar:
   - [x] Mensagens de sucesso exibidas (verde)
   - [x] Mensagens de erro exibidas (vermelho)
   - [x] Mesmo layout das mensagens de erro (sem bordas, apenas texto)
   - [x] Mensagens não desaparecem automaticamente
-- [x] Integração com formulário de profissional:
+- [x] Integração com formulário de membership:
   - [x] Checkbox "Enviar convite" funcional
-  - [x] Envio automático após salvar profissional
+  - [x] Envio automático após salvar/editar membership
   - [x] Tratamento de erros sem quebrar fluxo de salvamento
 
 ### 13.9 Melhorias Adicionais Implementadas

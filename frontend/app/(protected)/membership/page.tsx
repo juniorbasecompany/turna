@@ -4,6 +4,7 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { FilterButtons, FilterOption } from '@/components/FilterButtons'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
@@ -14,11 +15,10 @@ import {
     MembershipUpdateRequest,
     MembershipCreateRequest,
 } from '@/types/api'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export default function MembershipPage() {
     const { settings } = useTenantSettings()
-    const [memberships, setMemberships] = useState<MembershipResponse[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
@@ -40,13 +40,16 @@ export default function MembershipPage() {
     const [submitting, setSubmitting] = useState(false)
     const [selectedMemberships, setSelectedMemberships] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
-    const [filters, setFilters] = useState({
-        status: null as string | null,
-        role: null as string | null,
-    })
+    const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
+        new Set(['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']) // Todos selecionados por padrão
+    )
+    const [selectedRoles, setSelectedRoles] = useState<Set<string>>(
+        new Set(['account', 'admin']) // Todos selecionados por padrão
+    )
     const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
     const [total, setTotal] = useState(0)
     const [showEditArea, setShowEditArea] = useState(false)
+    const [allMemberships, setAllMemberships] = useState<MembershipResponse[]>([])
 
     // Carregar lista de memberships
     const loadMemberships = async () => {
@@ -55,14 +58,11 @@ export default function MembershipPage() {
             setError(null)
 
             const params = new URLSearchParams()
-            if (filters.status) params.append('status', filters.status)
-            if (filters.role) params.append('role', filters.role)
-            params.append('limit', String(pagination.limit))
-            params.append('offset', String(pagination.offset))
+            params.append('limit', String(1000)) // Carregar todos para filtrar no frontend
+            params.append('offset', String(0))
 
             const data = await protectedFetch<MembershipListResponse>(`/api/membership/list?${params.toString()}`)
-            setMemberships(data.items)
-            setTotal(data.total)
+            setAllMemberships(data.items)
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao carregar associações'
             setError(message)
@@ -74,7 +74,28 @@ export default function MembershipPage() {
 
     useEffect(() => {
         loadMemberships()
-    }, [filters, pagination])
+    }, [])
+
+    // Filtrar memberships no frontend
+    const memberships = useMemo(() => {
+        return allMemberships.filter((membership) => {
+            const statusMatch = selectedStatuses.has(membership.status)
+            const roleMatch = selectedRoles.has(membership.role)
+            return statusMatch && roleMatch
+        })
+    }, [allMemberships, selectedStatuses, selectedRoles])
+
+    // Aplicar paginação
+    const paginatedMemberships = useMemo(() => {
+        const start = pagination.offset
+        const end = start + pagination.limit
+        return memberships.slice(start, end)
+    }, [memberships, pagination])
+
+    // Atualizar total baseado nos filtros
+    useEffect(() => {
+        setTotal(memberships.length)
+    }, [memberships.length])
 
     // Verificar se há mudanças nos campos
     const hasChanges = () => {
@@ -351,6 +372,68 @@ export default function MembershipPage() {
         }
     }
 
+    // Handlers para filtros
+    const toggleStatus = (status: string) => {
+        setSelectedStatuses((prev) => {
+            const newSet = new Set(prev)
+            if (newSet.has(status)) {
+                newSet.delete(status)
+            } else {
+                newSet.add(status)
+            }
+            return newSet
+        })
+        setPagination({ ...pagination, offset: 0 })
+    }
+
+    const toggleAllStatuses = () => {
+        const allStatuses = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']
+        const allSelected = allStatuses.every((status) => selectedStatuses.has(status))
+        if (allSelected) {
+            setSelectedStatuses(new Set())
+        } else {
+            setSelectedStatuses(new Set(allStatuses))
+        }
+        setPagination({ ...pagination, offset: 0 })
+    }
+
+    const toggleRole = (role: string) => {
+        setSelectedRoles((prev) => {
+            const newSet = new Set(prev)
+            if (newSet.has(role)) {
+                newSet.delete(role)
+            } else {
+                newSet.add(role)
+            }
+            return newSet
+        })
+        setPagination({ ...pagination, offset: 0 })
+    }
+
+    const toggleAllRoles = () => {
+        const allRoles = ['account', 'admin']
+        const allSelected = allRoles.every((role) => selectedRoles.has(role))
+        if (allSelected) {
+            setSelectedRoles(new Set())
+        } else {
+            setSelectedRoles(new Set(allRoles))
+        }
+        setPagination({ ...pagination, offset: 0 })
+    }
+
+    // Opções para os filtros
+    const statusOptions: FilterOption<string>[] = [
+        { value: 'PENDING', label: 'Pendente', color: 'text-yellow-600' },
+        { value: 'ACTIVE', label: 'Ativo', color: 'text-green-600' },
+        { value: 'REJECTED', label: 'Rejeitado', color: 'text-red-600' },
+        { value: 'REMOVED', label: 'Removido', color: 'text-gray-600' },
+    ]
+
+    const roleOptions: FilterOption<string>[] = [
+        { value: 'account', label: 'Conta', color: 'text-blue-600' },
+        { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
+    ]
+
     return (
         <>
             <CardPanel
@@ -378,6 +461,21 @@ export default function MembershipPage() {
                                         required={!editingMembership}
                                         disabled={submitting}
                                     />
+                                </div>
+                                <div>
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id="sendInvite"
+                                            checked={sendInvite}
+                                            onChange={(e) => setSendInvite(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            disabled={submitting}
+                                        />
+                                        <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
+                                            Enviar convite
+                                        </label>
+                                    </div>
                                 </div>
                                 <div>
                                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -412,7 +510,7 @@ export default function MembershipPage() {
                                     </div>
                                     <div>
                                         <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                                            Status <span className="text-red-500">*</span>
+                                            Situação <span className="text-red-500">*</span>
                                         </label>
                                         <select
                                             id="status"
@@ -429,21 +527,6 @@ export default function MembershipPage() {
                                         </select>
                                     </div>
                                 </div>
-                                <div>
-                                    <div className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            id="sendInvite"
-                                            checked={sendInvite}
-                                            onChange={(e) => setSendInvite(e.target.checked)}
-                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                            disabled={submitting}
-                                        />
-                                        <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
-                                            Enviar convite
-                                        </label>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     ) : undefined
@@ -458,57 +541,28 @@ export default function MembershipPage() {
                 filterContent={
                     !isEditing ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Status
-                                    </label>
-                                    <select
-                                        id="filter-status"
-                                        value={filters.status || ''}
-                                        onChange={(e) => {
-                                            setFilters({
-                                                ...filters,
-                                                status: e.target.value === '' ? null : e.target.value,
-                                            })
-                                            setPagination({ ...pagination, offset: 0 })
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                        <option value="">Todos</option>
-                                        <option value="PENDING">Pendente</option>
-                                        <option value="ACTIVE">Ativo</option>
-                                        <option value="REJECTED">Rejeitado</option>
-                                        <option value="REMOVED">Removido</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="filter-role" className="block text-sm font-medium text-gray-700 mb-2">
-                                        Função
-                                    </label>
-                                    <select
-                                        id="filter-role"
-                                        value={filters.role || ''}
-                                        onChange={(e) => {
-                                            setFilters({
-                                                ...filters,
-                                                role: e.target.value === '' ? null : e.target.value,
-                                            })
-                                            setPagination({ ...pagination, offset: 0 })
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                        <option value="">Todas</option>
-                                        <option value="admin">Administrador</option>
-                                        <option value="account">Conta</option>
-                                    </select>
-                                </div>
+                            <div className="space-y-4">
+                                <FilterButtons
+                                    title="Situação"
+                                    options={statusOptions}
+                                    selectedValues={selectedStatuses}
+                                    onToggle={toggleStatus}
+                                    onToggleAll={toggleAllStatuses}
+                                />
+                                <FilterButtons
+                                    title="Função"
+                                    options={roleOptions}
+                                    selectedValues={selectedRoles}
+                                    onToggle={toggleRole}
+                                    onToggleAll={toggleAllRoles}
+                                    allOptionLabel="Todas"
+                                />
                             </div>
                         </div>
                     ) : undefined
                 }
             >
-                {memberships.map((membership) => {
+                {paginatedMemberships.map((membership) => {
                     const isSelected = selectedMemberships.has(membership.id)
                     return (
                         <div

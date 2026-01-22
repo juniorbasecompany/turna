@@ -3574,10 +3574,11 @@ def send_membership_invite_email(
         # Enviar email de convite
         try:
             # Usar membership.name se existir, senão usar email
-            professional_name = membership_obj.name if membership_obj.name else account_email
-            result = send_professional_invite(
+            from app.services.email_service import send_membership_invite
+            member_name = membership_obj.name if membership_obj.name else account_email
+            result = send_membership_invite(
                 to_email=account_email,
-                professional_name=professional_name,
+                member_name=member_name,
                 tenant_name=tenant.name,
             )
 

@@ -2,6 +2,7 @@
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
+import { FilterButtons } from '@/components/FilterButtons'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
@@ -1071,47 +1072,19 @@ export default function FilesPage() {
                     </div>
 
                     {/* Segunda linha: Filtro de Status */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Status
-                        </label>
-                        <div className="flex flex-wrap gap-3 sm:gap-4">
-                            {/* Botão para selecionar/deselecionar todos */}
-                            <label className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={allStatusesSelected}
-                                    onChange={toggleAllStatuses}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                                />
-                                <span className="text-gray-700 cursor-pointer">Todos</span>
-                            </label>
-
-                            {/* Checkbox para cada status */}
-                            {([
-                                { status: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
-                                { status: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
-                                { status: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
-                                { status: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
-                                { status: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
-                            ] as const).map(({ status, label, color }) => (
-                                <label
-                                    key={status === null ? 'null' : status}
-                                    className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStatuses.has(status)}
-                                        onChange={() => toggleStatus(status)}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                                    />
-                                    <span className={`${color} cursor-pointer`}>{label}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
+                    <FilterButtons
+                        title="Status"
+                        options={[
+                            { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
+                            { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
+                            { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
+                            { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
+                            { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
+                        ]}
+                        selectedValues={selectedStatuses}
+                        onToggle={toggleStatus}
+                        onToggleAll={toggleAllStatuses}
+                    />
                 </div>
                 {startDate && endDate && startDate > endDate && (
                     <p className="mt-2 text-sm text-red-600">

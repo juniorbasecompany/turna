@@ -19,7 +19,7 @@ except ImportError:
 
 
 def _get_email_template_html(
-    professional_name: str,
+    member_name: str,
     tenant_name: str,
     app_url: str,
     to_email: str,
@@ -41,7 +41,7 @@ def _get_email_template_html(
     </div>
 
     <div style="padding: 20px 0;">
-        <p>Olá <strong>{professional_name}</strong>,</p>
+        <p>Olá <strong>{member_name}</strong>,</p>
 
         <p>Você foi convidado(a) para fazer parte da clínica <strong>{tenant_name}</strong> no sistema Turna.</p>
 
@@ -81,7 +81,7 @@ def _get_email_template_html(
 
 
 def _get_email_template_text(
-    professional_name: str,
+    member_name: str,
     tenant_name: str,
     app_url: str,
     to_email: str,
@@ -90,7 +90,7 @@ def _get_email_template_text(
     Gera versão texto simples do email de convite.
     """
     return f"""
-Olá {professional_name},
+Olá {member_name},
 
 Você foi convidado(a) para fazer parte da clínica {tenant_name} no sistema Turna.
 
@@ -111,19 +111,19 @@ Este é um email automático do sistema Turna. Por favor, não responda este ema
     """.strip()
 
 
-def send_professional_invite(
+def send_membership_invite(
     to_email: str,
-    professional_name: str,
+    member_name: str,
     tenant_name: str,
     app_url: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """
-    Envia email de convite para um profissional se juntar à clínica usando Resend.
+    Envia email de convite para um membro se juntar à clínica usando Resend.
     Faz fallback para modo "log" quando RESEND_API_KEY não está configurado.
 
     Args:
         to_email: Email do destinatário
-        professional_name: Nome do profissional
+        member_name: Nome do membro
         tenant_name: Nome da clínica/tenant
         app_url: URL do aplicativo (opcional, pega de env var se não fornecido)
 
@@ -133,7 +133,7 @@ def send_professional_invite(
         - error_message: Mensagem de erro específica se falhou, string vazia se sucesso
     """
     logger.info(
-        f"Iniciando envio de email de convite para {to_email} (profissional: {professional_name}, clínica: {tenant_name})"
+        f"Iniciando envio de email de convite para {to_email} (membro: {member_name}, clínica: {tenant_name})"
     )
     try:
         app_url = app_url or os.getenv("APP_URL", "http://localhost:3000")
@@ -145,13 +145,13 @@ def send_professional_invite(
 
         # Gerar templates
         html_body = _get_email_template_html(
-            professional_name=professional_name,
+            member_name=member_name,
             tenant_name=tenant_name,
             app_url=app_url,
             to_email=to_email,
         )
         text_body = _get_email_template_text(
-            professional_name=professional_name,
+            member_name=member_name,
             tenant_name=tenant_name,
             app_url=app_url,
             to_email=to_email,
