@@ -1,19 +1,10 @@
 # 📊 Análise de Viabilidade: Migração para `useEntityPage`
 
-## Resumo Executivo
-
-**Status Geral**: ⚠️ **Parcialmente Viável**
-
-- ✅ **Demand**: ✅ **MIGRADO** - Já utiliza `useEntityPage`
-- ✅ **Member**: ✅ **MIGRADO** - Já utiliza `useEntityPage` (com filtros híbridos frontend/backend)
-- ⚠️ **File**: ⚠️ **VIÁVEL COM EXTENSÕES** - Requer extensões significativas no hook
-
----
-
-## 1. File - ⚠️ VIÁVEL COM EXTENSÕES
+## File - ⚠️ PENDENTE
 
 ### Situação Atual
-- Carrega dados paginados do backend
+- ❌ **NÃO MIGRADO** - Ainda utiliza padrão antigo com `useState`, `useEffect` e `protectedFetch` manual
+- Carrega dados paginados do backend manualmente
 - **Múltiplos filtros**: data (start/end), hospital, status
 - Depende de `settings` do tenant para conversão de datas
 - **Seleção dupla**: exclusão + leitura
@@ -23,40 +14,44 @@
 - `refreshKey` para forçar recarregamento
 
 ### Compatibilidade com `useEntityPage`
-⚠️ **Compatibilidade média - requer extensões**
+✅ **Viável** - Todos os padrões necessários já foram estabelecidos
 
 ### Desafios Principais
 
 #### 1.1 Múltiplos Filtros Dinâmicos
-**Problema**: `useEntityList` suporta `additionalParams`, mas precisa ser reativo a mudanças de `startDate`, `endDate`, `selectedHospitalId`, `statusFilters`  
-**Solução**: 
-- Estender `useEntityList` para aceitar função de `additionalParams` que seja reativa
-- OU usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
+**Solução**: Usar `useMemo` para calcular `additionalListParams` reativo (apenas filtros suportados pela API)
+
+**IMPORTANTE**: A API `/api/file/list` não aceita parâmetro `status`. O filtro de status deve ser aplicado no frontend após receber os dados (similar ao padrão usado em Member quando há múltiplos filtros).
 
 ```typescript
-// Opção: Usar useMemo (similar ao Member)
+// Filtros enviados à API (apenas start_at, end_at, hospital_id)
 const additionalListParams = useMemo(() => ({
   start_at: startDate ? localDateToUtcStart(startDate, settings) : null,
   end_at: endDate ? localDateToUtcEndExclusive(endDate, settings) : null,
   hospital_id: selectedHospitalId || null,
-  status: Array.from(statusFilters.selectedFilters).join(','),
-}), [startDate, endDate, selectedHospitalId, statusFilters, settings])
+}), [startDate, endDate, selectedHospitalId, settings])
+
+// Filtro de status aplicado no frontend (após receber dados)
+const filteredFiles = useMemo(() => {
+  return files.filter((file) => {
+    const status = file.job_status === null ? null : (file.job_status as JobStatus)
+    return statusFilters.selectedFilters.has(status)
+  })
+}, [files, statusFilters.selectedFilters])
 ```
 
 #### 1.2 Dependência de `settings`
-**Problema**: `useEntityList` carrega antes de `settings` estar disponível  
 **Solução**: Usar `listEnabled` para desabilitar carregamento até `settings` estar disponível
 
 ```typescript
 const { items: files } = useEntityPage({
   // ...
-  listEnabled: !!settings, // Só carregar quando settings estiver disponível
+  listEnabled: !!settings,
   additionalListParams: settings ? computedParams : undefined,
 })
 ```
 
 #### 1.3 Seleção Dupla
-**Problema**: `useEntityPage` só gerencia uma seleção  
 **Solução**: Manter seleção de leitura separada (não afeta carregamento)
 
 ```typescript
@@ -66,11 +61,9 @@ const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<numbe
 ```
 
 #### 1.4 Ação Customizada "Ler conteúdo"
-**Problema**: `useActionBarButtons` já foi estendido para suportar ações customizadas  
 **Solução**: Usar extensão existente de `useActionBarButtons`
 
 #### 1.5 RefreshKey
-**Problema**: Precisa forçar recarregamento após upload/processamento  
 **Solução**: Chamar `loadItems()` manualmente quando necessário
 
 ```typescript
@@ -80,80 +73,92 @@ const { loadItems } = useEntityPage({...})
 await loadItems()
 ```
 
-### Plano de Migração
+#### 1.6 Filtro de Status no Frontend
+**Solução**: Aplicar filtro de status no frontend após receber dados (API não suporta)
 
-1. [ ] Implementar mapeamentos de dados (`FileFormData`, `mapEntityToFormData`, etc.)
-2. [ ] Configurar `listEnabled` baseado em `settings`
-3. [ ] Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
-4. [ ] Manter seleção de leitura separada
-5. [ ] Usar extensão existente de `useActionBarButtons` para ação customizada
-6. [ ] Implementar `refreshKey` via `loadItems()`
+**IMPORTANTE**: Quando há filtro de status no frontend, a paginação também deve ser aplicada no frontend (similar ao padrão usado em Member).
 
-### Esforço Estimado
-**Alto** (8-12 horas)
+```typescript
+// Verificar se precisa filtrar no frontend
+const needsFrontendFilter = useMemo(() => {
+  return statusFilters.selectedFilters.size < statusFilters.allFilters.length
+}, [statusFilters.selectedFilters.size, statusFilters.allFilters.length])
 
-**Nota**: Não é necessário estender os hooks. O padrão usado no Member (usar `useMemo` para calcular `additionalListParams` reativo) já é suficiente e pode ser replicado no File.
+// Filtrar no frontend quando statusFilters está ativo
+const filteredFiles = useMemo(() => {
+  if (!needsFrontendFilter) {
+    return files  // Backend já retornou todos os dados necessários
+  }
+  return files.filter((file) => {
+    const status = file.job_status === null ? null : (file.job_status as JobStatus)
+    return statusFilters.selectedFilters.has(status)
+  })
+}, [files, statusFilters.selectedFilters, needsFrontendFilter])
 
----
+// Aplicar paginação no frontend quando há filtro de status
+const paginatedFiles = useMemo(() => {
+  if (!needsFrontendFilter) {
+    return filteredFiles  // Backend já paginou
+  }
+  // Paginar no frontend
+  const start = pagination.offset
+  const end = start + pagination.limit
+  return filteredFiles.slice(start, end)
+}, [filteredFiles, needsFrontendFilter, pagination.offset, pagination.limit])
 
-## 2. Status das Migrações
+// Ajustar total para refletir filtro de status
+const displayTotal = useMemo(() => {
+  if (!needsFrontendFilter) {
+    return total  // Usar total do backend
+  }
+  return filteredFiles.length  // Total após filtro no frontend
+}, [filteredFiles, needsFrontendFilter, total])
+```
 
-### ✅ Demand - MIGRADO
-- ✅ Já utiliza `useEntityPage`
-- ✅ Filtro de procedimento mantido no frontend (aplicado após carregamento)
-- ✅ Carregamento de hospitais mantido separado
-- ✅ Campos complexos (skills, source) funcionando corretamente
+#### 1.7 Upload de Arquivos
+**Solução**: Upload é feito via `/api/file/upload` com FormData, não via POST `/api/file`. Manter lógica de upload separada do `useEntityPage`.
 
-### ✅ Member - MIGRADO
-- ✅ Já utiliza `useEntityPage`
-- ✅ Implementa filtros híbridos: usa `additionalListParams` quando apenas 1 filtro está selecionado, filtra no frontend quando múltiplos estão selecionados
-- ✅ Paginação funciona corretamente com filtros híbridos
-- ✅ Funcionalidades customizadas (envio de convite, validação JSON) mantidas
+```typescript
+// Upload não usa handleSave do useEntityPage
+// Manter lógica de upload atual (handleFileSelect, handleUpload, etc.)
+// Após upload bem-sucedido, chamar loadItems() para recarregar lista
+```
 
----
+#### 1.8 FormData e Mapeamentos Simplificados
+**Solução**: File não tem formulário de criação/edição tradicional. Os mapeamentos podem ser simplificados, mas ainda precisam existir para que `useEntityPage` funcione.
 
-## 3. Recomendações Finais
+**Nota**: O único "formulário" real é para editar o JSON do job result_data, que é uma funcionalidade customizada e não deve usar o `handleSave` do `useEntityPage`.
 
-### Prioridade de Migração
+### Checklist de Migração
 
-1. ⚠️ **File** - **CONDICIONAL** (viável com extensões, esforço alto)
-
-### Plano de Ação Sugerido
-
-#### Migração do File (Opcional)
-- ⚠️ Implementar mapeamentos de dados (`FileFormData`, etc.)
-- ⚠️ Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
-- ⚠️ Configurar `listEnabled` baseado em `settings`
-- ⚠️ Manter seleção de leitura separada
-- ⚠️ Usar extensão existente de `useActionBarButtons` para ação customizada
-- ⚠️ Implementar `refreshKey` via `loadItems()`
-- **Benefício**: Padronização completa, mas requer implementação dos mapeamentos
-
----
-
-## 4. Checklist de Migração
-
-### File
-- [ ] Criar tipos `FileFormData`, `FileCreateRequest`, `FileUpdateRequest`
-- [ ] Implementar `mapEntityToFormData`
-- [ ] Implementar `mapFormDataToCreateRequest`
-- [ ] Implementar `mapFormDataToUpdateRequest`
-- [ ] Implementar `validateFormData`
-- [ ] Implementar `isEmptyCheck`
-- [ ] Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
+- [ ] Criar tipos `FileFormData`, `FileCreateRequest`, `FileUpdateRequest` (simplificados, pois File não tem formulário tradicional)
+- [ ] Implementar `mapEntityToFormData` (pode retornar objeto vazio ou mínimo)
+- [ ] Implementar `mapFormDataToCreateRequest` (não será usado para upload, mas necessário para o hook)
+- [ ] Implementar `mapFormDataToUpdateRequest` (não será usado, mas necessário para o hook)
+- [ ] Implementar `validateFormData` (pode retornar null sempre, pois validação é customizada)
+- [ ] Implementar `isEmptyCheck` (pode retornar true sempre, pois não há formulário tradicional)
+- [ ] Usar `useMemo` para calcular `additionalListParams` reativo (apenas start_at, end_at, hospital_id)
 - [ ] Configurar `listEnabled` baseado em `settings`
+- [ ] Implementar filtro de status no frontend usando `useMemo` (similar ao Member page)
+- [ ] Ajustar paginação no frontend quando filtro de status está ativo
 - [ ] Manter seleção de leitura separada (`selectedFilesForReading`)
+- [ ] Manter lógica de upload separada (não usar `handleSave` do `useEntityPage`)
+- [ ] Manter lógica de edição de JSON separada (não usar `handleSave` do `useEntityPage`)
 - [ ] Usar extensão existente de `useActionBarButtons` para ação customizada "Ler conteúdo"
 - [ ] Implementar `refreshKey` via `loadItems()` após upload/processamento
 - [ ] Atualizar `PANEL_COMPARISON.md`
 
+### Esforço Estimado
+**Médio-Alto** (6-10 horas)
+
+**Notas Importantes**:
+1. Não é necessário estender os hooks. O padrão de usar `useMemo` para calcular `additionalListParams` reativo já é suficiente.
+2. O filtro de status deve ser aplicado no frontend (API não suporta), similar ao padrão usado em Member quando há múltiplos filtros.
+3. Upload e edição de JSON são funcionalidades customizadas que não devem usar `handleSave` do `useEntityPage`.
+4. Os mapeamentos de FormData podem ser simplificados, mas ainda precisam existir para que o hook funcione corretamente.
+
 ---
 
-## 5. Conclusão
+## Conclusão
 
-**Resumo**:
-- ✅ **Demand**: ✅ **MIGRADO** - Já utiliza `useEntityPage`
-- ✅ **Member**: ✅ **MIGRADO** - Já utiliza `useEntityPage` (com filtros híbridos)
-- ⚠️ **File**: Viável com extensões, esforço alto - **CONDICIONAL**
-
-**Próximo Passo**: Decidir se deseja migrar File para `useEntityPage`. A migração é viável, mas requer implementação dos mapeamentos de dados e configuração adequada dos filtros reativos.
+**Próximo Passo**: Migrar File para `useEntityPage`. A migração é viável e requer implementação dos mapeamentos de dados e configuração adequada dos filtros reativos usando `useMemo`.
