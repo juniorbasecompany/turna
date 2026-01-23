@@ -5,6 +5,28 @@ interface PaginationState {
     offset: number
 }
 
+/**
+ * Hook para gerenciar paginação de forma padronizada.
+ * 
+ * Retorna estado de paginação, handlers e um objeto `paginationHandlers`
+ * para uso consistente em todos os painéis.
+ * 
+ * @example
+ * ```tsx
+ * const { pagination, total, paginationHandlers } = usePagination(20)
+ * 
+ * <Pagination
+ *   offset={pagination.offset}
+ *   limit={pagination.limit}
+ *   total={total}
+ *   onFirst={paginationHandlers.onFirst}
+ *   onPrevious={paginationHandlers.onPrevious}
+ *   onNext={paginationHandlers.onNext}
+ *   onLast={paginationHandlers.onLast}
+ * />
+ * ```
+ */
+
 interface UsePaginationReturn {
     pagination: PaginationState
     setPagination: React.Dispatch<React.SetStateAction<PaginationState>>
@@ -15,6 +37,12 @@ interface UsePaginationReturn {
     onNext: () => void
     onLast: () => void
     reset: () => void
+    paginationHandlers: {
+        onFirst: () => void
+        onPrevious: () => void
+        onNext: () => void
+        onLast: () => void
+    }
 }
 
 export function usePagination(initialLimit = 20): UsePaginationReturn {
@@ -63,5 +91,11 @@ export function usePagination(initialLimit = 20): UsePaginationReturn {
         onNext,
         onLast,
         reset,
+        paginationHandlers: {
+            onFirst,
+            onPrevious,
+            onNext,
+            onLast,
+        },
     }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
-import { CardActionButtons } from '@/components/CardActionButtons'
+import { CardFooter } from '@/components/CardFooter'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
@@ -18,9 +18,9 @@ import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { usePagination } from '@/hooks/usePagination'
 import { protectedFetch } from '@/lib/api'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
-import { getCardTextClasses, getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
+import { getCardTextClasses, getCardSecondaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface FileResponse {
     id: number
@@ -502,7 +502,7 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
     }, [file.id])
 
     return (
-        <div className="relative w-full h-40 sm:h-48 bg-white rounded-lg overflow-hidden group">
+        <div className="relative w-full h-full bg-white rounded-lg overflow-hidden group">
             <button
                 onClick={onClick}
                 className="w-full h-full flex items-center justify-center cursor-pointer transition-all duration-200 relative"
@@ -600,7 +600,7 @@ export default function FilesPage() {
     })
 
     // Paginação
-    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(19)
+    const { pagination, setPagination, total, setTotal, paginationHandlers } = usePagination(19)
     const limit = pagination.limit
     const offset = pagination.offset
 
@@ -1289,68 +1289,31 @@ export default function FilesPage() {
         }
     }
 
-    // Botões do ActionBar - customizado para File (suporta showEditArea e selectedFilesForReading)
-    // Ordem padronizada: Cancelar → Excluir → Salvar → Ler conteúdo
-    const actionBarButtons = useMemo(() => {
-        const buttons = []
-        
-        // 1. Botão Cancelar (aparece se houver edição OU seleção)
-        if (showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0) {
-            buttons.push({
-                label: 'Cancelar',
-                onClick: handleCancel,
-                variant: 'secondary' as const,
-                disabled: submitting || deleting || reading,
-            })
-        }
-        
-        // 2. Botão Excluir (aparece se houver arquivos marcados para exclusão)
-        if (selectedFiles.size > 0) {
-            buttons.push({
-                label: 'Excluir',
-                onClick: handleDeleteSelected,
-                variant: 'primary' as const,
-                disabled: deleting || submitting,
-                loading: deleting,
-            })
-        }
-        
-        // 3. Botão Salvar (aparece se houver edição com mudanças)
-        if (showEditArea && hasChanges()) {
-            buttons.push({
-                label: submitting ? 'Salvando...' : 'Salvar',
-                onClick: handleSave,
-                variant: 'primary' as const,
-                disabled: submitting,
-                loading: submitting,
-            })
-        }
-        
-        // 4. Botão Ler conteúdo (aparece se houver arquivos marcados para leitura)
-        if (selectedFilesForReading.size > 0) {
-            buttons.push({
-                label: 'Ler conteúdo',
-                onClick: handleReadSelected,
-                variant: 'primary' as const,
-                disabled: reading || submitting,
-                loading: reading,
-            })
-        }
-        
-        return buttons
-    }, [
-        showEditArea,
-        selectedFiles.size,
-        selectedFilesForReading.size,
-        hasChanges,
+    // Botões do ActionBar usando hook reutilizável (com extensões para File)
+    const actionBarButtons = useActionBarButtons({
+        isEditing: false, // Não usado quando showEditArea é fornecido
+        selectedCount: selectedFiles.size,
+        hasChanges: hasChanges(),
         submitting,
         deleting,
-        reading,
-        handleCancel,
-        handleSave,
-        handleDeleteSelected,
-        handleReadSelected,
-    ])
+        showEditArea, // Flag alternativa para File
+        additionalSelectedCount: selectedFilesForReading.size,
+        additionalStates: { reading },
+        customActions:
+            selectedFilesForReading.size > 0
+                ? [
+                      {
+                          label: 'Ler conteúdo',
+                          onClick: handleReadSelected,
+                          disabled: reading || submitting,
+                          loading: reading,
+                      },
+                  ]
+                : [],
+        onCancel: handleCancel,
+        onDelete: handleDeleteSelected,
+        onSave: handleSave,
+    })
 
     // Props de erro do ActionBar usando função utilitária (ajustado para showEditArea)
     const actionBarErrorProps = getActionBarErrorProps(
@@ -1679,34 +1642,70 @@ export default function FilesPage() {
                                         id={file.id}
                                         isSelected={isSelected}
                                         className="flex flex-col"
-                                    >
-                                        {/* 1. Topo - Identidade do arquivo - com cor do hospital */}
-                                        <div
-                                            className="mb-3 flex flex-col gap-1 min-w-0 rounded-t-xl -mx-4 -mt-4 px-4 pt-4"
-                                            style={{ backgroundColor: hospitalColor }}
-                                        >
-                                            <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
-                                                {file.hospital_name}
-                                            </span>
-                                            <div className="flex items-start gap-2 min-w-0">
-                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                    {fileTypeInfo.icon}
-                                                </div>
-                                                <h3
-                                                    className={`text-sm font-semibold truncate min-w-0 flex-1 ${getCardTextClasses(isSelected)}`}
-                                                    title={file.filename}
-                                                >
-                                                    {file.filename}
-                                                </h3>
-                                            </div>
-                                        </div>
-
-                                        {/* 2. Corpo - Preview */}
-                                        <div className="mb-3 flex-1">
-                                            <FileThumbnail
-                                                file={file}
-                                                onClick={() => toggleFileSelectionForReading(file.id)}
+                                        footer={
+                                            <CardFooter
+                                                isSelected={isSelected}
+                                                date={file.created_at}
+                                                settings={settings}
+                                                secondaryText={formatFileSize(file.file_size)}
+                                                beforeActions={
+                                                    <label className="flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelectedForReading}
+                                                            onChange={(e) => {
+                                                                e.stopPropagation()
+                                                                toggleFileSelectionForReading(file.id)
+                                                            }}
+                                                            disabled={reading}
+                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
+                                                        />
+                                                    </label>
+                                                }
+                                                onToggleSelection={(e) => {
+                                                    e.stopPropagation()
+                                                    toggleFileSelection(file.id)
+                                                }}
+                                                onEdit={() => handleEditClick(file)}
+                                                disabled={deleting}
+                                                deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                editTitle="Editar arquivo"
                                             />
+                                        }
+                                    >
+                                        {/* 1. Container padronizado - Topo + Preview */}
+                                        <div className="mb-3">
+                                            <div
+                                                className="h-40 sm:h-48 rounded-lg flex flex-col border border-blue-200 overflow-hidden"
+                                                style={{ backgroundColor: hospitalColor || '#f1f5f9' }}
+                                            >
+                                                {/* Topo - Identidade do arquivo */}
+                                                <div className="flex flex-col gap-1 min-w-0 px-4 pt-4 flex-shrink-0">
+                                                    <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
+                                                        {file.hospital_name}
+                                                    </span>
+                                                    <div className="flex items-start gap-2 min-w-0">
+                                                        <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                            {fileTypeInfo.icon}
+                                                        </div>
+                                                        <h3
+                                                            className={`text-sm font-semibold truncate min-w-0 flex-1 ${getCardTextClasses(isSelected)}`}
+                                                            title={file.filename}
+                                                        >
+                                                            {file.filename}
+                                                        </h3>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Preview - Thumbnail */}
+                                                <div className="flex-1 min-h-0 relative">
+                                                    <FileThumbnail
+                                                        file={file}
+                                                        onClick={() => toggleFileSelectionForReading(file.id)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
 
                                         {/* 3. Compartimento para status - ícone e texto */}
@@ -1721,48 +1720,6 @@ export default function FilesPage() {
                                                 {getJobStatusText(file.job_status)}
                                                 {file.job_status === 'RUNNING' && <LoadingSpinner />}
                                             </span>
-                                        </div>
-
-                                        {/* 4. Metadados e ações na parte inferior (footer customizado) */}
-                                        <div className="flex items-center justify-between gap-2">
-                                            {/* Metadados à esquerda */}
-                                            <div className="flex flex-col min-w-0 flex-1">
-                                                <span className={`text-sm truncate ${getCardSecondaryTextClasses(isSelected)}`}>
-                                                    {settings
-                                                        ? formatDateTime(file.created_at, settings)
-                                                        : new Date(file.created_at).toLocaleString()}
-                                                </span>
-                                                <span className={`text-xs truncate ${getCardTertiaryTextClasses(isSelected)}`}>{formatFileSize(file.file_size)}</span>
-                                            </div>
-                                            {/* Ações à direita */}
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                {/* Checkbox para leitura (específico do File) */}
-                                                <label className="flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelectedForReading}
-                                                        onChange={(e) => {
-                                                            e.stopPropagation()
-                                                            toggleFileSelectionForReading(file.id)
-                                                        }}
-                                                        disabled={reading}
-                                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
-                                                    />
-                                                </label>
-                                                {/* Botões padronizados (ordem automática: Excluir → Editar) */}
-                                                <CardActionButtons
-                                                    isSelected={isSelected}
-                                                    onToggleSelection={(e) => {
-                                                        e.stopPropagation()
-                                                        toggleFileSelection(file.id)
-                                                    }}
-                                                    onEdit={() => handleEditClick(file)}
-                                                    disabled={deleting}
-                                                    deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                    editTitle="Editar arquivo"
-                                                />
-                                            </div>
                                         </div>
                                     </EntityCard>
                                 )
@@ -1783,10 +1740,10 @@ export default function FilesPage() {
                             offset={offset}
                             limit={limit}
                             total={total}
-                            onFirst={onFirst}
-                            onPrevious={onPrevious}
-                            onNext={onNext}
-                            onLast={onLast}
+                            onFirst={paginationHandlers.onFirst}
+                            onPrevious={paginationHandlers.onPrevious}
+                            onNext={paginationHandlers.onNext}
+                            onLast={paginationHandlers.onLast}
                             disabled={loading}
                         />
                     ) : undefined

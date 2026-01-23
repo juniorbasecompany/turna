@@ -6,34 +6,36 @@
 |---------|----------|-------------------|---------------------|-------------------|-----------------|
 | **Hook de Gerenciamento** | ✅ `useEntityPage` | ✅ `useEntityPage` | ❌ Estado manual (`useState`) | ❌ Estado manual (`useState`) | ❌ Estado manual (`useState`) |
 | **EntityCard** | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa (conteúdo customizado) |
-| **CardFooter** | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa | ❌ Não usa (estrutura customizada) |
-| **CardActionButtons** | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ Usa diretamente |
-| **EditForm** | ✅ Usa | ✅ Usa | ❌ Usa `editContent` no CardPanel | ✅ Usa | ✅ Usa |
-| **FilterPanel** | ❌ N/A (sem filtros) | ❌ N/A (sem filtros) | ✅ Usa | ❌ N/A (sem filtros) | ✅ Usa |
-| **useEntityFilters** | ❌ N/A | ❌ N/A | ✅ Usa | ❌ N/A | ✅ Usa |
-| **useActionBarButtons** | ✅ (via useEntityPage) | ✅ (via useEntityPage) | ✅ Usa diretamente | ✅ Usa diretamente | ❌ Customizado (useMemo) |
+| **CardFooter** | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa (com `secondaryText` e `beforeActions`) |
+| **CardActionButtons** | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ (via CardFooter) | ✅ (via CardFooter) |
+| **EditForm** | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa | ✅ Usa |
+| **FilterPanel** | ✅ Usa (filtro por nome) | ✅ Usa (filtro por nome) | ✅ Usa | ✅ Usa (filtro por procedimento) | ✅ Usa |
+| **useEntityFilters** | ❌ N/A (filtro de texto) | ❌ N/A (filtro de texto) | ✅ Usa | ❌ N/A (filtro de texto) | ✅ Usa |
+| **useActionBarButtons** | ✅ (via useEntityPage) | ✅ (via useEntityPage) | ✅ Usa diretamente | ✅ Usa diretamente | ✅ Usa diretamente (com extensões) |
 | **getActionBarErrorProps** | ✅ (via useEntityPage) | ✅ (via useEntityPage) | ✅ Usa diretamente | ✅ Usa diretamente | ✅ Usa diretamente |
 | **paginationHandlers** | ✅ (via useEntityPage) | ✅ (via useEntityPage) | ✅ (via usePagination) | ✅ (via usePagination) | ✅ (via usePagination) |
 | **Estrutura de Edição** | ✅ `EditForm` separado | ✅ `EditForm` separado | ✅ `EditForm` separado | ✅ `EditForm` separado | ✅ `EditForm` separado |
-| **Filtros vs Edição** | ✅ N/A | ✅ N/A | ✅ Mutuamente exclusivos | ✅ N/A | ✅ Mutuamente exclusivos |
-| **Container do Card** | Cor dinâmica (`hospital.color`) | Gradiente fixo azul | Gradiente fixo azul | Cor dinâmica (`hospital.color`) | Estrutura customizada (thumbnail) |
-| **Borda no Container** | ✅ `border-gray-200` | ✅ `border-blue-200` | ❌ Não tem | ✅ `border-gray-200` | ❌ Não tem |
-| **Gradiente no Container** | ❌ Não tem | ✅ `bg-gradient-to-br` | ❌ Não tem | ❌ Não tem | ❌ Não tem |
+| **Filtros vs Edição** | ✅ Mutuamente exclusivos | ✅ Mutuamente exclusivos | ✅ Mutuamente exclusivos | ✅ Mutuamente exclusivos | ✅ Mutuamente exclusivos |
+| **Container do Card** | Cor dinâmica (`hospital.color`) | Cor sólida azul (`bg-blue-50`) | Cor sólida azul (`bg-blue-50`) | Cor dinâmica (`hospital.color`) | Cor dinâmica (`hospital.color`) com thumbnail |
+| **Borda no Container** | ✅ `border-blue-200` | ✅ `border-blue-200` | ✅ `border-blue-200` | ✅ `border-blue-200` | ✅ `border-blue-200` |
+| **Gradiente no Container** | ❌ Não tem | ❌ Não tem | ❌ Não tem | ❌ Não tem | ❌ Não tem |
 | **Informação Extra no Card** | Apenas nome | Nome + slug | Nome + badges (status/role) | Procedimento + hospital + badges | Thumbnail + status + metadados |
-| **Altura do Container** | `h-40 sm:h-48` | `h-40 sm:h-48` | `h-40 sm:h-48` | `h-40 sm:h-48` | Customizado (thumbnail) |
+| **Altura do Container** | `h-40 sm:h-48` | `h-40 sm:h-48` | `h-40 sm:h-48` | `h-40 sm:h-48` | ✅ `h-40 sm:h-48` |
 | **Ícone no Card** | ✅ SVG hospital | ✅ SVG clínica | ✅ SVG pessoas | ✅ SVG documento | ❌ Thumbnail/ícone tipo arquivo |
 | **Tamanho do Ícone** | `w-16 h-16 sm:w-20 sm:h-20` | `w-16 h-16 sm:w-20 sm:h-20` | `w-16 h-16 sm:w-20 sm:h-20` | `w-16 h-16 sm:w-20 sm:h-20` | Variável (thumbnail) |
-| **Cor do Ícone** | `text-blue-500` | `text-blue-600` | `text-blue-500` | `text-blue-500` | Variável (cor do hospital) |
+| **Cor do Ícone** | `text-blue-500` | `text-blue-600` | `text-blue-600` | `text-blue-500` | Variável (cor do hospital) |
 | **Título no Card** | Nome do hospital | Nome da clínica | Nome/email do member | Procedimento | Nome do arquivo |
 | **Badges/Status no Card** | ❌ Não tem | ❌ Não tem | ✅ Status + Role | ✅ Pediátrica + Prioridade | ✅ Status com ícone + spinner |
 | **Detalhes Adicionais** | ❌ Não tem | Slug abaixo do nome | Badges abaixo do nome | Lista de detalhes (sala, datas, etc) | Metadados (data, tamanho) |
-| **Estrutura Visual** | Container grande → Footer | Container grande → Footer | Container grande → Footer | Container grande → Detalhes → Footer | Thumbnail → Status → Metadados/Ações |
-| **Paginação** | ✅ `paginationHandlers` | ✅ `paginationHandlers` | ❌ Manual inline | ❌ Manual inline | ❌ Manual inline |
+| **Estrutura Visual** | Container grande → Footer | Container grande → Footer | Container grande → Footer | Container grande → Footer | Container grande → Footer |
+| **Conteúdo dentro do Container** | Ícone + Nome | Ícone + Nome + Slug | Ícone + Nome + Badges | Ícone + Nome + Badges + Detalhes | Topo (hospital + nome) + Thumbnail + Status |
+| **Paginação** | ✅ `paginationHandlers` | ✅ `paginationHandlers` | ✅ `paginationHandlers` | ✅ `paginationHandlers` | ✅ `paginationHandlers` |
+| **Uso de paginationHandlers** | ✅ Via objeto | ✅ Via objeto | ✅ Via objeto | ✅ Via objeto | ✅ Via objeto |
 | **Carregamento de Dados** | ✅ Via `useEntityPage` | ✅ Via `useEntityPage` | ❌ Manual (`loadMembers`) | ❌ Manual (`loadDemands`) | ❌ Manual (`loadFiles`) |
-| **Filtros** | ❌ Não tem | ❌ Não tem | ✅ Status + Role | ❌ Não tem | ✅ Hospital + Data + Status |
+| **Filtros** | ✅ Nome (texto) | ✅ Nome (texto) | ✅ Status + Role | ✅ Procedimento (texto) | ✅ Hospital + Data + Status |
 | **Seleção Múltipla** | ✅ Sim | ✅ Sim | ✅ Sim | ✅ Sim | ✅ Sim (exclusão + leitura) |
 | **Ações Customizadas** | ❌ Não tem | ❌ Não tem | ✅ Enviar convite | ❌ Não tem | ✅ Ler conteúdo |
-| **Ordem dos Botões** | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada (customizado) |
+| **Ordem dos Botões** | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada (com ação customizada) |
 | **Estrutura de Erro** | ✅ Padronizada | ✅ Padronizada | ✅ Padronizada (com emailMessage) | ✅ Padronizada | ✅ Padronizada |
 
 ---
@@ -86,64 +88,71 @@
 
 ### 4. **Estrutura Visual dos Cards**
 
-**Status:**
-- ✅ **File**: Estrutura customizada mantida (justificada: thumbnail, status complexo)
-- ✅ **Hospital**: Cor dinâmica + borda sutil (`border-gray-200`) (padronizado)
-- ✅ **Tenant**: Gradiente fixo + borda (`border-blue-200`)
-- ✅ **Member**: Gradiente fixo azul
-- ✅ **Demand**: Cor dinâmica + borda sutil (`border-gray-200`) (padronizado)
+**✅ PADRONIZADO:**
 
-**Status:** ✅ **Implementado** - Hospital e Demand agora têm borda sutil para consistência visual, mantendo a cor dinâmica funcional
+**Estrutura Visual:**
+- ✅ **Todos os painéis**: `Container grande → Footer`
+- ✅ **Detalhes, thumbnails e status**: Sempre dentro do container grande
+
+**Opções de Cor do Container:**
+
+**Opção 1 - Cor dinâmica do hospital:**
+- ✅ **Hospital**: `backgroundColor: hospital.color` + `border-blue-200`
+- ✅ **Demand**: `backgroundColor: hospital.color` + `border-blue-200` (com detalhes dentro)
+- ✅ **File**: `backgroundColor: hospital.color` + `border-blue-200` (com thumbnail e status dentro)
+
+**Opção 2 - Cor sólida azul:**
+- ✅ **Tenant**: `bg-blue-50` + `border-blue-200`
+- ✅ **Member**: `bg-blue-50` + `border-blue-200` (com badges dentro)
+
+**Status:** ✅ **Implementado** - Todos os painéis seguem a estrutura padronizada "Container grande → Footer". Elementos especiais (detalhes, thumbnails, status, badges) estão sempre dentro do container grande.
 
 ---
 
 ### 5. **Filtros**
 
-**Fora do padrão:**
-- ❌ **Member**: Usa `editContent` + `filterContent` (mutuamente exclusivos, mas via CardPanel)
-- ⚠️ **File**: Filtros customizados (hospital + data) além de status
+**✅ PADRONIZADO:**
+- ✅ **Hospital**: Usa `FilterPanel` com filtro de texto por nome
+- ✅ **Tenant**: Usa `FilterPanel` com filtro de texto por nome
+- ✅ **Member**: Usa `FilterPanel` e `useEntityFilters` (Status + Role)
+- ✅ **Demand**: Usa `FilterPanel` com filtro de texto por procedimento
+- ✅ **File**: Usa `FilterPanel` e `useEntityFilters` para status + filtros customizados (hospital + data)
 
-**Padrão:**
-- ✅ **File**: Usa `FilterPanel` e `useEntityFilters` para status
-- ✅ **Member**: Usa `FilterPanel` e `useEntityFilters`
-
-**Sugestão:**
-- **File**: Manter filtros customizados (hospital + data) dentro do `FilterPanel` (já está correto)
-- **Member**: Migrar para `EditForm` separado (remover `editContent`)
+**Status:** ✅ **Implementado** - Todos os painéis agora têm filtros padronizados usando `FilterPanel`
 
 ---
 
 ### 6. **Botões do ActionBar**
 
-**Fora do padrão:**
-- ❌ **File**: Customizado com `useMemo` em vez de `useActionBarButtons`
+**✅ PADRONIZADO:**
+- ✅ **Hospital**: Via `useEntityPage` (indireto)
+- ✅ **Tenant**: Via `useEntityPage` (indireto)
+- ✅ **Member**: Via `useActionBarButtons` (direto)
+- ✅ **Demand**: Via `useActionBarButtons` (direto)
+- ✅ **File**: Via `useActionBarButtons` (direto, com extensões para ações customizadas)
 
-**Padrão:**
-- ✅ **Hospital**: Via `useEntityPage`
-- ✅ **Tenant**: Via `useEntityPage`
-- ✅ **Member**: Via `useActionBarButtons`
-- ✅ **Demand**: Via `useActionBarButtons`
-
-**Sugestão:**
-- **File**: Avaliar se pode usar `useActionBarButtons` com extensão para suportar `selectedFilesForReading`
-- Se não for possível, documentar a customização e garantir que a ordem dos botões seja mantida
+**Status:** ✅ **Implementado** - File agora usa `useActionBarButtons` com extensões para suportar `selectedFilesForReading` e ação customizada "Ler conteúdo"
 
 ---
 
 ### 7. **Carregamento de Dados**
 
 **Fora do padrão:**
-- ❌ **Member**: Carrega todos os dados de uma vez (múltiplas requisições)
-- ❌ **Demand**: Carregamento manual
-- ❌ **File**: Carregamento manual
+- ❌ **Member**: Carrega todos os dados de uma vez (múltiplas requisições) - **NÃO VIÁVEL migrar** (arquitetura diferente: carrega tudo → filtra no frontend → pagina no frontend)
+- ❌ **Demand**: Carregamento manual - **✅ VIÁVEL migrar** (esforço médio)
+- ❌ **File**: Carregamento manual - **⚠️ VIÁVEL COM EXTENSÕES** (esforço alto, requer extensões no hook)
 
 **Padrão:**
 - ✅ **Hospital**: Via `useEntityPage`
 - ✅ **Tenant**: Via `useEntityPage`
 
-**Sugestão:**
-- Se migrar para `useEntityPage`, carregamento será padronizado
-- Se manter manual, garantir que siga o mesmo padrão de tratamento de erros
+**Análise de Viabilidade:**
+- ✅ **Demand**: Pode ser migrado com adaptações moderadas (mover filtro para backend ou aplicar após carregamento)
+- ⚠️ **File**: Requer extensões em `useEntityList` para suportar `additionalParams` reativo (múltiplos filtros dinâmicos)
+- ❌ **Member**: Arquitetura fundamentalmente diferente (carregamento completo vs paginação) - **NÃO RECOMENDADO migrar**
+
+**Documentação:**
+- 📄 Ver `MIGRATION_VIABILITY_ANALYSIS.md` para análise detalhada
 
 ---
 
@@ -153,13 +162,21 @@
 
 1. ✅ **Member**: Migrado `editContent` para `EditForm` separado
 2. ✅ **Member, Demand, File**: Migrados para usar `usePagination` (hook reutilizável)
-3. ✅ **Hospital, Demand**: Adicionada borda sutil (`border-gray-200`) nos containers
+3. ✅ **Hospital, Demand**: Adicionada borda padronizada (`border-blue-200`) nos containers
+4. ✅ **File**: Migrado para usar `EntityCard` e `CardFooter` (conteúdo customizado mantido via props)
+5. ✅ **Hospital, Tenant, Demand**: Adicionados filtros de texto (nome/procedimento) usando `FilterPanel`
+6. ✅ **File**: Migrado para usar `useActionBarButtons` (com extensões para ações customizadas)
+7. ✅ **Member, Demand, File**: Padronizado uso de `paginationHandlers` via objeto
+8. ✅ **Member, Tenant**: Removido gradiente, substituído por cor sólida `bg-blue-50`
+9. ✅ **File**: Migrado para container padronizado `h-40 sm:h-48` com `border-blue-200` (thumbnail dentro do container)
+10. ✅ **getCardContainerClasses**: Padronizado para retornar `border-blue-200` (aplica a todos os painéis via `EntityCard`)
 
 ### 🔄 Pendente (Avaliação)
 
-4. **Member, Demand, File**: Avaliar migração para `useEntityPage` (se viável)
-   - **Nota**: Member carrega todos os dados de uma vez (múltiplas requisições) e filtra no frontend
-   - **Nota**: Demand e File têm lógica específica que pode não se encaixar em `useEntityPage`
+4. **Demand, File**: Avaliar migração para `useEntityPage`
+   - ✅ **Demand**: ✅ **VIÁVEL** - Pode ser migrado com adaptações moderadas (ver `MIGRATION_VIABILITY_ANALYSIS.md`)
+   - ⚠️ **File**: ⚠️ **VIÁVEL COM EXTENSÕES** - Requer extensões em `useEntityList` para suportar `additionalParams` reativo
+   - ❌ **Member**: ❌ **NÃO VIÁVEL** - Arquitetura fundamentalmente diferente (carrega tudo → filtra no frontend → pagina no frontend)
 
 5. **File**: Avaliar se pode usar `useActionBarButtons` (com extensão para `selectedFilesForReading`)
    - **Nota**: File tem seleção dupla (exclusão + leitura), pode precisar de customização
@@ -174,16 +191,20 @@
 ## ✅ Aspectos Padronizados
 
 - ✅ **Todos usam `EntityCard`** (File migrado - conteúdo customizado)
-- ✅ Todos usam `CardFooter` (exceto File, que tem footer customizado com checkbox de leitura)
+- ✅ **Todos usam `CardFooter`** (File migrado - com props `secondaryText` e `beforeActions` para checkbox de leitura)
 - ✅ Todos usam `CardActionButtons` (ordem padronizada)
 - ✅ **Todos usam `EditForm` separado** (Member migrado)
-- ✅ Todos usam `FilterPanel` quando têm filtros
-- ✅ Todos usam `useEntityFilters` quando têm filtros
-- ✅ **Todos usam `usePagination` ou `paginationHandlers`** (Member, Demand, File migrados)
+- ✅ **Todos usam `FilterPanel`** (Hospital, Tenant, Demand, Member, File - todos têm filtros)
+- ✅ **Filtros vs Edição mutuamente exclusivos** (todos os painéis)
+- ✅ Todos usam `useEntityFilters` quando têm filtros de seleção (Member, File)
+- ✅ **Todos usam `useActionBarButtons`** (File migrado - com extensões para ações customizadas)
+- ✅ **Todos usam `paginationHandlers` via objeto** (padronizado em todos os painéis)
 - ✅ Todos usam `getActionBarErrorProps` (direto ou via hook)
-- ✅ Ordem dos botões padronizada (Cancelar → Excluir → Salvar)
-- ✅ Estrutura de cards similar (container grande no topo)
-- ✅ **Containers com borda** (Hospital e Demand padronizados)
+- ✅ Ordem dos botões padronizada (Cancelar → Excluir → Salvar → Ações customizadas)
+- ✅ **Estrutura visual padronizada** (Container grande → Footer, com detalhes/thumbnails/status dentro do container)
+- ✅ **Containers padronizados** (Cor dinâmica OU Cor sólida azul `bg-blue-50`, ambos com `border-blue-200`)
+- ✅ **Altura padronizada** (`h-40 sm:h-48` em todos os painéis, incluindo File)
+- ✅ **Borda padronizada** (`border-blue-200` via `getCardContainerClasses` aplicado a todos via `EntityCard`)
 
 ---
 
@@ -198,12 +219,14 @@
 5. **Botões**: `useActionBarButtons` (ou via `useEntityPage`)
 6. **Erros**: `getActionBarErrorProps` (ou via `useEntityPage`)
 7. **Paginação**: `paginationHandlers` (ou via `useEntityPage`)
-8. **Visual**: Container grande (`h-40 sm:h-48`) com ícone centralizado
+8. **Visual**: Estrutura padronizada (Container grande → Footer)
+9. **Container**: Altura `h-40 sm:h-48`, borda `border-blue-200`, cor dinâmica ou sólida
+10. **Conteúdo do Container**: Detalhes, thumbnails, status e badges sempre dentro do container grande
 
 ### Exceções Justificadas
 
-- **File**: Estrutura customizada (thumbnail, status complexo, múltiplas seleções)
-- **Hospital/Demand**: Cor dinâmica (funcionalidade específica)
+- **File**: Thumbnail dentro do container padronizado (mantém funcionalidade visual específica)
+- **Hospital/Demand/File**: Cor dinâmica (funcionalidade específica)
 - **File**: Botões customizados (suporta `selectedFilesForReading`)
 
 ### Próximos Passos
@@ -211,6 +234,13 @@
 1. ✅ ~~Migrar Member para `EditForm` separado~~ **CONCLUÍDO**
 2. ✅ ~~Criar hook `usePagination` e aplicar em Member/Demand/File~~ **CONCLUÍDO**
 3. ✅ ~~Adicionar borda sutil nos containers de Hospital/Demand~~ **CONCLUÍDO**
-4. Avaliar viabilidade de migrar Member/Demand/File para `useEntityPage` (opcional, pode não ser viável devido à complexidade)
-5. Avaliar extensão de `useActionBarButtons` para suportar `selectedFilesForReading` (opcional)
-6. Documentar padrões e exceções (já documentado neste arquivo)
+4. ✅ ~~Migrar File para usar `EntityCard`~~ **CONCLUÍDO**
+5. ✅ ~~Migrar File para usar `CardFooter`~~ **CONCLUÍDO**
+6. ✅ ~~Adicionar filtros de texto em Hospital, Tenant e Demand~~ **CONCLUÍDO**
+7. ✅ ~~Estender `useActionBarButtons` e migrar File para usá-lo~~ **CONCLUÍDO**
+8. ✅ ~~Padronizar `paginationHandlers` via objeto em todos os painéis~~ **CONCLUÍDO**
+9. ✅ ~~Padronizar containers dos cards (gradiente removido, substituído por cor sólida)~~ **CONCLUÍDO**
+10. ✅ ~~Padronizar borda dos containers em `border-blue-200` (via `getCardContainerClasses`)~~ **CONCLUÍDO**
+11. ✅ ~~Padronizar File para usar container `h-40 sm:h-48` com `border-blue-200`~~ **CONCLUÍDO**
+12. Avaliar viabilidade de migrar Member/Demand/File para `useEntityPage` (opcional, pode não ser viável devido à complexidade)
+13. Documentar padrões e exceções (já documentado neste arquivo)

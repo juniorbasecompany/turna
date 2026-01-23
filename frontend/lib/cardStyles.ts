@@ -13,7 +13,7 @@
 export function getCardContainerClasses(isSelected: boolean): string {
     return `group rounded-xl border p-4 min-w-0 transition-all duration-200 ${isSelected
             ? 'border-red-300 ring-2 ring-red-200 bg-red-50'
-            : 'border-slate-400 bg-white'
+            : 'border-blue-200 bg-white'
         }`
 }
 

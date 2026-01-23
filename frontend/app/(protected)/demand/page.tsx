@@ -6,52 +6,52 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
+import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
-import { usePagination } from '@/hooks/usePagination'
-import { protectedFetch, extractErrorMessage } from '@/lib/api'
-import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { protectedFetch } from '@/lib/api'
 import { formatDateTime } from '@/lib/tenantFormat'
 import {
     DemandCreateRequest,
-    DemandListResponse,
     DemandResponse,
     DemandUpdateRequest,
     HospitalListResponse,
     HospitalResponse,
 } from '@/types/api'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+type DemandFormData = {
+    hospital_id: number | null
+    job_id: number | null
+    room: string
+    start_time: Date | null
+    end_time: Date | null
+    procedure: string
+    anesthesia_type: string
+    complexity: string
+    skills: string[]
+    priority: string | null
+    is_pediatric: boolean
+    notes: string
+    source: Record<string, unknown> | null
+}
 
 export default function DemandPage() {
     const { settings } = useTenantSettings()
-    const [demands, setDemands] = useState<DemandResponse[]>([])
+    
+    // Estados auxiliares (não gerenciados por useEntityPage)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
-    const [loading, setLoading] = useState(true)
     const [loadingHospitals, setLoadingHospitals] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-    const [editingDemand, setEditingDemand] = useState<DemandResponse | null>(null)
+    const [procedureFilter, setProcedureFilter] = useState('')
+    const [skillsInput, setSkillsInput] = useState('')
 
-    type DemandFormData = {
-        hospital_id: number | null
-        job_id: number | null
-        room: string
-        start_time: Date | null
-        end_time: Date | null
-        procedure: string
-        anesthesia_type: string
-        complexity: string
-        skills: string[]
-        priority: string | null
-        is_pediatric: boolean
-        notes: string
-        source: Record<string, unknown> | null
-    }
-
-    const [formData, setFormData] = useState<DemandFormData>({
+    // Configuração inicial
+    const initialFormData: DemandFormData = {
         hospital_id: null,
         job_id: null,
         room: '',
@@ -65,15 +65,134 @@ export default function DemandPage() {
         is_pediatric: false,
         notes: '',
         source: null,
-    })
-    const [originalFormData, setOriginalFormData] = useState<DemandFormData>({ ...formData })
-    const [submitting, setSubmitting] = useState(false)
-    const [selectedDemands, setSelectedDemands] = useState<Set<number>>(new Set())
-    const [deleting, setDeleting] = useState(false)
-    const [skillsInput, setSkillsInput] = useState('')
-    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(20)
+    }
 
-    // Carregar lista de hospitais
+    // Mapeamentos
+    const mapEntityToFormData = (demand: DemandResponse): DemandFormData => {
+        return {
+            hospital_id: demand.hospital_id,
+            job_id: demand.job_id,
+            room: demand.room || '',
+            start_time: demand.start_time ? new Date(demand.start_time) : null,
+            end_time: demand.end_time ? new Date(demand.end_time) : null,
+            procedure: demand.procedure,
+            anesthesia_type: demand.anesthesia_type || '',
+            complexity: demand.complexity || '',
+            skills: demand.skills || [],
+            priority: demand.priority,
+            is_pediatric: demand.is_pediatric,
+            notes: demand.notes || '',
+            source: demand.source,
+        }
+    }
+
+    const mapFormDataToCreateRequest = (formData: DemandFormData): DemandCreateRequest => {
+        const startIso = formData.start_time?.toISOString()
+        const endIso = formData.end_time?.toISOString()
+        
+        return {
+            hospital_id: formData.hospital_id,
+            job_id: formData.job_id,
+            room: formData.room.trim() || null,
+            start_time: startIso!,
+            end_time: endIso!,
+            procedure: formData.procedure.trim(),
+            anesthesia_type: formData.anesthesia_type.trim() || null,
+            complexity: formData.complexity.trim() || null,
+            skills: formData.skills.length > 0 ? formData.skills : null,
+            priority: formData.priority || null,
+            is_pediatric: formData.is_pediatric,
+            notes: formData.notes.trim() || null,
+            source: formData.source,
+        }
+    }
+
+    const mapFormDataToUpdateRequest = (formData: DemandFormData): DemandUpdateRequest => {
+        const startIso = formData.start_time?.toISOString()
+        const endIso = formData.end_time?.toISOString()
+        
+        return {
+            hospital_id: formData.hospital_id,
+            job_id: formData.job_id,
+            room: formData.room.trim() || null,
+            start_time: startIso!,
+            end_time: endIso!,
+            procedure: formData.procedure.trim(),
+            anesthesia_type: formData.anesthesia_type.trim() || null,
+            complexity: formData.complexity.trim() || null,
+            skills: formData.skills.length > 0 ? formData.skills : null,
+            priority: formData.priority || null,
+            is_pediatric: formData.is_pediatric,
+            notes: formData.notes.trim() || null,
+            source: formData.source,
+        }
+    }
+
+    // Validação
+    const validateFormData = (formData: DemandFormData): string | null => {
+        if (!formData.procedure.trim()) {
+            return 'Procedimento é obrigatório'
+        }
+        
+        if (!formData.start_time || !formData.end_time) {
+            return 'Data/hora de início e fim são obrigatórias'
+        }
+        
+        if (formData.end_time <= formData.start_time) {
+            return 'Data/hora de fim deve ser maior que a de início'
+        }
+        
+        return null
+    }
+
+    // isEmptyCheck
+    const isEmptyCheck = (formData: DemandFormData): boolean => {
+        return (
+            formData.procedure.trim() === '' &&
+            formData.start_time === null &&
+            formData.end_time === null &&
+            formData.hospital_id === null &&
+            formData.room.trim() === ''
+        )
+    }
+
+    // useEntityPage
+    const {
+        items: demands,
+        loading,
+        error,
+        setError,
+        submitting,
+        deleting,
+        formData,
+        setFormData,
+        editingItem: editingDemand,
+        isEditing,
+        hasChanges,
+        handleCreateClick,
+        handleEditClick,
+        handleCancel,
+        selectedItems: selectedDemands,
+        toggleSelection: toggleDemandSelection,
+        selectedCount: selectedDemandsCount,
+        pagination,
+        total,
+        paginationHandlers,
+        handleSave,
+        handleDeleteSelected,
+        actionBarErrorProps,
+    } = useEntityPage<DemandFormData, DemandResponse, DemandCreateRequest, DemandUpdateRequest>({
+        endpoint: '/api/demand',
+        entityName: 'demanda',
+        initialFormData,
+        isEmptyCheck,
+        mapEntityToFormData,
+        mapFormDataToCreateRequest,
+        mapFormDataToUpdateRequest,
+        validateFormData,
+    })
+
+    // Carregar lista de hospitais (mantido separado)
     const loadHospitals = async () => {
         try {
             setLoadingHospitals(true)
@@ -89,142 +208,34 @@ export default function DemandPage() {
         }
     }
 
-    // Carregar lista de demandas
-    const loadDemands = async () => {
-        try {
-            setLoading(true)
-            setError(null)
-
-            const params = new URLSearchParams()
-            params.append('limit', String(pagination.limit))
-            params.append('offset', String(pagination.offset))
-
-            const data = await protectedFetch<DemandListResponse>(`/api/demand/list?${params.toString()}`)
-            setDemands(data.items)
-            setTotal(data.total)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar demandas'
-            setError(message)
-            console.error('Erro ao carregar demandas:', err)
-        } finally {
-            setLoading(false)
-        }
-    }
-
     useEffect(() => {
         loadHospitals()
     }, [])
 
-    useEffect(() => {
-        loadDemands()
-    }, [pagination])
-
-    // Verificar se há mudanças nos campos
-    const hasChanges = () => {
-        if (!editingDemand) {
-            return (
-                formData.procedure.trim() !== '' ||
-                formData.start_time !== null ||
-                formData.end_time !== null ||
-                formData.hospital_id !== null ||
-                formData.room.trim() !== ''
-            )
-        }
-        // Comparação mais robusta para incluir Date objects
-        return (
-            formData.procedure !== originalFormData.procedure ||
-            formData.start_time?.getTime() !== originalFormData.start_time?.getTime() ||
-            formData.end_time?.getTime() !== originalFormData.end_time?.getTime() ||
-            formData.hospital_id !== originalFormData.hospital_id ||
-            formData.room !== originalFormData.room ||
-            formData.anesthesia_type !== originalFormData.anesthesia_type ||
-            formData.complexity !== originalFormData.complexity ||
-            JSON.stringify(formData.skills) !== JSON.stringify(originalFormData.skills) ||
-            formData.priority !== originalFormData.priority ||
-            formData.is_pediatric !== originalFormData.is_pediatric ||
-            formData.notes !== originalFormData.notes ||
-            JSON.stringify(formData.source) !== JSON.stringify(originalFormData.source)
-        )
-    }
-
-    const [showEditArea, setShowEditArea] = useState(false)
-    const isEditing = showEditArea
-
-    // Abrir modo de criação
-    const handleCreateClick = () => {
-        const newFormData: DemandFormData = {
-            hospital_id: null,
-            job_id: null,
-            room: '',
-            start_time: null,
-            end_time: null,
-            procedure: '',
-            anesthesia_type: '',
-            complexity: '',
-            skills: [],
-            priority: null,
-            is_pediatric: false,
-            notes: '',
-            source: null,
-        }
-        setFormData(newFormData)
-        setOriginalFormData({ ...newFormData })
-        setEditingDemand(null)
+    // Wrappers customizados para skillsInput
+    const handleCreateClickCustom = () => {
+        handleCreateClick()
         setSkillsInput('')
-        setShowEditArea(true)
-        setError(null)
     }
 
-    // Abrir modo de edição
-    const handleEditClick = (demand: DemandResponse) => {
-        const initialData: DemandFormData = {
-            hospital_id: demand.hospital_id,
-            job_id: demand.job_id,
-            room: demand.room || '',
-            start_time: demand.start_time ? new Date(demand.start_time) : null,
-            end_time: demand.end_time ? new Date(demand.end_time) : null,
-            procedure: demand.procedure,
-            anesthesia_type: demand.anesthesia_type || '',
-            complexity: demand.complexity || '',
-            skills: demand.skills || [],
-            priority: demand.priority,
-            is_pediatric: demand.is_pediatric,
-            notes: demand.notes || '',
-            source: demand.source,
-        }
-        setFormData(initialData)
-        setOriginalFormData({ ...initialData })
-        setEditingDemand(demand)
+    const handleEditClickCustom = (demand: DemandResponse) => {
+        handleEditClick(demand)
         setSkillsInput((demand.skills || []).join(', '))
-        setShowEditArea(true)
-        setError(null)
     }
 
-    // Cancelar edição e/ou seleção
-    const handleCancel = () => {
-        const resetData: DemandFormData = {
-            hospital_id: null,
-            job_id: null,
-            room: '',
-            start_time: null,
-            end_time: null,
-            procedure: '',
-            anesthesia_type: '',
-            complexity: '',
-            skills: [],
-            priority: null,
-            is_pediatric: false,
-            notes: '',
-            source: null,
-        }
-        setFormData(resetData)
-        setOriginalFormData({ ...resetData })
-        setEditingDemand(null)
+    const handleCancelCustom = () => {
+        handleCancel()
         setSkillsInput('')
-        setShowEditArea(false)
-        setSelectedDemands(new Set())
-        setError(null)
     }
+
+    // Filtrar demandas por procedimento (filtro no frontend)
+    const filteredDemands = useMemo(() => {
+        if (!procedureFilter.trim()) {
+            return demands
+        }
+        const filterLower = procedureFilter.toLowerCase().trim()
+        return demands.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
+    }, [demands, procedureFilter])
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {
@@ -236,157 +247,17 @@ export default function DemandPage() {
         setFormData({ ...formData, skills: skillsArray })
     }
 
-    // Submeter formulário (criar ou editar)
-    const handleSave = async () => {
-        if (!formData.procedure.trim()) {
-            setError('Procedimento é obrigatório')
-            return
-        }
-
-        if (!formData.start_time || !formData.end_time) {
-            setError('Data/hora de início e fim são obrigatórias')
-            return
-        }
-
-        const startIso = formData.start_time.toISOString()
-        const endIso = formData.end_time.toISOString()
-
-        if (formData.end_time <= formData.start_time) {
-            setError('Data/hora de fim deve ser maior que a de início')
-            return
-        }
-
-        try {
-            setSubmitting(true)
-            setError(null)
-
-            if (editingDemand) {
-                // Editar demanda existente
-                const updateData: DemandUpdateRequest = {
-                    hospital_id: formData.hospital_id,
-                    job_id: formData.job_id,
-                    room: formData.room.trim() || null,
-                    start_time: startIso,
-                    end_time: endIso,
-                    procedure: formData.procedure.trim(),
-                    anesthesia_type: formData.anesthesia_type.trim() || null,
-                    complexity: formData.complexity.trim() || null,
-                    skills: formData.skills.length > 0 ? formData.skills : null,
-                    priority: formData.priority || null,
-                    is_pediatric: formData.is_pediatric,
-                    notes: formData.notes.trim() || null,
-                    source: formData.source,
-                }
-
-                await protectedFetch(`/api/demand/${editingDemand.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(updateData),
-                })
-            } else {
-                // Criar nova demanda
-                const createData: DemandCreateRequest = {
-                    hospital_id: formData.hospital_id,
-                    job_id: formData.job_id,
-                    room: formData.room.trim() || null,
-                    start_time: startIso,
-                    end_time: endIso,
-                    procedure: formData.procedure.trim(),
-                    anesthesia_type: formData.anesthesia_type.trim() || null,
-                    complexity: formData.complexity.trim() || null,
-                    skills: formData.skills.length > 0 ? formData.skills : null,
-                    priority: formData.priority || null,
-                    is_pediatric: formData.is_pediatric,
-                    notes: formData.notes.trim() || null,
-                    source: formData.source,
-                }
-
-                await protectedFetch('/api/demand', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(createData),
-                })
-            }
-
-            // Recarregar lista e limpar formulário
-            await loadDemands()
-            handleCancel()
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao salvar demanda'
-            setError(message)
-            console.error('Erro ao salvar demanda:', err)
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
-    // Toggle seleção de demanda para exclusão
-    const toggleDemandSelection = (demandId: number) => {
-        setSelectedDemands((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(demandId)) {
-                newSet.delete(demandId)
-            } else {
-                newSet.add(demandId)
-            }
-            return newSet
-        })
-    }
-
-    // Excluir demandas selecionadas
-    const handleDeleteSelected = async () => {
-        if (selectedDemands.size === 0) return
-
-        setDeleting(true)
-        setError(null)
-
-        try {
-            const deletePromises = Array.from(selectedDemands).map(async (demandId) => {
-                await protectedFetch(`/api/demand/${demandId}`, {
-                    method: 'DELETE',
-                })
-                return demandId
-            })
-
-            await Promise.all(deletePromises)
-
-            setDemands(demands.filter((demand) => !selectedDemands.has(demand.id)))
-            setSelectedDemands(new Set())
-
-            await loadDemands()
-        } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : 'Erro ao excluir demandas. Tente novamente.'
-            )
-        } finally {
-            setDeleting(false)
-        }
-    }
-
-    // Botões do ActionBar usando hook reutilizável
+    // Botões do ActionBar customizados (para usar handleCancelCustom)
     const actionBarButtons = useActionBarButtons({
         isEditing,
-        selectedCount: selectedDemands.size,
+        selectedCount: selectedDemandsCount,
         hasChanges: hasChanges(),
         submitting,
         deleting,
-        onCancel: handleCancel,
+        onCancel: handleCancelCustom,
         onDelete: handleDeleteSelected,
         onSave: handleSave,
     })
-
-    // Props de erro do ActionBar usando função utilitária
-    const actionBarErrorProps = getActionBarErrorProps(
-        error,
-        isEditing,
-        selectedDemands.size
-    )
 
     return (
         <>
@@ -543,25 +414,40 @@ export default function DemandPage() {
             <CardPanel
                 title="Demandas"
                 description="Gerencie as demandas cirúrgicas"
-                totalCount={demands.length}
+                totalCount={filteredDemands.length}
                 selectedCount={selectedDemands.size}
                 loading={loading}
                 loadingMessage="Carregando demandas..."
                 emptyMessage="Nenhuma demanda cadastrada ainda."
                 error={(() => {
                     // Mostra erro no CardPanel apenas se não houver botões de ação
-                    const hasButtons = isEditing || selectedDemands.size > 0
+                    const hasButtons = isEditing || selectedDemandsCount > 0
                     return hasButtons ? null : error
                 })()}
                 createCard={
                     <CreateCard
                         label="Criar nova demanda"
                         subtitle="Clique para adicionar"
-                        onClick={handleCreateClick}
+                        onClick={handleCreateClickCustom}
                     />
                 }
+                filterContent={
+                    !isEditing ? (
+                        <FilterPanel>
+                            <FormField label="Procedimento">
+                                <input
+                                    type="text"
+                                    value={procedureFilter}
+                                    onChange={(e) => setProcedureFilter(e.target.value)}
+                                    placeholder="Filtrar por procedimento..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </FormField>
+                        </FilterPanel>
+                    ) : undefined
+                }
             >
-                {demands.map((demand) => {
+                {filteredDemands.map((demand) => {
                     const isSelected = selectedDemands.has(demand.id)
                     const hospital = hospitals.find((h) => h.id === demand.hospital_id)
                     return (
@@ -578,7 +464,7 @@ export default function DemandPage() {
                                         e.stopPropagation()
                                         toggleDemandSelection(demand.id)
                                     }}
-                                    onEdit={() => handleEditClick(demand)}
+                                    onEdit={() => handleEditClickCustom(demand)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar demanda"
@@ -588,7 +474,7 @@ export default function DemandPage() {
                             {/* Corpo - Procedimento principal (similar ao Tenant) */}
                             <div className="mb-3">
                                 <div
-                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-gray-200"
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
                                     style={{
                                         backgroundColor: hospital?.color || '#f1f5f9',
                                     }}
@@ -706,10 +592,10 @@ export default function DemandPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={onFirst}
-                            onPrevious={onPrevious}
-                            onNext={onNext}
-                            onLast={onLast}
+                            onFirst={paginationHandlers.onFirst}
+                            onPrevious={paginationHandlers.onPrevious}
+                            onNext={paginationHandlers.onNext}
+                            onLast={paginationHandlers.onLast}
                             disabled={loading}
                         />
                     ) : undefined

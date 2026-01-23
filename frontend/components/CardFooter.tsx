@@ -1,7 +1,8 @@
 'use client'
 
+import { ReactNode } from 'react'
 import { TenantSettings } from '@/contexts/TenantSettingsContext'
-import { getCardSecondaryTextClasses } from '@/lib/cardStyles'
+import { getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
 import { CardActionButtons } from './CardActionButtons'
 
@@ -22,17 +23,22 @@ interface CardFooterProps {
     deleteTitle?: string
     /** Título do botão de editar */
     editTitle?: string
+    /** Texto secundário opcional (ex: tamanho do arquivo) */
+    secondaryText?: string
+    /** Elemento React opcional para renderizar antes dos botões de ação (ex: checkbox) */
+    beforeActions?: ReactNode
 }
 
 /**
  * Componente reutilizável para o rodapé de cards selecionáveis.
  *
- * Padroniza o rodapé usado em Hospital, Demand, etc:
- * - Data formatada à esquerda
- * - Botões de ação (excluir/editar) à direita
+ * Padroniza o rodapé usado em Hospital, Demand, File, etc:
+ * - Data formatada à esquerda (com texto secundário opcional)
+ * - Botões de ação (excluir/editar) à direita (com elemento opcional antes)
  *
  * @example
  * ```tsx
+ * // Uso básico (Hospital, Demand)
  * <CardFooter
  *   isSelected={selectedItems.has(item.id)}
  *   date={item.created_at}
@@ -43,6 +49,17 @@ interface CardFooterProps {
  *   }}
  *   onEdit={() => handleEdit(item)}
  *   disabled={deleting}
+ * />
+ *
+ * // Uso com texto secundário e elemento antes dos botões (File)
+ * <CardFooter
+ *   isSelected={isSelected}
+ *   date={file.created_at}
+ *   settings={settings}
+ *   secondaryText={formatFileSize(file.file_size)}
+ *   beforeActions={<Checkbox ... />}
+ *   onToggleSelection={...}
+ *   onEdit={...}
  * />
  * ```
  */
@@ -55,6 +72,8 @@ export function CardFooter({
     disabled = false,
     deleteTitle,
     editTitle,
+    secondaryText,
+    beforeActions,
 }: CardFooterProps) {
     return (
         <div className="flex items-center justify-between gap-2">
@@ -68,15 +87,23 @@ export function CardFooter({
                             year: 'numeric',
                         })}
                 </span>
+                {secondaryText && (
+                    <span className={`text-xs truncate ${getCardTertiaryTextClasses(isSelected)}`}>
+                        {secondaryText}
+                    </span>
+                )}
             </div>
-            <CardActionButtons
-                isSelected={isSelected}
-                onToggleSelection={onToggleSelection}
-                onEdit={onEdit}
-                disabled={disabled}
-                deleteTitle={deleteTitle}
-                editTitle={editTitle}
-            />
+            <div className="flex items-center gap-2 shrink-0">
+                {beforeActions}
+                <CardActionButtons
+                    isSelected={isSelected}
+                    onToggleSelection={onToggleSelection}
+                    onEdit={onEdit}
+                    disabled={disabled}
+                    deleteTitle={deleteTitle}
+                    editTitle={editTitle}
+                />
+            </div>
         </div>
     )
 }

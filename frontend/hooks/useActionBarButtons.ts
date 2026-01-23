@@ -8,6 +8,13 @@ interface ActionButton {
     loading?: boolean
 }
 
+interface CustomAction {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+    loading?: boolean
+}
+
 interface UseActionBarButtonsOptions {
     isEditing: boolean
     selectedCount: number
@@ -20,6 +27,14 @@ interface UseActionBarButtonsOptions {
     saveLabel?: string
     deleteLabel?: string
     cancelLabel?: string
+    // Extensões opcionais para casos específicos (ex: File)
+    showEditArea?: boolean // Alternativa a isEditing (para File)
+    additionalSelectedCount?: number // Seleção adicional (ex: selectedFilesForReading)
+    additionalStates?: {
+        reading?: boolean
+        [key: string]: boolean | undefined
+    }
+    customActions?: CustomAction[] // Ações customizadas (ex: "Ler conteúdo")
 }
 
 /**
@@ -29,8 +44,47 @@ interface UseActionBarButtonsOptions {
  * 1. Cancelar (secondary) - aparece quando há edição OU seleção
  * 2. Excluir (primary) - aparece quando há seleção
  * 3. Salvar (primary) - aparece quando há edição com mudanças
+ * 4. Ações customizadas (primary) - aparecem conforme definido
  *
  * Esta ordem garante consistência visual em todos os painéis.
+ *
+ * @example
+ * ```tsx
+ * // Uso básico (Hospital, Tenant, Member, Demand)
+ * const actionBarButtons = useActionBarButtons({
+ *   isEditing,
+ *   selectedCount: selectedItems.size,
+ *   hasChanges: hasChanges(),
+ *   submitting,
+ *   deleting,
+ *   onCancel: handleCancel,
+ *   onDelete: handleDeleteSelected,
+ *   onSave: handleSave,
+ * })
+ *
+ * // Uso com extensões (File)
+ * const actionBarButtons = useActionBarButtons({
+ *   isEditing: showEditArea, // ou usar showEditArea diretamente
+ *   selectedCount: selectedFiles.size,
+ *   hasChanges: hasChanges(),
+ *   submitting,
+ *   deleting,
+ *   showEditArea, // flag alternativa
+ *   additionalSelectedCount: selectedFilesForReading.size,
+ *   additionalStates: { reading },
+ *   customActions: [
+ *     {
+ *       label: 'Ler conteúdo',
+ *       onClick: handleReadSelected,
+ *       disabled: reading || submitting,
+ *       loading: reading,
+ *     },
+ *   ],
+ *   onCancel: handleCancel,
+ *   onDelete: handleDeleteSelected,
+ *   onSave: handleSave,
+ * })
+ * ```
  */
 
 export function useActionBarButtons(options: UseActionBarButtonsOptions): ActionButton[] {
@@ -46,27 +100,41 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
         saveLabel = 'Salvar',
         deleteLabel = 'Excluir',
         cancelLabel = 'Cancelar',
+        showEditArea,
+        additionalSelectedCount = 0,
+        additionalStates = {},
+        customActions = [],
     } = options
+
+    // Usar showEditArea se fornecido, caso contrário usar isEditing
+    const editing = showEditArea !== undefined ? showEditArea : isEditing
+    
+    // Contar todas as seleções (principal + adicional)
+    const totalSelectedCount = selectedCount + additionalSelectedCount
+    
+    // Verificar estados adicionais para desabilitar botões
+    const additionalDisabled = Object.values(additionalStates).some((state) => state === true)
 
     return useMemo(() => {
         const buttons: ActionButton[] = []
 
         // Ordem padronizada dos botões:
         // 1. Cancelar (secondary) - sempre primeiro quando aparece
-        // 2. Excluir (primary) - quando há seleção
+        // 2. Excluir (primary) - quando há seleção principal
         // 3. Salvar (primary) - quando há edição com mudanças
+        // 4. Ações customizadas (primary) - quando há seleção adicional ou condições específicas
 
-        // Botão Cancelar (aparece se houver edição OU seleção)
-        if (isEditing || selectedCount > 0) {
+        // Botão Cancelar (aparece se houver edição OU qualquer seleção)
+        if (editing || totalSelectedCount > 0) {
             buttons.push({
                 label: cancelLabel,
                 onClick: onCancel,
                 variant: 'secondary',
-                disabled: submitting || deleting,
+                disabled: submitting || deleting || additionalDisabled,
             })
         }
 
-        // Botão Excluir (aparece se houver seleção)
+        // Botão Excluir (aparece se houver seleção principal)
         if (selectedCount > 0) {
             buttons.push({
                 label: deleteLabel,
@@ -78,7 +146,7 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
         }
 
         // Botão Salvar (aparece se houver edição com mudanças)
-        if (isEditing && hasChanges) {
+        if (editing && hasChanges) {
             buttons.push({
                 label: submitting ? 'Salvando...' : saveLabel,
                 onClick: onSave,
@@ -88,18 +156,32 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
             })
         }
 
+        // Ações customizadas (ex: "Ler conteúdo" para File)
+        customActions.forEach((action) => {
+            buttons.push({
+                label: action.label,
+                onClick: action.onClick,
+                variant: 'primary',
+                disabled: action.disabled,
+                loading: action.loading,
+            })
+        })
+
         return buttons
     }, [
-        isEditing,
+        editing,
         selectedCount,
+        totalSelectedCount,
         hasChanges,
         submitting,
         deleting,
+        additionalDisabled,
         onCancel,
         onDelete,
         onSave,
         saveLabel,
         deleteLabel,
         cancelLabel,
+        customActions,
     ])
 }

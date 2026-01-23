@@ -67,7 +67,7 @@ export default function MemberPage() {
             setPagination((prev) => ({ ...prev, offset: 0 }))
         },
     })
-    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(20)
+    const { pagination, setPagination, total, setTotal, paginationHandlers } = usePagination(20)
     const [showEditArea, setShowEditArea] = useState(false)
     const [allMembers, setAllMembers] = useState<MemberResponse[]>([])
 
@@ -643,8 +643,8 @@ export default function MemberPage() {
                             }
                         >
                             <div className="mb-3">
-                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50">
-                                    <div className="flex flex-col items-center justify-center text-blue-500">
+                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
+                                    <div className="flex flex-col items-center justify-center text-blue-600">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
                                             <svg
                                                 className="w-full h-full"
@@ -692,10 +692,10 @@ export default function MemberPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={onFirst}
-                            onPrevious={onPrevious}
-                            onNext={onNext}
-                            onLast={onLast}
+                            onFirst={paginationHandlers.onFirst}
+                            onPrevious={paginationHandlers.onPrevious}
+                            onNext={paginationHandlers.onNext}
+                            onLast={paginationHandlers.onLast}
                             disabled={loading}
                         />
                     ) : undefined

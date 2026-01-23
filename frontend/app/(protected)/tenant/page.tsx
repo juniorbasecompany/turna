@@ -6,10 +6,12 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
+import { FilterPanel } from '@/components/FilterPanel'
 import { Pagination } from '@/components/Pagination'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useMemo, useState } from 'react'
 import {
     TenantCreateRequest,
     TenantResponse,
@@ -27,6 +29,7 @@ type TenantFormData = {
 
 export default function TenantPage() {
     const { settings } = useTenantSettings()
+    const [nameFilter, setNameFilter] = useState('')
 
     const initialFormData: TenantFormData = {
         name: '',
@@ -114,6 +117,15 @@ export default function TenantPage() {
         },
     })
 
+    // Filtrar tenants por nome
+    const filteredTenants = useMemo(() => {
+        if (!nameFilter.trim()) {
+            return tenants
+        }
+        const filterLower = nameFilter.toLowerCase().trim()
+        return tenants.filter((tenant) => tenant.name.toLowerCase().includes(filterLower))
+    }, [tenants, nameFilter])
+
     return (
         <>
             {/* Área de edição */}
@@ -197,7 +209,7 @@ export default function TenantPage() {
             <CardPanel
                 title="Clínicas"
                 description="Gerencie as clínicas (tenants) do sistema"
-                totalCount={tenants.length}
+                totalCount={filteredTenants.length}
                 selectedCount={selectedTenantsCount}
                 loading={loading}
                 loadingMessage="Carregando clínicas..."
@@ -209,8 +221,23 @@ export default function TenantPage() {
                         onClick={handleCreateClick}
                     />
                 }
+                filterContent={
+                    !isEditing ? (
+                        <FilterPanel>
+                            <FormField label="Nome">
+                                <input
+                                    type="text"
+                                    value={nameFilter}
+                                    onChange={(e) => setNameFilter(e.target.value)}
+                                    placeholder="Filtrar por nome..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </FormField>
+                        </FilterPanel>
+                    ) : undefined
+                }
             >
-                {tenants.map((tenant) => {
+                {filteredTenants.map((tenant) => {
                     const isSelected = selectedTenants.has(tenant.id)
                     return (
                         <EntityCard
@@ -235,7 +262,7 @@ export default function TenantPage() {
                         >
                             {/* Corpo - Nome e informações */}
                             <div className="mb-3">
-                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
                                     <div className="flex flex-col items-center justify-center text-blue-600">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
                                             <svg

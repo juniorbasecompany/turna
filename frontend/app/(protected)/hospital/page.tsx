@@ -7,10 +7,12 @@ import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
+import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useMemo, useState } from 'react'
 import {
     HospitalCreateRequest,
     HospitalResponse,
@@ -26,6 +28,7 @@ type HospitalFormData = {
 
 export default function HospitalPage() {
     const { settings } = useTenantSettings()
+    const [nameFilter, setNameFilter] = useState('')
 
     const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
 
@@ -84,6 +87,15 @@ export default function HospitalPage() {
         },
     })
 
+    // Filtrar hospitais por nome
+    const filteredHospitals = useMemo(() => {
+        if (!nameFilter.trim()) {
+            return hospitals
+        }
+        const filterLower = nameFilter.toLowerCase().trim()
+        return hospitals.filter((hospital) => hospital.name.toLowerCase().includes(filterLower))
+    }, [hospitals, nameFilter])
+
     return (
         <>
             {/* Área de edição */}
@@ -129,7 +141,7 @@ export default function HospitalPage() {
             <CardPanel
                 title="Hospitais"
                 description="Gerencie os hospitais e seus prompts de extração"
-                totalCount={hospitals.length}
+                totalCount={filteredHospitals.length}
                 selectedCount={selectedHospitals.size}
                 loading={loading}
                 loadingMessage="Carregando hospitais..."
@@ -141,8 +153,23 @@ export default function HospitalPage() {
                         onClick={handleCreateClick}
                     />
                 }
+                filterContent={
+                    !isEditing ? (
+                        <FilterPanel>
+                            <FormField label="Nome">
+                                <input
+                                    type="text"
+                                    value={nameFilter}
+                                    onChange={(e) => setNameFilter(e.target.value)}
+                                    placeholder="Filtrar por nome..."
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </FormField>
+                        </FilterPanel>
+                    ) : undefined
+                }
             >
-                {hospitals.map((hospital) => {
+                {filteredHospitals.map((hospital) => {
                     const isSelected = selectedHospitals.has(hospital.id)
                     return (
                         <EntityCard
@@ -168,7 +195,7 @@ export default function HospitalPage() {
                             {/* Corpo - Ícone de hospital e nome */}
                             <div className="mb-3">
                                 <div
-                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-gray-200"
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
                                     style={{
                                         backgroundColor: hospital.color || '#f1f5f9',
                                     }}
