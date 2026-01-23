@@ -2,6 +2,7 @@
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CreateCard } from '@/components/CreateCard'
+import { EditForm } from '@/components/EditForm'
 import { FilterButtons } from '@/components/FilterButtons'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -206,6 +207,123 @@ function getJobStatusText(jobStatus: string | null): string {
             return 'Não foi possível ler o conteúdo'
         default:
             return 'Pronto para ser lido'
+    }
+}
+
+/**
+ * Obtém a cor de fundo para o campo de status
+ */
+function getStatusBackgroundColor(jobStatus: string | null): string {
+    switch (jobStatus) {
+        case 'PENDING':
+            return '#FCD34D' // yellow-300
+        case 'RUNNING':
+            return '#60A5FA' // blue-400
+        case 'COMPLETED':
+            return '#34D399' // green-400
+        case 'FAILED':
+            return '#F87171' // red-400
+        default:
+            return '#94A3B8' // slate-400
+    }
+}
+
+/**
+ * Obtém a cor do texto para o campo de status
+ */
+function getStatusTextColor(jobStatus: string | null): string {
+    // Texto branco para todos os status para melhor contraste
+    return '#FFFFFF'
+}
+
+/**
+ * Obtém o ícone SVG para o status
+ */
+function getStatusIcon(jobStatus: string | null): JSX.Element {
+    const iconClass = "w-10 h-10 shrink-0"
+    const statusColor = getStatusBackgroundColor(jobStatus)
+    
+    switch (jobStatus) {
+        case 'PENDING':
+            return (
+                <svg
+                    className={iconClass}
+                    fill="none"
+                    stroke={statusColor}
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                </svg>
+            )
+        case 'RUNNING':
+            return (
+                <svg
+                    className={iconClass}
+                    fill="none"
+                    stroke={statusColor}
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                </svg>
+            )
+        case 'COMPLETED':
+            return (
+                <svg
+                    className={iconClass}
+                    fill="none"
+                    stroke={statusColor}
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                    />
+                </svg>
+            )
+        case 'FAILED':
+            return (
+                <svg
+                    className={iconClass}
+                    fill="none"
+                    stroke={statusColor}
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                    />
+                </svg>
+            )
+        default:
+            return (
+                <svg
+                    className={iconClass}
+                    fill="none"
+                    stroke={statusColor}
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                </svg>
+            )
     }
 }
 
@@ -483,6 +601,15 @@ export default function FilesPage() {
     // Flash vermelho no campo hospital quando não há hospital selecionado
     const [hospitalFieldFlash, setHospitalFieldFlash] = useState(false)
 
+    // Estados para edição
+    const [showEditArea, setShowEditArea] = useState(false)
+    const [editingFile, setEditingFile] = useState<FileResponse | null>(null)
+    const [editingJobId, setEditingJobId] = useState<number | null>(null)
+    const [jsonContent, setJsonContent] = useState<string>('')
+    const [originalJsonContent, setOriginalJsonContent] = useState<string>('')
+    const [loadingJson, setLoadingJson] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
+
     // Carregar hospitais ao montar
     useEffect(() => {
         async function loadHospitalList() {
@@ -664,6 +791,125 @@ export default function FilesPage() {
             return newSet
         })
     }
+
+    // Buscar JSON do arquivo através do job
+    const fetchFileJson = useCallback(async (fileId: number): Promise<{ json: string; jobId: number | null }> => {
+        try {
+            // Buscar jobs do tipo extract_demand para este arquivo
+            const jobsResponse = await protectedFetch<{ items: JobResponse[]; total: number }>(
+                `/api/job/list?job_type=extract_demand&limit=100`
+            )
+            
+            // Encontrar o job mais recente com status COMPLETED para este arquivo
+            const completedJob = jobsResponse.items
+                .filter(job => {
+                    const inputData = job.input_data as { file_id?: number } | null
+                    return inputData?.file_id === fileId && job.status === 'COMPLETED'
+                })
+                .sort((a, b) => {
+                    const dateA = new Date(a.completed_at || a.created_at).getTime()
+                    const dateB = new Date(b.completed_at || b.created_at).getTime()
+                    return dateB - dateA
+                })[0]
+
+            if (completedJob && completedJob.result_data) {
+                return { json: JSON.stringify(completedJob.result_data, null, 2), jobId: completedJob.id }
+            }
+
+            return { json: JSON.stringify({ meta: {}, demands: [] }, null, 2), jobId: null }
+        } catch (err) {
+            console.error('Erro ao buscar JSON do arquivo:', err)
+            return { json: JSON.stringify({ error: 'Erro ao carregar dados do arquivo' }, null, 2), jobId: null }
+        }
+    }, [])
+
+    // Abrir edição do arquivo
+    const handleEditClick = useCallback(async (file: FileResponse) => {
+        setEditingFile(file)
+        setShowEditArea(true)
+        setLoadingJson(true)
+        setError(null)
+
+        try {
+            const { json, jobId } = await fetchFileJson(file.id)
+            setJsonContent(json)
+            setOriginalJsonContent(json)
+            setEditingJobId(jobId)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao carregar JSON do arquivo')
+            setJsonContent(JSON.stringify({ error: 'Erro ao carregar dados' }, null, 2))
+            setOriginalJsonContent(JSON.stringify({ error: 'Erro ao carregar dados' }, null, 2))
+            setEditingJobId(null)
+        } finally {
+            setLoadingJson(false)
+        }
+    }, [fetchFileJson])
+
+    // Verificar se há mudanças
+    const hasChanges = useCallback(() => {
+        if (!showEditArea) return false
+        return jsonContent !== originalJsonContent
+    }, [showEditArea, jsonContent, originalJsonContent])
+
+    // Salvar edição
+    const handleSave = useCallback(async () => {
+        if (!editingFile || !editingJobId) {
+            setError('Job não encontrado para este arquivo')
+            return
+        }
+
+        // Validar JSON
+        let parsedJson: Record<string, unknown>
+        try {
+            parsedJson = JSON.parse(jsonContent)
+        } catch (err) {
+            setError('JSON inválido. Por favor, corrija o formato antes de salvar.')
+            return
+        }
+
+        setSubmitting(true)
+        setError(null)
+
+        try {
+            // Atualizar o job com o novo result_data
+            await protectedFetch(`/api/job/${editingJobId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    result_data: parsedJson,
+                }),
+            } as RequestInit)
+
+            // Atualizar o JSON original
+            setOriginalJsonContent(jsonContent)
+            
+            // Fechar área de edição
+            setShowEditArea(false)
+            setEditingFile(null)
+            setEditingJobId(null)
+            setJsonContent('')
+            setOriginalJsonContent('')
+
+            // Recarregar lista de arquivos
+            setRefreshKey((prev) => prev + 1)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao salvar JSON do arquivo')
+        } finally {
+            setSubmitting(false)
+        }
+    }, [editingFile, editingJobId, jsonContent])
+
+    // Cancelar edição
+    const handleCancel = useCallback(() => {
+        setShowEditArea(false)
+        setEditingFile(null)
+        setEditingJobId(null)
+        setJsonContent('')
+        setOriginalJsonContent('')
+        setError(null)
+    }, [])
 
     // Polling do status do job
     const pollJobStatus = useCallback(async (jobId: number, fileIndex: number) => {
@@ -1099,72 +1345,104 @@ export default function FilesPage() {
                 </p>
             </div>
 
-            {/* Filtro por período e hospital */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="space-y-4">
-                    {/* Primeira linha: Hospital e Datas */}
-                    <FormFieldGrid cols={1} smCols={3} gap={4}>
-                        <FormField label="Hospital">
-                            {loadingHospitalList ? (
-                                <div className="flex justify-center py-2">
-                                    <LoadingSpinner />
-                                </div>
-                            ) : (
-                                <select
-                                    id="hospital-filter"
-                                    value={selectedHospitalId || ''}
-                                    onChange={(e) => handleHospitalChange(e.target.value)}
-                                    className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
-                                        ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
-                                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                        }`}
-                                >
-                                    <option value=""></option>
-                                    {hospitalList.map((hospital) => (
-                                        <option key={hospital.id} value={hospital.id}>
-                                            {hospital.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </FormField>
-                        <TenantDatePicker
-                            label="Cadastrados deste"
-                            value={startDate}
-                            onChange={handleStartDateChange}
-                            id="start_at"
-                            name="start_at"
-                        />
-                        <TenantDatePicker
-                            label="Cadastrados até"
-                            value={endDate}
-                            onChange={handleEndDateChange}
-                            id="end_at"
-                            name="end_at"
-                        />
-                    </FormFieldGrid>
+            {/* Filtros ou Área de edição (nunca aparecem juntos) */}
+            {!showEditArea ? (
+                /* Filtro por período e hospital */
+                <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+                    <div className="space-y-4">
+                        {/* Primeira linha: Hospital e Datas */}
+                        <FormFieldGrid cols={1} smCols={3} gap={4}>
+                            <FormField label="Hospital">
+                                {loadingHospitalList ? (
+                                    <div className="flex justify-center py-2">
+                                        <LoadingSpinner />
+                                    </div>
+                                ) : (
+                                    <select
+                                        id="hospital-filter"
+                                        value={selectedHospitalId || ''}
+                                        onChange={(e) => handleHospitalChange(e.target.value)}
+                                        className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
+                                            ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                                            }`}
+                                    >
+                                        <option value=""></option>
+                                        {hospitalList.map((hospital) => (
+                                            <option key={hospital.id} value={hospital.id}>
+                                                {hospital.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </FormField>
+                            <TenantDatePicker
+                                label="Cadastrados deste"
+                                value={startDate}
+                                onChange={handleStartDateChange}
+                                id="start_at"
+                                name="start_at"
+                            />
+                            <TenantDatePicker
+                                label="Cadastrados até"
+                                value={endDate}
+                                onChange={handleEndDateChange}
+                                id="end_at"
+                                name="end_at"
+                            />
+                        </FormFieldGrid>
 
-                    {/* Segunda linha: Filtro de Status */}
-                    <FilterButtons
-                        title="Status"
-                        options={[
-                            { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
-                            { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
-                            { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
-                            { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
-                            { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
-                        ]}
-                        selectedValues={selectedStatuses}
-                        onToggle={toggleStatus}
-                        onToggleAll={toggleAllStatuses}
-                    />
+                        {/* Segunda linha: Filtro de Status */}
+                        <FilterButtons
+                            title="Situação"
+                            options={[
+                                { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
+                                { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
+                                { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
+                                { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
+                                { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
+                            ]}
+                            selectedValues={selectedStatuses}
+                            onToggle={toggleStatus}
+                            onToggleAll={toggleAllStatuses}
+                        />
+                    </div>
+                    {startDate && endDate && startDate > endDate && (
+                        <p className="mt-2 text-sm text-red-600">
+                            Data inicial deve ser menor ou igual à data final
+                        </p>
+                    )}
                 </div>
-                {startDate && endDate && startDate > endDate && (
-                    <p className="mt-2 text-sm text-red-600">
-                        Data inicial deve ser menor ou igual à data final
-                    </p>
+            ) : (
+                /* Área de edição */
+            <EditForm
+                title="Arquivo"
+                editTitle="Editar arquivo"
+                isEditing={showEditArea}
+            >
+                {loadingJson ? (
+                    <div className="flex justify-center items-center py-12">
+                        <LoadingSpinner />
+                    </div>
+                ) : (
+                    <>
+                        <FormField
+                            label="JSON extraído"
+                            helperText="Conteúdo JSON extraído do arquivo. Você pode editar este campo."
+                        >
+                            <textarea
+                                id="json-content"
+                                value={jsonContent}
+                                onChange={(e) => setJsonContent(e.target.value)}
+                                rows={20}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                    </>
                 )}
-            </div>
+            </EditForm>
+            )}
 
             {/* Loading */}
             {loading && (
@@ -1399,8 +1677,22 @@ export default function FilesPage() {
                                             />
                                         </div>
 
-                                        {/* 3. Metadados e ações */}
-                                        <div className="mb-3 flex items-center justify-between gap-2">
+                                        {/* 3. Compartimento para status - ícone e texto */}
+                                        <div
+                                            className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4 cursor-pointer"
+                                            style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
+                                            onClick={() => toggleFileSelectionForReading(file.id)}
+                                            title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
+                                        >
+                                            {getStatusIcon(file.job_status)}
+                                            <span className="text-base font-normal text-gray-900 flex items-center gap-2">
+                                                {getJobStatusText(file.job_status)}
+                                                {file.job_status === 'RUNNING' && <LoadingSpinner />}
+                                            </span>
+                                        </div>
+
+                                        {/* 4. Metadados e ações na parte inferior */}
+                                        <div className="flex items-center justify-between gap-2">
                                             {/* Metadados à esquerda */}
                                             <div className="flex flex-col min-w-0 flex-1">
                                                 <span className={`text-sm truncate ${getCardSecondaryTextClasses(isSelected)}`}>
@@ -1426,6 +1718,29 @@ export default function FilesPage() {
                                                         title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
                                                     />
                                                 </label>
+                                                {/* Botão para editar */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleEditClick(file)
+                                                    }}
+                                                    className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600 hover:text-blue-700"
+                                                    title="Editar arquivo"
+                                                >
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                        />
+                                                    </svg>
+                                                </button>
                                                 {/* Ícone para exclusão */}
                                                 <button
                                                     onClick={(e) => {
@@ -1454,16 +1769,6 @@ export default function FilesPage() {
                                                     </svg>
                                                 </button>
                                             </div>
-                                        </div>
-
-                                        {/* 4. Compartimento inferior para status - usa cor do status */}
-                                        <div
-                                            className={`h-10 flex items-center justify-center rounded-b-xl border-t-4 ${jobStatusClasses.bg}`}
-                                            style={{ borderTopColor: jobStatusClasses.borderColor }}
-                                        >
-                                            <span className={`text-sm font-medium text-center ${jobStatusClasses.text}`}>
-                                                {getJobStatusText(file.job_status)}
-                                            </span>
                                         </div>
                                     </div>
                                 )
@@ -1494,12 +1799,12 @@ export default function FilesPage() {
                 }
                 error={(() => {
                     // Mostra erro no ActionBar apenas se houver botões de ação
-                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
                     return hasButtons ? error || undefined : undefined
                 })()}
                 message={(() => {
                     // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
                     if (!hasButtons && error) {
                         return error
                     }
@@ -1507,7 +1812,7 @@ export default function FilesPage() {
                 })()}
                 messageType={(() => {
                     // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = selectedFiles.size > 0 || selectedFilesForReading.size > 0
+                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
                     if (!hasButtons && error) {
                         return 'error' as const
                     }
@@ -1515,13 +1820,32 @@ export default function FilesPage() {
                 })()}
                 buttons={(() => {
                     const buttons = []
+                    // Botão Cancelar (aparece se houver edição OU seleção)
+                    if (showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0) {
+                        buttons.push({
+                            label: 'Cancelar',
+                            onClick: handleCancel,
+                            variant: 'secondary' as const,
+                            disabled: submitting || deleting || reading,
+                        })
+                    }
+                    // Botão Salvar (aparece se houver edição com mudanças)
+                    if (showEditArea && hasChanges()) {
+                        buttons.push({
+                            label: submitting ? 'Salvando...' : 'Salvar',
+                            onClick: handleSave,
+                            variant: 'primary' as const,
+                            disabled: submitting,
+                            loading: submitting,
+                        })
+                    }
                     // Adicionar botão "Excluir" se houver arquivos marcados para exclusão
                     if (selectedFiles.size > 0) {
                         buttons.push({
                             label: 'Excluir',
                             onClick: handleDeleteSelected,
                             variant: 'primary' as const,
-                            disabled: deleting,
+                            disabled: deleting || submitting,
                             loading: deleting,
                         })
                     }
@@ -1531,7 +1855,7 @@ export default function FilesPage() {
                             label: 'Ler conteúdo',
                             onClick: handleReadSelected,
                             variant: 'primary' as const,
-                            disabled: reading,
+                            disabled: reading || submitting,
                             loading: reading,
                         })
                     }

@@ -55,3 +55,58 @@ export async function GET(
     )
   }
 }
+
+/**
+ * PUT /api/job/[id]
+ *
+ * Atualiza um job específico (apenas result_data).
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const jobId = params.id
+
+    if (!jobId) {
+      return NextResponse.json(
+        { detail: 'ID do job é obrigatório' },
+        { status: 400 }
+      )
+    }
+
+    const body = await request.json()
+    const accessToken = request.cookies.get('access_token')?.value
+
+    const response = await fetch(`${API_URL}/job/${jobId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({
+        detail: `Erro HTTP ${response.status}`,
+      }))
+      return NextResponse.json(errorData, { status: response.status })
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error('Erro ao atualizar job:', error)
+    return NextResponse.json(
+      {
+        detail:
+          error instanceof Error
+            ? error.message
+            : 'Erro desconhecido ao atualizar job',
+      },
+      { status: 500 }
+    )
+  }
+}
