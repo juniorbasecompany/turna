@@ -153,7 +153,7 @@ const mapEntityToFormData = (demand: DemandResponse): DemandFormData => {
 const mapFormDataToCreateRequest = (formData: DemandFormData): DemandCreateRequest => {
     const startIso = formData.start_time?.toISOString()
     const endIso = formData.end_time?.toISOString()
-    
+
     return {
         hospital_id: formData.hospital_id,
         job_id: formData.job_id,
@@ -174,7 +174,7 @@ const mapFormDataToCreateRequest = (formData: DemandFormData): DemandCreateReque
 const mapFormDataToUpdateRequest = (formData: DemandFormData): DemandUpdateRequest => {
     const startIso = formData.start_time?.toISOString()
     const endIso = formData.end_time?.toISOString()
-    
+
     return {
         hospital_id: formData.hospital_id,
         job_id: formData.job_id,
@@ -204,15 +204,15 @@ const validateFormData = (formData: DemandFormData): string | null => {
     if (!formData.procedure.trim()) {
         return 'Procedimento é obrigatório'
     }
-    
+
     if (!formData.start_time || !formData.end_time) {
         return 'Data/hora de início e fim são obrigatórias'
     }
-    
+
     if (formData.end_time <= formData.start_time) {
         return 'Data/hora de fim deve ser maior que a de início'
     }
-    
+
     return null
 }
 ```
@@ -247,7 +247,7 @@ const filteredDemands = useMemo(() => {
         return demands  // demands vem do useEntityPage
     }
     const filterLower = procedureFilter.toLowerCase().trim()
-    return demands.filter((demand) => 
+    return demands.filter((demand) =>
         demand.procedure.toLowerCase().includes(filterLower)
     )
 }, [demands, procedureFilter])
@@ -258,8 +258,8 @@ const filteredDemands = useMemo(() => {
 // ⚠️ FUTURO: Mover filtro para backend
 const { items: demands } = useEntityPage({
     // ...
-    additionalListParams: procedureFilter 
-        ? { procedure: procedureFilter } 
+    additionalListParams: procedureFilter
+        ? { procedure: procedureFilter }
         : undefined,
 })
 ```
@@ -568,16 +568,16 @@ import { useEntityPage } from '@/hooks/useEntityPage'
 ```typescript
 export default function DemandPage() {
     const { settings } = useTenantSettings()
-    
+
     // Estados auxiliares (não gerenciados por useEntityPage)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [procedureFilter, setProcedureFilter] = useState('')
     const [skillsInput, setSkillsInput] = useState('')
-    
+
     // Configuração inicial
     const initialFormData: DemandFormData = { ... }
-    
+
     // useEntityPage
     const {
         items: demands,
@@ -614,39 +614,39 @@ export default function DemandPage() {
         mapFormDataToUpdateRequest,
         validateFormData,
     })
-    
+
     // Wrappers customizados para skillsInput
     const handleCreateClickCustom = () => {
         handleCreateClick()
         setSkillsInput('')
     }
-    
+
     const handleEditClickCustom = (demand: DemandResponse) => {
         handleEditClick(demand)
         setSkillsInput((demand.skills || []).join(', '))
     }
-    
+
     const handleCancelCustom = () => {
         handleCancel()
         setSkillsInput('')
     }
-    
+
     // Filtro no frontend
     const filteredDemands = useMemo(() => {
         if (!procedureFilter.trim()) {
             return demands
         }
         const filterLower = procedureFilter.toLowerCase().trim()
-        return demands.filter((demand) => 
+        return demands.filter((demand) =>
             demand.procedure.toLowerCase().includes(filterLower)
         )
     }, [demands, procedureFilter])
-    
+
     // Carregar hospitais (mantido separado)
     useEffect(() => {
         loadHospitals()
     }, [])
-    
+
     // updateSkills (mantido)
     const updateSkills = (input: string) => {
         setSkillsInput(input)
@@ -656,7 +656,7 @@ export default function DemandPage() {
             .filter((s) => s.length > 0)
         setFormData({ ...formData, skills: skillsArray })
     }
-    
+
     // JSX...
 }
 ```

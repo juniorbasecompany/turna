@@ -12,127 +12,259 @@ import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
-import { usePagination } from '@/hooks/usePagination'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { protectedFetch } from '@/lib/api'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
 import {
     MemberCreateRequest,
-    MemberListResponse,
     MemberResponse,
     MemberUpdateRequest,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
+type MemberFormData = {
+    role: string
+    status: string
+    name: string
+    email: string
+    attribute: string  // JSON como string para edição
+}
+
 export default function MemberPage() {
     const { settings } = useTenantSettings()
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    
+    // Estados auxiliares (não gerenciados por useEntityPage)
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
-    const [editingMember, setEditingMember] = useState<MemberResponse | null>(null)
-    const [formData, setFormData] = useState({
-        role: 'account',
-        status: 'ACTIVE',
-        name: '',
-        email: '',
-        attribute: '{}',
-    })
-    const [originalFormData, setOriginalFormData] = useState({
-        role: 'account',
-        status: 'ACTIVE',
-        name: '',
-        email: '',
-        attribute: '{}',
-    })
     const [jsonError, setJsonError] = useState<string | null>(null)
     const [sendInvite, setSendInvite] = useState(false)
-    const [submitting, setSubmitting] = useState(false)
-    const [selectedMembers, setSelectedMembers] = useState<Set<number>>(new Set())
-    const [deleting, setDeleting] = useState(false)
+
+    // Constantes para filtros
+    const ALL_STATUS_FILTERS = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED'] as const
+    const ALL_ROLE_FILTERS = ['account', 'admin'] as const
+
     // Filtros usando hook reutilizável
-    const statusFilters = useEntityFilters({
-        allFilters: ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED'],
-        initialFilters: new Set(['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']),
-        onFilterChange: () => {
-            setPagination((prev) => ({ ...prev, offset: 0 }))
-        },
+    const statusFilters = useEntityFilters<string>({
+        allFilters: ALL_STATUS_FILTERS,
+        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
-    const roleFilters = useEntityFilters({
-        allFilters: ['account', 'admin'],
-        initialFilters: new Set(['account', 'admin']),
-        onFilterChange: () => {
-            setPagination((prev) => ({ ...prev, offset: 0 }))
-        },
+    const roleFilters = useEntityFilters<string>({
+        allFilters: ALL_ROLE_FILTERS,
+        initialFilters: new Set(ALL_ROLE_FILTERS),
     })
-    const { pagination, setPagination, total, setTotal, paginationHandlers } = usePagination(20)
-    const [showEditArea, setShowEditArea] = useState(false)
-    const [allMembers, setAllMembers] = useState<MemberResponse[]>([])
 
-    // Carregar lista de members (faz múltiplas requisições para carregar todos)
-    const loadMembers = async () => {
-        try {
-            setLoading(true)
-            setError(null)
+    // Configuração inicial
+    const initialFormData: MemberFormData = {
+        role: 'account',
+        status: 'ACTIVE',
+        name: '',
+        email: '',
+        attribute: '{}',
+    }
 
-            const allItems: MemberResponse[] = []
-            const limit = 100 // Limite máximo do backend
-            let offset = 0
-            let hasMore = true
-
-            // Fazer requisições paginadas até carregar todos os dados
-            while (hasMore) {
-                const params = new URLSearchParams()
-                params.append('limit', String(limit))
-                params.append('offset', String(offset))
-
-                const data = await protectedFetch<MemberListResponse>(`/api/member/list?${params.toString()}`)
-                allItems.push(...data.items)
-
-                // Verificar se há mais dados para carregar
-                if (data.items.length < limit || allItems.length >= data.total) {
-                    hasMore = false
-                } else {
-                    offset += limit
-                }
-            }
-
-            setAllMembers(allItems)
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao carregar associados'
-            setError(message)
-            console.error('Erro ao carregar associados:', err)
-        } finally {
-            setLoading(false)
+    // Mapeamentos
+    const mapEntityToFormData = (member: MemberResponse): MemberFormData => {
+        return {
+            role: member.role,
+            status: member.status,
+            name: member.member_name || '',
+            email: member.member_email || '',
+            attribute: JSON.stringify(member.attribute || {}, null, 2),
         }
     }
 
-    useEffect(() => {
-        loadMembers()
-    }, [])
+    const mapFormDataToCreateRequest = (formData: MemberFormData): MemberCreateRequest => {
+        // Validar JSON antes de converter
+        let parsedAttribute: Record<string, unknown> = {}
+        try {
+            if (formData.attribute.trim()) {
+                parsedAttribute = JSON.parse(formData.attribute)
+            }
+        } catch {
+            // Se inválido, será validado em validateFormData
+            parsedAttribute = {}
+        }
 
-    // Filtrar members no frontend
-    const members = useMemo(() => {
-        return allMembers.filter((member) => {
+        return {
+            email: formData.email.trim() || null,
+            name: formData.name.trim() || null,
+            role: formData.role,
+            status: formData.status,
+            attribute: parsedAttribute || null,
+        }
+    }
+
+    const mapFormDataToUpdateRequest = (formData: MemberFormData): MemberUpdateRequest => {
+        // Validar JSON antes de converter
+        let parsedAttribute: Record<string, unknown> | null = null
+        try {
+            if (formData.attribute.trim()) {
+                parsedAttribute = JSON.parse(formData.attribute)
+            }
+        } catch {
+            // Se inválido, será validado em validateFormData
+            parsedAttribute = null
+        }
+
+        return {
+            role: formData.role,
+            status: formData.status,
+            name: formData.name.trim() || null,
+            email: formData.email.trim() || null,
+            attribute: parsedAttribute,
+        }
+    }
+
+    // Validação
+    const validateFormData = (formData: MemberFormData): string | null => {
+        // Validar email (obrigatório para criação, opcional para edição)
+        if (!formData.email || formData.email.trim() === '') {
+            return 'E-mail é obrigatório'
+        }
+
+        // Validar JSON
+        if (!formData.attribute.trim()) {
+            return 'JSON não pode estar vazio'
+        }
+        
+        try {
+            const parsed = JSON.parse(formData.attribute)
+            if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return 'JSON deve ser um objeto'
+            }
+        } catch (e) {
+            return `JSON inválido: ${e instanceof Error ? e.message : 'erro desconhecido'}`
+        }
+
+        return null
+    }
+
+    // isEmptyCheck
+    const isEmptyCheck = (formData: MemberFormData): boolean => {
+        return (
+            formData.email.trim() === '' &&
+            formData.name.trim() === ''
+        )
+    }
+
+    // Calcular additionalListParams reativo baseado nos filtros
+    const additionalListParams = useMemo(() => {
+        const params: Record<string, string | number | boolean | null> = {}
+        
+        // Status: passar apenas se exatamente 1 estiver selecionado
+        if (statusFilters.selectedFilters.size === 1) {
+            const status = Array.from(statusFilters.selectedFilters)[0]
+            params.status = status
+        }
+        
+        // Role: passar apenas se exatamente 1 estiver selecionado
+        if (roleFilters.selectedFilters.size === 1) {
+            const role = Array.from(roleFilters.selectedFilters)[0]
+            params.role = role
+        }
+        
+        return params
+    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+    
+    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
+    const needsFrontendFilter = useMemo(() => {
+        const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
+        const allRoleSelected = roleFilters.selectedFilters.size === ALL_ROLE_FILTERS.length
+        
+        // Se todos estão selecionados, não precisa filtrar
+        if (allStatusSelected && allRoleSelected) {
+            return false
+        }
+        
+        // Se apenas 1 de cada está selecionado, backend filtra (não precisa filtrar no frontend)
+        const singleStatusSelected = statusFilters.selectedFilters.size === 1
+        const singleRoleSelected = roleFilters.selectedFilters.size === 1
+        
+        if (singleStatusSelected && singleRoleSelected) {
+            return false
+        }
+        
+        // Se múltiplos estão selecionados, precisa filtrar no frontend
+        return true
+    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+
+    // useEntityPage
+    const {
+        items: members,
+        loading,
+        error,
+        setError,
+        submitting,
+        deleting,
+        formData,
+        setFormData,
+        editingItem: editingMember,
+        isEditing,
+        hasChanges,
+        handleCreateClick,
+        handleEditClick,
+        handleCancel,
+        selectedItems: selectedMembers,
+        toggleSelection: toggleMemberSelection,
+        selectedCount: selectedMembersCount,
+        pagination,
+        total,
+        paginationHandlers,
+        handleSave: baseHandleSave,
+        handleDeleteSelected,
+        loadItems,
+        actionBarErrorProps,
+    } = useEntityPage<MemberFormData, MemberResponse, MemberCreateRequest, MemberUpdateRequest>({
+        endpoint: '/api/member',
+        entityName: 'member',
+        initialFormData,
+        isEmptyCheck,
+        mapEntityToFormData,
+        mapFormDataToCreateRequest,
+        mapFormDataToUpdateRequest,
+        validateFormData,
+        additionalListParams,
+        onSaveSuccess: () => {
+            // Resetar estados específicos após salvar
+            setSendInvite(false)
+            setEmailMessage(null)
+            setJsonError(null)
+        },
+    })
+
+    // Resetar offset quando filtros mudarem
+    useEffect(() => {
+        paginationHandlers.onFirst()
+    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+
+    // Filtrar no frontend quando múltiplos valores estão selecionados (backend não suporta múltiplos)
+    const filteredMembers = useMemo(() => {
+        if (!needsFrontendFilter) {
+            return members
+        }
+        
+        // Filtrar no frontend
+        return members.filter((member) => {
             const statusMatch = statusFilters.selectedFilters.has(member.status)
             const roleMatch = roleFilters.selectedFilters.has(member.role)
             return statusMatch && roleMatch
         })
-    }, [allMembers, statusFilters.selectedFilters, roleFilters.selectedFilters])
-
-    // Aplicar paginação
+    }, [members, statusFilters.selectedFilters, roleFilters.selectedFilters, needsFrontendFilter])
+    
+    // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedMembers = useMemo(() => {
+        if (!needsFrontendFilter) {
+            return filteredMembers  // Backend já paginou
+        }
+        
+        // Paginar no frontend
         const start = pagination.offset
         const end = start + pagination.limit
-        return members.slice(start, end)
-    }, [members, pagination])
-
-    // Atualizar total baseado nos filtros
-    useEffect(() => {
-        setTotal(members.length)
-    }, [members.length, setTotal])
+        return filteredMembers.slice(start, end)
+    }, [filteredMembers, needsFrontendFilter, pagination])
 
     // Validar JSON
     const validateJson = (jsonString: string): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
@@ -150,99 +282,34 @@ export default function MemberPage() {
         }
     }
 
-    // Verificar se há mudanças nos campos
-    const hasChanges = () => {
-        if (!editingMember) {
-            // Para criação, verificar se há dados preenchidos
-            return formData.email.trim() !== '' || formData.name.trim() !== ''
-        }
-        return (
-            formData.role !== originalFormData.role ||
-            formData.status !== originalFormData.status ||
-            formData.name !== originalFormData.name ||
-            formData.email !== originalFormData.email ||
-            formData.attribute !== originalFormData.attribute
-        )
-    }
-
-    const isEditing = showEditArea
-
-    // Handlers
-    const handleCreateClick = () => {
+    // Wrappers customizados para funcionalidades específicas
+    const handleCreateClickCustom = () => {
+        handleCreateClick()
         setFormData({
-            role: 'account',
-            status: 'PENDING',
-            name: '',
-            email: '',
-            attribute: '{}',
-        })
-        setOriginalFormData({
-            role: 'account',
-            status: 'PENDING',
-            name: '',
-            email: '',
-            attribute: '{}',
-        })
-        setEditingMember(null)
-        setSendInvite(false)
-        setShowEditArea(true)
-        setError(null)
-        setJsonError(null)
-    }
-
-    const handleEditClick = (member: MemberResponse) => {
-        setEditingMember(member)
-        const attributeJson = JSON.stringify(member.attribute || {}, null, 2)
-        setFormData({
-            role: member.role,
-            status: member.status,
-            name: member.member_name || '',
-            email: member.member_email || '',
-            attribute: attributeJson,
-        })
-        setOriginalFormData({
-            role: member.role,
-            status: member.status,
-            name: member.member_name || '',
-            email: member.member_email || '',
-            attribute: attributeJson,
-        })
-        setShowEditArea(true)
-        setError(null)
-        setJsonError(null)
-    }
-
-    const handleCancel = () => {
-        setEditingMember(null)
-        setFormData({
-            role: 'account',
-            status: 'ACTIVE',
-            name: '',
-            email: '',
-            attribute: '{}',
-        })
-        setOriginalFormData({
-            role: 'account',
-            status: 'ACTIVE',
-            name: '',
-            email: '',
-            attribute: '{}',
+            ...formData,
+            status: 'PENDING',  // Status padrão para criação
         })
         setSendInvite(false)
-        setShowEditArea(false)
-        setError(null)
         setEmailMessage(null)
         setJsonError(null)
     }
 
-    const handleCreate = async () => {
-        // Validar que email está preenchido
-        if (!formData.email || formData.email.trim() === '') {
-            setError('E-mail é obrigatório')
-            return
-        }
+    const handleEditClickCustom = (member: MemberResponse) => {
+        handleEditClick(member)
+        setEmailMessage(null)
+        setJsonError(null)
+    }
 
-        // Validar JSON
+    const handleCancelCustom = () => {
+        handleCancel()
+        setSendInvite(false)
+        setEmailMessage(null)
+        setJsonError(null)
+    }
+
+    // Handler customizado para criação com suporte a sendInvite
+    const handleCreate = async () => {
+        // Validar JSON antes de salvar
         const jsonValidation = validateJson(formData.attribute)
         if (!jsonValidation.valid) {
             setError(jsonValidation.error || 'JSON inválido')
@@ -251,11 +318,12 @@ export default function MemberPage() {
         }
 
         try {
-            setSubmitting(true)
             setError(null)
             setEmailMessage(null)
             setJsonError(null)
 
+            // Usar handleSave do useEntityPage, mas precisamos customizar
+            // Como não podemos customizar handleSave facilmente, vamos fazer manualmente
             const createData: MemberCreateRequest = {
                 email: formData.email.trim(),
                 name: formData.name.trim() || null,
@@ -278,15 +346,13 @@ export default function MemberPage() {
             }
 
             // Recarregar lista e limpar formulário
-            await loadMembers()
-            handleCancel()
+            await loadItems()
+            handleCancelCustom()
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao criar member'
             setError(message)
             setEmailMessage(null)
             console.error('Erro ao criar member:', err)
-        } finally {
-            setSubmitting(false)
         }
     }
 
@@ -308,10 +374,15 @@ export default function MemberPage() {
         }
     }
 
+    // Handler customizado para edição com suporte a sendInvite
     const handleSave = async () => {
-        if (!editingMember) return
+        if (!editingMember) {
+            // Se não está editando, usar handleCreate
+            await handleCreate()
+            return
+        }
 
-        // Validar JSON
+        // Validar JSON antes de salvar
         const jsonValidation = validateJson(formData.attribute)
         if (!jsonValidation.valid) {
             setError(jsonValidation.error || 'JSON inválido')
@@ -320,11 +391,12 @@ export default function MemberPage() {
         }
 
         try {
-            setSubmitting(true)
             setError(null)
             setEmailMessage(null)
             setJsonError(null)
 
+            // Usar handleSave do useEntityPage, mas precisamos customizar
+            // Como não podemos customizar handleSave facilmente, vamos fazer manualmente
             const updateData: MemberUpdateRequest = {
                 role: formData.role,
                 status: formData.status,
@@ -347,37 +419,21 @@ export default function MemberPage() {
             }
 
             // Recarregar lista e limpar formulário
-            await loadMembers()
-            handleCancel()
+            await loadItems()
+            handleCancelCustom()
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao salvar member'
             setError(message)
             setEmailMessage(null)
             console.error('Erro ao salvar member:', err)
-        } finally {
-            setSubmitting(false)
         }
     }
 
-    // Toggle seleção de member para exclusão
-    const toggleMemberSelection = (memberId: number) => {
-        setSelectedMembers((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(memberId)) {
-                newSet.delete(memberId)
-            } else {
-                newSet.add(memberId)
-            }
-            return newSet
-        })
-    }
-
-    // Excluir members selecionados
-    const handleDeleteSelected = async () => {
+    // Handler customizado para exclusão (mantém lógica de Promise.allSettled)
+    const handleDeleteSelectedCustom = async () => {
         if (selectedMembers.size === 0) return
 
         try {
-            setDeleting(true)
             setError(null)
 
             const deletePromises = Array.from(selectedMembers).map(async (memberId) => {
@@ -398,15 +454,12 @@ export default function MemberPage() {
                 throw new Error(`${failed.length} associação(ões) não puderam ser removidas`)
             }
 
-            // Recarregar lista
-            await loadMembers()
-            setSelectedMembers(new Set())
+            // Recarregar lista (useEntityPage já limpa seleção)
+            await loadItems()
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Erro ao remover associados'
             setError(message)
             console.error('Erro ao remover associados:', err)
-        } finally {
-            setDeleting(false)
         }
     }
 
@@ -473,27 +526,32 @@ export default function MemberPage() {
     // Botões do ActionBar usando hook reutilizável
     const actionBarButtons = useActionBarButtons({
         isEditing,
-        selectedCount: selectedMembers.size,
+        selectedCount: selectedMembersCount,
         hasChanges: hasChanges() || sendInvite, // Customização: incluir sendInvite
         submitting,
         deleting,
-        onCancel: handleCancel,
-        onDelete: handleDeleteSelected,
-        onSave: editingMember ? handleSave : handleCreate,
+        onCancel: handleCancelCustom,
+        onDelete: handleDeleteSelectedCustom,
+        onSave: handleSave,
         saveLabel: submitting 
             ? (editingMember ? 'Salvando...' : 'Criando...') 
             : (editingMember ? 'Salvar' : 'Criar'),
         deleteLabel: 'Remover',
     })
 
-    // Props de erro do ActionBar usando função utilitária
-    const actionBarErrorProps = getActionBarErrorProps(
-        error,
-        isEditing,
-        selectedMembers.size,
-        emailMessage,
-        emailMessageType
-    )
+    // Props de erro do ActionBar (customizado para incluir emailMessage)
+    const actionBarErrorPropsCustom = useMemo(() => {
+        const baseProps = actionBarErrorProps
+        // Se houver emailMessage, usar ele em vez de error
+        if (emailMessage) {
+            return {
+                ...baseProps,
+                message: emailMessage,
+                messageType: emailMessageType,
+            }
+        }
+        return baseProps
+    }, [actionBarErrorProps, emailMessage, emailMessageType])
 
     return (
         <>
@@ -588,13 +646,15 @@ export default function MemberPage() {
 
             <CardPanel
                 title="Associados"
+                totalCount={filteredMembers.length}
+                selectedCount={selectedMembersCount}
                 loading={loading}
                 error={undefined}
                 createCard={
                     <CreateCard
                         label="Convidar novo membro"
                         subtitle="Clique para adicionar"
-                        onClick={handleCreateClick}
+                        onClick={handleCreateClickCustom}
                     />
                 }
                 filterContent={
@@ -635,7 +695,7 @@ export default function MemberPage() {
                                         e.stopPropagation()
                                         toggleMemberSelection(member.id)
                                     }}
-                                    onEdit={() => handleEditClick(member)}
+                                    onEdit={() => handleEditClickCustom(member)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar associação"
@@ -687,11 +747,11 @@ export default function MemberPage() {
 
             <ActionBar
                 pagination={
-                    total > 0 ? (
+                    (needsFrontendFilter ? filteredMembers.length : total) > 0 ? (
                         <Pagination
                             offset={pagination.offset}
                             limit={pagination.limit}
-                            total={total}
+                            total={needsFrontendFilter ? filteredMembers.length : total}
                             onFirst={paginationHandlers.onFirst}
                             onPrevious={paginationHandlers.onPrevious}
                             onNext={paginationHandlers.onNext}
@@ -700,9 +760,9 @@ export default function MemberPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
-                message={actionBarErrorProps.message}
-                messageType={actionBarErrorProps.messageType}
+                error={actionBarErrorPropsCustom.error}
+                message={actionBarErrorPropsCustom.message}
+                messageType={actionBarErrorPropsCustom.messageType}
                 buttons={actionBarButtons}
             />
         </>
