@@ -731,6 +731,10 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - Storage: MinIO em dev, S3 real em produção (configurar via env)
 - Saída: apenas PDF (não Excel/CSV)
 
+### Migração para pasta backend
+- Ao reorganizar o backend na pasta `backend/`, seguir o **BACKEND_MIGRATION_CHECKLIST.md**.
+- Garantir conformidade com DIRECTIVES, SECURITY e STACK; não quebrar Docker, Alembic, jobs nem `app.py`.
+
 ### Evolução Futura (Quando Necessário)
 - [ ] Promover Demand de JSON para tabela (quando precisar queryar diretamente)
 - [ ] Criar modelo Schedule (quando precisar múltiplas versões por schedule)
