@@ -8,7 +8,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Cria um novo account (apenas admin).
  */
 export async function POST(request: NextRequest) {
-  console.log('[ACCOUNT-FRONTEND] Criando novo account')
   try {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
@@ -27,7 +26,6 @@ export async function POST(request: NextRequest) {
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error('[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao criar account:', errorData)
       return NextResponse.json(errorData, { status: response.status })
     }
 
@@ -35,7 +33,6 @@ export async function POST(request: NextRequest) {
     console.log('[ACCOUNT-FRONTEND] ✅ SUCESSO - Account criado com sucesso', data)
     return NextResponse.json(data)
   } catch (error) {
-    console.error('[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao criar account:', error)
     return NextResponse.json(
       {
         detail:

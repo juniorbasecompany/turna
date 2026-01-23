@@ -11,7 +11,6 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[TENANT-FRONTEND] Atualizando tenant ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
@@ -30,24 +29,12 @@ export async function PUT(
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error(
-        `[TENANT-FRONTEND] ❌ FALHA - Erro ao atualizar tenant ID=${params.id}:`,
-        errorData
-      )
       return NextResponse.json(errorData, { status: response.status })
     }
 
     const data = await response.json()
-    console.log(
-      `[TENANT-FRONTEND] ✅ SUCESSO - Tenant atualizado com sucesso ID=${params.id}`,
-      data
-    )
     return NextResponse.json(data)
   } catch (error) {
-    console.error(
-      `[TENANT-FRONTEND] ❌ FALHA - Erro ao atualizar tenant ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:
@@ -69,7 +56,6 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[TENANT-FRONTEND] Removendo tenant ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
@@ -86,22 +72,11 @@ export async function DELETE(
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error(
-        `[TENANT-FRONTEND] ❌ FALHA - Erro ao remover tenant ID=${params.id}:`,
-        errorData
-      )
       return NextResponse.json(errorData, { status: response.status })
     }
 
-    console.log(
-      `[TENANT-FRONTEND] ✅ SUCESSO - Tenant removido com sucesso ID=${params.id}`
-    )
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error(
-      `[TENANT-FRONTEND] ❌ FALHA - Erro ao remover tenant ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:

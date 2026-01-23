@@ -40,7 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccount(data)
     } catch (error) {
       // Silenciosamente falha se não autenticado
-      console.debug('Erro ao carregar account:', error)
       setAccount(null)
     }
   }
@@ -84,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await Promise.all([refreshAccount(), refreshTenant()])
       } catch (error) {
         // Silenciosamente falha se não autenticado
-        console.debug('Auth check failed:', error)
       } finally {
         setLoading(false)
       }

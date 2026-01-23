@@ -10,8 +10,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ## 1. Logs de Debug no Frontend
 
 ### 1.1. Logs de Thumbnail (Frontend)
-- [ ] **Arquivo:** `frontend/app/(protected)/file/page.tsx`
-- [ ] **Linhas:** 305, 315, 319, 328, 338, 344, 367, 381
+- [x] **Arquivo:** `frontend/app/(protected)/file/page.tsx`
+- [x] **Linhas:** 305, 315, 319, 328, 338, 344, 367, 381
 
 **Logs:**
 - `console.log('[THUMBNAIL] Thumbnail disponível para file_id=...')`
@@ -28,8 +28,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 1.2. Logs de Thumbnail (API Route)
-- [ ] **Arquivo:** `frontend/app/api/file/[id]/thumbnail/route.ts`
-- [ ] **Linhas:** 27, 38, 42, 65
+- [x] **Arquivo:** `frontend/app/api/file/[id]/thumbnail/route.ts`
+- [x] **Linhas:** 27, 38, 42, 65
 
 **Logs:**
 - `console.log('[THUMBNAIL-FRONTEND] Buscando thumbnail para file_id=..., hasToken=...')`
@@ -42,8 +42,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 1.3. Logs de Debug em lib/api.ts
-- [ ] **Arquivo:** `frontend/lib/api.ts`
-- [ ] **Linhas:** 34, 59, 208, 212, 216, 220, 228
+- [x] **Arquivo:** `frontend/lib/api.ts`
+- [x] **Linhas:** 34, 59, 208, 212, 216, 220, 228
 
 **Logs:**
 - `console.log('Error data received:', JSON.stringify(data, null, 2))` (linha 34)
@@ -59,8 +59,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 1.4. Logs de Debug em ActionBar
-- [ ] **Arquivo:** `frontend/components/ActionBar.tsx`
-- [ ] **Linha:** 92
+- [x] **Arquivo:** `frontend/components/ActionBar.tsx`
+- [x] **Linha:** 92
 
 **Log:**
 - `console.log('[ACTIONBAR-COMPONENT] message:', message, 'messageType:', messageType, 'error:', error, 'buttons:', buttons.length)`
@@ -70,8 +70,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 1.5. Logs de Debug em Member Page
-- [ ] **Arquivo:** `frontend/app/(protected)/member/page.tsx`
-- [ ] **Linhas:** 279, 290, 295, 726
+- [x] **Arquivo:** `frontend/app/(protected)/member/page.tsx`
+- [x] **Linhas:** 279, 290, 295, 726
 
 **Logs:**
 - `console.log('[INVITE-UI] Iniciando envio de convite para member ID=...')`
@@ -84,15 +84,15 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 1.6. Logs de Debug em API Routes (Frontend)
-- [ ] **Arquivos:** 
-  - `frontend/app/api/tenant/route.ts` (linhas 11, 30, 35, 38)
-  - `frontend/app/api/tenant/[id]/route.ts` (linhas 14, 33, 41, 47, 72, 89, 96, 101)
-  - `frontend/app/api/tenant/list/route.ts` (linhas 11, 28, 33, 36)
-  - `frontend/app/api/member/route.ts` (linhas 11, 38, 43, 46)
-  - `frontend/app/api/member/[id]/invite/route.ts` (linha 14)
-  - `frontend/app/api/tenant/[id]/invite/route.ts` (linha 14)
-  - `frontend/app/api/account/route.ts` (linhas 11, 30, 35, 38)
-  - `frontend/app/api/account/[id]/route.ts` (linhas 14, 33, 41, 47, 72, 89, 96, 101)
+- [x] **Arquivos:** 
+  - [x] `frontend/app/api/tenant/route.ts` (linhas 11, 30, 35, 38)
+  - [x] `frontend/app/api/tenant/[id]/route.ts` (linhas 14, 33, 41, 47, 72, 89, 96, 101)
+  - [x] `frontend/app/api/tenant/list/route.ts` (linhas 11, 28, 33, 36)
+  - [x] `frontend/app/api/member/route.ts` (linhas 11, 38, 43, 46)
+  - [x] `frontend/app/api/member/[id]/invite/route.ts` (linha 14)
+  - [x] `frontend/app/api/tenant/[id]/invite/route.ts` (linha 14)
+  - [x] `frontend/app/api/account/route.ts` (linhas 11, 30, 35, 38)
+  - [x] `frontend/app/api/account/[id]/route.ts` (linhas 14, 33, 41, 47, 72, 89, 96, 101)
 
 **Logs:**
 - `console.log('[TENANT-FRONTEND] ...')`
@@ -123,8 +123,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ## 2. Logs de Debug no Backend
 
 ### 2.1. Logs Verbosos de Hospital (Backend)
-- [ ] **Arquivo:** `app/api/route.py`
-- [ ] **Linhas:** 2006, 2014, 2194
+- [x] **Arquivo:** `app/api/route.py`
+- [x] **Linhas:** 2006, 2014, 2194
 
 **Logs:**
 - `logger.info(f"Valor do prompt após validação Pydantic: {body.prompt}")` (linha 2006)
@@ -136,8 +136,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 2.2. Logs Verbosos de Thumbnail (Backend)
-- [ ] **Arquivo:** `app/api/route.py`
-- [ ] **Linhas:** 1709, 1718, 1725, 1734
+- [x] **Arquivo:** `app/api/route.py`
+- [x] **Linhas:** 1709, 1718, 1725, 1734
 
 **Logs:**
 - `logger.info(f"[THUMBNAIL] Buscando thumbnail para file_id={file_id}, s3_key={file_model.s3_key}, thumbnail_key={thumbnail_key}")`
@@ -150,8 +150,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 2.3. Logs Verbosos de Thumbnail (Worker)
-- [ ] **Arquivo:** `app/worker/job.py`
-- [ ] **Linhas:** 394, 398, 454, 455, 459, 476, 507, 517, 528, 534, 538, 575, 581, 643, 668
+- [x] **Arquivo:** `app/worker/job.py`
+- [x] **Linhas:** 394, 398, 454, 455, 459, 476, 507, 517, 528, 534, 538, 575, 581, 643, 668
 
 **Logs:**
 - `logger.info(f"[THUMBNAIL] Iniciando job (job_id={job_id})")`
@@ -176,8 +176,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ---
 
 ### 2.4. Logs Verbosos de Email Service
-- [ ] **Arquivo:** `app/services/email_service.py`
-- [ ] **Linhas:** 144, 166, 167, 168, 176, 177, 178, 193, 203, 207, 210, 216, 219
+- [x] **Arquivo:** `app/services/email_service.py`
+- [x] **Linhas:** 144, 166, 167, 168, 176, 177, 178, 193, 203, 207, 210, 216, 219
 
 **Logs:**
 - `logger.debug(f"Configurações: APP_URL={app_url}, EMAIL_FROM={'***' if email_from else 'NÃO CONFIGURADO'}, RESEND_API_KEY={'***' if resend_api_key else 'NÃO CONFIGURADO'}")`
@@ -196,8 +196,8 @@ Este documento lista trechos de código que podem ser removidos com segurança:
 ## 3. Código com Problemas ou Referências Incorretas
 
 ### 3.1. Referência a Variável Inexistente em Log
-- [ ] **Arquivo:** `app/worker/job.py`
-- [ ] **Linha:** 455
+- [x] **Arquivo:** `app/worker/job.py`
+- [x] **Linha:** 455 (já resolvido ao remover o log no item 2.3)
 
 **Código:**
 ```python
@@ -211,8 +211,8 @@ logger.info(f"[THUMBNAIL] Detalhes detecção: mime='{mime}', ext='{ext}', mime 
 ---
 
 ### 3.2. Imports Duplicados de Logging
-- [ ] **Arquivo:** `app/worker/job.py`
-- [ ] **Linhas:** 392-393, 452-453, 505-506, 646-647, 665-666
+- [x] **Arquivo:** `app/worker/job.py`
+- [x] **Linhas:** 392-393, 452-453, 505-506, 646-647, 665-666 (consolidados no início do try)
 
 **Código:**
 ```python
@@ -227,8 +227,8 @@ logger = logging.getLogger(__name__)
 ---
 
 ### 3.3. Imports Inline de Logging e Traceback
-- [ ] **Arquivo:** `app/api/route.py`
-- [ ] **Linhas:** 1453, 1683, 1769, 1773, 1785, 1794-1795
+- [x] **Arquivo:** `app/api/route.py`
+- [x] **Linhas:** 1453, 1683, 1769, 1773, 1785, 1794-1795 (traceback importado no nível do módulo, imports inline removidos)
 
 **Código:**
 ```python
@@ -260,8 +260,8 @@ import traceback
 ## 5. Logs Operacionais Excessivamente Verbosos
 
 ### 5.1. Logs de Auditoria Muito Detalhados
-- [ ] **Arquivo:** `app/api/route.py`
-- [ ] **Múltiplas linhas com padrão:**
+- [x] **Arquivo:** `app/api/route.py`
+- [x] **Múltiplas linhas com padrão:**
   - `logger.info(f"Criando account: email={body.email}, tenant_id={member.tenant_id}")`
   - `logger.info(f"Account criado com sucesso: id={account.id}")`
   - `logger.info(f"Listando accounts para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")`
@@ -298,10 +298,10 @@ import traceback
 - Logs operacionais no backend podem ser reduzidos mantendo apenas erros e operações críticas.
 
 ### Progresso:
-- [ ] Seção 1: Logs de Debug no Frontend (7 itens)
-- [ ] Seção 2: Logs de Debug no Backend (4 itens)
-- [ ] Seção 3: Código com Problemas (3 itens)
-- [ ] Seção 4: Comentários Obsoletos (1 item)
-- [ ] Seção 5: Logs Operacionais Verbosos (1 item)
+- [x] Seção 1: Logs de Debug no Frontend (7 itens)
+- [x] Seção 2: Logs de Debug no Backend (4 itens)
+- [x] Seção 3: Código com Problemas (3 itens)
+- [x] Seção 4: Comentários Obsoletos (1 item)
+- [x] Seção 5: Logs Operacionais Verbosos (1 item)
 
 **Total: 16 itens principais**

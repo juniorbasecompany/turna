@@ -276,9 +276,6 @@ export default function MemberPage() {
     }
 
     const sendInviteEmail = async (member: MemberResponse) => {
-        console.log(
-            `[INVITE-UI] Iniciando envio de convite para member ID=${member.id} (${member.member_name || member.member_email})`
-        )
         try {
             await protectedFetch(`/api/member/${member.id}/invite`, {
                 method: 'POST',
@@ -287,15 +284,10 @@ export default function MemberPage() {
                 },
             })
             const successMsg = `E-mail de convite foi enviado para ${member.member_name || member.member_email}`
-            console.log('[EMAIL-MESSAGE] Definindo mensagem de sucesso:', successMsg)
             setEmailMessage(successMsg)
             setEmailMessageType('success')
         } catch (inviteErr) {
             const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
-            console.error(
-                `[INVITE-UI] ❌ FALHA - Erro ao enviar convite para member ID=${member.id}:`,
-                inviteErr
-            )
             setEmailMessage(`E-mail de convite não foi enviado para ${member.member_name || member.member_email}. ${errorMsg}`)
             setEmailMessageType('error')
         }
@@ -723,7 +715,6 @@ export default function MemberPage() {
                     // Se houver mensagem de email, não mostrar erro genérico
                     // A mensagem de email será exibida via prop 'message'
                     if (emailMessage) {
-                        console.log('[ACTIONBAR] Mensagem de email presente, não mostrando erro genérico')
                         return undefined
                     }
                     const hasButtons = isEditing || selectedMembers.size > 0

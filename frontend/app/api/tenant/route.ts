@@ -8,7 +8,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Cria um novo tenant (apenas admin).
  */
 export async function POST(request: NextRequest) {
-  console.log('[TENANT-FRONTEND] Criando novo tenant')
   try {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
@@ -27,15 +26,12 @@ export async function POST(request: NextRequest) {
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error('[TENANT-FRONTEND] ❌ FALHA - Erro ao criar tenant:', errorData)
       return NextResponse.json(errorData, { status: response.status })
     }
 
     const data = await response.json()
-    console.log('[TENANT-FRONTEND] ✅ SUCESSO - Tenant criado com sucesso', data)
     return NextResponse.json(data)
   } catch (error) {
-    console.error('[TENANT-FRONTEND] ❌ FALHA - Erro ao criar tenant:', error)
     return NextResponse.json(
       {
         detail:

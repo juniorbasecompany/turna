@@ -302,7 +302,6 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
 
             if (response.ok) {
                 // Thumbnail existe, definir src para carregar
-                console.log(`[THUMBNAIL] Thumbnail disponível para file_id=${file.id}`)
                 setImageSrc(`${thumbnailUrl}?t=${Date.now()}`)
                 setIsLoading(true)
                 setImageError(false)
@@ -312,11 +311,9 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
             } else if (response.status === 404) {
                 // Thumbnail ainda não existe, fazer retry (usar ref para evitar closure obsoleta)
                 const currentRetry = retryCountRef.current
-                console.log(`[THUMBNAIL] Thumbnail não encontrado para file_id=${file.id}, retryCount=${currentRetry}`)
 
                 // Se já tentamos muitas vezes (5 tentativas = ~15 segundos), mostrar fallback
                 if (currentRetry >= 5) {
-                    console.log(`[THUMBNAIL] Máximo de tentativas atingido para file_id=${file.id}, mostrando fallback`)
                     setIsLoading(false)
                     setImageError(true)
                     pollingRef.current = false
@@ -325,7 +322,6 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
 
                 // Aguardar antes de tentar novamente (3 segundos)
                 const delay = 3000
-                console.log(`[THUMBNAIL] Agendando retry em ${delay}ms para file_id=${file.id}`)
 
                 retryTimeoutRef.current = setTimeout(() => {
                     retryCountRef.current += 1
@@ -335,13 +331,11 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
                 }, delay)
             } else {
                 // Outro erro
-                console.error(`[THUMBNAIL] Erro ao verificar thumbnail para file_id=${file.id}: status=${response.status}`)
                 setIsLoading(false)
                 setImageError(true)
                 pollingRef.current = false
             }
         } catch (error) {
-            console.error(`[THUMBNAIL] Erro ao verificar thumbnail para file_id=${file.id}:`, error)
             // Em caso de erro de rede, tentar carregar mesmo assim (pode ser CORS ou outro problema)
             setImageSrc(`${thumbnailUrl}?t=${Date.now()}`)
             setIsLoading(true)
@@ -364,7 +358,6 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
 
     // Resetar retry count quando a imagem carregar com sucesso
     const handleImageLoad = useCallback(() => {
-        console.log(`[THUMBNAIL] Thumbnail carregado com sucesso para file_id=${file.id}`)
         setIsLoading(false)
         setImageError(false)
         setRetryCount(0)
@@ -378,7 +371,6 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
 
     // Handler para erro ao carregar imagem (mesmo após verificação HEAD)
     const handleImageError = useCallback(() => {
-        console.log(`[THUMBNAIL] Erro ao carregar imagem para file_id=${file.id}`)
         setIsLoading(false)
         setImageError(true)
         pollingRef.current = false

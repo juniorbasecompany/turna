@@ -391,11 +391,9 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
         try:
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"[THUMBNAIL] Iniciando job (job_id={job_id})")
 
             input_data = job.input_data or {}
             file_id = int(input_data.get("file_id"))
-            logger.info(f"[THUMBNAIL] Processando file_id={file_id}")
 
             file_model = session.get(File, file_id)
             if not file_model:
@@ -449,11 +447,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                 or ext in {".xls", ".xlsx"}
             )
 
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"[THUMBNAIL] file_id={file_id}, mime={mime}, ext={ext}, is_image={is_image}, is_pdf={is_pdf}, is_excel={is_excel}")
-            logger.info(f"[THUMBNAIL] Detalhes detecção: mime='{mime}', ext='{ext}', mime in excel_mime_types={mime in excel_mime_types}, ext in excel_exts={ext in {'.xls', '.xlsx'}}")
-
             if not (is_image or is_pdf or is_excel):
                 # Outro tipo: não gerar thumbnail (frontend exibirá fallback)
                 logger.warning(f"[THUMBNAIL] Tipo não suportado para file_id={file_id}: mime={mime}, ext={ext}")
@@ -472,8 +465,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                 session.commit()
                 session.refresh(job)
                 return {"ok": True, "job_id": job.id, "skipped": True}
-
-            logger.info(f"[THUMBNAIL] Tipo suportado detectado: is_image={is_image}, is_pdf={is_pdf}, is_excel={is_excel}")
 
             # Download do arquivo original para arquivo temporário
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
@@ -502,9 +493,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                 pdf_doc.close()
             elif is_excel:
                 # Excel (XLS/XLSX): renderizar primeira planilha como tabela
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.info(f"[THUMBNAIL] Processando Excel: file_id={file_id}, ext={ext}")
 
                 import pandas as pd
                 import matplotlib
@@ -514,7 +502,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
 
                 # Ler primeira planilha (limitado a 50 linhas para performance)
                 try:
-                    logger.info(f"[THUMBNAIL] Lendo Excel com engine apropriado: ext={ext}")
                     if ext == ".xls":
                         df = pd.read_excel(tmp_path, engine='xlrd', nrows=50)
                     else:
@@ -525,7 +512,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                             logger.warning(f"[THUMBNAIL] Erro com openpyxl, tentando xlrd: {e1}")
                             # Fallback para xlrd se openpyxl falhar
                             df = pd.read_excel(tmp_path, engine='xlrd', nrows=50)
-                    logger.info(f"[THUMBNAIL] Excel lido: {len(df)} linhas, {len(df.columns)} colunas")
                 except Exception as e:
                     logger.error(f"[THUMBNAIL] Erro ao ler Excel: {e}", exc_info=True)
                     raise RuntimeError(f"Erro ao ler Excel: {e}")
@@ -572,13 +558,11 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                 table.scale(1, 1.5)
 
                 # Converter figura para PIL Image
-                logger.info(f"[THUMBNAIL] Convertendo figura para PIL Image")
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=100, pad_inches=0.1)
                 buf.seek(0)
                 image = Image.open(buf)
                 plt.close(fig)
-                logger.info(f"[THUMBNAIL] Excel convertido para imagem: {image.size}")
             elif is_image:
                 # PNG/JPEG: abrir com Pillow
                 image = Image.open(tmp_path)
@@ -640,11 +624,8 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
             session.add(job)
             session.commit()
             session.refresh(job)
-            logger.info(f"[THUMBNAIL] Thumbnail gerado com sucesso (job_id={job.id}, file_id={file_id}, thumbnail_key={thumbnail_key})")
             return {"ok": True, "job_id": job.id, "thumbnail_key": thumbnail_key}
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             error_msg = _safe_error_message(e)
             logger.error(f"[THUMBNAIL] Erro ao gerar thumbnail (job_id={job_id}, file_id={file_id if file_id else 'N/A'}): {error_msg}", exc_info=True)
 
@@ -662,10 +643,6 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
                     os.remove(tmp_path)
                 except Exception:
                     pass
-            import logging
-            logger = logging.getLogger(__name__)
-            if file_id:
-                logger.info(f"[THUMBNAIL] Finalizando job (job_id={job_id}, file_id={file_id})")
 
 
 async def reconcile_pending_orphans(ctx: dict[str, Any]) -> dict[str, Any]:

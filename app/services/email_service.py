@@ -141,7 +141,6 @@ def send_member_invite(
         email_from = os.getenv("EMAIL_FROM")
 
         subject = f"Convite para se juntar à {tenant_name}"
-        logger.debug(f"Configurações: APP_URL={app_url}, EMAIL_FROM={'***' if email_from else 'NÃO CONFIGURADO'}, RESEND_API_KEY={'***' if resend_api_key else 'NÃO CONFIGURADO'}")
 
         # Gerar templates
         html_body = _get_email_template_html(
@@ -163,9 +162,6 @@ def send_member_invite(
             logger.warning(
                 f"[EMAIL] {error_msg} Email de convite apenas logado para {to_email}"
             )
-            logger.info(f"[EMAIL] Assunto: {subject}")
-            logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
-            logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
             return False, error_msg
 
         if not resend_api_key:
@@ -173,9 +169,6 @@ def send_member_invite(
             logger.warning(
                 f"[EMAIL] {error_msg} Email de convite apenas logado para {to_email}"
             )
-            logger.info(f"[EMAIL] Assunto: {subject}")
-            logger.info(f"[EMAIL] Corpo (texto):\n{text_body}")
-            logger.info(f"[EMAIL] Processo concluído (modo log) - Email NÃO enviado para {to_email}")
             return False, error_msg
 
         if not email_from:
@@ -190,7 +183,6 @@ def send_member_invite(
         resend.api_key = resend_api_key
 
         # Enviar email via Resend
-        logger.info(f"[EMAIL] Tentando enviar email via Resend para {to_email}...")
         try:
             params = {
                 "from": email_from,
@@ -200,23 +192,14 @@ def send_member_invite(
                 "text": text_body,
             }
             email_response = resend.Emails.send(params)
-            logger.debug(f"[EMAIL] Resposta do Resend recebida: {type(email_response)}")
 
             # Resend retorna um objeto com 'id' quando bem-sucedido
             if email_response and isinstance(email_response, dict) and "id" in email_response:
-                logger.info(
-                    f"[EMAIL] ✅ SUCESSO - Email de convite enviado com sucesso para {to_email} (Resend ID: {email_response['id']})"
-                )
-                logger.info(f"[EMAIL] Processo concluído com SUCESSO - Email enviado para {to_email}")
                 return True, ""
             elif email_response:
                 # Pode retornar objeto com atributo id
                 email_id = getattr(email_response, "id", None)
                 if email_id:
-                    logger.info(
-                        f"[EMAIL] ✅ SUCESSO - Email de convite enviado com sucesso para {to_email} (Resend ID: {email_id})"
-                    )
-                    logger.info(f"[EMAIL] Processo concluído com SUCESSO - Email enviado para {to_email}")
                     return True, ""
 
             error_msg = f"Resposta inesperada do serviço de email: {email_response}"

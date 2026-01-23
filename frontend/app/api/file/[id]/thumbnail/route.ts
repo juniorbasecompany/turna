@@ -24,7 +24,6 @@ export async function GET(
 
         // Obter access_token do cookie
         const accessToken = request.cookies.get('access_token')?.value
-        console.log(`[THUMBNAIL-FRONTEND] Buscando thumbnail para file_id=${fileId}, hasToken=${!!accessToken}`)
 
         // Chamar endpoint do backend que serve o thumbnail
         const thumbnailResponse = await fetch(`${API_URL}/file/${fileId}/thumbnail`, {
@@ -35,11 +34,8 @@ export async function GET(
             credentials: 'include',
         })
 
-        console.log(`[THUMBNAIL-FRONTEND] Response status: ${thumbnailResponse.status}, contentType: ${thumbnailResponse.headers.get('content-type')}`)
-
         if (!thumbnailResponse.ok) {
             const errorData = await thumbnailResponse.text().catch(() => 'Erro desconhecido')
-            console.error(`[THUMBNAIL-FRONTEND] Erro ao obter thumbnail: status=${thumbnailResponse.status}, body=${errorData.substring(0, 200)}`)
             try {
                 const jsonError = JSON.parse(errorData)
                 return NextResponse.json(jsonError, { status: thumbnailResponse.status })
@@ -62,7 +58,6 @@ export async function GET(
             },
         })
     } catch (error) {
-        console.error('Erro ao fazer proxy do thumbnail:', error)
         return NextResponse.json(
             {
                 detail:

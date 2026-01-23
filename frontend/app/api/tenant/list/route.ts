@@ -8,7 +8,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Lista todos os tenants (apenas admin).
  */
 export async function GET(request: NextRequest) {
-  console.log('[TENANT-FRONTEND] Listando tenants')
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
@@ -25,15 +24,12 @@ export async function GET(request: NextRequest) {
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error('[TENANT-FRONTEND] ❌ FALHA - Erro ao listar tenants:', errorData)
       return NextResponse.json(errorData, { status: response.status })
     }
 
     const data = await response.json()
-    console.log('[TENANT-FRONTEND] ✅ SUCESSO - Tenants listados com sucesso', data)
     return NextResponse.json(data)
   } catch (error) {
-    console.error('[TENANT-FRONTEND] ❌ FALHA - Erro ao listar tenants:', error)
     return NextResponse.json(
       {
         detail:

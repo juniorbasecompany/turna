@@ -11,7 +11,6 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[ACCOUNT-FRONTEND] Atualizando account ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
@@ -30,10 +29,6 @@ export async function PUT(
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error(
-        `[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao atualizar account ID=${params.id}:`,
-        errorData
-      )
       return NextResponse.json(errorData, { status: response.status })
     }
 
@@ -44,10 +39,6 @@ export async function PUT(
     )
     return NextResponse.json(data)
   } catch (error) {
-    console.error(
-      `[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao atualizar account ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:
@@ -86,10 +77,6 @@ export async function DELETE(
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error(
-        `[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao remover account ID=${params.id}:`,
-        errorData
-      )
       return NextResponse.json(errorData, { status: response.status })
     }
 
@@ -98,10 +85,6 @@ export async function DELETE(
     )
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error(
-      `[ACCOUNT-FRONTEND] ❌ FALHA - Erro ao remover account ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:

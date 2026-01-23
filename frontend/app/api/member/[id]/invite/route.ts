@@ -11,7 +11,6 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[INVITE-FRONTEND] Iniciando envio de convite para member ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
 
@@ -28,24 +27,12 @@ export async function POST(
       const errorData = await response.json().catch(() => ({
         detail: `Erro HTTP ${response.status}`,
       }))
-      console.error(
-        `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para member ID=${params.id}:`,
-        errorData
-      )
       return NextResponse.json(errorData, { status: response.status })
     }
 
     const data = await response.json()
-    console.log(
-      `[INVITE-FRONTEND] ✅ SUCESSO - Convite enviado com sucesso para member ID=${params.id}`,
-      data
-    )
     return NextResponse.json(data)
   } catch (error) {
-    console.error(
-      `[INVITE-FRONTEND] ❌ FALHA - Erro ao enviar convite para member ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:

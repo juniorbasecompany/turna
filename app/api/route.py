@@ -1,5 +1,6 @@
 import os
 import logging
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -240,7 +241,6 @@ def create_account(
         session.commit()
         session.refresh(account)
 
-        logger.info(f"Account criado com sucesso: id={account.id}")
         return AccountResponse(
             id=account.id,
             email=account.email,
@@ -273,8 +273,6 @@ def list_accounts(
     Lista accounts do tenant atual (via Member ACTIVE) com paginação.
     """
     try:
-        logger.info(f"Listando accounts para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
-
         # Query base para buscar (LEFT JOIN para incluir members sem Account)
         base_query = (
             select(Member, Account)
@@ -317,7 +315,6 @@ def list_accounts(
                     updated_at=_isoformat_utc(account.updated_at),
                 ))
 
-        logger.info(f"Encontrados {total} accounts, retornando {len(accounts)}")
         return AccountListResponse(
             items=accounts,
             total=total,
@@ -489,7 +486,6 @@ def delete_account(
             ),
         )
 
-        logger.info(f"Account removido com sucesso: id={account_id}")
         return Response(status_code=204)
     except HTTPException:
         raise
@@ -636,8 +632,6 @@ def list_tenants(
         count_query = select(func.count(Tenant.id))
         total = session.exec(count_query).one()
 
-        logger.info(f"Encontrados {total} tenants")
-
         # Aplicar ordenação e paginação
         items = session.exec(query.order_by(Tenant.name).limit(limit).offset(offset)).all()
 
@@ -732,7 +726,6 @@ def update_tenant(
         session.commit()
         session.refresh(tenant)
 
-        logger.info(f"Tenant atualizado com sucesso: id={tenant_id}")
         return TenantResponse(
             id=tenant.id,
             name=tenant.name,
@@ -790,7 +783,6 @@ def delete_tenant(
         session.delete(tenant)
         session.commit()
 
-        logger.info(f"Tenant removido com sucesso: id={tenant_id}")
         return Response(status_code=204)
     except HTTPException:
         raise
@@ -1450,7 +1442,6 @@ async def upload_file(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
         error_detail = f"Erro ao fazer upload do arquivo: {str(e)}"
         # Em desenvolvimento, incluir traceback completo
         if os.getenv("APP_ENV", "dev") == "dev":
@@ -1706,7 +1697,6 @@ def get_file_thumbnail(
 
     # Calcular thumbnail_key
     thumbnail_key = file_model.s3_key + ".thumbnail.webp"
-    logger.info(f"[THUMBNAIL] Buscando thumbnail para file_id={file_id}, s3_key={file_model.s3_key}, thumbnail_key={thumbnail_key}")
 
     # Obter storage service
     storage_service = StorageService()
@@ -1722,7 +1712,6 @@ def get_file_thumbnail(
                 Bucket=storage_service.config.bucket_name,
                 Key=thumbnail_key,
             )
-            logger.info(f"[THUMBNAIL] Retornando thumbnail para file_id={file_id}")
             return StreamingResponse(
                 response['Body'].iter_chunks(chunk_size=8192),
                 media_type="image/webp",
@@ -1731,7 +1720,7 @@ def get_file_thumbnail(
                 },
             )
         else:
-            logger.warning(f"[THUMBNAIL] Thumbnail não encontrado (key={thumbnail_key})")
+            pass  # Thumbnail não existe, será retornado 404 abaixo
     except Exception as e:
         logger.error(f"[THUMBNAIL] Erro ao obter thumbnail (file_id={file_id}, thumbnail_key={thumbnail_key}): {e}", exc_info=True)
 
@@ -1766,12 +1755,10 @@ def delete_file(
         storage_service.delete_file(file_model.s3_key)
     except Exception as e:
         # Log erro mas continua com exclusão do banco (arquivo pode já ter sido deletado)
-        import logging
-        logging.warning(f"Erro ao excluir arquivo do S3 (continuando com exclusão do banco): {e}")
+        logger.warning(f"Erro ao excluir arquivo do S3 (continuando com exclusão do banco): {e}")
         # Em desenvolvimento, log mais detalhado
         if os.getenv("APP_ENV", "dev") == "dev":
-            import traceback
-            logging.warning(f"Traceback ao excluir do S3:\n{traceback.format_exc()}")
+            logger.warning(f"Traceback ao excluir do S3:\n{traceback.format_exc()}")
 
     # Excluir thumbnail do S3/MinIO (se existir)
     thumbnail_key = file_model.s3_key + ".thumbnail.webp"
@@ -1791,12 +1778,10 @@ def delete_file(
         session.commit()
     except Exception as e:
         session.rollback()
-        import logging
-        import traceback
         error_detail = f"Erro ao excluir arquivo do banco: {str(e)}"
         if os.getenv("APP_ENV", "dev") == "dev":
             error_detail += f"\n\nTraceback:\n{traceback.format_exc()}"
-        logging.error(error_detail)
+        logger.error(error_detail)
         raise HTTPException(status_code=500, detail=error_detail)
 
     # Retornar 204 No Content
@@ -2003,8 +1988,6 @@ def create_hospital(
                 detail=f"Hospital com nome '{body.name}' já existe neste tenant",
             )
 
-        logger.info(f"Valor do prompt após validação Pydantic: {body.prompt}")
-
         hospital = Hospital(
             tenant_id=member.tenant_id,
             name=body.name,
@@ -2016,7 +1999,6 @@ def create_hospital(
         session.add(hospital)
         try:
             session.commit()
-            logger.info(f"Hospital criado com sucesso: id={hospital.id}")
             session.refresh(hospital)
             return hospital
         except IntegrityError as e:
@@ -2064,18 +2046,14 @@ def list_hospital(
     Lista todos os hospitais do tenant atual com paginação.
     """
     try:
-        logger.info(f"Listando hospitais para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
         query = select(Hospital).where(Hospital.tenant_id == member.tenant_id)
 
         # Contar total antes de aplicar paginação
         count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == member.tenant_id)
         total = session.exec(count_query).one()
 
-        logger.info(f"Encontrados {total} hospitais")
-
         # Se não há itens, retornar lista vazia diretamente
         if total == 0:
-            logger.info("Nenhum hospital encontrado, retornando lista vazia")
             return HospitalListResponse(
                 items=[],
                 total=0,
@@ -2094,7 +2072,6 @@ def list_hospital(
                 logger.error(f"Erro ao validar hospital id={h.id}, name={h.name}, prompt={h.prompt}: {e}", exc_info=True)
                 raise
 
-        logger.info(f"Retornando {len(response_items)} hospitais validados")
         return HospitalListResponse(
             items=response_items,
             total=total,
@@ -2191,12 +2168,9 @@ def update_hospital(
             logger.info(f"Cor atualizada: {body.color}")
         hospital.updated_at = utc_now()
 
-        logger.info(f"Objeto Hospital antes do commit: tenant_id={hospital.tenant_id}, name={hospital.name}, prompt={hospital.prompt}")
-
         session.add(hospital)
         try:
             session.commit()
-            logger.info(f"Hospital atualizado com sucesso: id={hospital.id}")
             session.refresh(hospital)
             return hospital
         except IntegrityError as e:
@@ -2554,7 +2528,6 @@ def list_demands(
         query = query.order_by(Demand.start_time.asc()).limit(limit).offset(offset)
 
         items = session.exec(query).all()
-        logger.info(f"Encontradas {total} demandas, retornando {len(items)}")
 
         return DemandListResponse(
             items=[DemandResponse.model_validate(item) for item in items],
@@ -2924,7 +2897,6 @@ def create_member(
         # Buscar account_email para resposta (pode ser None)
         account_email = account.email if account else None
 
-        logger.info(f"Member criado com sucesso: id={member_obj.id}")
         return MemberResponse(
             id=member_obj.id,
             tenant_id=member_obj.tenant_id,
@@ -2963,8 +2935,6 @@ def list_members(
     Sempre filtra por tenant_id do JWT (via member).
     """
     try:
-        logger.info(f"Listando members para tenant_id={member.tenant_id}, limit={limit}, offset={offset}")
-
         # Query base: members do tenant com LEFT JOIN em Account (para incluir members sem Account)
         query = (
             select(Member, Account)
@@ -3025,7 +2995,6 @@ def list_members(
                 )
             )
 
-        logger.info(f"Retornando {len(items)} members de {total} total")
         return MemberListResponse(items=items, total=total)
     except Exception as e:
         logger.error(f"Erro ao listar members: {e}", exc_info=True)
@@ -3182,7 +3151,6 @@ def update_member(
             if account:
                 account_email = account.email
 
-        logger.info(f"Member atualizado com sucesso: id={member_id}")
         return MemberResponse(
             id=member_obj.id,
             tenant_id=member_obj.tenant_id,
@@ -3272,7 +3240,6 @@ def delete_member(
             ),
         )
 
-        logger.info(f"Member removido com sucesso: id={member_id}")
         return Response(status_code=204)
     except HTTPException:
         raise

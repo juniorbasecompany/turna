@@ -87,11 +87,6 @@ export function ActionBar({
     pagination,
     show,
 }: ActionBarProps) {
-    // Debug: log quando message mudar
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('[ACTIONBAR-COMPONENT] message:', message, 'messageType:', messageType, 'error:', error, 'buttons:', buttons.length)
-    }
-
     // Se show for explicitamente false, não renderizar
     // Caso contrário, sempre renderizar (mesmo sem botões/mensagem)
     if (show === false) {

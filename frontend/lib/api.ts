@@ -29,11 +29,6 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
 
     const data = errorData as Record<string, unknown>
 
-    // Debug: log do objeto de erro para entender o formato
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('Error data received:', JSON.stringify(data, null, 2))
-    }
-
     // Formato FastAPI padrão: { detail: "..." }
     if (typeof data.detail === 'string') {
         return data.detail
@@ -54,11 +49,6 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
     }
 
     // Se não encontrou nenhum formato conhecido, retorna o default
-    // mas também tenta stringificar o objeto para debug
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.warn('Could not extract error message from:', data)
-    }
-
     return defaultMessage
 }
 
@@ -203,30 +193,17 @@ export async function apiRequest<T>(
                 if (text) {
                     try {
                         errorData = JSON.parse(text)
-                        // Debug: log do erro parseado
-                        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-                            console.log('Parsed error data:', errorData)
-                        }
                     } catch (parseError) {
                         // Se não conseguir fazer parse JSON, usa o texto como mensagem
-                        console.warn('Failed to parse error response as JSON:', parseError, 'Text:', text)
                         errorData = { message: text }
                     }
-                } else {
-                    console.warn('Empty error response body')
                 }
             } catch (textError) {
                 // Se não conseguir ler o texto, usa mensagem padrão
-                console.warn('Failed to read error response text:', textError)
                 errorData = {}
             }
 
             const errorMessage = extractErrorMessage(errorData, `Erro HTTP ${response.status}`)
-
-            // Debug: log da mensagem extraída
-            if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-                console.log('Extracted error message:', errorMessage)
-            }
 
             throw new ApiError(
                 errorMessage,

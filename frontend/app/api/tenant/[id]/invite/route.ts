@@ -11,7 +11,6 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log(`[INVITE-FRONTEND] Iniciando convite para tenant ID=${params.id}`)
   try {
     const accessToken = request.cookies.get('access_token')?.value
     const body = await request.json()
@@ -38,16 +37,8 @@ export async function POST(
     }
 
     const data = await response.json()
-    console.log(
-      `[INVITE-FRONTEND] ✅ SUCESSO - Convite criado com sucesso para tenant ID=${params.id}`,
-      data
-    )
     return NextResponse.json(data)
   } catch (error) {
-    console.error(
-      `[INVITE-FRONTEND] ❌ FALHA - Erro ao criar convite para tenant ID=${params.id}:`,
-      error
-    )
     return NextResponse.json(
       {
         detail:

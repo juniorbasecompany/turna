@@ -15,7 +15,7 @@ except Exception:
     pass
 
 # Configuração JWT
-# Aceita JWT_SECRET ou APP_JWT_SECRET (compatibilidade com login.py)
+# Aceita JWT_SECRET ou APP_JWT_SECRET
 JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("APP_JWT_SECRET") or "CHANGE_ME"
 JWT_ISSUER = os.getenv("JWT_ISSUER") or os.getenv("APP_JWT_ISSUER", "turna")
 JWT_ALGORITHM = "HS256"
