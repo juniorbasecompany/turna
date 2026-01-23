@@ -4,10 +4,10 @@ import JsonView from '@uiw/react-json-view'
 import { useEffect, useRef, useState } from 'react'
 
 interface JsonEditorProps {
-    /** Valor atual (objeto JSON) */
-    value: unknown
-    /** Callback quando o valor muda */
-    on_change: (value: unknown) => void
+    /** Valor atual (string JSON) */
+    value: string
+    /** Callback quando o valor muda (retorna string JSON formatada) */
+    on_change: (value: string) => void
     /** Se o editor está desabilitado */
     is_disabled?: boolean
     /** Altura do editor (número em px ou string CSS) */
@@ -19,6 +19,8 @@ interface JsonEditorProps {
 /**
  * Componente de edição de JSON em formato árvore.
  * Permite edição inline com expansão/colapso de nós.
+ * 
+ * Aceita e retorna string JSON formatada, fazendo a conversão internamente.
  */
 export function JsonEditor({
     value,
@@ -27,16 +29,40 @@ export function JsonEditor({
     height = 400,
     id,
 }: JsonEditorProps) {
-    const [internalValue, setInternalValue] = useState<unknown>(value)
-    const initialValueRef = useRef<unknown>(value)
+    // Converter string JSON para objeto
+    const parseJsonValue = (jsonString: string): unknown => {
+        try {
+            if (!jsonString || jsonString.trim() === '') {
+                return {}
+            }
+            return JSON.parse(jsonString)
+        } catch {
+            return {}
+        }
+    }
+
+    // Converter objeto para string JSON formatada
+    const stringifyJsonValue = (obj: unknown): string => {
+        try {
+            return JSON.stringify(obj, null, 2)
+        } catch {
+            return '{}'
+        }
+    }
+
+    // Valor inicial parseado
+    const initialParsedValue: unknown = parseJsonValue(value)
+    const [internalValue, setInternalValue] = useState<unknown>(initialParsedValue)
+    const initialValueRef = useRef<unknown>(initialParsedValue)
     // Estado para rastrear qual valor está sendo editado (usando path como chave)
     const [editingPath, setEditingPath] = useState<string | null>(null)
     const [editingValue, setEditingValue] = useState<string>('')
 
     // Sincronizar com valor externo quando mudar
     useEffect(() => {
-        setInternalValue(value)
-        initialValueRef.current = value
+        const parsed = parseJsonValue(value)
+        setInternalValue(parsed)
+        initialValueRef.current = parsed
     }, [value])
 
     // Converter altura para string CSS
@@ -45,7 +71,9 @@ export function JsonEditor({
     // Handler para mudanças no editor
     const handleChange = (newValue: unknown) => {
         setInternalValue(newValue)
-        on_change(newValue)
+        // Converter objeto para string JSON formatada antes de chamar on_change
+        const jsonString = stringifyJsonValue(newValue)
+        on_change(jsonString)
     }
 
     // Verificar se há mudanças em relação ao valor inicial

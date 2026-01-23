@@ -1450,15 +1450,9 @@ export default function FilesPage() {
                         >
                             <JsonEditor
                                 id="json-content"
-                                value={(() => {
-                                    try {
-                                        return JSON.parse(jsonContent)
-                                    } catch {
-                                        return {}
-                                    }
-                                })()}
+                                value={jsonContent}
                                 on_change={(value) => {
-                                    setJsonContent(JSON.stringify(value, null, 2))
+                                    setJsonContent(value)
                                 }}
                                 is_disabled={submitting}
                                 height={400}
