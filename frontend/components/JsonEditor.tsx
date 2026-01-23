@@ -60,40 +60,124 @@ export function JsonEditor({
                 ? internalValue as object
                 : { value: internalValue }
 
-    // Função auxiliar para atualizar um valor específico no objeto
-    const updateValueInObject = (obj: Record<string, unknown>, path: (string | number)[], newValue: unknown): Record<string, unknown> => {
-        // Criar uma cópia profunda do objeto
-        const result = JSON.parse(JSON.stringify(obj)) as Record<string, unknown>
+    // Função auxiliar para atualizar um valor específico no objeto/array
+    // Suporta tanto objetos quanto arrays, tratando corretamente índices numéricos
+    const updateValueInObject = (obj: unknown, path: (string | number)[], newValue: unknown): unknown => {
+        // Criar uma cópia profunda do objeto/array
+        const result = JSON.parse(JSON.stringify(obj))
 
-        // Se o path estiver vazio, retornar o objeto sem alterações
+        // Se o path estiver vazio, retornar sem alterações
         if (path.length === 0) {
             return result
         }
 
-        // Se o path tiver apenas um elemento, atualizar diretamente na raiz
-        if (path.length === 1) {
-            const key = String(path[0])
-            result[key] = newValue
-            return result
-        }
-
-        let current: Record<string, unknown> = result
-
-        // Navegar até o objeto pai do valor final
-        for (let i = 0; i < path.length - 1; i++) {
-            const key = String(path[i])
-            if (typeof current[key] === 'object' && current[key] !== null && !Array.isArray(current[key])) {
-                current = current[key] as Record<string, unknown>
+        // Função auxiliar para acessar um valor no objeto/array atual
+        const getValue = (container: unknown, key: string | number): unknown => {
+            if (typeof key === 'number') {
+                if (Array.isArray(container)) {
+                    return container[key]
+                }
+                return undefined
             } else {
-                // Se o caminho não existir, criar o objeto necessário
-                current[key] = {}
-                current = current[key] as Record<string, unknown>
+                if (typeof container === 'object' && container !== null && !Array.isArray(container)) {
+                    return (container as Record<string, unknown>)[key]
+                }
+                return undefined
             }
         }
 
+        // Função auxiliar para definir um valor no objeto/array atual
+        const setValue = (container: unknown, key: string | number, value: unknown): void => {
+            if (typeof key === 'number') {
+                if (Array.isArray(container)) {
+                    container[key] = value
+                }
+            } else {
+                if (typeof container === 'object' && container !== null && !Array.isArray(container)) {
+                    ;(container as Record<string, unknown>)[key] = value
+                }
+            }
+        }
+
+        // Navegar até o objeto/array pai do valor final
+        let current: unknown = result
+
+        for (let i = 0; i < path.length - 1; i++) {
+            const key = path[i]
+            const nextKey = path[i + 1]
+
+            // Determinar se o próximo elemento é índice de array ou chave de objeto
+            const nextIsArrayIndex = typeof nextKey === 'number'
+
+            // Obter o elemento atual
+            let currentElement = getValue(current, key)
+
+            // Se o elemento não existir ou tiver tipo errado, criar a estrutura correta
+            if (currentElement === undefined || currentElement === null) {
+                currentElement = nextIsArrayIndex ? [] : {}
+                setValue(current, key, currentElement)
+            } else if (nextIsArrayIndex && !Array.isArray(currentElement)) {
+                // Próximo é índice de array mas elemento atual não é array, converter
+                currentElement = []
+                setValue(current, key, currentElement)
+            } else if (!nextIsArrayIndex && (typeof currentElement !== 'object' || currentElement === null || Array.isArray(currentElement))) {
+                // Próximo é chave de objeto mas elemento atual não é objeto, converter
+                currentElement = {}
+                setValue(current, key, currentElement)
+            }
+
+            // Avançar para o próximo nível
+            current = currentElement
+        }
+
         // Atualizar o valor final
-        const finalKey = String(path[path.length - 1])
-        current[finalKey] = newValue
+        const finalKey = path[path.length - 1]
+        
+        // Garantir que o container final tenha o tipo correto
+        if (typeof finalKey === 'number') {
+            // Acessar array por índice
+            if (!Array.isArray(current)) {
+                // Se não for array, criar array
+                current = []
+                // Atualizar no pai anterior
+                if (path.length > 1) {
+                    const parentKey = path[path.length - 2]
+                    // Navegar de volta até o pai
+                    let parent: unknown = result
+                    for (let i = 0; i < path.length - 2; i++) {
+                        parent = getValue(parent, path[i])
+                    }
+                    setValue(parent, parentKey, current)
+                } else {
+                    // É a raiz
+                    ;(current as unknown[])[finalKey] = newValue
+                    return current
+                }
+            }
+            ;(current as unknown[])[finalKey] = newValue
+        } else {
+            // Acessar objeto por chave string
+            if (typeof current !== 'object' || current === null || Array.isArray(current)) {
+                // Se não for objeto, criar objeto
+                current = {}
+                // Atualizar no pai anterior
+                if (path.length > 1) {
+                    const parentKey = path[path.length - 2]
+                    // Navegar de volta até o pai
+                    let parent: unknown = result
+                    for (let i = 0; i < path.length - 2; i++) {
+                        parent = getValue(parent, path[i])
+                    }
+                    setValue(parent, parentKey, current)
+                } else {
+                    // É a raiz
+                    ;(current as Record<string, unknown>)[finalKey] = newValue
+                    return current
+                }
+            }
+            ;(current as Record<string, unknown>)[finalKey] = newValue
+        }
+
         return result
     }
 
@@ -168,7 +252,7 @@ export function JsonEditor({
                                             setEditingPath(null)
                                             if (jsonViewValue && typeof jsonViewValue === 'object' && keys && keys.length > 0) {
                                                 const updated = updateValueInObject(
-                                                    jsonViewValue as Record<string, unknown>,
+                                                    jsonViewValue,
                                                     keys,
                                                     editingValue || ''
                                                 )
@@ -260,7 +344,7 @@ export function JsonEditor({
                                             const numValue = Number(editingValue)
                                             if (!isNaN(numValue) && jsonViewValue && typeof jsonViewValue === 'object') {
                                                 const updated = updateValueInObject(
-                                                    jsonViewValue as Record<string, unknown>,
+                                                    jsonViewValue,
                                                     keys || [],
                                                     numValue
                                                 )
@@ -350,7 +434,7 @@ export function JsonEditor({
                                             setEditingPath(null)
                                             if (jsonViewValue && typeof jsonViewValue === 'object' && keys && keys.length > 0) {
                                                 const updated = updateValueInObject(
-                                                    jsonViewValue as Record<string, unknown>,
+                                                    jsonViewValue,
                                                     keys,
                                                     editingValue || ''
                                                 )
@@ -414,7 +498,7 @@ export function JsonEditor({
                                             setEditingPath(null)
                                             if (jsonViewValue && typeof jsonViewValue === 'object' && keys && keys.length > 0) {
                                                 const updated = updateValueInObject(
-                                                    jsonViewValue as Record<string, unknown>,
+                                                    jsonViewValue,
                                                     keys,
                                                     editingValue || ''
                                                 )
@@ -481,7 +565,7 @@ export function JsonEditor({
                                             const numValue = Number(editingValue)
                                             if (!isNaN(numValue) && jsonViewValue && typeof jsonViewValue === 'object') {
                                                 const updated = updateValueInObject(
-                                                    jsonViewValue as Record<string, unknown>,
+                                                    jsonViewValue,
                                                     keys || [],
                                                     numValue
                                                 )
