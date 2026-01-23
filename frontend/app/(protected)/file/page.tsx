@@ -1,17 +1,24 @@
 'use client'
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
+import { CardActionButtons } from '@/components/CardActionButtons'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
+import { EntityCard } from '@/components/EntityCard'
 import { FilterButtons } from '@/components/FilterButtons'
+import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityFilters } from '@/hooks/useEntityFilters'
+import { usePagination } from '@/hooks/usePagination'
 import { protectedFetch } from '@/lib/api'
-import { getCardContainerClasses, getCardTextClasses, getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
+import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { getCardTextClasses, getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -557,7 +564,6 @@ export default function FilesPage() {
     const processingRef = useRef(false)
     const processedFilesRef = useRef<Set<string>>(new Set())
     const [files, setFiles] = useState<FileResponse[]>([])
-    const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
@@ -587,14 +593,16 @@ export default function FilesPage() {
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
-    // Filtro de status
-    const [selectedStatuses, setSelectedStatuses] = useState<Set<JobStatus | null>>(
-        new Set(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]) // Todos selecionados por padrão
-    )
+    // Filtro de status usando hook reutilizável
+    const statusFilters = useEntityFilters<JobStatus | null>({
+        allFilters: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null],
+        initialFilters: new Set(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]),
+    })
 
     // Paginação
-    const [limit] = useState(19) // Limite padrão
-    const [offset, setOffset] = useState(0)
+    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(19)
+    const limit = pagination.limit
+    const offset = pagination.offset
 
     // Flash vermelho no card de upload quando não há hospital selecionado
     const [uploadCardFlash, setUploadCardFlash] = useState(false)
@@ -679,80 +687,31 @@ export default function FilesPage() {
         loadFiles()
     }, [startDate, endDate, selectedHospitalId, settings, limit, offset, refreshKey])
 
-    // Navegar para primeira página
-    const goToFirstPage = () => {
-        setOffset(0)
-    }
-
-    // Navegar para página anterior
-    const goToPreviousPage = () => {
-        if (offset > 0) {
-            setOffset(Math.max(0, offset - limit))
-        }
-    }
-
-    // Navegar para próxima página
-    const goToNextPage = () => {
-        if (offset + limit < total) {
-            setOffset(offset + limit)
-        }
-    }
-
-    // Navegar para última página
-    const goToLastPage = () => {
-        const lastOffset = Math.floor((total - 1) / limit) * limit
-        setOffset(lastOffset)
-    }
+    // Handlers de paginação agora vêm do hook usePagination
 
     // Handlers para mudança de data no TenantDatePicker
     const handleStartDateChange = (date: Date | null) => {
         setStartDate(date)
-        setOffset(0) // Resetar paginação ao mudar filtro
+        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
     }
 
     const handleEndDateChange = (date: Date | null) => {
         setEndDate(date)
-        setOffset(0) // Resetar paginação ao mudar filtro
+        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
     }
 
     const handleHospitalChange = (hospitalId: string) => {
         setSelectedHospitalId(hospitalId ? parseInt(hospitalId) : null)
-        setOffset(0) // Resetar paginação ao mudar filtro
+        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
 
-    // Toggle seleção de status
-    const toggleStatus = (status: JobStatus | null) => {
-        setSelectedStatuses((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(status)) {
-                newSet.delete(status)
-            } else {
-                newSet.add(status)
-            }
-            return newSet
-        })
-        setOffset(0) // Resetar paginação ao mudar filtro
-    }
-
-    // Selecionar/deselecionar todos os status
-    const toggleAllStatuses = () => {
-        const allStatuses: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
-        const allSelected = allStatuses.every((status) => selectedStatuses.has(status))
-
-        if (allSelected) {
-            setSelectedStatuses(new Set())
-        } else {
-            setSelectedStatuses(new Set(allStatuses))
-        }
-        setOffset(0) // Resetar paginação ao mudar filtro
-    }
-
-    // Verificar se todos os status estão selecionados
-    const allStatusesSelected = useMemo(() => {
-        const allStatuses: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
-        return allStatuses.every((status) => selectedStatuses.has(status))
-    }, [selectedStatuses])
+    // Handlers para filtros (usando hooks reutilizáveis)
+    // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
+    // Resetar paginação quando filtros mudarem
+    useEffect(() => {
+        setPagination((prev) => ({ ...prev, offset: 0 }))
+    }, [statusFilters.selectedFilters, setPagination])
 
     // Toggle seleção de arquivo para exclusão
     const toggleFileSelection = (fileId: number) => {
@@ -1330,6 +1289,76 @@ export default function FilesPage() {
         }
     }
 
+    // Botões do ActionBar - customizado para File (suporta showEditArea e selectedFilesForReading)
+    // Ordem padronizada: Cancelar → Excluir → Salvar → Ler conteúdo
+    const actionBarButtons = useMemo(() => {
+        const buttons = []
+        
+        // 1. Botão Cancelar (aparece se houver edição OU seleção)
+        if (showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0) {
+            buttons.push({
+                label: 'Cancelar',
+                onClick: handleCancel,
+                variant: 'secondary' as const,
+                disabled: submitting || deleting || reading,
+            })
+        }
+        
+        // 2. Botão Excluir (aparece se houver arquivos marcados para exclusão)
+        if (selectedFiles.size > 0) {
+            buttons.push({
+                label: 'Excluir',
+                onClick: handleDeleteSelected,
+                variant: 'primary' as const,
+                disabled: deleting || submitting,
+                loading: deleting,
+            })
+        }
+        
+        // 3. Botão Salvar (aparece se houver edição com mudanças)
+        if (showEditArea && hasChanges()) {
+            buttons.push({
+                label: submitting ? 'Salvando...' : 'Salvar',
+                onClick: handleSave,
+                variant: 'primary' as const,
+                disabled: submitting,
+                loading: submitting,
+            })
+        }
+        
+        // 4. Botão Ler conteúdo (aparece se houver arquivos marcados para leitura)
+        if (selectedFilesForReading.size > 0) {
+            buttons.push({
+                label: 'Ler conteúdo',
+                onClick: handleReadSelected,
+                variant: 'primary' as const,
+                disabled: reading || submitting,
+                loading: reading,
+            })
+        }
+        
+        return buttons
+    }, [
+        showEditArea,
+        selectedFiles.size,
+        selectedFilesForReading.size,
+        hasChanges,
+        submitting,
+        deleting,
+        reading,
+        handleCancel,
+        handleSave,
+        handleDeleteSelected,
+        handleReadSelected,
+    ])
+
+    // Props de erro do ActionBar usando função utilitária (ajustado para showEditArea)
+    const actionBarErrorProps = getActionBarErrorProps(
+        error,
+        showEditArea, // File usa showEditArea em vez de isEditing
+        selectedFiles.size + selectedFilesForReading.size // Contar ambas as seleções
+    )
+
     return (
         <div
             className="p-4 sm:p-6 lg:p-8 min-w-0"
@@ -1348,71 +1377,72 @@ export default function FilesPage() {
             {/* Filtros ou Área de edição (nunca aparecem juntos) */}
             {!showEditArea ? (
                 /* Filtro por período e hospital */
-                <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-                    <div className="space-y-4">
-                        {/* Primeira linha: Hospital e Datas */}
-                        <FormFieldGrid cols={1} smCols={3} gap={4}>
-                            <FormField label="Hospital">
-                                {loadingHospitalList ? (
-                                    <div className="flex justify-center py-2">
-                                        <LoadingSpinner />
-                                    </div>
-                                ) : (
-                                    <select
-                                        id="hospital-filter"
-                                        value={selectedHospitalId || ''}
-                                        onChange={(e) => handleHospitalChange(e.target.value)}
-                                        className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
-                                            ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
-                                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                            }`}
-                                    >
-                                        <option value=""></option>
-                                        {hospitalList.map((hospital) => (
-                                            <option key={hospital.id} value={hospital.id}>
-                                                {hospital.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
-                            </FormField>
-                            <TenantDatePicker
-                                label="Cadastrados deste"
-                                value={startDate}
-                                onChange={handleStartDateChange}
-                                id="start_at"
-                                name="start_at"
-                            />
-                            <TenantDatePicker
-                                label="Cadastrados até"
-                                value={endDate}
-                                onChange={handleEndDateChange}
-                                id="end_at"
-                                name="end_at"
-                            />
-                        </FormFieldGrid>
-
-                        {/* Segunda linha: Filtro de Status */}
-                        <FilterButtons
-                            title="Situação"
-                            options={[
-                                { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
-                                { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
-                                { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
-                                { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
-                                { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
-                            ]}
-                            selectedValues={selectedStatuses}
-                            onToggle={toggleStatus}
-                            onToggleAll={toggleAllStatuses}
+                <FilterPanel
+                    validationErrors={
+                        startDate && endDate && startDate > endDate ? (
+                            <p className="mt-2 text-sm text-red-600">
+                                Data inicial deve ser menor ou igual à data final
+                            </p>
+                        ) : undefined
+                    }
+                >
+                    {/* Primeira linha: Hospital e Datas */}
+                    <FormFieldGrid cols={1} smCols={3} gap={4}>
+                        <FormField label="Hospital">
+                            {loadingHospitalList ? (
+                                <div className="flex justify-center py-2">
+                                    <LoadingSpinner />
+                                </div>
+                            ) : (
+                                <select
+                                    id="hospital-filter"
+                                    value={selectedHospitalId || ''}
+                                    onChange={(e) => handleHospitalChange(e.target.value)}
+                                    className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
+                                        ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                                        }`}
+                                >
+                                    <option value=""></option>
+                                    {hospitalList.map((hospital) => (
+                                        <option key={hospital.id} value={hospital.id}>
+                                            {hospital.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </FormField>
+                        <TenantDatePicker
+                            label="Cadastrados deste"
+                            value={startDate}
+                            onChange={handleStartDateChange}
+                            id="start_at"
+                            name="start_at"
                         />
-                    </div>
-                    {startDate && endDate && startDate > endDate && (
-                        <p className="mt-2 text-sm text-red-600">
-                            Data inicial deve ser menor ou igual à data final
-                        </p>
-                    )}
-                </div>
+                        <TenantDatePicker
+                            label="Cadastrados até"
+                            value={endDate}
+                            onChange={handleEndDateChange}
+                            id="end_at"
+                            name="end_at"
+                        />
+                    </FormFieldGrid>
+
+                    {/* Segunda linha: Filtro de Status */}
+                    <FilterButtons
+                        title="Situação"
+                        options={[
+                            { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
+                            { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
+                            { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
+                            { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
+                            { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
+                        ]}
+                        selectedValues={statusFilters.selectedFilters}
+                        onToggle={statusFilters.toggleFilter}
+                        onToggleAll={statusFilters.toggleAll}
+                    />
+                </FilterPanel>
             ) : (
                 /* Área de edição */
             <EditForm
@@ -1456,7 +1486,7 @@ export default function FilesPage() {
                 // Filtrar arquivos por status
                 const filteredFiles = files.filter((file) => {
                     const status = file.job_status === null ? null : (file.job_status as JobStatus)
-                    return selectedStatuses.has(status)
+                    return statusFilters.selectedFilters.has(status)
                 })
                 const filteredTotal = filteredFiles.length
 
@@ -1644,9 +1674,11 @@ export default function FilesPage() {
                                 const hospitalBorderColor = file.hospital_color || '#E2E8F0' // slate-200 como fallback
 
                                 return (
-                                    <div
+                                    <EntityCard
                                         key={file.id}
-                                        className={`${getCardContainerClasses(isSelected)} flex flex-col`}
+                                        id={file.id}
+                                        isSelected={isSelected}
+                                        className="flex flex-col"
                                     >
                                         {/* 1. Topo - Identidade do arquivo - com cor do hospital */}
                                         <div
@@ -1691,7 +1723,7 @@ export default function FilesPage() {
                                             </span>
                                         </div>
 
-                                        {/* 4. Metadados e ações na parte inferior */}
+                                        {/* 4. Metadados e ações na parte inferior (footer customizado) */}
                                         <div className="flex items-center justify-between gap-2">
                                             {/* Metadados à esquerda */}
                                             <div className="flex flex-col min-w-0 flex-1">
@@ -1704,7 +1736,7 @@ export default function FilesPage() {
                                             </div>
                                             {/* Ações à direita */}
                                             <div className="flex items-center gap-2 shrink-0">
-                                                {/* Checkbox para leitura */}
+                                                {/* Checkbox para leitura (específico do File) */}
                                                 <label className="flex items-center cursor-pointer">
                                                     <input
                                                         type="checkbox"
@@ -1718,59 +1750,21 @@ export default function FilesPage() {
                                                         title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
                                                     />
                                                 </label>
-                                                {/* Botão para editar */}
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleEditClick(file)
-                                                    }}
-                                                    className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600 hover:text-blue-700"
-                                                    title="Editar arquivo"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                                        />
-                                                    </svg>
-                                                </button>
-                                                {/* Ícone para exclusão */}
-                                                <button
-                                                    onClick={(e) => {
+                                                {/* Botões padronizados (ordem automática: Excluir → Editar) */}
+                                                <CardActionButtons
+                                                    isSelected={isSelected}
+                                                    onToggleSelection={(e) => {
                                                         e.stopPropagation()
                                                         toggleFileSelection(file.id)
                                                     }}
+                                                    onEdit={() => handleEditClick(file)}
                                                     disabled={deleting}
-                                                    className={`shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
-                                                        ? 'text-red-700 bg-red-100 opacity-100'
-                                                        : 'text-gray-400'
-                                                        }`}
-                                                    title={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                                        />
-                                                    </svg>
-                                                </button>
+                                                    deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                                    editTitle="Editar arquivo"
+                                                />
                                             </div>
                                         </div>
-                                    </div>
+                                    </EntityCard>
                                 )
                             })}
                         </div>
@@ -1789,78 +1783,18 @@ export default function FilesPage() {
                             offset={offset}
                             limit={limit}
                             total={total}
-                            onFirst={goToFirstPage}
-                            onPrevious={goToPreviousPage}
-                            onNext={goToNextPage}
-                            onLast={goToLastPage}
+                            onFirst={onFirst}
+                            onPrevious={onPrevious}
+                            onNext={onNext}
+                            onLast={onLast}
                             disabled={loading}
                         />
                     ) : undefined
                 }
-                error={(() => {
-                    // Mostra erro no ActionBar apenas se houver botões de ação
-                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
-                    return hasButtons ? error || undefined : undefined
-                })()}
-                message={(() => {
-                    // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
-                    if (!hasButtons && error) {
-                        return error
-                    }
-                    return undefined
-                })()}
-                messageType={(() => {
-                    // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0
-                    if (!hasButtons && error) {
-                        return 'error' as const
-                    }
-                    return undefined
-                })()}
-                buttons={(() => {
-                    const buttons = []
-                    // Botão Cancelar (aparece se houver edição OU seleção)
-                    if (showEditArea || selectedFiles.size > 0 || selectedFilesForReading.size > 0) {
-                        buttons.push({
-                            label: 'Cancelar',
-                            onClick: handleCancel,
-                            variant: 'secondary' as const,
-                            disabled: submitting || deleting || reading,
-                        })
-                    }
-                    // Botão Salvar (aparece se houver edição com mudanças)
-                    if (showEditArea && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    // Adicionar botão "Excluir" se houver arquivos marcados para exclusão
-                    if (selectedFiles.size > 0) {
-                        buttons.push({
-                            label: 'Excluir',
-                            onClick: handleDeleteSelected,
-                            variant: 'primary' as const,
-                            disabled: deleting || submitting,
-                            loading: deleting,
-                        })
-                    }
-                    // Adicionar botão "Ler conteúdo" se houver arquivos marcados para leitura
-                    if (selectedFilesForReading.size > 0) {
-                        buttons.push({
-                            label: 'Ler conteúdo',
-                            onClick: handleReadSelected,
-                            variant: 'primary' as const,
-                            disabled: reading || submitting,
-                            loading: reading,
-                        })
-                    }
-                    return buttons
-                })()}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtons}
             />
         </div>
     )

@@ -4,13 +4,19 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { EditForm } from '@/components/EditForm'
+import { EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterOption } from '@/components/FilterButtons'
+import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityFilters } from '@/hooks/useEntityFilters'
+import { usePagination } from '@/hooks/usePagination'
 import { protectedFetch } from '@/lib/api'
-import { getCardContainerClasses } from '@/lib/cardStyles'
+import { getActionBarErrorProps } from '@/lib/entityUtils'
 import {
     MemberCreateRequest,
     MemberListResponse,
@@ -45,14 +51,23 @@ export default function MemberPage() {
     const [submitting, setSubmitting] = useState(false)
     const [selectedMembers, setSelectedMembers] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
-    const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
-        new Set(['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']) // Todos selecionados por padrão
-    )
-    const [selectedRoles, setSelectedRoles] = useState<Set<string>>(
-        new Set(['account', 'admin']) // Todos selecionados por padrão
-    )
-    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
-    const [total, setTotal] = useState(0)
+    // Filtros usando hook reutilizável
+    const statusFilters = useEntityFilters({
+        allFilters: ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED'],
+        initialFilters: new Set(['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']),
+        onFilterChange: () => {
+            setPagination((prev) => ({ ...prev, offset: 0 }))
+        },
+    })
+
+    const roleFilters = useEntityFilters({
+        allFilters: ['account', 'admin'],
+        initialFilters: new Set(['account', 'admin']),
+        onFilterChange: () => {
+            setPagination((prev) => ({ ...prev, offset: 0 }))
+        },
+    })
+    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(20)
     const [showEditArea, setShowEditArea] = useState(false)
     const [allMembers, setAllMembers] = useState<MemberResponse[]>([])
 
@@ -101,11 +116,11 @@ export default function MemberPage() {
     // Filtrar members no frontend
     const members = useMemo(() => {
         return allMembers.filter((member) => {
-            const statusMatch = selectedStatuses.has(member.status)
-            const roleMatch = selectedRoles.has(member.role)
+            const statusMatch = statusFilters.selectedFilters.has(member.status)
+            const roleMatch = roleFilters.selectedFilters.has(member.role)
             return statusMatch && roleMatch
         })
-    }, [allMembers, selectedStatuses, selectedRoles])
+    }, [allMembers, statusFilters.selectedFilters, roleFilters.selectedFilters])
 
     // Aplicar paginação
     const paginatedMembers = useMemo(() => {
@@ -117,7 +132,7 @@ export default function MemberPage() {
     // Atualizar total baseado nos filtros
     useEffect(() => {
         setTotal(members.length)
-    }, [members.length])
+    }, [members.length, setTotal])
 
     // Validar JSON
     const validateJson = (jsonString: string): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
@@ -439,54 +454,8 @@ export default function MemberPage() {
         }
     }
 
-    // Handlers para filtros
-    const toggleStatus = (status: string) => {
-        setSelectedStatuses((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(status)) {
-                newSet.delete(status)
-            } else {
-                newSet.add(status)
-            }
-            return newSet
-        })
-        setPagination({ ...pagination, offset: 0 })
-    }
-
-    const toggleAllStatuses = () => {
-        const allStatuses = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']
-        const allSelected = allStatuses.every((status) => selectedStatuses.has(status))
-        if (allSelected) {
-            setSelectedStatuses(new Set())
-        } else {
-            setSelectedStatuses(new Set(allStatuses))
-        }
-        setPagination({ ...pagination, offset: 0 })
-    }
-
-    const toggleRole = (role: string) => {
-        setSelectedRoles((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(role)) {
-                newSet.delete(role)
-            } else {
-                newSet.add(role)
-            }
-            return newSet
-        })
-        setPagination({ ...pagination, offset: 0 })
-    }
-
-    const toggleAllRoles = () => {
-        const allRoles = ['account', 'admin']
-        const allSelected = allRoles.every((role) => selectedRoles.has(role))
-        if (allSelected) {
-            setSelectedRoles(new Set())
-        } else {
-            setSelectedRoles(new Set(allRoles))
-        }
-        setPagination({ ...pagination, offset: 0 })
-    }
+    // Handlers para filtros (usando hooks reutilizáveis)
+    // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
 
     // Opções para os filtros (ordenadas automaticamente pelo componente)
     const statusOptions: FilterOption<string>[] = [
@@ -501,106 +470,126 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
+    // Botões do ActionBar usando hook reutilizável
+    const actionBarButtons = useActionBarButtons({
+        isEditing,
+        selectedCount: selectedMembers.size,
+        hasChanges: hasChanges() || sendInvite, // Customização: incluir sendInvite
+        submitting,
+        deleting,
+        onCancel: handleCancel,
+        onDelete: handleDeleteSelected,
+        onSave: editingMember ? handleSave : handleCreate,
+        saveLabel: submitting 
+            ? (editingMember ? 'Salvando...' : 'Criando...') 
+            : (editingMember ? 'Salvar' : 'Criar'),
+        deleteLabel: 'Remover',
+    })
+
+    // Props de erro do ActionBar usando função utilitária
+    const actionBarErrorProps = getActionBarErrorProps(
+        error,
+        isEditing,
+        selectedMembers.size,
+        emailMessage,
+        emailMessageType
+    )
+
     return (
         <>
+            {/* Área de edição */}
+            <EditForm title="Associação" isEditing={isEditing}>
+                <div className="space-y-4">
+                    <FormField label="E-mail" required>
+                        <input
+                            id="email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="E-mail público na clínica"
+                            required={!editingMember}
+                            disabled={submitting}
+                        />
+                    </FormField>
+                    <div>
+                        <div className="flex items-center">
+                            <input
+                                type="checkbox"
+                                id="sendInvite"
+                                checked={sendInvite}
+                                onChange={(e) => setSendInvite(e.target.checked)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                disabled={submitting}
+                            />
+                            <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
+                                Enviar convite
+                            </label>
+                        </div>
+                    </div>
+                    <FormField label="Nome">
+                        <input
+                            id="name"
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Nome público na clínica"
+                            disabled={submitting}
+                        />
+                    </FormField>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Função" required>
+                            <select
+                                id="role"
+                                value={formData.role}
+                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                disabled={submitting}
+                            >
+                                <option value="account">Conta</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </FormField>
+                        <FormField label="Situação" required>
+                            <select
+                                id="status"
+                                value={formData.status}
+                                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                disabled={submitting}
+                            >
+                                <option value="PENDING">Pendente</option>
+                                <option value="ACTIVE">Ativo</option>
+                                <option value="REJECTED">Rejeitado</option>
+                                <option value="REMOVED">Removido</option>
+                            </select>
+                        </FormField>
+                    </FormFieldGrid>
+                    <FormField
+                        label="Atributos (JSON)"
+                        required
+                        error={jsonError || undefined}
+                    >
+                        <textarea
+                            id="attribute"
+                            value={formData.attribute}
+                            onChange={(e) => handleAttributeChange(e.target.value)}
+                            rows={10}
+                            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
+                                }`}
+                            disabled={submitting}
+                        />
+                    </FormField>
+                </div>
+            </EditForm>
+
             <CardPanel
                 title="Associados"
                 loading={loading}
                 error={undefined}
-                editContent={
-                    isEditing ? (
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                                {editingMember ? 'Editar Associação' : 'Criar Associação'}
-                            </h2>
-                            <div className="space-y-4">
-                                <FormField label="E-mail" required>
-                                    <input
-                                        id="email"
-                                        type="email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="E-mail público na clínica"
-                                        required={!editingMember}
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                                <div>
-                                    <div className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            id="sendInvite"
-                                            checked={sendInvite}
-                                            onChange={(e) => setSendInvite(e.target.checked)}
-                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                            disabled={submitting}
-                                        />
-                                        <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
-                                            Enviar convite
-                                        </label>
-                                    </div>
-                                </div>
-                                <FormField label="Nome">
-                                    <input
-                                        id="name"
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="Nome público na clínica"
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                                <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                    <FormField label="Função" required>
-                                        <select
-                                            id="role"
-                                            value={formData.role}
-                                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                            disabled={submitting}
-                                        >
-                                            <option value="account">Conta</option>
-                                            <option value="admin">Administrador</option>
-                                        </select>
-                                    </FormField>
-                                    <FormField label="Situação" required>
-                                        <select
-                                            id="status"
-                                            value={formData.status}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                            disabled={submitting}
-                                        >
-                                            <option value="PENDING">Pendente</option>
-                                            <option value="ACTIVE">Ativo</option>
-                                            <option value="REJECTED">Rejeitado</option>
-                                            <option value="REMOVED">Removido</option>
-                                        </select>
-                                    </FormField>
-                                </FormFieldGrid>
-                                <FormField
-                                    label="Atributos (JSON)"
-                                    required
-                                    error={jsonError || undefined}
-                                >
-                                    <textarea
-                                        id="attribute"
-                                        value={formData.attribute}
-                                        onChange={(e) => handleAttributeChange(e.target.value)}
-                                        rows={10}
-                                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
-                                            }`}
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                            </div>
-                        </div>
-                    ) : undefined
-                }
                 createCard={
                     <CreateCard
                         label="Convidar novo membro"
@@ -610,34 +599,48 @@ export default function MemberPage() {
                 }
                 filterContent={
                     !isEditing ? (
-                        <div className="bg-white rounded-lg border border-gray-200 p-4">
-                            <div className="space-y-4">
-                                <FilterButtons
-                                    title="Situação"
-                                    options={statusOptions}
-                                    selectedValues={selectedStatuses}
-                                    onToggle={toggleStatus}
-                                    onToggleAll={toggleAllStatuses}
-                                />
-                                <FilterButtons
-                                    title="Função"
-                                    options={roleOptions}
-                                    selectedValues={selectedRoles}
-                                    onToggle={toggleRole}
-                                    onToggleAll={toggleAllRoles}
-                                    allOptionLabel="Todas"
-                                />
-                            </div>
-                        </div>
+                        <FilterPanel>
+                            <FilterButtons
+                                title="Situação"
+                                options={statusOptions}
+                                selectedValues={statusFilters.selectedFilters}
+                                onToggle={statusFilters.toggleFilter}
+                                onToggleAll={statusFilters.toggleAll}
+                            />
+                            <FilterButtons
+                                title="Função"
+                                options={roleOptions}
+                                selectedValues={roleFilters.selectedFilters}
+                                onToggle={roleFilters.toggleFilter}
+                                onToggleAll={roleFilters.toggleAll}
+                                allOptionLabel="Todas"
+                            />
+                        </FilterPanel>
                     ) : undefined
                 }
             >
                 {paginatedMembers.map((member) => {
                     const isSelected = selectedMembers.has(member.id)
                     return (
-                        <div
+                        <EntityCard
                             key={member.id}
-                            className={getCardContainerClasses(isSelected)}
+                            id={member.id}
+                            isSelected={isSelected}
+                            footer={
+                                <CardFooter
+                                    isSelected={isSelected}
+                                    date={member.created_at}
+                                    settings={settings}
+                                    onToggleSelection={(e) => {
+                                        e.stopPropagation()
+                                        toggleMemberSelection(member.id)
+                                    }}
+                                    onEdit={() => handleEditClick(member)}
+                                    disabled={deleting}
+                                    deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                    editTitle="Editar associação"
+                                />
+                            }
                         >
                             <div className="mb-3">
                                 <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50">
@@ -675,21 +678,7 @@ export default function MemberPage() {
                                     </div>
                                 </div>
                             </div>
-
-                            <CardFooter
-                                isSelected={isSelected}
-                                date={member.created_at}
-                                settings={settings}
-                                onToggleSelection={(e) => {
-                                    e.stopPropagation()
-                                    toggleMemberSelection(member.id)
-                                }}
-                                onEdit={() => handleEditClick(member)}
-                                disabled={deleting}
-                                deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                editTitle="Editar associação"
-                            />
-                        </div>
+                        </EntityCard>
                     )
                 })}
             </CardPanel>
@@ -703,78 +692,18 @@ export default function MemberPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
-                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
-                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
-                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            onFirst={onFirst}
+                            onPrevious={onPrevious}
+                            onNext={onNext}
+                            onLast={onLast}
                             disabled={loading}
                         />
                     ) : undefined
                 }
-                error={(() => {
-                    // Se houver mensagem de email, não mostrar erro genérico
-                    // A mensagem de email será exibida via prop 'message'
-                    if (emailMessage) {
-                        return undefined
-                    }
-                    const hasButtons = isEditing || selectedMembers.size > 0
-                    return hasButtons ? error : undefined
-                })()}
-                message={(() => {
-                    // Priorizar mensagem de email se houver
-                    if (emailMessage) {
-                        return emailMessage
-                    }
-                    // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = isEditing || selectedMembers.size > 0
-                    if (!hasButtons && error) {
-                        return error
-                    }
-                    return undefined
-                })()}
-                messageType={(() => {
-                    // Priorizar tipo de mensagem de email se houver
-                    if (emailMessage) {
-                        return emailMessageType
-                    }
-                    // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = isEditing || selectedMembers.size > 0
-                    if (!hasButtons && error) {
-                        return 'error' as const
-                    }
-                    return undefined
-                })()}
-                buttons={(() => {
-                    const buttons = []
-                    if (isEditing || selectedMembers.size > 0) {
-                        buttons.push({
-                            label: 'Cancelar',
-                            onClick: handleCancel,
-                            variant: 'secondary' as const,
-                            disabled: submitting || deleting,
-                        })
-                    }
-                    if (selectedMembers.size > 0) {
-                        buttons.push({
-                            label: 'Remover',
-                            onClick: handleDeleteSelected,
-                            variant: 'primary' as const,
-                            disabled: deleting || submitting,
-                            loading: deleting,
-                        })
-                    }
-                    // Botão Salvar aparece se houver mudanças OU se o checkbox "Enviar convite" estiver marcado
-                    if (isEditing && (hasChanges() || sendInvite)) {
-                        buttons.push({
-                            label: submitting ? (editingMember ? 'Salvando...' : 'Criando...') : (editingMember ? 'Salvar' : 'Criar'),
-                            onClick: editingMember ? handleSave : handleCreate,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    return buttons
-                })()}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtons}
             />
         </>
     )

@@ -22,6 +22,17 @@ interface UseActionBarButtonsOptions {
     cancelLabel?: string
 }
 
+/**
+ * Hook para gerar botões padronizados do ActionBar.
+ *
+ * Ordem padronizada dos botões (sempre nesta ordem):
+ * 1. Cancelar (secondary) - aparece quando há edição OU seleção
+ * 2. Excluir (primary) - aparece quando há seleção
+ * 3. Salvar (primary) - aparece quando há edição com mudanças
+ *
+ * Esta ordem garante consistência visual em todos os painéis.
+ */
+
 export function useActionBarButtons(options: UseActionBarButtonsOptions): ActionButton[] {
     const {
         isEditing,
@@ -39,6 +50,11 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
 
     return useMemo(() => {
         const buttons: ActionButton[] = []
+
+        // Ordem padronizada dos botões:
+        // 1. Cancelar (secondary) - sempre primeiro quando aparece
+        // 2. Excluir (primary) - quando há seleção
+        // 3. Salvar (primary) - quando há edição com mudanças
 
         // Botão Cancelar (aparece se houver edição OU seleção)
         if (isEditing || selectedCount > 0) {

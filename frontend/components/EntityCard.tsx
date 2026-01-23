@@ -30,7 +30,7 @@ interface EntityCardProps {
  *   footer={<CardFooter {...props} />}
  * >
  *   <div className="mb-3">
- *     {/* Conteúdo do card */}
+ *     Conteúdo do card
  *   </div>
  * </EntityCard>
  * ```

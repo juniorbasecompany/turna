@@ -6,11 +6,11 @@ import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
+import { EntityCard } from '@/components/EntityCard'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
     HospitalResponse,
@@ -143,64 +143,65 @@ export default function HospitalPage() {
                 }
             >
                 {hospitals.map((hospital) => {
-                            const isSelected = selectedHospitals.has(hospital.id)
-                            return (
+                    const isSelected = selectedHospitals.has(hospital.id)
+                    return (
+                        <EntityCard
+                            key={hospital.id}
+                            id={hospital.id}
+                            isSelected={isSelected}
+                            footer={
+                                <CardFooter
+                                    isSelected={isSelected}
+                                    date={hospital.created_at}
+                                    settings={settings}
+                                    onToggleSelection={(e) => {
+                                        e.stopPropagation()
+                                        toggleHospitalSelection(hospital.id)
+                                    }}
+                                    onEdit={() => handleEditClick(hospital)}
+                                    disabled={deleting}
+                                    deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                    editTitle="Editar hospital"
+                                />
+                            }
+                        >
+                            {/* Corpo - Ícone de hospital e nome */}
+                            <div className="mb-3">
                                 <div
-                                    key={hospital.id}
-                                    className={getCardContainerClasses(isSelected)}
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-gray-200"
+                                    style={{
+                                        backgroundColor: hospital.color || '#f1f5f9',
+                                    }}
                                 >
-                                    {/* 1. Corpo - Ícone de hospital e nome */}
-                                    <div className="mb-3">
-                                        <div
-                                            className="h-40 sm:h-48 rounded-lg flex items-center justify-center"
-                                            style={{
-                                                backgroundColor: hospital.color || '#f1f5f9',
-                                            }}
-                                        >
-                                            <div className="flex flex-col items-center justify-center text-blue-500">
-                                                <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                    <svg
-                                                        className="w-full h-full"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                                <h3
-                                                    className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                        }`}
-                                                    title={hospital.name}
-                                                >
-                                                    {hospital.name}
-                                                </h3>
-                                            </div>
+                                    <div className="flex flex-col items-center justify-center text-blue-500">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                            <svg
+                                                className="w-full h-full"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                                                />
+                                            </svg>
                                         </div>
+                                        <h3
+                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                }`}
+                                            title={hospital.name}
+                                        >
+                                            {hospital.name}
+                                        </h3>
                                     </div>
-
-                                    {/* 3. Rodapé - Metadados e ações */}
-                                    <CardFooter
-                                        isSelected={isSelected}
-                                        date={hospital.created_at}
-                                        settings={settings}
-                                        onToggleSelection={(e) => {
-                                            e.stopPropagation()
-                                            toggleHospitalSelection(hospital.id)
-                                        }}
-                                        onEdit={() => handleEditClick(hospital)}
-                                        disabled={deleting}
-                                        deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                        editTitle="Editar hospital"
-                                    />
                                 </div>
-                            )
-                        })}
+                            </div>
+                        </EntityCard>
+                    )
+                })}
             </CardPanel>
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}

@@ -5,11 +5,11 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
+import { EntityCard } from '@/components/EntityCard'
 import { Pagination } from '@/components/Pagination'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { getCardContainerClasses } from '@/lib/cardStyles'
 import {
     TenantCreateRequest,
     TenantResponse,
@@ -213,9 +213,25 @@ export default function TenantPage() {
                 {tenants.map((tenant) => {
                     const isSelected = selectedTenants.has(tenant.id)
                     return (
-                        <div
+                        <EntityCard
                             key={tenant.id}
-                            className={getCardContainerClasses(isSelected)}
+                            id={tenant.id}
+                            isSelected={isSelected}
+                            footer={
+                                <CardFooter
+                                    isSelected={isSelected}
+                                    date={tenant.created_at}
+                                    settings={settings}
+                                    onToggleSelection={(e) => {
+                                        e.stopPropagation()
+                                        toggleTenantSelection(tenant.id)
+                                    }}
+                                    onEdit={() => handleEditClick(tenant)}
+                                    disabled={deleting}
+                                    deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                    editTitle="Editar clínica"
+                                />
+                            }
                         >
                             {/* Corpo - Nome e informações */}
                             <div className="mb-3">
@@ -248,22 +264,7 @@ export default function TenantPage() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Rodapé - Metadados e ações */}
-                            <CardFooter
-                                isSelected={isSelected}
-                                date={tenant.created_at}
-                                settings={settings}
-                                onToggleSelection={(e) => {
-                                    e.stopPropagation()
-                                    toggleTenantSelection(tenant.id)
-                                }}
-                                onEdit={() => handleEditClick(tenant)}
-                                disabled={deleting}
-                                deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                editTitle="Editar clínica"
-                            />
-                        </div>
+                        </EntityCard>
                     )
                 })}
             </CardPanel>

@@ -1,16 +1,20 @@
 'use client'
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
-import { CardActionButtons } from '@/components/CardActionButtons'
+import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
+import { EditForm } from '@/components/EditForm'
+import { EntityCard } from '@/components/EntityCard'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { usePagination } from '@/hooks/usePagination'
 import { protectedFetch, extractErrorMessage } from '@/lib/api'
-import { getCardContainerClasses, getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
+import { getActionBarErrorProps } from '@/lib/entityUtils'
 import { formatDateTime } from '@/lib/tenantFormat'
 import {
     DemandCreateRequest,
@@ -67,8 +71,7 @@ export default function DemandPage() {
     const [selectedDemands, setSelectedDemands] = useState<Set<number>>(new Set())
     const [deleting, setDeleting] = useState(false)
     const [skillsInput, setSkillsInput] = useState('')
-    const [pagination, setPagination] = useState({ limit: 20, offset: 0 })
-    const [total, setTotal] = useState(0)
+    const { pagination, setPagination, total, setTotal, onFirst, onPrevious, onNext, onLast } = usePagination(20)
 
     // Carregar lista de hospitais
     const loadHospitals = async () => {
@@ -366,16 +369,30 @@ export default function DemandPage() {
         }
     }
 
+    // Botões do ActionBar usando hook reutilizável
+    const actionBarButtons = useActionBarButtons({
+        isEditing,
+        selectedCount: selectedDemands.size,
+        hasChanges: hasChanges(),
+        submitting,
+        deleting,
+        onCancel: handleCancel,
+        onDelete: handleDeleteSelected,
+        onSave: handleSave,
+    })
+
+    // Props de erro do ActionBar usando função utilitária
+    const actionBarErrorProps = getActionBarErrorProps(
+        error,
+        isEditing,
+        selectedDemands.size
+    )
+
     return (
         <>
             {/* Área de edição */}
-            {isEditing && (
-                <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-                    <div className="mb-4 sm:mb-6 bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                            {editingDemand ? 'Editar Demanda' : 'Criar Demanda'}
-                        </h2>
-                        <div className="space-y-4">
+            <EditForm title="Demanda" isEditing={isEditing}>
+                <div className="space-y-4">
                             <FormFieldGrid cols={1} smCols={2} gap={4}>
                                 <FormField label="Hospital">
                                     <select
@@ -521,9 +538,7 @@ export default function DemandPage() {
                                 />
                             </FormField>
                         </div>
-                    </div>
-                </div>
-            )}
+            </EditForm>
 
             <CardPanel
                 title="Demandas"
@@ -550,135 +565,15 @@ export default function DemandPage() {
                     const isSelected = selectedDemands.has(demand.id)
                     const hospital = hospitals.find((h) => h.id === demand.hospital_id)
                     return (
-                        <div
+                        <EntityCard
                             key={demand.id}
-                            className={getCardContainerClasses(isSelected)}
-                        >
-                            {/* Cabeçalho - Ícone e Hospital */}
-                            <div className="mb-3 flex items-center gap-2">
-                                <div className="flex-shrink-0">
-                                    <svg
-                                        className="w-5 h-5"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        style={{
-                                            color: hospital?.color || '#64748b',
-                                        }}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                                        />
-                                    </svg>
-                                </div>
-                                {hospital && (
-                                    <h4
-                                        className={`text-sm font-semibold truncate flex-1 ${getCardTextClasses(isSelected)}`}
-                                        title={hospital.name}
-                                    >
-                                        {hospital.name}
-                                    </h4>
-                                )}
-                            </div>
-
-                            {/* Corpo - Detalhes da demanda */}
-                            <div className="mb-3 space-y-2">
-                                <div>
-                                    <h3
-                                        className={`text-base font-semibold mb-1 ${isSelected ? 'text-red-900' : 'text-gray-900'}`}
-                                        title={demand.procedure}
-                                    >
-                                        {demand.procedure}
-                                    </h3>
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                        {demand.is_pediatric && (
-                                            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
-                                                👶 Pediátrica
-                                            </span>
-                                        )}
-                                        {demand.priority && (
-                                            <span
-                                                className={`px-2 py-0.5 text-xs font-medium rounded ${demand.priority === 'Urgente'
-                                                    ? 'bg-orange-100 text-orange-800'
-                                                    : 'bg-red-100 text-red-800'
-                                                    }`}
-                                            >
-                                                {demand.priority}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="space-y-1 text-sm">
-                                    {demand.room && (
-                                        <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                            <span className="font-medium">Sala:</span> {demand.room}
-                                        </p>
-                                    )}
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                        <span className="font-medium">Início:</span>{' '}
-                                        {settings
-                                            ? formatDateTime(demand.start_time, settings)
-                                            : new Date(demand.start_time).toLocaleString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                    </p>
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                        <span className="font-medium">Fim:</span>{' '}
-                                        {settings
-                                            ? formatDateTime(demand.end_time, settings)
-                                            : new Date(demand.end_time).toLocaleString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                    </p>
-                                    {demand.anesthesia_type && (
-                                        <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                            <span className="font-medium">Anestesia:</span> {demand.anesthesia_type}
-                                        </p>
-                                    )}
-                                    {demand.complexity && (
-                                        <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                            <span className="font-medium">Complexidade:</span> {demand.complexity}
-                                        </p>
-                                    )}
-                                    {demand.skills && demand.skills.length > 0 && (
-                                        <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                            <span className="font-medium">Habilidades:</span> {demand.skills.join(', ')}
-                                        </p>
-                                    )}
-                                    {demand.notes && (
-                                        <p className={`text-xs ${isSelected ? 'text-red-700' : 'text-gray-500'} line-clamp-2`}>
-                                            <span className="font-medium">Obs:</span> {demand.notes}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Rodapé - Metadados e ações */}
-                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200">
-                                <div className="flex flex-col min-w-0 flex-1">
-                                    <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
-                                        {settings
-                                            ? formatDateTime(demand.created_at || demand.start_time, settings)
-                                            : new Date(demand.created_at || demand.start_time).toLocaleDateString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                year: 'numeric',
-                                            })}
-                                    </span>
-                                </div>
-                                <CardActionButtons
+                            id={demand.id}
+                            isSelected={isSelected}
+                            footer={
+                                <CardFooter
                                     isSelected={isSelected}
+                                    date={demand.created_at || demand.start_time}
+                                    settings={settings}
                                     onToggleSelection={(e) => {
                                         e.stopPropagation()
                                         toggleDemandSelection(demand.id)
@@ -688,8 +583,116 @@ export default function DemandPage() {
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar demanda"
                                 />
+                            }
+                        >
+                            {/* Corpo - Procedimento principal (similar ao Tenant) */}
+                            <div className="mb-3">
+                                <div
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-gray-200"
+                                    style={{
+                                        backgroundColor: hospital?.color || '#f1f5f9',
+                                    }}
+                                >
+                                    <div className="flex flex-col items-center justify-center text-blue-500">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                            <svg
+                                                className="w-full h-full"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <h3
+                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
+                                                }`}
+                                            title={demand.procedure}
+                                        >
+                                            {demand.procedure}
+                                        </h3>
+                                        {hospital && (
+                                            <p className="text-xs text-gray-600 mt-1">{hospital.name}</p>
+                                        )}
+                                        <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
+                                            {demand.is_pediatric && (
+                                                <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+                                                    👶 Pediátrica
+                                                </span>
+                                            )}
+                                            {demand.priority && (
+                                                <span
+                                                    className={`px-2 py-0.5 text-xs font-medium rounded ${demand.priority === 'Urgente'
+                                                        ? 'bg-orange-100 text-orange-800'
+                                                        : 'bg-red-100 text-red-800'
+                                                        }`}
+                                                >
+                                                    {demand.priority}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+
+                            {/* Detalhes adicionais */}
+                            <div className="mb-3 space-y-1 text-sm">
+                                {demand.room && (
+                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                        <span className="font-medium">Sala:</span> {demand.room}
+                                    </p>
+                                )}
+                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <span className="font-medium">Início:</span>{' '}
+                                    {settings
+                                        ? formatDateTime(demand.start_time, settings)
+                                        : new Date(demand.start_time).toLocaleString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                </p>
+                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <span className="font-medium">Fim:</span>{' '}
+                                    {settings
+                                        ? formatDateTime(demand.end_time, settings)
+                                        : new Date(demand.end_time).toLocaleString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                </p>
+                                {demand.anesthesia_type && (
+                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                        <span className="font-medium">Anestesia:</span> {demand.anesthesia_type}
+                                    </p>
+                                )}
+                                {demand.complexity && (
+                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                        <span className="font-medium">Complexidade:</span> {demand.complexity}
+                                    </p>
+                                )}
+                                {demand.skills && demand.skills.length > 0 && (
+                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                        <span className="font-medium">Habilidades:</span> {demand.skills.join(', ')}
+                                    </p>
+                                )}
+                                {demand.notes && (
+                                    <p className={`text-xs ${isSelected ? 'text-red-700' : 'text-gray-500'} line-clamp-2`}>
+                                        <span className="font-medium">Obs:</span> {demand.notes}
+                                    </p>
+                                )}
+                            </div>
+                        </EntityCard>
                     )
                 })}
             </CardPanel>
@@ -703,68 +706,18 @@ export default function DemandPage() {
                             offset={pagination.offset}
                             limit={pagination.limit}
                             total={total}
-                            onFirst={() => setPagination({ ...pagination, offset: 0 })}
-                            onPrevious={() => setPagination({ ...pagination, offset: Math.max(0, pagination.offset - pagination.limit) })}
-                            onNext={() => setPagination({ ...pagination, offset: pagination.offset + pagination.limit })}
-                            onLast={() => setPagination({ ...pagination, offset: Math.floor((total - 1) / pagination.limit) * pagination.limit })}
+                            onFirst={onFirst}
+                            onPrevious={onPrevious}
+                            onNext={onNext}
+                            onLast={onLast}
                             disabled={loading}
                         />
                     ) : undefined
                 }
-                error={(() => {
-                    // Mostra erro no ActionBar apenas se houver botões de ação
-                    const hasButtons = isEditing || selectedDemands.size > 0
-                    return hasButtons ? error : undefined
-                })()}
-                message={(() => {
-                    // Se não há botões mas há erro, mostrar via message
-                    const hasButtons = isEditing || selectedDemands.size > 0
-                    if (!hasButtons && error) {
-                        return error
-                    }
-                    return undefined
-                })()}
-                messageType={(() => {
-                    // Se não há botões mas há erro, usar tipo error
-                    const hasButtons = isEditing || selectedDemands.size > 0
-                    if (!hasButtons && error) {
-                        return 'error' as const
-                    }
-                    return undefined
-                })()}
-                buttons={(() => {
-                    const buttons = []
-                    // Botão Cancelar (aparece se houver edição OU seleção)
-                    if (isEditing || selectedDemands.size > 0) {
-                        buttons.push({
-                            label: 'Cancelar',
-                            onClick: handleCancel,
-                            variant: 'secondary' as const,
-                            disabled: submitting || deleting,
-                        })
-                    }
-                    // Botão Excluir (aparece se houver seleção)
-                    if (selectedDemands.size > 0) {
-                        buttons.push({
-                            label: 'Excluir',
-                            onClick: handleDeleteSelected,
-                            variant: 'primary' as const,
-                            disabled: deleting || submitting,
-                            loading: deleting,
-                        })
-                    }
-                    // Botão Salvar (aparece se houver edição com mudanças)
-                    if (isEditing && hasChanges()) {
-                        buttons.push({
-                            label: submitting ? 'Salvando...' : 'Salvar',
-                            onClick: handleSave,
-                            variant: 'primary' as const,
-                            disabled: submitting,
-                            loading: submitting,
-                        })
-                    }
-                    return buttons
-                })()}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtons}
             />
         </>
     )

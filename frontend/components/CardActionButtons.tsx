@@ -14,6 +14,10 @@ interface CardActionButtonsProps {
  *
  * Usado em cards de Hospital, Demand, etc.
  *
+ * Ordem padronizada dos botões:
+ * 1. Excluir (ícone de lixeira) - à esquerda
+ * 2. Editar (ícone de lápis) - à direita
+ *
  * @example
  * ```tsx
  * <CardActionButtons
@@ -37,7 +41,7 @@ export function CardActionButtons({
 }: CardActionButtonsProps) {
     return (
         <div className="flex items-center gap-1 shrink-0">
-            {/* Ícone para exclusão */}
+            {/* 1. Ícone para exclusão */}
             <button
                 onClick={onToggleSelection}
                 disabled={disabled}
@@ -61,6 +65,7 @@ export function CardActionButtons({
                     />
                 </svg>
             </button>
+            {/* 2. Ícone para editar */}
             <button
                 onClick={onEdit}
                 className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
