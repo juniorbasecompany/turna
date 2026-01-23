@@ -86,12 +86,9 @@ export function createDeleteHandler<T extends { id: number }>(
         if (selectedItems.size === 0) return
 
         try {
-            const deletePromises = Array.from(selectedItems).map(async (id) => {
-                await onDelete(id)
-                return id
-            })
-
-            await Promise.all(deletePromises)
+            // Passar todos os IDs de uma vez para onDelete
+            const ids = Array.from(selectedItems)
+            await onDelete(ids)
 
             // Remover itens deletados da lista local
             const remainingItems = items.filter((item) => !selectedItems.has(item.id))

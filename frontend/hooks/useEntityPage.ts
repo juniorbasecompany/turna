@@ -111,7 +111,7 @@ export function useEntityPage<
     const selection = useEntitySelection()
 
     // Formulário
-    const form = useEntityForm({
+    const form = useEntityForm<TFormData, TEntity>({
         initialFormData,
         isEmptyCheck,
     })

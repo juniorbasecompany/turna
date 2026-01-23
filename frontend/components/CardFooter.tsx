@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { TenantSettings } from '@/contexts/TenantSettingsContext'
+import { TenantFormatSettings } from '@/lib/tenantFormat'
 import { getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
 import { CardActionButtons } from './CardActionButtons'
@@ -12,7 +12,7 @@ interface CardFooterProps {
     /** Data para exibir (ISO string) */
     date: string
     /** Configurações do tenant para formatação de data */
-    settings: TenantSettings | null
+    settings: TenantFormatSettings | null
     /** Callback quando o botão de exclusão é clicado */
     onToggleSelection: (e: React.MouseEvent) => void
     /** Callback quando o botão de editar é clicado */

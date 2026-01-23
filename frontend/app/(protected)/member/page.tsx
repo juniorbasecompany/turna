@@ -10,6 +10,7 @@ import { FilterButtons, FilterOption } from '@/components/FilterButtons'
 import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
+import { JsonEditor } from '@/components/JsonEditor'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
@@ -29,7 +30,7 @@ type MemberFormData = {
     status: string
     name: string
     email: string
-    attribute: string  // JSON como string para edição
+    attribute: unknown  // JSON como objeto para edição
 }
 
 export default function MemberPage() {
@@ -42,8 +43,8 @@ export default function MemberPage() {
     const [sendInvite, setSendInvite] = useState(false)
 
     // Constantes para filtros
-    const ALL_STATUS_FILTERS = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED'] as const
-    const ALL_ROLE_FILTERS = ['account', 'admin'] as const
+    const ALL_STATUS_FILTERS: string[] = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']
+    const ALL_ROLE_FILTERS: string[] = ['account', 'admin']
 
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
@@ -62,7 +63,7 @@ export default function MemberPage() {
         status: 'ACTIVE',
         name: '',
         email: '',
-        attribute: '{}',
+        attribute: {},
     }
 
     // Mapeamentos
@@ -72,49 +73,37 @@ export default function MemberPage() {
             status: member.status,
             name: member.member_name || '',
             email: member.member_email || '',
-            attribute: JSON.stringify(member.attribute || {}, null, 2),
+            attribute: member.attribute || {},
         }
     }
 
     const mapFormDataToCreateRequest = (formData: MemberFormData): MemberCreateRequest => {
-        // Validar JSON antes de converter
-        let parsedAttribute: Record<string, unknown> = {}
-        try {
-            if (formData.attribute.trim()) {
-                parsedAttribute = JSON.parse(formData.attribute)
-            }
-        } catch {
-            // Se inválido, será validado em validateFormData
-            parsedAttribute = {}
-        }
+        // Converter attribute para objeto (já é objeto, mas garantir tipo)
+        const attributeValue = formData.attribute && typeof formData.attribute === 'object' && !Array.isArray(formData.attribute)
+            ? (formData.attribute as Record<string, unknown>)
+            : {}
 
         return {
             email: formData.email.trim() || null,
             name: formData.name.trim() || null,
             role: formData.role,
             status: formData.status,
-            attribute: parsedAttribute || null,
+            attribute: attributeValue || null,
         }
     }
 
     const mapFormDataToUpdateRequest = (formData: MemberFormData): MemberUpdateRequest => {
-        // Validar JSON antes de converter
-        let parsedAttribute: Record<string, unknown> | null = null
-        try {
-            if (formData.attribute.trim()) {
-                parsedAttribute = JSON.parse(formData.attribute)
-            }
-        } catch {
-            // Se inválido, será validado em validateFormData
-            parsedAttribute = null
-        }
+        // Converter attribute para objeto (já é objeto, mas garantir tipo)
+        const attributeValue = formData.attribute && typeof formData.attribute === 'object' && !Array.isArray(formData.attribute)
+            ? (formData.attribute as Record<string, unknown>)
+            : null
 
         return {
             role: formData.role,
             status: formData.status,
             name: formData.name.trim() || null,
             email: formData.email.trim() || null,
-            attribute: parsedAttribute,
+            attribute: attributeValue,
         }
     }
 
@@ -125,18 +114,17 @@ export default function MemberPage() {
             return 'E-mail é obrigatório'
         }
 
-        // Validar JSON
-        if (!formData.attribute.trim()) {
-            return 'JSON não pode estar vazio'
+        // Validar attribute (deve ser objeto, não array, não null, não undefined)
+        if (formData.attribute === null || formData.attribute === undefined) {
+            return 'Atributos não podem estar vazios'
         }
         
-        try {
-            const parsed = JSON.parse(formData.attribute)
-            if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-                return 'JSON deve ser um objeto'
-            }
-        } catch (e) {
-            return `JSON inválido: ${e instanceof Error ? e.message : 'erro desconhecido'}`
+        if (typeof formData.attribute !== 'object') {
+            return 'Atributos devem ser um objeto'
+        }
+        
+        if (Array.isArray(formData.attribute)) {
+            return 'Atributos devem ser um objeto, não um array'
         }
 
         return null
@@ -266,20 +254,21 @@ export default function MemberPage() {
         return filteredMembers.slice(start, end)
     }, [filteredMembers, needsFrontendFilter, pagination])
 
-    // Validar JSON
-    const validateJson = (jsonString: string): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
-        try {
-            if (!jsonString.trim()) {
-                return { valid: false, error: 'JSON não pode estar vazio' }
-            }
-            const parsed = JSON.parse(jsonString)
-            if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-                return { valid: false, error: 'JSON deve ser um objeto' }
-            }
-            return { valid: true, parsed }
-        } catch (e) {
-            return { valid: false, error: `JSON inválido: ${e instanceof Error ? e.message : 'erro desconhecido'}` }
+    // Validar attribute (objeto JSON)
+    const validateAttribute = (attribute: unknown): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
+        if (attribute === null || attribute === undefined) {
+            return { valid: false, error: 'Atributos não podem estar vazios' }
         }
+        
+        if (typeof attribute !== 'object') {
+            return { valid: false, error: 'Atributos devem ser um objeto' }
+        }
+        
+        if (Array.isArray(attribute)) {
+            return { valid: false, error: 'Atributos devem ser um objeto, não um array' }
+        }
+        
+        return { valid: true, parsed: attribute as Record<string, unknown> }
     }
 
     // Wrappers customizados para funcionalidades específicas
@@ -309,11 +298,11 @@ export default function MemberPage() {
 
     // Handler customizado para criação com suporte a sendInvite
     const handleCreate = async () => {
-        // Validar JSON antes de salvar
-        const jsonValidation = validateJson(formData.attribute)
-        if (!jsonValidation.valid) {
-            setError(jsonValidation.error || 'JSON inválido')
-            setJsonError(jsonValidation.error || 'JSON inválido')
+        // Validar attribute antes de salvar
+        const attributeValidation = validateAttribute(formData.attribute)
+        if (!attributeValidation.valid) {
+            setError(attributeValidation.error || 'Atributos inválidos')
+            setJsonError(attributeValidation.error || 'Atributos inválidos')
             return
         }
 
@@ -329,7 +318,7 @@ export default function MemberPage() {
                 name: formData.name.trim() || null,
                 role: formData.role,
                 status: formData.status,
-                attribute: jsonValidation.parsed || {},
+                attribute: attributeValidation.parsed || {},
             }
 
             const savedMember = await protectedFetch<MemberResponse>(`/api/member`, {
@@ -382,11 +371,11 @@ export default function MemberPage() {
             return
         }
 
-        // Validar JSON antes de salvar
-        const jsonValidation = validateJson(formData.attribute)
-        if (!jsonValidation.valid) {
-            setError(jsonValidation.error || 'JSON inválido')
-            setJsonError(jsonValidation.error || 'JSON inválido')
+        // Validar attribute antes de salvar
+        const attributeValidation = validateAttribute(formData.attribute)
+        if (!attributeValidation.valid) {
+            setError(attributeValidation.error || 'Atributos inválidos')
+            setJsonError(attributeValidation.error || 'Atributos inválidos')
             return
         }
 
@@ -402,7 +391,7 @@ export default function MemberPage() {
                 status: formData.status,
                 name: formData.name.trim() || null,
                 email: formData.email.trim() || null,
-                attribute: jsonValidation.parsed || {},
+                attribute: attributeValidation.parsed || {},
             }
 
             const savedMember = await protectedFetch<MemberResponse>(`/api/member/${editingMember.id}`, {
@@ -497,13 +486,13 @@ export default function MemberPage() {
         }
     }
 
-    const handleAttributeChange = (value: string) => {
+    const handleAttributeChange = (value: unknown) => {
         setFormData({ ...formData, attribute: value })
-        const validation = validateJson(value)
+        const validation = validateAttribute(value)
         if (validation.valid) {
             setJsonError(null)
         } else {
-            setJsonError(validation.error || 'JSON inválido')
+            setJsonError(validation.error || 'Atributos inválidos')
         }
     }
 
@@ -631,14 +620,12 @@ export default function MemberPage() {
                         required
                         error={jsonError || undefined}
                     >
-                        <textarea
+                        <JsonEditor
                             id="attribute"
                             value={formData.attribute}
-                            onChange={(e) => handleAttributeChange(e.target.value)}
-                            rows={10}
-                            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm ${jsonError ? 'border-red-300' : 'border-gray-300'
-                                }`}
-                            disabled={submitting}
+                            on_change={handleAttributeChange}
+                            is_disabled={submitting}
+                            height={400}
                         />
                     </FormField>
                 </div>
@@ -646,6 +633,7 @@ export default function MemberPage() {
 
             <CardPanel
                 title="Associados"
+                description="Gerencie os membros associados da clínica"
                 totalCount={filteredMembers.length}
                 selectedCount={selectedMembersCount}
                 loading={loading}

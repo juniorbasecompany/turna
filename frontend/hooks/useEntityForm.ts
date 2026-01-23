@@ -36,7 +36,10 @@ export function useEntityForm<TFormData extends Record<string, unknown>, TEntity
     const isEditing = showEditArea
 
     const checkHasChanges = useCallback(() => {
-        return hasFormChanges(editingItem, formData, originalFormData, isEmptyCheck)
+        // hasFormChanges espera TFormData | null, mas editingItem é TEntity | null
+        // A função só verifica se editingItem é null para determinar se está criando ou editando
+        // Passamos null quando não há item (modo criação) e formData quando há item (modo edição)
+        return hasFormChanges(editingItem ? formData : null, formData, originalFormData, isEmptyCheck)
     }, [editingItem, formData, originalFormData, isEmptyCheck])
 
     const handleCreateClick = useCallback(() => {

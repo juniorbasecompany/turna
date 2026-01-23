@@ -50,8 +50,8 @@ export function TenantDateTimePicker({
         return hour24
     }
 
-    const getAmPm = (hour24: number): 'am' | 'pm' => {
-        return hour24 >= 12 ? 'pm' : 'am'
+    const getAmPm = (hour24: number): 'AM' | 'PM' => {
+        return hour24 >= 12 ? 'PM' : 'AM'
     }
 
     // Estados para seleção de hora (0-11 format)
@@ -187,7 +187,7 @@ export function TenantDateTimePicker({
     const hours12 = Array.from({ length: 12 }, (_, i) => i) // 0 a 11
     const minuteTens = [0, 10, 20, 30, 40, 50] // Dezenas de minutos
     const minuteUnits = Array.from({ length: 10 }, (_, i) => i) // 0 a 9
-    const amPmOptions: ('am' | 'pm')[] = ['am', 'pm']
+    const amPmOptions: ('AM' | 'PM')[] = ['AM', 'PM']
 
     if (!settings) {
         // Fallback se settings não estiver carregado
@@ -289,7 +289,7 @@ export function TenantDateTimePicker({
                                     {(() => {
                                         const finalDate = new Date(tempDate)
                                         let hour24 = tempHour12
-                                        if (tempAmPm === 'pm') {
+                                        if (tempAmPm === 'PM') {
                                             if (tempHour12 === 0) {
                                                 hour24 = 12
                                             } else {

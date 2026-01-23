@@ -9,6 +9,7 @@ import { FilterButtons } from '@/components/FilterButtons'
 import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
+import { JsonEditor } from '@/components/JsonEditor'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
@@ -602,7 +603,7 @@ export default function FilesPage() {
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
     // Filtro de status usando hook reutilizável
-    const ALL_STATUS_FILTERS = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null] as const
+    const ALL_STATUS_FILTERS: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
     const statusFilters = useEntityFilters<JobStatus | null>({
         allFilters: ALL_STATUS_FILTERS,
         initialFilters: new Set(ALL_STATUS_FILTERS),
@@ -672,6 +673,14 @@ export default function FilesPage() {
         listEnabled: !!settings,
     })
 
+    // Estado local para arquivos (permite atualização direta via polling)
+    const [localFiles, setLocalFiles] = useState<FileResponse[]>(files)
+
+    // Sincronizar localFiles com files quando files mudar (vindo do hook)
+    useEffect(() => {
+        setLocalFiles(files)
+    }, [files])
+
     // Flash vermelho no card de upload quando não há hospital selecionado
     const [uploadCardFlash, setUploadCardFlash] = useState(false)
     // Flash vermelho no campo hospital quando não há hospital selecionado
@@ -726,13 +735,13 @@ export default function FilesPage() {
     // Filtrar no frontend quando statusFilters está ativo
     const filteredFiles = useMemo(() => {
         if (!needsFrontendFilter) {
-            return files  // Backend já retornou todos os dados necessários
+            return localFiles  // Backend já retornou todos os dados necessários
         }
-        return files.filter((file) => {
+        return localFiles.filter((file) => {
             const status = file.job_status === null ? null : (file.job_status as JobStatus)
             return statusFilters.selectedFilters.has(status)
         })
-    }, [files, statusFilters.selectedFilters, needsFrontendFilter])
+    }, [localFiles, statusFilters.selectedFilters, needsFrontendFilter])
 
     // Aplicar paginação no frontend quando há filtro de status
     const paginatedFiles = useMemo(() => {
@@ -1183,7 +1192,7 @@ export default function FilesPage() {
     // Polling para atualizar status de arquivos com jobs em andamento
     useEffect(() => {
         // Verificar se há arquivos com jobs em andamento
-        const hasPendingOrRunningJobs = files.some(
+        const hasPendingOrRunningJobs = localFiles.some(
             (file) => file.job_status === 'PENDING' || file.job_status === 'RUNNING'
         )
 
@@ -1222,7 +1231,7 @@ export default function FilesPage() {
                 }
 
                 // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
-                setFiles((prevFiles) => {
+                setLocalFiles((prevFiles) => {
                     return prevFiles.map((file) => {
                         const newStatus = fileIdToJobStatus.get(file.id)
                         // Atualizar se:
@@ -1248,7 +1257,7 @@ export default function FilesPage() {
         return () => {
             clearInterval(interval)
         }
-    }, [files])
+    }, [localFiles])
 
     // Limpar polling ao desmontar
     useEffect(() => {
@@ -1439,13 +1448,20 @@ export default function FilesPage() {
                             label="JSON extraído"
                             helperText="Conteúdo JSON extraído do arquivo. Você pode editar este campo."
                         >
-                            <textarea
+                            <JsonEditor
                                 id="json-content"
-                                value={jsonContent}
-                                onChange={(e) => setJsonContent(e.target.value)}
-                                rows={20}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                                disabled={submitting}
+                                value={(() => {
+                                    try {
+                                        return JSON.parse(jsonContent)
+                                    } catch {
+                                        return {}
+                                    }
+                                })()}
+                                on_change={(value) => {
+                                    setJsonContent(JSON.stringify(value, null, 2))
+                                }}
+                                is_disabled={submitting}
+                                height={400}
                             />
                         </FormField>
                     </>
@@ -1527,20 +1543,20 @@ export default function FilesPage() {
                                 </div>
                             </CreateCard>
 
-                            {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em files */}
+                            {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em localFiles */}
                             {pendingFiles
                                 .filter((pendingFile) => {
-                                    // Se o arquivo já tem fileId e está na lista de files, não mostrar
+                                    // Se o arquivo já tem fileId e está na lista de localFiles, não mostrar
                                     if (pendingFile.fileId) {
-                                        return !files.some((f) => f.id === pendingFile.fileId)
+                                        return !localFiles.some((f) => f.id === pendingFile.fileId)
                                     }
-                                    // Verificar se já está na lista de files comparando nome e tamanho
+                                    // Verificar se já está na lista de localFiles comparando nome e tamanho
                                     const fileName = pendingFile.file.name
                                     const fileSize = pendingFile.file.size
-                                    const alreadyInFiles = files.some(
+                                    const alreadyInFiles = localFiles.some(
                                         (f) => f.filename === fileName && f.file_size === fileSize
                                     )
-                                    // Se já está em files, não mostrar como pendente
+                                    // Se já está em localFiles, não mostrar como pendente
                                     return !alreadyInFiles
                                 })
                                 .map((pendingFile, filteredIndex) => {

@@ -4,6 +4,7 @@ import { useDrawer } from '@/app/(protected)/layout'
 import { AccountResponse, MeResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
+import { LoadingSpinner } from './LoadingSpinner'
 
 export function Header() {
     const router = useRouter()
