@@ -263,7 +263,7 @@ function getStatusTextColor(jobStatus: string | null): string {
 function getStatusIcon(jobStatus: string | null): JSX.Element {
     const iconClass = "w-10 h-10 shrink-0"
     const statusColor = getStatusBackgroundColor(jobStatus)
-    
+
     switch (jobStatus) {
         case 'PENDING':
             return (
@@ -814,7 +814,7 @@ export default function FilesPage() {
             const jobsResponse = await protectedFetch<{ items: JobResponse[]; total: number }>(
                 `/api/job/list?job_type=extract_demand&limit=100`
             )
-            
+
             // Encontrar o job mais recente com status COMPLETED para este arquivo
             const completedJob = jobsResponse.items
                 .filter(job => {
@@ -899,7 +899,7 @@ export default function FilesPage() {
 
             // Atualizar o JSON original
             setOriginalJsonContent(jsonContent)
-            
+
             // Fechar área de edição
             setShowEditArea(false)
             setEditingFile(null)
@@ -914,7 +914,7 @@ export default function FilesPage() {
         } finally {
             setSubmitting(false)
         }
-    }, [editingFile, editingJobId, jsonContent])
+    }, [editingFile, editingJobId, jsonContent, loadItems])
 
     // Cancelar edição
     const handleCancel = useCallback(() => {
@@ -1721,7 +1721,7 @@ export default function FilesPage() {
                                                         </h3>
                                                     </div>
                                                 </div>
-                                                
+
                                                 {/* Preview - Thumbnail */}
                                                 <div className="flex-1 min-h-0 relative">
                                                     <FileThumbnail

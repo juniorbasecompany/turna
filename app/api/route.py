@@ -1225,6 +1225,55 @@ def get_job(
     return job
 
 
+class JobUpdate(PydanticBaseModel):
+    result_data: dict | None = None
+
+
+@router.put("/job/{job_id}", response_model=JobResponse, tags=["Job"])
+def update_job(
+    job_id: int,
+    body: JobUpdate,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza um job (apenas result_data).
+    Valida que o job pertence ao tenant atual.
+    """
+    try:
+        logger.info(f"Atualizando job id={job_id} para tenant_id={member.tenant_id}")
+
+        job = session.get(Job, job_id)
+        if not job:
+            logger.warning(f"Job não encontrado: id={job_id}")
+            raise HTTPException(status_code=404, detail="Job não encontrado")
+        if job.tenant_id != member.tenant_id:
+            logger.warning(f"Acesso negado: job.tenant_id={job.tenant_id}, member.tenant_id={member.tenant_id}")
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Atualizar result_data se fornecido
+        if body.result_data is not None:
+            job.result_data = body.result_data
+            logger.info(f"result_data atualizado para job id={job_id}")
+
+        job.updated_at = utc_now()
+
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        logger.info(f"Job atualizado com sucesso: id={job.id}")
+        return job
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Erro ao atualizar job: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao atualizar job: {str(e)}",
+        ) from e
+
+
 @router.post("/job/{job_id}/requeue", response_model=JobRequeueResponse, status_code=202, tags=["Job"])
 async def requeue_job(
     job_id: int,
