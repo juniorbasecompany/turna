@@ -11,6 +11,7 @@ class JobType(str, enum.Enum):
     PING = "PING"
     EXTRACT_DEMAND = "EXTRACT_DEMAND"
     GENERATE_SCHEDULE = "GENERATE_SCHEDULE"
+    GENERATE_THUMBNAIL = "GENERATE_THUMBNAIL"
 
 
 class JobStatus(str, enum.Enum):

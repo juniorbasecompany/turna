@@ -365,6 +365,309 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
                     pass
 
 
+async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
+    """
+    Gera thumbnail WebP 500x500 para arquivo (PNG/JPEG/PDF).
+    Thumbnail é salvo no MinIO com chave: {original_key}.thumbnail.webp
+    Idempotente: se thumbnail já existe, não regenera.
+    """
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if not job:
+            return {"ok": False, "error": "job_not_found", "job_id": job_id}
+
+        if job.status != JobStatus.PENDING:
+            return {"ok": False, "error": "job_not_pending", "job_id": job_id, "status": job.status}
+
+        now = utc_now()
+        job.status = JobStatus.RUNNING
+        job.started_at = now  # type: ignore[attr-defined]
+        job.updated_at = now
+        session.add(job)
+        session.commit()
+
+        tmp_path: str | None = None
+        file_id: int | None = None
+        try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[THUMBNAIL] Iniciando job (job_id={job_id})")
+
+            input_data = job.input_data or {}
+            file_id = int(input_data.get("file_id"))
+            logger.info(f"[THUMBNAIL] Processando file_id={file_id}")
+
+            file_model = session.get(File, file_id)
+            if not file_model:
+                raise RuntimeError(f"File não encontrado (file_id={file_id})")
+            if file_model.tenant_id != job.tenant_id:
+                raise RuntimeError("Acesso negado (tenant mismatch)")
+
+            # Calcular thumbnail_key: original_key + ".thumbnail.webp"
+            original_key = file_model.s3_key
+            thumbnail_key = original_key + ".thumbnail.webp"
+
+            # Idempotência: verificar se thumbnail já existe
+            s3 = S3Client()
+            if s3.file_exists(thumbnail_key):
+                # Thumbnail já existe, não regenerar
+                job.status = JobStatus.COMPLETED
+                job.completed_at = utc_now()
+                job.updated_at = job.completed_at
+                job.result_data = {
+                    "file_id": file_id,
+                    "original_key": original_key,
+                    "thumbnail_key": thumbnail_key,
+                    "skipped": True,
+                    "reason": "thumbnail já existe",
+                }
+                job.error_message = None
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+                return {"ok": True, "job_id": job.id, "skipped": True}
+
+            # Detectar mime type
+            mime = file_model.content_type or ""
+            filename = file_model.filename or "file"
+            _, ext = os.path.splitext(filename)
+            ext = (ext or "").lower()
+
+            # Determinar se é imagem, PDF ou Excel
+            is_image = mime.startswith("image/") or ext in {".png", ".jpg", ".jpeg"}
+            is_pdf = mime == "application/pdf" or ext == ".pdf"
+            # MIME types comuns para Excel
+            excel_mime_types = {
+                "application/vnd.ms-excel",  # XLS antigo
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # XLSX
+                "application/excel",  # Alternativo para XLS
+                "application/x-excel",  # Alternativo para XLS
+                "application/x-msexcel",  # Alternativo para XLS
+            }
+            is_excel = (
+                mime in excel_mime_types
+                or ext in {".xls", ".xlsx"}
+            )
+
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[THUMBNAIL] file_id={file_id}, mime={mime}, ext={ext}, is_image={is_image}, is_pdf={is_pdf}, is_excel={is_excel}")
+            logger.info(f"[THUMBNAIL] Detalhes detecção: mime='{mime}', ext='{ext}', mime in excel_mime_types={mime in excel_mime_types}, ext in excel_exts={ext in {'.xls', '.xlsx'}}")
+
+            if not (is_image or is_pdf or is_excel):
+                # Outro tipo: não gerar thumbnail (frontend exibirá fallback)
+                logger.warning(f"[THUMBNAIL] Tipo não suportado para file_id={file_id}: mime={mime}, ext={ext}")
+                job.status = JobStatus.COMPLETED
+                job.completed_at = utc_now()
+                job.updated_at = job.completed_at
+                job.result_data = {
+                    "file_id": file_id,
+                    "original_key": original_key,
+                    "thumbnail_key": thumbnail_key,
+                    "skipped": True,
+                    "reason": f"tipo não suportado (mime={mime}, ext={ext})",
+                }
+                job.error_message = None
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+                return {"ok": True, "job_id": job.id, "skipped": True}
+
+            logger.info(f"[THUMBNAIL] Tipo suportado detectado: is_image={is_image}, is_pdf={is_pdf}, is_excel={is_excel}")
+
+            # Download do arquivo original para arquivo temporário
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp_path = tmp.name
+
+            s3.download_file(original_key, tmp_path)
+
+            # Gerar imagem base
+            from PIL import Image
+            image: Image.Image | None = None
+
+            if is_pdf:
+                # PDF: renderizar página 1 com PyMuPDF
+                import fitz  # PyMuPDF
+                pdf_doc = fitz.open(tmp_path)
+                if len(pdf_doc) == 0:
+                    raise RuntimeError("PDF vazio")
+                page = pdf_doc[0]  # Primeira página
+                # Renderizar em alta resolução (zoom 2.0 para melhor qualidade)
+                mat = fitz.Matrix(2.0, 2.0)
+                pix = page.get_pixmap(matrix=mat)
+                # Converter para PIL Image
+                img_data = pix.tobytes("png")
+                import io
+                image = Image.open(io.BytesIO(img_data))
+                pdf_doc.close()
+            elif is_excel:
+                # Excel (XLS/XLSX): renderizar primeira planilha como tabela
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[THUMBNAIL] Processando Excel: file_id={file_id}, ext={ext}")
+
+                import pandas as pd
+                import matplotlib
+                matplotlib.use('Agg')  # Backend sem GUI
+                import matplotlib.pyplot as plt
+                import io
+
+                # Ler primeira planilha (limitado a 50 linhas para performance)
+                try:
+                    logger.info(f"[THUMBNAIL] Lendo Excel com engine apropriado: ext={ext}")
+                    if ext == ".xls":
+                        df = pd.read_excel(tmp_path, engine='xlrd', nrows=50)
+                    else:
+                        # XLSX ou extensão não reconhecida: tentar openpyxl primeiro
+                        try:
+                            df = pd.read_excel(tmp_path, engine='openpyxl', nrows=50)
+                        except Exception as e1:
+                            logger.warning(f"[THUMBNAIL] Erro com openpyxl, tentando xlrd: {e1}")
+                            # Fallback para xlrd se openpyxl falhar
+                            df = pd.read_excel(tmp_path, engine='xlrd', nrows=50)
+                    logger.info(f"[THUMBNAIL] Excel lido: {len(df)} linhas, {len(df.columns)} colunas")
+                except Exception as e:
+                    logger.error(f"[THUMBNAIL] Erro ao ler Excel: {e}", exc_info=True)
+                    raise RuntimeError(f"Erro ao ler Excel: {e}")
+
+                if df.empty:
+                    logger.warning(f"[THUMBNAIL] Planilha Excel vazia para file_id={file_id}")
+                    raise RuntimeError("Planilha Excel vazia")
+
+                # Criar figura matplotlib
+                logger.info(f"[THUMBNAIL] Criando figura matplotlib")
+                fig, ax = plt.subplots(figsize=(10, 8), dpi=100)
+                ax.axis('tight')
+                ax.axis('off')
+
+                # Criar tabela (limitado a 20 colunas para não ficar muito largo)
+                df_display = df.iloc[:, :20]  # Primeiras 20 colunas
+
+                # Limitar número de linhas exibidas (máximo 30 para não ficar muito grande)
+                df_display = df_display.iloc[:30]
+
+                # Converter valores para string (matplotlib table precisa de strings)
+                # Substituir NaN por string vazia e truncar valores muito longos
+                def format_cell_value(val):
+                    if pd.isna(val):
+                        return ''
+                    s = str(val)
+                    # Truncar valores muito longos (máximo 50 caracteres)
+                    if len(s) > 50:
+                        return s[:47] + '...'
+                    return s
+
+                # Usar apply com função para cada célula (applymap está deprecated)
+                df_display_str = df_display.map(format_cell_value)
+
+                table = ax.table(
+                    cellText=df_display_str.values.tolist(),
+                    colLabels=[str(col)[:30] for col in df_display_str.columns.tolist()],  # Truncar nomes de colunas também
+                    cellLoc='left',
+                    loc='center',
+                    bbox=[0, 0, 1, 1]
+                )
+                table.auto_set_font_size(False)
+                table.set_fontsize(8)
+                table.scale(1, 1.5)
+
+                # Converter figura para PIL Image
+                logger.info(f"[THUMBNAIL] Convertendo figura para PIL Image")
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=100, pad_inches=0.1)
+                buf.seek(0)
+                image = Image.open(buf)
+                plt.close(fig)
+                logger.info(f"[THUMBNAIL] Excel convertido para imagem: {image.size}")
+            elif is_image:
+                # PNG/JPEG: abrir com Pillow
+                image = Image.open(tmp_path)
+                # Converter para RGB se necessário (WebP não suporta RGBA diretamente)
+                if image.mode in ("RGBA", "LA", "P"):
+                    # Criar fundo branco para imagens com transparência
+                    rgb_image = Image.new("RGB", image.size, (255, 255, 255))
+                    if image.mode == "P":
+                        # Converter paleta para RGBA primeiro
+                        image = image.convert("RGBA")
+                    if image.mode in ("RGBA", "LA"):
+                        # Usar canal alpha como máscara
+                        rgb_image.paste(image, mask=image.split()[-1])
+                    else:
+                        # Sem transparência, apenas colar
+                        rgb_image.paste(image)
+                    image = rgb_image
+                elif image.mode != "RGB":
+                    image = image.convert("RGB")
+
+            if not image:
+                raise RuntimeError("Falha ao gerar imagem base")
+
+            # Transformar para 500x500 (fit + fundo branco)
+            target_size = (500, 500)
+            # Calcular tamanho mantendo proporção (fit)
+            image.thumbnail(target_size, Image.Resampling.LANCZOS)
+            # Criar imagem 500x500 com fundo branco
+            thumbnail = Image.new("RGB", target_size, (255, 255, 255))
+            # Centralizar imagem original
+            x_offset = (target_size[0] - image.size[0]) // 2
+            y_offset = (target_size[1] - image.size[1]) // 2
+            thumbnail.paste(image, (x_offset, y_offset))
+
+            # Salvar thumbnail como WebP em BytesIO
+            import io
+            webp_buffer = io.BytesIO()
+            thumbnail.save(webp_buffer, format="WEBP", quality=85)
+            webp_buffer.seek(0)
+
+            # Upload para MinIO
+            s3.upload_fileobj(
+                webp_buffer,
+                thumbnail_key,
+                content_type="image/webp",
+            )
+
+            # Sucesso
+            job.status = JobStatus.COMPLETED
+            job.completed_at = utc_now()
+            job.updated_at = job.completed_at
+            job.result_data = {
+                "file_id": file_id,
+                "original_key": original_key,
+                "thumbnail_key": thumbnail_key,
+                "skipped": False,
+            }
+            job.error_message = None
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            logger.info(f"[THUMBNAIL] Thumbnail gerado com sucesso (job_id={job.id}, file_id={file_id}, thumbnail_key={thumbnail_key})")
+            return {"ok": True, "job_id": job.id, "thumbnail_key": thumbnail_key}
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            error_msg = _safe_error_message(e)
+            logger.error(f"[THUMBNAIL] Erro ao gerar thumbnail (job_id={job_id}, file_id={file_id if file_id else 'N/A'}): {error_msg}", exc_info=True)
+
+            job.status = JobStatus.FAILED
+            job.error_message = error_msg
+            now = utc_now()
+            job.completed_at = now
+            job.updated_at = now
+            session.add(job)
+            session.commit()
+            return {"ok": False, "error": job.error_message, "job_id": job.id}
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            import logging
+            logger = logging.getLogger(__name__)
+            if file_id:
+                logger.info(f"[THUMBNAIL] Finalizando job (job_id={job_id}, file_id={file_id})")
+
+
 async def reconcile_pending_orphans(ctx: dict[str, Any]) -> dict[str, Any]:
     """
     Auto-fail de jobs órfãos/stale:

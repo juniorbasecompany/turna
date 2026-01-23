@@ -10,6 +10,7 @@ import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { protectedFetch } from '@/lib/api'
+import { getCardContainerClasses, getCardTextClasses, getCardSecondaryTextClasses, getCardTertiaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -255,78 +256,161 @@ function PendingFileImageThumbnail({ file }: { file: File }) {
 
 /**
  * Componente de thumbnail do arquivo (preview no corpo do card)
+ * Exibe thumbnail WebP se disponível, ou fundo branco com extensão do arquivo
  */
 function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => void }) {
-    const [imageUrl, setImageUrl] = useState<string | null>(null)
-    const [loadingImage, setLoadingImage] = useState(false)
+    // URL do endpoint de thumbnail
+    const thumbnailUrl = `/api/file/${file.id}/thumbnail`
+    const [imageError, setImageError] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
+    const [retryCount, setRetryCount] = useState(0)
+    const [imageSrc, setImageSrc] = useState<string | null>(null)
+    const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const pollingRef = useRef(false)
+    const retryCountRef = useRef(0)
 
-    // Carregar URL da imagem se for imagem
-    useEffect(() => {
-        if (isImage(file.content_type) && !imageUrl && !loadingImage) {
-            setLoadingImage(true)
-            // Usar proxy diretamente para imagens
-            const proxyUrl = `/api/file/${file.id}/proxy`
-            setImageUrl(proxyUrl)
-            setLoadingImage(false)
+    // Extrair extensão do arquivo
+    const getFileExtension = (filename: string, contentType: string): string => {
+        // Tentar extrair do filename primeiro
+        const match = filename.match(/\.([^.]+)$/)
+        if (match) {
+            return match[1].toUpperCase()
         }
-    }, [file.id, file.content_type, imageUrl, loadingImage])
+        // Fallback: extrair do content_type
+        if (contentType === 'application/pdf') {
+            return 'PDF'
+        }
+        const parts = contentType.split('/')
+        if (parts.length > 1) {
+            return parts[1].toUpperCase()
+        }
+        return 'FILE'
+    }
 
-    const fileTypeInfo = getFileTypeInfo(file.content_type)
+    const fileExtension = getFileExtension(file.filename, file.content_type)
+
+    // Verificar se thumbnail existe e fazer polling se necessário
+    const checkThumbnail = useCallback(async () => {
+        if (pollingRef.current) return // Evitar múltiplas verificações simultâneas
+
+        try {
+            pollingRef.current = true
+            const response = await fetch(thumbnailUrl, {
+                method: 'GET',
+                credentials: 'include',
+            })
+
+            if (response.ok) {
+                // Thumbnail existe, definir src para carregar
+                console.log(`[THUMBNAIL] Thumbnail disponível para file_id=${file.id}`)
+                setImageSrc(`${thumbnailUrl}?t=${Date.now()}`)
+                setIsLoading(true)
+                setImageError(false)
+                setRetryCount(0)
+                retryCountRef.current = 0
+                pollingRef.current = false
+            } else if (response.status === 404) {
+                // Thumbnail ainda não existe, fazer retry (usar ref para evitar closure obsoleta)
+                const currentRetry = retryCountRef.current
+                console.log(`[THUMBNAIL] Thumbnail não encontrado para file_id=${file.id}, retryCount=${currentRetry}`)
+
+                // Se já tentamos muitas vezes (5 tentativas = ~15 segundos), mostrar fallback
+                if (currentRetry >= 5) {
+                    console.log(`[THUMBNAIL] Máximo de tentativas atingido para file_id=${file.id}, mostrando fallback`)
+                    setIsLoading(false)
+                    setImageError(true)
+                    pollingRef.current = false
+                    return
+                }
+
+                // Aguardar antes de tentar novamente (3 segundos)
+                const delay = 3000
+                console.log(`[THUMBNAIL] Agendando retry em ${delay}ms para file_id=${file.id}`)
+
+                retryTimeoutRef.current = setTimeout(() => {
+                    retryCountRef.current += 1
+                    setRetryCount((prev) => prev + 1)
+                    pollingRef.current = false
+                    checkThumbnail()
+                }, delay)
+            } else {
+                // Outro erro
+                console.error(`[THUMBNAIL] Erro ao verificar thumbnail para file_id=${file.id}: status=${response.status}`)
+                setIsLoading(false)
+                setImageError(true)
+                pollingRef.current = false
+            }
+        } catch (error) {
+            console.error(`[THUMBNAIL] Erro ao verificar thumbnail para file_id=${file.id}:`, error)
+            // Em caso de erro de rede, tentar carregar mesmo assim (pode ser CORS ou outro problema)
+            setImageSrc(`${thumbnailUrl}?t=${Date.now()}`)
+            setIsLoading(true)
+            pollingRef.current = false
+        }
+    }, [file.id, thumbnailUrl])
+
+    // Limpar timeout quando componente desmontar
+    useEffect(() => {
+        // Verificar thumbnail na montagem
+        checkThumbnail()
+
+        return () => {
+            if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current)
+            }
+            pollingRef.current = false
+        }
+    }, [checkThumbnail])
+
+    // Resetar retry count quando a imagem carregar com sucesso
+    const handleImageLoad = useCallback(() => {
+        console.log(`[THUMBNAIL] Thumbnail carregado com sucesso para file_id=${file.id}`)
+        setIsLoading(false)
+        setImageError(false)
+        setRetryCount(0)
+        retryCountRef.current = 0
+        if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current)
+            retryTimeoutRef.current = null
+        }
+        pollingRef.current = false
+    }, [file.id])
+
+    // Handler para erro ao carregar imagem (mesmo após verificação HEAD)
+    const handleImageError = useCallback(() => {
+        console.log(`[THUMBNAIL] Erro ao carregar imagem para file_id=${file.id}`)
+        setIsLoading(false)
+        setImageError(true)
+        pollingRef.current = false
+    }, [file.id])
 
     return (
-        <div className="relative w-full h-40 sm:h-48 bg-slate-50 rounded-lg overflow-hidden group">
+        <div className="relative w-full h-40 sm:h-48 bg-white rounded-lg overflow-hidden group">
             <button
                 onClick={onClick}
-                className="w-full h-full flex items-center justify-center cursor-pointer transition-all duration-200"
+                className="w-full h-full flex items-center justify-center cursor-pointer transition-all duration-200 relative"
                 title="Clique para marcar para leitura"
             >
-                {isImage(file.content_type) && imageUrl ? (
+                {!imageError && imageSrc ? (
                     <img
-                        src={imageUrl}
+                        key={imageSrc} // Forçar re-render quando imageSrc mudar
+                        src={imageSrc || undefined}
                         alt={file.filename}
                         className="w-full h-full object-cover rounded-lg"
-                        onError={() => {
-                            setImageUrl(null)
-                        }}
+                        onLoad={handleImageLoad}
+                        onError={handleImageError}
+                        style={{ display: isLoading ? 'none' : 'block' }}
                     />
-                ) : (
-                    <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                            {file.content_type === 'application/pdf' ? (
-                                <svg
-                                    className="w-full h-full"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                                    />
-                                </svg>
-                            ) : (
-                                <svg
-                                    className="w-full h-full"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                </svg>
-                            )}
-                        </div>
-                        <span className="text-xs font-medium">
-                            {file.content_type === 'application/pdf'
-                                ? 'PDF'
-                                : file.content_type.split('/')[1]?.toUpperCase() || 'DOCUMENTO'}
-                        </span>
+                ) : null}
+                {(imageError || isLoading) && (
+                    <div className="flex flex-col items-center justify-center w-full h-full bg-white absolute inset-0">
+                        {isLoading ? (
+                            <LoadingSpinner />
+                        ) : (
+                            <span className="text-2xl sm:text-3xl font-semibold text-gray-400">
+                                {fileExtension}
+                            </span>
+                        )}
                     </div>
                 )}
             </button>
@@ -1109,26 +1193,11 @@ export default function FilesPage() {
                 return (
                     <>
                         {/* Cards de arquivos */}
-                        {/* Mensagem de contadores de ações */}
-                        {(bottomBarMessage || selectedFilesForReading.size > 0 || selectedFiles.size > 0) && (
+                        {/* Mensagem de erro (se houver) */}
+                        {bottomBarMessage && (
                             <div className="mb-4 sm:mb-6">
-                                <div className="text-sm text-gray-600">
-                                    {bottomBarMessage ? (
-                                        <span className="text-red-600">{bottomBarMessage}</span>
-                                    ) : (
-                                        <>
-                                            {selectedFilesForReading.size > 0 && (
-                                                <span className="text-blue-600">
-                                                    {selectedFilesForReading.size} marcado{selectedFilesForReading.size > 1 ? 's' : ''} para leitura
-                                                </span>
-                                            )}
-                                            {selectedFiles.size > 0 && (
-                                                <span className={`ml-2 sm:ml-4 text-red-600`}>
-                                                    {selectedFiles.size} marcado{selectedFiles.size > 1 ? 's' : ''} para exclusão
-                                                </span>
-                                            )}
-                                        </>
-                                    )}
+                                <div className="text-sm text-red-600">
+                                    {bottomBarMessage}
                                 </div>
                             </div>
                         )}
@@ -1304,32 +1373,17 @@ export default function FilesPage() {
                                 const hospitalColor = file.hospital_color || '#FFFFFF'
                                 const hospitalBorderColor = file.hospital_color || '#E2E8F0' // slate-200 como fallback
 
-                                // Aplicar destaque na borda quando selecionado
-                                let cardBorderClasses = ''
-                                let cardBgStyle: React.CSSProperties = {}
-
-                                if (isSelected) {
-                                    cardBorderClasses = 'border-4 ring-4 ring-red-300'
-                                    cardBgStyle.borderColor = '#EF4444' // red-500
-                                } else if (isSelectedForReading) {
-                                    cardBorderClasses = 'border-4 ring-4 ring-blue-300'
-                                    cardBgStyle.borderColor = '#3B82F6' // blue-500
-                                } else {
-                                    cardBorderClasses = 'border border-slate-400'
-                                }
-
                                 return (
                                     <div
                                         key={file.id}
-                                        className={`group rounded-xl ${cardBorderClasses} bg-white p-4 min-w-0 transition-all duration-200 flex flex-col`}
-                                        style={cardBgStyle}
+                                        className={`${getCardContainerClasses(isSelected)} flex flex-col`}
                                     >
                                         {/* 1. Topo - Identidade do arquivo - com cor do hospital */}
                                         <div
                                             className="mb-3 flex flex-col gap-1 min-w-0 rounded-t-xl -mx-4 -mt-4 px-4 pt-4"
                                             style={{ backgroundColor: hospitalColor }}
                                         >
-                                            <span className={`text-xs truncate ${isSelected ? 'text-red-700' : 'text-slate-500'}`}>
+                                            <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
                                                 {file.hospital_name}
                                             </span>
                                             <div className="flex items-start gap-2 min-w-0">
@@ -1337,7 +1391,7 @@ export default function FilesPage() {
                                                     {fileTypeInfo.icon}
                                                 </div>
                                                 <h3
-                                                    className={`text-sm font-semibold truncate min-w-0 flex-1 ${isSelected ? 'text-red-900' : 'text-gray-900'}`}
+                                                    className={`text-sm font-semibold truncate min-w-0 flex-1 ${getCardTextClasses(isSelected)}`}
                                                     title={file.filename}
                                                 >
                                                     {file.filename}
@@ -1357,15 +1411,29 @@ export default function FilesPage() {
                                         <div className="mb-3 flex items-center justify-between gap-2">
                                             {/* Metadados à esquerda */}
                                             <div className="flex flex-col min-w-0 flex-1">
-                                                <span className={`text-sm truncate ${isSelected ? 'text-red-900' : 'text-slate-500'}`}>
+                                                <span className={`text-sm truncate ${getCardSecondaryTextClasses(isSelected)}`}>
                                                     {settings
                                                         ? formatDateTime(file.created_at, settings)
                                                         : new Date(file.created_at).toLocaleString()}
                                                 </span>
-                                                <span className={`text-xs truncate ${isSelected ? 'text-red-700' : 'text-slate-400'}`}>{formatFileSize(file.file_size)}</span>
+                                                <span className={`text-xs truncate ${getCardTertiaryTextClasses(isSelected)}`}>{formatFileSize(file.file_size)}</span>
                                             </div>
                                             {/* Ações à direita */}
-                                            <div className="flex items-center gap-1 shrink-0">
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {/* Checkbox para leitura */}
+                                                <label className="flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelectedForReading}
+                                                        onChange={(e) => {
+                                                            e.stopPropagation()
+                                                            toggleFileSelectionForReading(file.id)
+                                                        }}
+                                                        disabled={reading}
+                                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
+                                                    />
+                                                </label>
                                                 {/* Ícone para exclusão */}
                                                 <button
                                                     onClick={(e) => {

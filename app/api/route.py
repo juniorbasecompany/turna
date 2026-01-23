@@ -1380,7 +1380,7 @@ class ScheduleGenerateResponse(PydanticBaseModel):
 
 
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
-def upload_file(
+async def upload_file(
     file: UploadFile = FastAPIFile(...),
     hospital_id: int = Query(..., description="ID do hospital (obrigatório)"),
     member: Member = Depends(get_current_member),
@@ -1389,6 +1389,7 @@ def upload_file(
     """
     Faz upload de arquivo para MinIO/S3 e cria registro File no banco.
     Requer hospital_id obrigatório.
+    Após upload bem-sucedido, enfileira job para gerar thumbnail.
 
     Retorna file_id, s3_url e presigned_url para acesso ao arquivo.
     """
@@ -1415,6 +1416,28 @@ def upload_file(
             s3_key=file_model.s3_key,
             expiration=3600,  # 1 hora
         )
+
+        # Enfileirar job para gerar thumbnail
+        try:
+            thumbnail_job = Job(
+                tenant_id=member.tenant_id,
+                job_type=JobType.GENERATE_THUMBNAIL,
+                status=JobStatus.PENDING,
+                input_data={"file_id": file_model.id},
+            )
+            session.add(thumbnail_job)
+            session.commit()
+            session.refresh(thumbnail_job)
+
+            redis_dsn = WorkerSettings.redis_dsn()
+            redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+            await redis.enqueue_job("generate_thumbnail_job", thumbnail_job.id)
+        except (RedisTimeoutError, RedisConnectionError) as e:
+            # Log erro mas não falha o upload
+            logger.warning(f"Erro ao enfileirar job de thumbnail (file_id={file_model.id}): {e}")
+        except Exception as e:
+            # Log erro mas não falha o upload
+            logger.warning(f"Erro ao criar/enfileirar job de thumbnail (file_id={file_model.id}): {e}")
 
         return FileUploadResponse(
             file_id=file_model.id,
@@ -1662,6 +1685,63 @@ def download_file(
         raise HTTPException(status_code=500, detail=f"Erro ao fazer download do arquivo: {str(e)}")
 
 
+@router.get("/file/{file_id}/thumbnail", tags=["File"])
+def get_file_thumbnail(
+    file_id: int,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Retorna thumbnail WebP 500x500 do arquivo.
+    Retorna 404 se thumbnail não existir (frontend exibe fallback).
+    """
+    # Buscar arquivo
+    file_model = session.get(File, file_id)
+    if not file_model:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
+    # Validar tenant_id
+    if file_model.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Calcular thumbnail_key
+    thumbnail_key = file_model.s3_key + ".thumbnail.webp"
+    logger.info(f"[THUMBNAIL] Buscando thumbnail para file_id={file_id}, s3_key={file_model.s3_key}, thumbnail_key={thumbnail_key}")
+
+    # Obter storage service
+    storage_service = StorageService()
+    s3_client = storage_service.client
+
+    # Tentar obter thumbnail do MinIO
+    try:
+        exists = s3_client.file_exists(thumbnail_key)
+        logger.info(f"[THUMBNAIL] Thumbnail existe? {exists} (key={thumbnail_key})")
+        if exists:
+            # Thumbnail existe: retornar stream
+            response = s3_client._client.get_object(
+                Bucket=storage_service.config.bucket_name,
+                Key=thumbnail_key,
+            )
+            logger.info(f"[THUMBNAIL] Retornando thumbnail para file_id={file_id}")
+            return StreamingResponse(
+                response['Body'].iter_chunks(chunk_size=8192),
+                media_type="image/webp",
+                headers={
+                    "Cache-Control": "private, max-age=3600",
+                },
+            )
+        else:
+            logger.warning(f"[THUMBNAIL] Thumbnail não encontrado (key={thumbnail_key})")
+    except Exception as e:
+        logger.error(f"[THUMBNAIL] Erro ao obter thumbnail (file_id={file_id}, thumbnail_key={thumbnail_key}): {e}", exc_info=True)
+
+    # Thumbnail não existe: retornar 404 (frontend exibe fallback)
+    raise HTTPException(
+        status_code=404,
+        detail=f"Thumbnail não disponível (key={thumbnail_key})",
+    )
+
+
 @router.delete("/file/{file_id}", status_code=204, tags=["File"])
 def delete_file(
     file_id: int,
@@ -1692,6 +1772,18 @@ def delete_file(
         if os.getenv("APP_ENV", "dev") == "dev":
             import traceback
             logging.warning(f"Traceback ao excluir do S3:\n{traceback.format_exc()}")
+
+    # Excluir thumbnail do S3/MinIO (se existir)
+    thumbnail_key = file_model.s3_key + ".thumbnail.webp"
+    try:
+        s3_client = storage_service.client
+        if s3_client.file_exists(thumbnail_key):
+            storage_service.delete_file(thumbnail_key)
+            logger.info(f"[DELETE] Thumbnail excluído: {thumbnail_key}")
+    except Exception as e:
+        # Log erro mas continua (thumbnail pode não existir ou já ter sido deletado)
+        import logging
+        logging.warning(f"Erro ao excluir thumbnail do S3 (continuando): {e}")
 
     # Excluir registro do banco
     try:
@@ -2774,7 +2866,7 @@ def create_member(
             # Se account_id não foi fornecido, verificar unicidade por email
             if not email_lower:
                 raise HTTPException(status_code=400, detail="email é obrigatório quando account_id não é fornecido")
-            
+
             existing_member = session.exec(
                 select(Member).where(
                     Member.tenant_id == member.tenant_id,
@@ -3222,7 +3314,7 @@ def send_member_invite_email(
             account = session.get(Account, member_obj.account_id)
             if account and account.email:
                 account_email = account.email
-        
+
         if not account_email:
             raise HTTPException(status_code=400, detail="Member não possui email para envio de convite")
 

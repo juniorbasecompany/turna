@@ -170,3 +170,45 @@ class S3Client:
             )
         except ClientError as e:
             raise Exception(f"Erro ao excluir arquivo do S3: {e}")
+
+    def file_exists(self, s3_key: str) -> bool:
+        """
+        Verifica se um arquivo existe no S3/MinIO.
+
+        Args:
+            s3_key: Chave S3 do arquivo
+
+        Returns:
+            True se o arquivo existe, False caso contrário
+        """
+        try:
+            self._client.head_object(
+                Bucket=self.config.bucket_name,
+                Key=s3_key,
+            )
+            return True
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "404":
+                return False
+            # Outros erros são propagados
+            raise Exception(f"Erro ao verificar existência do arquivo: {e}")
+
+    def get_file_stream(self, s3_key: str):
+        """
+        Obtém stream do arquivo do S3/MinIO.
+
+        Args:
+            s3_key: Chave S3 do arquivo
+
+        Returns:
+            Stream do arquivo (Body do response)
+        """
+        try:
+            response = self._client.get_object(
+                Bucket=self.config.bucket_name,
+                Key=s3_key,
+            )
+            return response['Body']
+        except ClientError as e:
+            raise Exception(f"Erro ao obter arquivo do S3: {e}")
