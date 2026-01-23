@@ -4,64 +4,13 @@
 
 **Status Geral**: ⚠️ **Parcialmente Viável**
 
-- ✅ **Demand**: ✅ **VIÁVEL** - Pode ser migrado com adaptações moderadas
+- ✅ **Demand**: ✅ **MIGRADO** - Já utiliza `useEntityPage`
+- ✅ **Member**: ✅ **MIGRADO** - Já utiliza `useEntityPage` (com filtros híbridos frontend/backend)
 - ⚠️ **File**: ⚠️ **VIÁVEL COM EXTENSÕES** - Requer extensões significativas no hook
-- ❌ **Member**: ❌ **NÃO VIÁVEL** - Arquitetura fundamentalmente diferente (carrega todos os dados)
 
 ---
 
-## 1. Demand - ✅ VIÁVEL
-
-### Situação Atual
-- Carrega dados paginados do backend via `loadDemands()`
-- Filtro de texto por procedimento (frontend)
-- Carrega lista de hospitais separadamente
-- Lógica de validação de datas
-- Campos complexos (skills array, source object)
-
-### Compatibilidade com `useEntityPage`
-✅ **Alta compatibilidade**
-
-### Adaptações Necessárias
-
-#### 1.1 Filtro de Procedimento
-**Problema**: Filtro de texto no frontend  
-**Solução**: 
-- Opção A: Mover filtro para backend (recomendado)
-- Opção B: Aplicar filtro após receber dados do `useEntityPage`
-
-```typescript
-// Usar additionalListParams para filtro no backend
-const { items: demands } = useEntityPage({
-  // ...
-  additionalListParams: procedureFilter 
-    ? { procedure: procedureFilter } 
-    : undefined,
-})
-```
-
-#### 1.2 Lista de Hospitais
-**Problema**: Carrega hospitais separadamente  
-**Solução**: Manter carregamento separado (não afeta `useEntityPage`)
-
-#### 1.3 Campos Complexos
-**Problema**: `skills` (array) e `source` (object)  
-**Solução**: `useEntityPage` já suporta através de `mapFormDataToCreateRequest` e `mapFormDataToUpdateRequest`
-
-### Plano de Migração
-
-1. ✅ Criar tipos `DemandFormData`, `DemandCreateRequest`, `DemandUpdateRequest`
-2. ✅ Implementar mapeamentos (`mapEntityToFormData`, etc.)
-3. ✅ Mover filtro de procedimento para backend OU aplicar após carregamento
-4. ✅ Manter carregamento de hospitais separado
-5. ✅ Testar validações e campos complexos
-
-### Esforço Estimado
-**Médio** (4-6 horas)
-
----
-
-## 2. File - ⚠️ VIÁVEL COM EXTENSÕES
+## 1. File - ⚠️ VIÁVEL COM EXTENSÕES
 
 ### Situação Atual
 - Carrega dados paginados do backend
@@ -78,15 +27,15 @@ const { items: demands } = useEntityPage({
 
 ### Desafios Principais
 
-#### 2.1 Múltiplos Filtros Dinâmicos
+#### 1.1 Múltiplos Filtros Dinâmicos
 **Problema**: `useEntityList` suporta `additionalParams`, mas precisa ser reativo a mudanças de `startDate`, `endDate`, `selectedHospitalId`, `statusFilters`  
 **Solução**: 
 - Estender `useEntityList` para aceitar função de `additionalParams` que seja reativa
-- OU usar `useEffect` para atualizar `additionalListParams` quando filtros mudarem
+- OU usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
 
 ```typescript
-// Opção: Estender useEntityList
-const additionalParams = useMemo(() => ({
+// Opção: Usar useMemo (similar ao Member)
+const additionalListParams = useMemo(() => ({
   start_at: startDate ? localDateToUtcStart(startDate, settings) : null,
   end_at: endDate ? localDateToUtcEndExclusive(endDate, settings) : null,
   hospital_id: selectedHospitalId || null,
@@ -94,7 +43,7 @@ const additionalParams = useMemo(() => ({
 }), [startDate, endDate, selectedHospitalId, statusFilters, settings])
 ```
 
-#### 2.2 Dependência de `settings`
+#### 1.2 Dependência de `settings`
 **Problema**: `useEntityList` carrega antes de `settings` estar disponível  
 **Solução**: Usar `listEnabled` para desabilitar carregamento até `settings` estar disponível
 
@@ -106,7 +55,7 @@ const { items: files } = useEntityPage({
 })
 ```
 
-#### 2.3 Seleção Dupla
+#### 1.3 Seleção Dupla
 **Problema**: `useEntityPage` só gerencia uma seleção  
 **Solução**: Manter seleção de leitura separada (não afeta carregamento)
 
@@ -116,11 +65,11 @@ const { items: files } = useEntityPage({
 const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<number>>(new Set())
 ```
 
-#### 2.4 Ação Customizada "Ler conteúdo"
+#### 1.4 Ação Customizada "Ler conteúdo"
 **Problema**: `useActionBarButtons` já foi estendido para suportar ações customizadas  
 **Solução**: Usar extensão existente de `useActionBarButtons`
 
-#### 2.5 RefreshKey
+#### 1.5 RefreshKey
 **Problema**: Precisa forçar recarregamento após upload/processamento  
 **Solução**: Chamar `loadItems()` manualmente quando necessário
 
@@ -133,177 +82,78 @@ await loadItems()
 
 ### Plano de Migração
 
-1. ✅ Estender `useEntityList` para suportar `additionalParams` reativo (função ou objeto reativo)
-2. ✅ Implementar mapeamentos de dados
-3. ✅ Configurar `listEnabled` baseado em `settings`
-4. ✅ Manter seleção de leitura separada
-5. ✅ Usar extensão existente de `useActionBarButtons` para ação customizada
-6. ✅ Implementar `refreshKey` via `loadItems()`
+1. [ ] Implementar mapeamentos de dados (`FileFormData`, `mapEntityToFormData`, etc.)
+2. [ ] Configurar `listEnabled` baseado em `settings`
+3. [ ] Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
+4. [ ] Manter seleção de leitura separada
+5. [ ] Usar extensão existente de `useActionBarButtons` para ação customizada
+6. [ ] Implementar `refreshKey` via `loadItems()`
 
 ### Esforço Estimado
 **Alto** (8-12 horas)
 
-### Extensões Necessárias no Hook
-
-```typescript
-// useEntityList.ts - Adicionar suporte a função reativa
-interface UseEntityListOptions<T> {
-  // ...
-  additionalParams?: Record<string, string | number | boolean | null> 
-    | (() => Record<string, string | number | boolean | null>)
-}
-```
+**Nota**: Não é necessário estender os hooks. O padrão usado no Member (usar `useMemo` para calcular `additionalListParams` reativo) já é suficiente e pode ser replicado no File.
 
 ---
 
-## 3. Member - ❌ NÃO VIÁVEL
+## 2. Status das Migrações
 
-### Situação Atual
-- **Carrega TODOS os dados de uma vez** (múltiplas requisições paginadas)
-- **Filtra no frontend** (status e role)
-- **Pagina no frontend** (após filtrar)
-- Funcionalidade de "enviar convite" customizada
-- Validação de JSON customizada
-- Mensagens de email customizadas
+### ✅ Demand - MIGRADO
+- ✅ Já utiliza `useEntityPage`
+- ✅ Filtro de procedimento mantido no frontend (aplicado após carregamento)
+- ✅ Carregamento de hospitais mantido separado
+- ✅ Campos complexos (skills, source) funcionando corretamente
 
-### Compatibilidade com `useEntityPage`
-❌ **Incompatível - arquitetura fundamentalmente diferente**
-
-### Problemas Fundamentais
-
-#### 3.1 Carregamento Completo vs Paginação
-**Problema**: Member carrega TODOS os dados de uma vez, enquanto `useEntityPage` carrega dados paginados do backend  
-**Impacto**: 
-- Member: Carrega tudo → Filtra no frontend → Pagina no frontend
-- `useEntityPage`: Carrega página do backend → Backend filtra → Backend pagina
-
-**Por que não funciona**:
-- Se mover filtros para backend, perde a capacidade de filtrar todos os dados de uma vez
-- Se manter carregamento completo, não usa a paginação do `useEntityPage`
-- Se usar paginação do backend, não pode filtrar todos os dados no frontend
-
-#### 3.2 Filtros no Frontend
-**Problema**: Filtros de status e role são aplicados no frontend após carregar todos os dados  
-**Impacto**: Não pode usar `additionalListParams` porque os filtros são aplicados após o carregamento
-
-#### 3.3 Total Baseado em Filtros
-**Problema**: O `total` é calculado baseado nos dados filtrados no frontend  
-**Impacto**: `useEntityPage` retorna `total` do backend, não do frontend
-
-### Alternativas
-
-#### Opção A: Migrar Filtros para Backend
-**Viabilidade**: ✅ Técnicamente viável  
-**Problema**: Requer mudanças no backend e perde flexibilidade de filtros no frontend
-
-#### Opção B: Criar Hook Especializado
-**Viabilidade**: ✅ Viável  
-**Problema**: Não usa `useEntityPage`, mas pode criar `useEntityPageFullLoad` similar
-
-#### Opção C: Manter Como Está
-**Viabilidade**: ✅ Viável  
-**Recomendação**: ✅ **RECOMENDADO** - Member tem requisitos específicos que justificam carregamento completo
-
-### Conclusão
-❌ **NÃO RECOMENDADO migrar Member para `useEntityPage`**
-
-**Razão**: Arquitetura fundamentalmente diferente (carregamento completo vs paginação). A migração exigiria mudar a arquitetura do Member, o que pode não ser desejável.
+### ✅ Member - MIGRADO
+- ✅ Já utiliza `useEntityPage`
+- ✅ Implementa filtros híbridos: usa `additionalListParams` quando apenas 1 filtro está selecionado, filtra no frontend quando múltiplos estão selecionados
+- ✅ Paginação funciona corretamente com filtros híbridos
+- ✅ Funcionalidades customizadas (envio de convite, validação JSON) mantidas
 
 ---
 
-## 4. Recomendações Finais
+## 3. Recomendações Finais
 
 ### Prioridade de Migração
 
-1. ✅ **Demand** - **RECOMENDADO** (viável, esforço médio)
-2. ⚠️ **File** - **CONDICIONAL** (viável com extensões, esforço alto)
-3. ❌ **Member** - **NÃO RECOMENDADO** (incompatível, arquitetura diferente)
+1. ⚠️ **File** - **CONDICIONAL** (viável com extensões, esforço alto)
 
 ### Plano de Ação Sugerido
 
-#### Fase 1: Demand (Recomendado)
-- ✅ Migrar Demand para `useEntityPage`
-- ✅ Mover filtro de procedimento para backend OU aplicar após carregamento
-- ✅ Manter carregamento de hospitais separado
-- **Benefício**: Padronização sem grandes complexidades
-
-#### Fase 2: File (Opcional)
-- ⚠️ Estender `useEntityList` para suportar `additionalParams` reativo
-- ⚠️ Migrar File para `useEntityPage` com extensões
+#### Migração do File (Opcional)
+- ⚠️ Implementar mapeamentos de dados (`FileFormData`, etc.)
+- ⚠️ Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
+- ⚠️ Configurar `listEnabled` baseado em `settings`
 - ⚠️ Manter seleção de leitura separada
-- **Benefício**: Padronização completa, mas requer extensões no hook
-
-#### Fase 3: Member (Não Recomendado)
-- ❌ **NÃO MIGRAR** - Manter arquitetura atual
-- ✅ Documentar que Member usa carregamento completo por design
-- ✅ Considerar criar `useEntityPageFullLoad` no futuro se necessário
+- ⚠️ Usar extensão existente de `useActionBarButtons` para ação customizada
+- ⚠️ Implementar `refreshKey` via `loadItems()`
+- **Benefício**: Padronização completa, mas requer implementação dos mapeamentos
 
 ---
 
-## 5. Extensões Necessárias nos Hooks
+## 4. Checklist de Migração
 
-### 5.1 `useEntityList` - Suporte a Parâmetros Reativos
-
-```typescript
-// useEntityList.ts
-interface UseEntityListOptions<T> {
-  // ...
-  additionalParams?: 
-    | Record<string, string | number | boolean | null>
-    | (() => Record<string, string | number | boolean | null>)
-}
-
-// Na implementação:
-const params = typeof additionalParams === 'function' 
-  ? additionalParams() 
-  : additionalParams
-```
-
-### 5.2 `useEntityPage` - Passar `additionalParams` Reativo
-
-```typescript
-// useEntityPage.ts
-interface UseEntityPageOptions<TFormData, TEntity, TCreateRequest, TUpdateRequest> {
-  // ...
-  additionalListParams?: 
-    | Record<string, string | number | boolean | null>
-    | (() => Record<string, string | number | boolean | null>)
-}
-```
-
----
-
-## 6. Checklist de Migração
-
-### Demand
-- [ ] Criar tipos `DemandFormData`
+### File
+- [ ] Criar tipos `FileFormData`, `FileCreateRequest`, `FileUpdateRequest`
 - [ ] Implementar `mapEntityToFormData`
 - [ ] Implementar `mapFormDataToCreateRequest`
 - [ ] Implementar `mapFormDataToUpdateRequest`
-- [ ] Mover filtro de procedimento para backend OU aplicar após carregamento
-- [ ] Testar validações
-- [ ] Testar campos complexos (skills, source)
-- [ ] Atualizar `PANEL_COMPARISON.md`
-
-### File
-- [ ] Estender `useEntityList` para suportar `additionalParams` reativo
-- [ ] Estender `useEntityPage` para passar `additionalParams` reativo
-- [ ] Criar tipos `FileFormData`
-- [ ] Implementar mapeamentos
+- [ ] Implementar `validateFormData`
+- [ ] Implementar `isEmptyCheck`
+- [ ] Usar `useMemo` para calcular `additionalListParams` reativo (similar ao Member)
 - [ ] Configurar `listEnabled` baseado em `settings`
-- [ ] Manter seleção de leitura separada
-- [ ] Testar múltiplos filtros
-- [ ] Testar conversão de datas
-- [ ] Testar refreshKey
+- [ ] Manter seleção de leitura separada (`selectedFilesForReading`)
+- [ ] Usar extensão existente de `useActionBarButtons` para ação customizada "Ler conteúdo"
+- [ ] Implementar `refreshKey` via `loadItems()` após upload/processamento
 - [ ] Atualizar `PANEL_COMPARISON.md`
 
 ---
 
-## 7. Conclusão
+## 5. Conclusão
 
 **Resumo**:
-- ✅ **Demand**: Viável, esforço médio - **RECOMENDADO**
+- ✅ **Demand**: ✅ **MIGRADO** - Já utiliza `useEntityPage`
+- ✅ **Member**: ✅ **MIGRADO** - Já utiliza `useEntityPage` (com filtros híbridos)
 - ⚠️ **File**: Viável com extensões, esforço alto - **CONDICIONAL**
-- ❌ **Member**: Não viável - **NÃO RECOMENDADO**
 
-**Próximo Passo**: Decidir se deseja migrar Demand e/ou File, e se deseja estender os hooks para suportar File.
+**Próximo Passo**: Decidir se deseja migrar File para `useEntityPage`. A migração é viável, mas requer implementação dos mapeamentos de dados e configuração adequada dos filtros reativos.
