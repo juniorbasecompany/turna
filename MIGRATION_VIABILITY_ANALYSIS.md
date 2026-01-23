@@ -1,9 +1,9 @@
 # 📊 Análise de Viabilidade: Migração para `useEntityPage`
 
-## File - ⚠️ PENDENTE
+## File - ✅ CONCLUÍDO
 
 ### Situação Atual
-- ❌ **NÃO MIGRADO** - Ainda utiliza padrão antigo com `useState`, `useEffect` e `protectedFetch` manual
+- ✅ **MIGRADO** - Agora utiliza `useEntityPage` seguindo o padrão dos demais painéis
 - Carrega dados paginados do backend manualmente
 - **Múltiplos filtros**: data (start/end), hospital, status
 - Depende de `settings` do tenant para conversão de datas
@@ -81,8 +81,8 @@ await loadItems()
 ```typescript
 // Verificar se precisa filtrar no frontend
 const needsFrontendFilter = useMemo(() => {
-  return statusFilters.selectedFilters.size < statusFilters.allFilters.length
-}, [statusFilters.selectedFilters.size, statusFilters.allFilters.length])
+  return statusFilters.selectedFilters.size < ALL_STATUS_FILTERS.length
+}, [statusFilters.selectedFilters])
 
 // Filtrar no frontend quando statusFilters está ativo
 const filteredFiles = useMemo(() => {
@@ -131,21 +131,21 @@ const displayTotal = useMemo(() => {
 
 ### Checklist de Migração
 
-- [ ] Criar tipos `FileFormData`, `FileCreateRequest`, `FileUpdateRequest` (simplificados, pois File não tem formulário tradicional)
-- [ ] Implementar `mapEntityToFormData` (pode retornar objeto vazio ou mínimo)
-- [ ] Implementar `mapFormDataToCreateRequest` (não será usado para upload, mas necessário para o hook)
-- [ ] Implementar `mapFormDataToUpdateRequest` (não será usado, mas necessário para o hook)
-- [ ] Implementar `validateFormData` (pode retornar null sempre, pois validação é customizada)
-- [ ] Implementar `isEmptyCheck` (pode retornar true sempre, pois não há formulário tradicional)
-- [ ] Usar `useMemo` para calcular `additionalListParams` reativo (apenas start_at, end_at, hospital_id)
-- [ ] Configurar `listEnabled` baseado em `settings`
-- [ ] Implementar filtro de status no frontend usando `useMemo` (similar ao Member page)
-- [ ] Ajustar paginação no frontend quando filtro de status está ativo
-- [ ] Manter seleção de leitura separada (`selectedFilesForReading`)
-- [ ] Manter lógica de upload separada (não usar `handleSave` do `useEntityPage`)
-- [ ] Manter lógica de edição de JSON separada (não usar `handleSave` do `useEntityPage`)
-- [ ] Usar extensão existente de `useActionBarButtons` para ação customizada "Ler conteúdo"
-- [ ] Implementar `refreshKey` via `loadItems()` após upload/processamento
+- [x] Criar tipos `FileFormData`, `FileCreateRequest`, `FileUpdateRequest` (simplificados, pois File não tem formulário tradicional)
+- [x] Implementar `mapEntityToFormData` (pode retornar objeto vazio ou mínimo)
+- [x] Implementar `mapFormDataToCreateRequest` (não será usado para upload, mas necessário para o hook)
+- [x] Implementar `mapFormDataToUpdateRequest` (não será usado, mas necessário para o hook)
+- [x] Implementar `validateFormData` (pode retornar null sempre, pois validação é customizada)
+- [x] Implementar `isEmptyCheck` (pode retornar true sempre, pois não há formulário tradicional)
+- [x] Usar `useMemo` para calcular `additionalListParams` reativo (apenas start_at, end_at, hospital_id)
+- [x] Configurar `listEnabled` baseado em `settings`
+- [x] Implementar filtro de status no frontend usando `useMemo` (similar ao Member page)
+- [x] Ajustar paginação no frontend quando filtro de status está ativo
+- [x] Manter seleção de leitura separada (`selectedFilesForReading`)
+- [x] Manter lógica de upload separada (não usar `handleSave` do `useEntityPage`)
+- [x] Manter lógica de edição de JSON separada (não usar `handleSave` do `useEntityPage`)
+- [x] Usar extensão existente de `useActionBarButtons` para ação customizada "Ler conteúdo"
+- [x] Implementar `refreshKey` via `loadItems()` após upload/processamento
 - [ ] Atualizar `PANEL_COMPARISON.md`
 
 ### Esforço Estimado
@@ -161,4 +161,16 @@ const displayTotal = useMemo(() => {
 
 ## Conclusão
 
-**Próximo Passo**: Migrar File para `useEntityPage`. A migração é viável e requer implementação dos mapeamentos de dados e configuração adequada dos filtros reativos usando `useMemo`.
+**Status**: ✅ **MIGRAÇÃO CONCLUÍDA**
+
+A migração foi realizada com sucesso. Todos os desafios foram resolvidos:
+- Filtros dinâmicos implementados com `useMemo`
+- Filtro de status aplicado no frontend com paginação ajustada
+- Seleção dupla mantida (exclusão + leitura)
+- Upload e edição de JSON mantidos como funcionalidades customizadas
+- `refreshKey` substituído por `loadItems()`
+- Compatível com os demais painéis (Member, Hospital, Tenant, Demand)
+
+**Correções aplicadas durante a implementação**:
+- Removido `paginationHandlers` das dependências do `useEffect` para evitar loop infinito
+- Ajustada dependência do `useMemo` para usar `statusFilters.selectedFilters` completo (não apenas `.size`)

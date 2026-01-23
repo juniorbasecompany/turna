@@ -15,12 +15,12 @@ import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
-import { usePagination } from '@/hooks/usePagination'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
 import { getCardTextClasses, getCardSecondaryTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface FileResponse {
     id: number
@@ -55,6 +55,19 @@ interface FileListResponse {
 }
 
 type JobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+
+// Tipos para useEntityPage (simplificados, pois File não tem formulário tradicional)
+type FileFormData = Record<string, never> // Objeto vazio, pois não há formulário tradicional
+
+interface FileCreateRequest {
+    // Não será usado para upload, mas necessário para o hook
+    [key: string]: never
+}
+
+interface FileUpdateRequest {
+    // Não será usado, mas necessário para o hook
+    [key: string]: never
+}
 
 interface PendingFile {
     file: File
@@ -563,18 +576,13 @@ export default function FilesPage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const processingRef = useRef(false)
     const processedFilesRef = useRef<Set<string>>(new Set())
-    const [files, setFiles] = useState<FileResponse[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
     const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
-    const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set())
+    // Seleção de leitura separada (não gerenciada por useEntityPage)
     const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<number>>(new Set())
-    const [deleting, setDeleting] = useState(false)
     const [reading, setReading] = useState(false)
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [uploading, setUploading] = useState(false)
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
-    const [refreshKey, setRefreshKey] = useState(0)
 
     // Filtros de período usando TenantDatePicker (Date objects)
     // Inicializar com data de hoje
@@ -594,15 +602,75 @@ export default function FilesPage() {
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
     // Filtro de status usando hook reutilizável
+    const ALL_STATUS_FILTERS = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null] as const
     const statusFilters = useEntityFilters<JobStatus | null>({
-        allFilters: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null],
-        initialFilters: new Set(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]),
+        allFilters: ALL_STATUS_FILTERS,
+        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
-    // Paginação
-    const { pagination, setPagination, total, setTotal, paginationHandlers } = usePagination(19)
-    const limit = pagination.limit
-    const offset = pagination.offset
+    // Configuração inicial para useEntityPage (simplificada, pois File não tem formulário tradicional)
+    const initialFormData: FileFormData = {}
+
+    // Mapeamentos (simplificados, pois File não tem formulário tradicional)
+    const mapEntityToFormData = (file: FileResponse): FileFormData => {
+        return {}
+    }
+
+    const mapFormDataToCreateRequest = (formData: FileFormData): FileCreateRequest => {
+        return {}
+    }
+
+    const mapFormDataToUpdateRequest = (formData: FileFormData): FileUpdateRequest => {
+        return {}
+    }
+
+    const validateFormData = (formData: FileFormData): string | null => {
+        // Validação customizada é feita em handleSave para edição de JSON
+        return null
+    }
+
+    const isEmptyCheck = (formData: FileFormData): boolean => {
+        // Sempre retorna true, pois não há formulário tradicional
+        return true
+    }
+
+    // Calcular additionalListParams reativo (apenas filtros suportados pela API)
+    const additionalListParams = useMemo(() => {
+        if (!settings) return undefined
+        return {
+            start_at: startDate ? localDateToUtcStart(startDate, settings) : null,
+            end_at: endDate ? localDateToUtcEndExclusive(endDate, settings) : null,
+            hospital_id: selectedHospitalId || null,
+        }
+    }, [startDate, endDate, selectedHospitalId, settings])
+
+    // useEntityPage
+    const {
+        items: files,
+        loading,
+        error,
+        setError,
+        deleting,
+        selectedItems: selectedFiles,
+        toggleSelection: toggleFileSelection,
+        selectedCount: selectedFilesCount,
+        pagination,
+        total,
+        paginationHandlers,
+        handleDeleteSelected,
+        loadItems,
+    } = useEntityPage<FileFormData, FileResponse, FileCreateRequest, FileUpdateRequest>({
+        endpoint: '/api/file',
+        entityName: 'arquivo',
+        initialFormData,
+        isEmptyCheck,
+        mapEntityToFormData,
+        mapFormDataToCreateRequest,
+        mapFormDataToUpdateRequest,
+        validateFormData,
+        additionalListParams,
+        listEnabled: !!settings,
+    })
 
     // Flash vermelho no card de upload quando não há hospital selecionado
     const [uploadCardFlash, setUploadCardFlash] = useState(false)
@@ -638,102 +706,83 @@ export default function FilesPage() {
         loadHospitalList()
     }, [])
 
-    // Carregar arquivos
+    // Validar intervalo de datas
     useEffect(() => {
-        async function loadFiles() {
-            if (!settings) {
-                // Aguardar settings carregar - não setar loading para evitar travamento
-                setLoading(false)
-                return
-            }
-
-            setLoading(true)
-            setError(null)
-
-            try {
-                // Validar intervalo (se ambas as datas estão selecionadas)
-                if (startDate && endDate && startDate > endDate) {
-                    setError('Data inicial deve ser menor ou igual à data final')
-                    setLoading(false)
-                    return
-                }
-
-                // Converter Date objects para UTC strings (ISO 8601) antes de enviar à API
-                const startAt = startDate ? localDateToUtcStart(startDate, settings) : ''
-                const endAt = endDate ? localDateToUtcEndExclusive(endDate, settings) : ''
-
-                // Construir URL com query params
-                const url = new URL('/api/file/list', window.location.origin)
-                if (startAt) url.searchParams.set('start_at', startAt)
-                if (endAt) url.searchParams.set('end_at', endAt)
-                if (selectedHospitalId) url.searchParams.set('hospital_id', String(selectedHospitalId))
-                url.searchParams.set('limit', String(limit))
-                url.searchParams.set('offset', String(offset))
-
-                const data = await protectedFetch<FileListResponse>(url.toString())
-                setFiles(data.items)
-                setTotal(data.total)
-            } catch (err: unknown) {
-                if (err instanceof Error) {
-                    setError(err.message || 'Erro ao carregar arquivos')
-                } else {
-                    setError('Erro desconhecido ao carregar arquivos')
-                }
-            } finally {
-                setLoading(false)
-            }
+        if (startDate && endDate && startDate > endDate) {
+            setError('Data inicial deve ser menor ou igual à data final')
         }
+    }, [startDate, endDate, setError])
 
-        loadFiles()
-    }, [startDate, endDate, selectedHospitalId, settings, limit, offset, refreshKey])
+    // Resetar offset quando filtros mudarem
+    useEffect(() => {
+        paginationHandlers.onFirst()
+    }, [statusFilters.selectedFilters])
 
-    // Handlers de paginação agora vêm do hook usePagination
+    // Verificar se precisa filtrar no frontend
+    const needsFrontendFilter = useMemo(() => {
+        return statusFilters.selectedFilters.size < ALL_STATUS_FILTERS.length
+    }, [statusFilters.selectedFilters])
+
+    // Filtrar no frontend quando statusFilters está ativo
+    const filteredFiles = useMemo(() => {
+        if (!needsFrontendFilter) {
+            return files  // Backend já retornou todos os dados necessários
+        }
+        return files.filter((file) => {
+            const status = file.job_status === null ? null : (file.job_status as JobStatus)
+            return statusFilters.selectedFilters.has(status)
+        })
+    }, [files, statusFilters.selectedFilters, needsFrontendFilter])
+
+    // Aplicar paginação no frontend quando há filtro de status
+    const paginatedFiles = useMemo(() => {
+        if (!needsFrontendFilter) {
+            return filteredFiles  // Backend já paginou
+        }
+        // Paginar no frontend
+        const start = pagination.offset
+        const end = start + pagination.limit
+        return filteredFiles.slice(start, end)
+    }, [filteredFiles, needsFrontendFilter, pagination.offset, pagination.limit])
+
+    // Ajustar total para refletir filtro de status
+    const displayTotal = useMemo(() => {
+        if (!needsFrontendFilter) {
+            return total  // Usar total do backend
+        }
+        return filteredFiles.length  // Total após filtro no frontend
+    }, [filteredFiles, needsFrontendFilter, total])
 
     // Handlers para mudança de data no TenantDatePicker
     const handleStartDateChange = (date: Date | null) => {
         setStartDate(date)
-        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
+        paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
     const handleEndDateChange = (date: Date | null) => {
         setEndDate(date)
-        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
+        paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
     const handleHospitalChange = (hospitalId: string) => {
         setSelectedHospitalId(hospitalId ? parseInt(hospitalId) : null)
-        setPagination((prev) => ({ ...prev, offset: 0 })) // Resetar paginação ao mudar filtro
+        paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
 
-    // Handlers para filtros (usando hooks reutilizáveis)
-    // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
-    // Resetar paginação quando filtros mudarem
-    useEffect(() => {
-        setPagination((prev) => ({ ...prev, offset: 0 }))
-    }, [statusFilters.selectedFilters, setPagination])
-
-    // Toggle seleção de arquivo para exclusão
-    const toggleFileSelection = (fileId: number) => {
-        setSelectedFiles((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(fileId)) {
-                newSet.delete(fileId)
-            } else {
-                newSet.add(fileId)
-            }
-            return newSet
-        })
+    // Wrapper para toggleFileSelection que também remove da seleção de leitura
+    const toggleFileSelectionWrapper = useCallback((fileId: number) => {
+        toggleFileSelection(fileId)
         // Ao selecionar para exclusão, remover da seleção de leitura
         setSelectedFilesForReading((prev) => {
             const newSet = new Set(prev)
             newSet.delete(fileId)
             return newSet
         })
-    }
+    }, [toggleFileSelection])
 
     // Toggle seleção de arquivo para leitura
-    const toggleFileSelectionForReading = (fileId: number) => {
+    const toggleFileSelectionForReading = useCallback((fileId: number) => {
         setSelectedFilesForReading((prev) => {
             const newSet = new Set(prev)
             if (newSet.has(fileId)) {
@@ -744,12 +793,10 @@ export default function FilesPage() {
             return newSet
         })
         // Ao selecionar para leitura, remover da seleção de exclusão
-        setSelectedFiles((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(fileId)
-            return newSet
-        })
-    }
+        if (selectedFiles.has(fileId)) {
+            toggleFileSelection(fileId)
+        }
+    }, [selectedFiles, toggleFileSelection])
 
     // Buscar JSON do arquivo através do job
     const fetchFileJson = useCallback(async (fileId: number): Promise<{ json: string; jobId: number | null }> => {
@@ -852,7 +899,7 @@ export default function FilesPage() {
             setOriginalJsonContent('')
 
             // Recarregar lista de arquivos
-            setRefreshKey((prev) => prev + 1)
+            await loadItems()
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao salvar JSON do arquivo')
         } finally {
@@ -1115,7 +1162,7 @@ export default function FilesPage() {
 
                 // Recarregar lista de arquivos após upload de todos
                 if (filesToProcess.length > 0) {
-                    setRefreshKey((prev) => prev + 1)
+                    await loadItems()
                 }
             } catch (err) {
                 setError(
@@ -1241,7 +1288,7 @@ export default function FilesPage() {
             }
 
             // Recarregar lista de arquivos para atualizar o status
-            setRefreshKey((prev) => prev + 1)
+            await loadItems()
 
             // Limpar seleção após iniciar leitura
             setSelectedFilesForReading(new Set())
@@ -1256,43 +1303,12 @@ export default function FilesPage() {
         }
     }
 
-    // Excluir arquivos selecionados
-    const handleDeleteSelected = async () => {
-        if (selectedFiles.size === 0) return
-
-        setDeleting(true)
-        setError(null)
-
-        try {
-            // Excluir todos os arquivos selecionados em paralelo
-            const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
-                await protectedFetch(`/api/file/${fileId}`, {
-                    method: 'DELETE',
-                })
-                return fileId
-            })
-
-            await Promise.all(deletePromises)
-
-            // Remover arquivos excluídos da lista
-            setFiles(files.filter((file) => !selectedFiles.has(file.id)))
-            setTotal(total - selectedFiles.size)
-            setSelectedFiles(new Set())
-        } catch (err) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : 'Erro ao excluir arquivos. Tente novamente.'
-            )
-        } finally {
-            setDeleting(false)
-        }
-    }
+    // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
 
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
     const actionBarButtons = useActionBarButtons({
         isEditing: false, // Não usado quando showEditArea é fornecido
-        selectedCount: selectedFiles.size,
+        selectedCount: selectedFilesCount,
         hasChanges: hasChanges(),
         submitting,
         deleting,
@@ -1319,7 +1335,7 @@ export default function FilesPage() {
     const actionBarErrorProps = getActionBarErrorProps(
         error,
         showEditArea, // File usa showEditArea em vez de isEditing
-        selectedFiles.size + selectedFilesForReading.size // Contar ambas as seleções
+        selectedFilesCount + selectedFilesForReading.size // Contar ambas as seleções
     )
 
     return (
@@ -1445,27 +1461,19 @@ export default function FilesPage() {
             )}
 
             {/* Lista de arquivos */}
-            {!loading && (() => {
-                // Filtrar arquivos por status
-                const filteredFiles = files.filter((file) => {
-                    const status = file.job_status === null ? null : (file.job_status as JobStatus)
-                    return statusFilters.selectedFilters.has(status)
-                })
-                const filteredTotal = filteredFiles.length
-
-                return (
-                    <>
-                        {/* Cards de arquivos */}
-                        {/* Mensagem de erro (se houver) */}
-                        {bottomBarMessage && (
-                            <div className="mb-4 sm:mb-6">
-                                <div className="text-sm text-red-600">
-                                    {bottomBarMessage}
-                                </div>
+            {!loading && (
+                <>
+                    {/* Cards de arquivos */}
+                    {/* Mensagem de erro (se houver) */}
+                    {bottomBarMessage && (
+                        <div className="mb-4 sm:mb-6">
+                            <div className="text-sm text-red-600">
+                                {bottomBarMessage}
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
                             {/* Card de upload - sempre o primeiro */}
                             <input
                                 ref={fileInputRef}
@@ -1626,7 +1634,7 @@ export default function FilesPage() {
                                 })}
 
                             {/* Renderizar arquivos existentes */}
-                            {filteredFiles.map((file) => {
+                            {paginatedFiles.map((file) => {
                                 const fileTypeInfo = getFileTypeInfo(file.content_type)
                                 const isSelected = selectedFiles.has(file.id)
                                 const isSelectedForReading = selectedFilesForReading.has(file.id)
@@ -1665,7 +1673,7 @@ export default function FilesPage() {
                                                 }
                                                 onToggleSelection={(e) => {
                                                     e.stopPropagation()
-                                                    toggleFileSelection(file.id)
+                                                    toggleFileSelectionWrapper(file.id)
                                                 }}
                                                 onEdit={() => handleEditClick(file)}
                                                 disabled={deleting}
@@ -1725,9 +1733,8 @@ export default function FilesPage() {
                                 )
                             })}
                         </div>
-                    </>
-                )
-            })()}
+                </>
+            )}
 
             {/* Spacer para evitar que conteúdo fique escondido atrás da barra */}
             <ActionBarSpacer />
@@ -1735,11 +1742,11 @@ export default function FilesPage() {
             {/* Barra inferior fixa com ações */}
             <ActionBar
                 pagination={
-                    total > 0 ? (
+                    displayTotal > 0 ? (
                         <Pagination
-                            offset={offset}
-                            limit={limit}
-                            total={total}
+                            offset={pagination.offset}
+                            limit={pagination.limit}
+                            total={displayTotal}
                             onFirst={paginationHandlers.onFirst}
                             onPrevious={paginationHandlers.onPrevious}
                             onNext={paginationHandlers.onNext}
