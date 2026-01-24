@@ -230,7 +230,8 @@ Após a migração, a **raiz do backend** passa a ser `backend/`. Todos os `proj
 
 ## Fase 7: Limpeza e documentação
 
-- [ ] Remover da **raiz** do repositório quaisquer cópias residuais de `app/`, `alembic/`, `demand/`, etc., se tiver usado “copiar e depois apagar” na Fase 2.
+- [ ] Remover da **raiz** cópias residuais: `app/`, `alembic/`, `demand/`, `output/`, `strategy/`, `static/`, `requirements.txt`, `Dockerfile`, `app.py`, `turna.py`, `login.py`, `diagnose.py`, `alembic.ini`. Se der "Access denied": feche o IDE, `docker compose down`, tente de novo. Ou execute `python script_cleanup_root_duplicates.py`.
+- [ ] Se existir `backend/app/app/` (aninhado): faça `docker compose down`, depois `Remove-Item -Recurse -Force backend\app\app`.
 - [ ] Atualizar `README.md` (ou documento de setup) com:
   - [ ] Indicação de que o backend está em `backend/`.
   - [ ] Comandos Docker e Alembic executados a partir da raiz, com contexto `backend/`.
@@ -260,6 +261,13 @@ Se algo quebrar após a migração:
 | **DIRECTIVES.md** | Frontend inalterado; comunicação só via HTTP; mudanças mínimas e pontuais (paths e Docker). |
 | **SECURITY.md** | Nenhuma mudança em regras de tenant, JWT ou endpoints; apenas reorganização de arquivos. |
 | **STACK.md** | Mesma stack (FastAPI, SQLModel, Alembic, Arq, Redis, Postgres, MinIO, etc.). |
+
+---
+
+## Revisão / Pendências
+
+- **`backend/app/app/`** (pasta aninhada): se ainda existir, remover manualmente após `docker compose down` — `Remove-Item -Recurse -Force backend\app\app`. Enquanto existir, o Docker usa `app.main` em `backend/app/`; a pasta aninhada é redundante.
+- **Raiz**: não deve haver `app/`, `alembic/`, etc. Se houver, use `python script_cleanup_root_duplicates.py` (após `docker compose down`).
 
 ---
 

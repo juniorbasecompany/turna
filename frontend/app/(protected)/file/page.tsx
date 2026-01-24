@@ -18,9 +18,9 @@ import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
+import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
-import { getCardTextClasses, getCardSecondaryTextClasses } from '@/lib/cardStyles'
-import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
+import { localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface FileResponse {
@@ -1327,13 +1327,13 @@ export default function FilesPage() {
         customActions:
             selectedFilesForReading.size > 0
                 ? [
-                      {
-                          label: 'Ler conteúdo',
-                          onClick: handleReadSelected,
-                          disabled: reading || submitting,
-                          loading: reading,
-                      },
-                  ]
+                    {
+                        label: 'Ler conteúdo',
+                        onClick: handleReadSelected,
+                        disabled: reading || submitting,
+                        loading: reading,
+                    },
+                ]
                 : [],
         onCancel: handleCancel,
         onDelete: handleDeleteSelected,
@@ -1433,34 +1433,34 @@ export default function FilesPage() {
                 </FilterPanel>
             ) : (
                 /* Área de edição */
-            <EditForm
-                title="Arquivo"
-                editTitle="Editar arquivo"
-                isEditing={showEditArea}
-            >
-                {loadingJson ? (
-                    <div className="flex justify-center items-center py-12">
-                        <LoadingSpinner />
-                    </div>
-                ) : (
-                    <>
-                        <FormField
-                            label="JSON extraído"
-                            helperText="Conteúdo JSON extraído do arquivo. Você pode editar este campo."
-                        >
-                            <JsonEditor
-                                id="json-content"
-                                value={jsonContent}
-                                on_change={(value) => {
-                                    setJsonContent(value)
-                                }}
-                                is_disabled={submitting}
-                                height={400}
-                            />
-                        </FormField>
-                    </>
-                )}
-            </EditForm>
+                <EditForm
+                    title="Arquivo"
+                    editTitle="Editar arquivo"
+                    isEditing={showEditArea}
+                >
+                    {loadingJson ? (
+                        <div className="flex justify-center items-center py-12">
+                            <LoadingSpinner />
+                        </div>
+                    ) : (
+                        <>
+                            <FormField
+                                label="JSON extraído"
+                                helperText="Conteúdo JSON extraído do arquivo. Você pode editar este campo."
+                            >
+                                <JsonEditor
+                                    id="json-content"
+                                    value={jsonContent}
+                                    on_change={(value) => {
+                                        setJsonContent(value)
+                                    }}
+                                    is_disabled={submitting}
+                                    height={400}
+                                />
+                            </FormField>
+                        </>
+                    )}
+                </EditForm>
             )}
 
             {/* Loading */}
@@ -1484,265 +1484,265 @@ export default function FilesPage() {
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
-                            {/* Card de upload - sempre o primeiro */}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
-                                onChange={handleFileSelect}
-                                className="hidden"
-                                id="file-upload"
-                            />
-                            <CreateCard
-                                label="Adicionar um ou mais arquivos"
-                                subtitle="Clique ou arraste e solte"
-                                onClick={handleUploadCardClick}
-                                isDragging={isDragging}
-                                showFlash={uploadCardFlash}
-                                flashMessage="Selecione o hospital"
-                                onDragEnter={handleDragEnter}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                customIcon={
-                                    <svg
-                                        className="w-full h-full"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                                        />
-                                    </svg>
+                        {/* Card de upload - sempre o primeiro */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                            id="file-upload"
+                        />
+                        <CreateCard
+                            label="Adicionar um ou mais arquivos"
+                            subtitle="Clique ou arraste e solte"
+                            onClick={handleUploadCardClick}
+                            isDragging={isDragging}
+                            showFlash={uploadCardFlash}
+                            flashMessage="Selecione o hospital"
+                            onDragEnter={handleDragEnter}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            customIcon={
+                                <svg
+                                    className="w-full h-full"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                                    />
+                                </svg>
+                            }
+                        >
+                            <div className="space-y-0.5">
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Documentos PDF
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Planilhas XLSX ou XLS
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Imagens JPG ou PNG
+                                </p>
+                                <p className="text-xs text-slate-400 leading-tight">
+                                    Texto CSV
+                                </p>
+                            </div>
+                        </CreateCard>
+
+                        {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em localFiles */}
+                        {pendingFiles
+                            .filter((pendingFile) => {
+                                // Se o arquivo já tem fileId e está na lista de localFiles, não mostrar
+                                if (pendingFile.fileId) {
+                                    return !localFiles.some((f) => f.id === pendingFile.fileId)
                                 }
-                            >
-                                <div className="space-y-0.5">
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Documentos PDF
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Planilhas XLSX ou XLS
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Imagens JPG ou PNG
-                                    </p>
-                                    <p className="text-xs text-slate-400 leading-tight">
-                                        Texto CSV
-                                    </p>
-                                </div>
-                            </CreateCard>
+                                // Verificar se já está na lista de localFiles comparando nome e tamanho
+                                const fileName = pendingFile.file.name
+                                const fileSize = pendingFile.file.size
+                                const alreadyInFiles = localFiles.some(
+                                    (f) => f.filename === fileName && f.file_size === fileSize
+                                )
+                                // Se já está em localFiles, não mostrar como pendente
+                                return !alreadyInFiles
+                            })
+                            .map((pendingFile, filteredIndex) => {
+                                // Usar índice original de pendingFiles para remover corretamente
+                                const originalIndex = pendingFiles.findIndex((pf) => pf === pendingFile)
+                                const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
 
-                            {/* Renderizar arquivos pendentes primeiro - filtrar aqueles que já estão em localFiles */}
-                            {pendingFiles
-                                .filter((pendingFile) => {
-                                    // Se o arquivo já tem fileId e está na lista de localFiles, não mostrar
-                                    if (pendingFile.fileId) {
-                                        return !localFiles.some((f) => f.id === pendingFile.fileId)
+                                return (
+                                    <div
+                                        key={`pending-${originalIndex}-${pendingFile.file.name}`}
+                                        className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 border-blue-200"
+                                    >
+                                        {/* 1. Topo - Identidade do arquivo */}
+                                        <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
+                                                    {fileTypeInfo.icon}
+                                                </div>
+                                                <h3
+                                                    className="text-sm font-semibold truncate min-w-0 text-gray-900"
+                                                    title={pendingFile.file.name}
+                                                >
+                                                    {pendingFile.file.name}
+                                                </h3>
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    removePendingFile(originalIndex)
+                                                }}
+                                                className="shrink-0 p-1.5 rounded-md transition-all duration-200 text-gray-400"
+                                                title="Remover arquivo"
+                                            >
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        {/* 2. Corpo - Preview */}
+                                        <div className="mb-3">
+                                            {isImage(pendingFile.file.type || '') ? (
+                                                <PendingFileImageThumbnail file={pendingFile.file} />
+                                            ) : (
+                                                // Para outros tipos, mostrar ícone
+                                                <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
+                                                    <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
+                                                        <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
+                                                            {fileTypeInfo.icon}
+                                                        </div>
+                                                        <span className="text-xs font-medium">
+                                                            {pendingFile.file.type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 3. Rodapé - Status */}
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
+                                            {pendingFile.uploading && (
+                                                <>
+                                                    <LoadingSpinner />
+                                                </>
+                                            )}
+                                            {pendingFile.error && (
+                                                <>
+                                                    <span className="shrink-0 text-slate-500">•</span>
+                                                    <span className="truncate text-red-600">Erro</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {pendingFile.error && (
+                                            <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
+                                                {pendingFile.error}
+                                            </p>
+                                        )}
+                                    </div>
+                                )
+                            })}
+
+                        {/* Renderizar arquivos existentes */}
+                        {paginatedFiles.map((file) => {
+                            const fileTypeInfo = getFileTypeInfo(file.content_type)
+                            const isSelected = selectedFiles.has(file.id)
+                            const isSelectedForReading = selectedFilesForReading.has(file.id)
+                            const jobStatusClasses = getJobStatusCardClasses(file.job_status)
+
+                            // Calcular cor do hospital (com fallback para branco se não houver cor)
+                            const hospitalColor = file.hospital_color || '#FFFFFF'
+                            const hospitalBorderColor = file.hospital_color || '#E2E8F0' // slate-200 como fallback
+
+                            return (
+                                <EntityCard
+                                    key={file.id}
+                                    id={file.id}
+                                    isSelected={isSelected}
+                                    className="flex flex-col"
+                                    footer={
+                                        <CardFooter
+                                            isSelected={isSelected}
+                                            date={file.created_at}
+                                            settings={settings}
+                                            secondaryText={formatFileSize(file.file_size)}
+                                            beforeActions={
+                                                <label className="flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelectedForReading}
+                                                        onChange={(e) => {
+                                                            e.stopPropagation()
+                                                            toggleFileSelectionForReading(file.id)
+                                                        }}
+                                                        disabled={reading}
+                                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
+                                                    />
+                                                </label>
+                                            }
+                                            onToggleSelection={(e) => {
+                                                e.stopPropagation()
+                                                toggleFileSelectionWrapper(file.id)
+                                            }}
+                                            onEdit={() => handleEditClick(file)}
+                                            disabled={deleting}
+                                            deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                            editTitle="Editar arquivo"
+                                        />
                                     }
-                                    // Verificar se já está na lista de localFiles comparando nome e tamanho
-                                    const fileName = pendingFile.file.name
-                                    const fileSize = pendingFile.file.size
-                                    const alreadyInFiles = localFiles.some(
-                                        (f) => f.filename === fileName && f.file_size === fileSize
-                                    )
-                                    // Se já está em localFiles, não mostrar como pendente
-                                    return !alreadyInFiles
-                                })
-                                .map((pendingFile, filteredIndex) => {
-                                    // Usar índice original de pendingFiles para remover corretamente
-                                    const originalIndex = pendingFiles.findIndex((pf) => pf === pendingFile)
-                                    const fileTypeInfo = getFileTypeInfo(pendingFile.file.type || 'application/octet-stream')
-
-                                    return (
+                                >
+                                    {/* 1. Container padronizado - Topo + Preview */}
+                                    <div className="mb-3">
                                         <div
-                                            key={`pending-${originalIndex}-${pendingFile.file.name}`}
-                                            className="group rounded-xl border bg-white p-4 min-w-0 transition-all duration-200 border-blue-200"
+                                            className="h-40 sm:h-48 rounded-lg flex flex-col border border-blue-200 overflow-hidden"
+                                            style={{ backgroundColor: hospitalColor || '#f1f5f9' }}
                                         >
-                                            {/* 1. Topo - Identidade do arquivo */}
-                                            <div className="mb-3 flex items-start justify-between gap-2 min-w-0">
-                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            {/* Topo - Identidade do arquivo */}
+                                            <div className="flex flex-col gap-1 min-w-0 px-4 pt-4 flex-shrink-0">
+                                                <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
+                                                    {file.hospital_name}
+                                                </span>
+                                                <div className="flex items-start gap-2 min-w-0">
                                                     <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
                                                         {fileTypeInfo.icon}
                                                     </div>
                                                     <h3
-                                                        className="text-sm font-semibold truncate min-w-0 text-gray-900"
-                                                        title={pendingFile.file.name}
+                                                        className={`text-sm font-semibold truncate min-w-0 flex-1 ${getCardTextClasses(isSelected)}`}
+                                                        title={file.filename}
                                                     >
-                                                        {pendingFile.file.name}
+                                                        {file.filename}
                                                     </h3>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        removePendingFile(originalIndex)
-                                                    }}
-                                                    className="shrink-0 p-1.5 rounded-md transition-all duration-200 text-gray-400"
-                                                    title="Remover arquivo"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M6 18L18 6M6 6l12 12"
-                                                        />
-                                                    </svg>
-                                                </button>
                                             </div>
 
-                                            {/* 2. Corpo - Preview */}
-                                            <div className="mb-3">
-                                                {isImage(pendingFile.file.type || '') ? (
-                                                    <PendingFileImageThumbnail file={pendingFile.file} />
-                                                ) : (
-                                                    // Para outros tipos, mostrar ícone
-                                                    <div className="h-40 sm:h-48 bg-slate-50 rounded-lg flex items-center justify-center">
-                                                        <div className={`flex flex-col items-center justify-center ${fileTypeInfo.colorClass}`}>
-                                                            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
-                                                                {fileTypeInfo.icon}
-                                                            </div>
-                                                            <span className="text-xs font-medium">
-                                                                {pendingFile.file.type?.split('/')[1]?.toUpperCase() || 'ARQUIVO'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                            {/* Preview - Thumbnail */}
+                                            <div className="flex-1 min-h-0 relative">
+                                                <FileThumbnail
+                                                    file={file}
+                                                    onClick={() => toggleFileSelectionForReading(file.id)}
+                                                />
                                             </div>
-
-                                            {/* 3. Rodapé - Status */}
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <span className="truncate text-slate-500">{formatFileSize(pendingFile.file.size)}</span>
-                                                {pendingFile.uploading && (
-                                                    <>
-                                                        <LoadingSpinner />
-                                                    </>
-                                                )}
-                                                {pendingFile.error && (
-                                                    <>
-                                                        <span className="shrink-0 text-slate-500">•</span>
-                                                        <span className="truncate text-red-600">Erro</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {pendingFile.error && (
-                                                <p className="mt-2 text-xs text-red-600 truncate" title={pendingFile.error}>
-                                                    {pendingFile.error}
-                                                </p>
-                                            )}
                                         </div>
-                                    )
-                                })}
+                                    </div>
 
-                            {/* Renderizar arquivos existentes */}
-                            {paginatedFiles.map((file) => {
-                                const fileTypeInfo = getFileTypeInfo(file.content_type)
-                                const isSelected = selectedFiles.has(file.id)
-                                const isSelectedForReading = selectedFilesForReading.has(file.id)
-                                const jobStatusClasses = getJobStatusCardClasses(file.job_status)
-
-                                // Calcular cor do hospital (com fallback para branco se não houver cor)
-                                const hospitalColor = file.hospital_color || '#FFFFFF'
-                                const hospitalBorderColor = file.hospital_color || '#E2E8F0' // slate-200 como fallback
-
-                                return (
-                                    <EntityCard
-                                        key={file.id}
-                                        id={file.id}
-                                        isSelected={isSelected}
-                                        className="flex flex-col"
-                                        footer={
-                                            <CardFooter
-                                                isSelected={isSelected}
-                                                date={file.created_at}
-                                                settings={settings}
-                                                secondaryText={formatFileSize(file.file_size)}
-                                                beforeActions={
-                                                    <label className="flex items-center cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelectedForReading}
-                                                            onChange={(e) => {
-                                                                e.stopPropagation()
-                                                                toggleFileSelectionForReading(file.id)
-                                                            }}
-                                                            disabled={reading}
-                                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
-                                                        />
-                                                    </label>
-                                                }
-                                                onToggleSelection={(e) => {
-                                                    e.stopPropagation()
-                                                    toggleFileSelectionWrapper(file.id)
-                                                }}
-                                                onEdit={() => handleEditClick(file)}
-                                                disabled={deleting}
-                                                deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
-                                                editTitle="Editar arquivo"
-                                            />
-                                        }
+                                    {/* 3. Compartimento para status - ícone e texto */}
+                                    <div
+                                        className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4 cursor-pointer"
+                                        style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
+                                        onClick={() => toggleFileSelectionForReading(file.id)}
+                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
                                     >
-                                        {/* 1. Container padronizado - Topo + Preview */}
-                                        <div className="mb-3">
-                                            <div
-                                                className="h-40 sm:h-48 rounded-lg flex flex-col border border-blue-200 overflow-hidden"
-                                                style={{ backgroundColor: hospitalColor || '#f1f5f9' }}
-                                            >
-                                                {/* Topo - Identidade do arquivo */}
-                                                <div className="flex flex-col gap-1 min-w-0 px-4 pt-4 flex-shrink-0">
-                                                    <span className={`text-xs truncate ${getCardSecondaryTextClasses(isSelected)}`}>
-                                                        {file.hospital_name}
-                                                    </span>
-                                                    <div className="flex items-start gap-2 min-w-0">
-                                                        <div className={`shrink-0 ${fileTypeInfo.colorClass}`}>
-                                                            {fileTypeInfo.icon}
-                                                        </div>
-                                                        <h3
-                                                            className={`text-sm font-semibold truncate min-w-0 flex-1 ${getCardTextClasses(isSelected)}`}
-                                                            title={file.filename}
-                                                        >
-                                                            {file.filename}
-                                                        </h3>
-                                                    </div>
-                                                </div>
-
-                                                {/* Preview - Thumbnail */}
-                                                <div className="flex-1 min-h-0 relative">
-                                                    <FileThumbnail
-                                                        file={file}
-                                                        onClick={() => toggleFileSelectionForReading(file.id)}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* 3. Compartimento para status - ícone e texto */}
-                                        <div
-                                            className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4 cursor-pointer"
-                                            style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
-                                            onClick={() => toggleFileSelectionForReading(file.id)}
-                                            title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
-                                        >
-                                            {getStatusIcon(file.job_status)}
-                                            <span className="text-base font-normal text-gray-900 flex items-center gap-2">
-                                                {getJobStatusText(file.job_status)}
-                                                {file.job_status === 'RUNNING' && <LoadingSpinner />}
-                                            </span>
-                                        </div>
-                                    </EntityCard>
-                                )
-                            })}
-                        </div>
+                                        {getStatusIcon(file.job_status)}
+                                        <span className="text-base font-normal text-gray-900 flex items-center gap-2">
+                                            {getJobStatusText(file.job_status)}
+                                            {file.job_status === 'RUNNING' && <LoadingSpinner />}
+                                        </span>
+                                    </div>
+                                </EntityCard>
+                            )
+                        })}
+                    </div>
                 </>
             )}
 

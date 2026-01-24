@@ -15,7 +15,7 @@ class S3Config:
             env_file = project_root / ".env"
             raise ValueError(
                 f"Variável S3_ENDPOINT_URL contém placeholder inválido: {endpoint_url}\n\n"
-                f"SOLUÇÃO: Edite o arquivo .env na raiz do projeto ({env_file}) e configure:\n"
+                f"SOLUÇÃO: Edite o arquivo backend/.env ({env_file}) e configure:\n"
                 f"  S3_ENDPOINT_URL=http://localhost:9000\n"
                 f"  S3_ACCESS_KEY_ID=minio\n"
                 f"  S3_SECRET_ACCESS_KEY=minio12345\n"

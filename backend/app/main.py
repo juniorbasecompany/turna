@@ -14,10 +14,11 @@ from app.middleware.tenant import tenant_context_middleware
 
 logger = logging.getLogger(__name__)
 
-# Carrega variáveis de ambiente do .env
+# Carrega variáveis de ambiente do .env (backend/ ou raiz do repo)
 try:
     from dotenv import load_dotenv
     project_root = Path(__file__).resolve().parent.parent
+    load_dotenv(project_root.parent / ".env")
     load_dotenv(project_root / ".env")
     load_dotenv(".env")
 except Exception:

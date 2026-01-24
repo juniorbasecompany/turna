@@ -5,10 +5,11 @@ from fastapi import HTTPException
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-# Carrega variáveis de ambiente do .env (garante que está carregado antes de usar)
+# Carrega variáveis de ambiente do .env (backend/ ou raiz do repo)
 try:
     from dotenv import load_dotenv
     project_root = Path(__file__).resolve().parent.parent.parent
+    load_dotenv(project_root.parent / ".env")
     load_dotenv(project_root / ".env")
     load_dotenv(".env")
 except Exception:

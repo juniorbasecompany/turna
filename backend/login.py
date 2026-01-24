@@ -21,9 +21,8 @@ try:
     from dotenv import load_dotenv
 
     project_root = Path(__file__).resolve().parent
-    # 1) Preferir sempre o .env na raiz do projeto (robusto mesmo se CWD mudar)
+    load_dotenv(project_root.parent / ".env")
     load_dotenv(project_root / ".env")
-    # 2) Também tenta .env no diretório atual (útil em execuções ad-hoc)
     load_dotenv(".env")
 except Exception:
     pass
@@ -51,7 +50,7 @@ ACCOUNT_FILE.parent.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Sistema de Autenticação (Login e Cadastro)")
 
 # Serve a página simples de login
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(project_root / "static")), name="static")
 
 bearer = HTTPBearer(auto_error=False)
 

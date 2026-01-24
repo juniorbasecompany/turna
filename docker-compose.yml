@@ -44,8 +44,9 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
+    env_file: backend/.env
     environment:
       APP_ENV: dev
       DATABASE_URL: postgresql+psycopg://turna:turna@postgres:5432/turna
@@ -84,7 +85,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./:/app
+      - ./backend:/app
     command: >
       bash -lc "
       alembic upgrade head &&
@@ -93,9 +94,10 @@ services:
 
   worker:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file: backend/.env
     environment:
       APP_ENV: dev
       DATABASE_URL: postgresql+psycopg://turna:turna@postgres:5432/turna
@@ -126,7 +128,7 @@ services:
       minio:
         condition: service_started
     volumes:
-      - ./:/app
+      - ./backend:/app
     command: >
       bash -lc "
       python -m app.worker.run

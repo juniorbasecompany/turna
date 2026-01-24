@@ -5,10 +5,11 @@ from typing import Any, Dict, Optional
 from jose import jwt, JWTError
 from fastapi import HTTPException
 
-# Carrega variáveis de ambiente do .env (garante que está carregado antes de usar)
+# Carrega variáveis de ambiente do .env (backend/ ou raiz do repo)
 try:
     from dotenv import load_dotenv
     project_root = Path(__file__).resolve().parent.parent.parent
+    load_dotenv(project_root.parent / ".env")
     load_dotenv(project_root / ".env")
     load_dotenv(".env")
 except Exception:

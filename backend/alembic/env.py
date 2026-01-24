@@ -10,6 +10,14 @@ from sqlmodel import SQLModel
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
+# Carrega .env (backend/ ou raiz) para alembic upgrade local usar DATABASE_URL
+try:
+    from dotenv import load_dotenv
+    load_dotenv(project_root.parent / ".env")
+    load_dotenv(project_root / ".env")
+except Exception:
+    pass
+
 # Importa todos os modelos para que o SQLModel os registre
 from app.model import Tenant, Account, Member, Job, File, ScheduleVersion, Hospital, Demand
 

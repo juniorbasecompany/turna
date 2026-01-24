@@ -97,10 +97,9 @@ try:
     from dotenv import load_dotenv
 
     here = Path(__file__).resolve().parent       # demand/
-    project_root = here.parent                   # turna/
-    # 1) Preferir sempre o .env na raiz do projeto (robusto mesmo se CWD mudar)
+    project_root = here.parent                   # backend/
+    load_dotenv(project_root.parent / ".env")
     load_dotenv(project_root / ".env")
-    # 2) Também tenta .env no diretório atual (útil em execuções ad-hoc)
     load_dotenv(".env")
 except Exception:
     pass
@@ -117,7 +116,7 @@ def _openai_client():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY não encontrada. Coloque no arquivo .env na raiz do projeto (turna/.env):\n"
+            "OPENAI_API_KEY não encontrada. Coloque no .env (backend/.env ou raiz do repo):\n"
             "OPENAI_API_KEY=sk-...\n"
         )
     return OpenAI(api_key=api_key)
