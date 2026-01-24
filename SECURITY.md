@@ -1,6 +1,6 @@
 # Padrões de Segurança e Validação Multi-Tenant
 
-Este documento descreve os padrões de segurança implementados no sistema, com foco em isolamento multi-tenant e validação de acesso.
+Este documento descreve os padrões de segurança implementados no sistema, com foco em isolamento multi-tenant e validação de acesso. O código da API e dos endpoints referenciados está em `backend/` (ver `README.md` e `STACK.md`).
 
 ## Princípios Fundamentais
 

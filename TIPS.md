@@ -1,15 +1,18 @@
 # Turna
 <!-- Pressiona CTRL+SHIFT+V para ver formatado. -->
 
+Todos os comandos abaixo são executados a partir da **raiz do repositório**, exceto quando indicado.
+
 ## Ativação rápida
-Use este comando para iniciar todos os serviços (backend + frontend):
+Para iniciar infra + backend (Docker) e frontend (Next.js):
   ```
   docker compose up -d; cd frontend; npm run dev
   ```
+
 ## Atualizar o banco de dados - Alembic
-  ```
-  alembic upgrade head
-  ```
+- **Via Docker** (recomendado): `docker compose exec api alembic upgrade head`
+- **Local** (com CWD em `backend/`): `alembic upgrade head`
+
 ## Auth Platform
 Console para administrar a forma de autenticação
 
@@ -19,23 +22,22 @@ Console para administrar a forma de autenticação
 
 # BACKEND
 
+O backend está em `backend/`. Docker Compose sobe API, worker, Postgres, Redis e MinIO. Use `backend/.env` para variáveis (Docker carrega via `env_file`).
+
 ## APIs
 - **Primeira vez / após ligar o computador**
-  - Para iniciar todos os serviços (postgres, redis, minio, api, worker)
-  ```
-  docker compose up -d
-  ```
+  - Na raiz do repo: `docker compose up -d`
 
-- **Reiniciar apenas a API (se containers já estiverem rodando)**
-  ```
-  docker compose restart api
-  ```
+- **Reiniciar apenas a API** (se os containers já estiverem rodando): `docker compose restart api`
+
+- **Reiniciar o worker**: `docker compose restart worker`
 
 
 # FRONTEND
   ```
   cd frontend
   ```
+  (a partir da raiz do repositório)
 
 ## NEXT.js
 

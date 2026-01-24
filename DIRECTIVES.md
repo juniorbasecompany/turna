@@ -260,14 +260,15 @@ O `AuthProvider` é montado no `RootLayout` e executa em **todas as páginas**, 
 
 ## Execução (Dev): Docker vs Local
 
+- **Estrutura**: Backend em `backend/`, frontend em `frontend/`, `docker-compose.yml` na raiz. Comandos Docker e Alembic são executados a partir da raiz do repositório.
 - **Padrão (recomendado)**: rodar via **Docker Compose** (API + worker + Postgres + Redis + MinIO).
 - **Local (exceção)**: rodar no venv apenas para depuração pontual (scripts/diagnóstico), não como modo “oficial”.
-- **Comandos úteis (Docker Compose)**:
+- **Comandos úteis (Docker Compose)** — executar na **raiz** do repo:
   - **Subir stack**: `docker compose up -d --build`
   - **Logs worker**: `docker compose logs -f worker`
   - **Logs API**: `docker compose logs -f api`
 - **Comandos úteis (Local / exceção)**:
-  - **Rodar worker local**: `python .\app\worker\run.py`
+  - **Rodar worker local**: a partir de `backend/`, `python -m app.worker.run` (requer `backend/.env` e infra rodando).
 - **Portas**:
   - **Docker Compose**: API em `http://localhost:8000`
   - **Local**: a porta pode variar (ex.: `8001`) e isso impacta integrações.

@@ -1,5 +1,12 @@
 # Fase 1 — Stack (decidida)
 
+## Estrutura do repositório
+
+- **Monorepo**: um único repositório `turna`.
+- **Backend**: pasta `backend/` (API FastAPI, worker Arq, modelos, Alembic, demand, output, strategy). Docker usa `context: ./backend` e volume `./backend:/app`. Variáveis de ambiente em `backend/.env`; Docker Compose usa `env_file: backend/.env`.
+- **Frontend**: pasta `frontend/` (Next.js). Variáveis em `frontend/.env.local`.
+- **Orquestração**: `docker-compose.yml` na raiz; comandos Docker e Alembic executados a partir da raiz.
+
 ## Objetivo
 MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com acesso:
 - **Web (admin)**: cadastros, importação, geração/publicação de escalas, relatórios.

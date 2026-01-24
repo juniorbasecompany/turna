@@ -4,6 +4,7 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 
 ## Status Geral
 
+- **Estrutura**: Backend em `backend/` (API, worker, Alembic, demand, output, strategy). Frontend em `frontend/`. `docker-compose.yml` na raiz; build context `./backend`, volume `./backend:/app`. Ver `BACKEND_MIGRATION_CHECKLIST.md` para detalhes da migração.
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
 - **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
@@ -436,13 +437,14 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 ### 8.1 Organização do Repositório (Monorepo)
 - [x] Manter **um único repositório `turna`** (monorepo)
 - [x] Criar pasta `frontend/` para o projeto Next.js
-- [x] **Não mover o backend neste momento**
-  - [x] Manter código FastAPI na estrutura atual
-  - [x] Evitar impacto em imports, Alembic, Docker e scripts existentes
+- [x] **Backend em `backend/`** (migração concluída)
+  - [x] Código FastAPI em `backend/app/`; Alembic em `backend/alembic/`; demand, output, strategy em `backend/`
+  - [x] Docker: `build.context: ./backend`, volumes `./backend:/app`; `env_file: backend/.env`
+  - [x] Comandos Docker e Alembic executados a partir da raiz do repo
 - [x] Manter `docker-compose.yml` na raiz do projeto
 - [x] Garantir independência entre backend e frontend:
-  - [x] Backend com seu próprio `requirements.txt`
-  - [x] Frontend com seu próprio `package.json`
+  - [x] Backend com seu próprio `requirements.txt` (em `backend/`)
+  - [x] Frontend com seu próprio `package.json` (em `frontend/`)
   - [x] Comunicação exclusivamente via API HTTP
   - [x] Nenhuma dependência direta de código entre as camadas
 
@@ -732,8 +734,8 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - Saída: apenas PDF (não Excel/CSV)
 
 ### Migração para pasta backend
-- Ao reorganizar o backend na pasta `backend/`, seguir o **BACKEND_MIGRATION_CHECKLIST.md**.
-- Garantir conformidade com DIRECTIVES, SECURITY e STACK; não quebrar Docker, Alembic, jobs nem `app.py`.
+- **Migração concluída**: o backend está em `backend/`. Detalhes e validação em **BACKEND_MIGRATION_CHECKLIST.md**.
+- Ao alterar estrutura, paths ou Docker do backend, manter conformidade com DIRECTIVES, SECURITY e STACK; não quebrar Docker, Alembic, jobs nem `app.py` (legado em `backend/app.py`).
 
 ### Evolução Futura (Quando Necessário)
 - [ ] Promover Demand de JSON para tabela (quando precisar queryar diretamente)

@@ -2,8 +2,9 @@
 
 ## Estrutura
 
-- **`backend/`** — API FastAPI, worker Arq, modelos, alembic, demand, output, strategy. Docker usa `context: ./backend` e volume `./backend:/app`.
+- **`backend/`** — API FastAPI, worker Arq, modelos, Alembic, demand, output, strategy. Toda a lógica do backend vive aqui. Docker usa `context: ./backend` e volume `./backend:/app`.
 - **`frontend/`** — Next.js; comunica com a API apenas via HTTP (ver `DIRECTIVES.md`).
+- **`docker-compose.yml`** — Na raiz do repositório. Orquestra Postgres, Redis, MinIO, API e worker. Comandos Docker e Alembic são executados a partir da raiz.
 
 ## Execução (Docker Compose)
 
@@ -48,8 +49,9 @@ docker compose up -d --build
 
 ## .env
 
-- Pode ficar na **raiz** do repo ou em **`backend/`**. O código carrega `backend/.env` e, como fallback, `../.env` (raiz).
-- Variáveis do Docker vêm do `environment` no `docker-compose.yml`; para dev local, use `backend/.env` ou raiz.
+- **Backend**: `backend/.env`. O código carrega `backend/.env` e, como fallback, `../.env` (raiz). O Docker Compose usa `env_file: backend/.env` para os serviços `api` e `worker`.
+- **Frontend**: `frontend/.env.local` (copie de `frontend/env.example`). Variáveis `NEXT_PUBLIC_*` são usadas pelo Next.js.
+- **Docker**: variáveis do `environment` no `docker-compose.yml` sobrescrevem as do `env_file` quando coincidem. Para dev local (fora do Docker), use `backend/.env`.
 
 ## Documentos
 
@@ -58,4 +60,5 @@ docker compose up -d --build
 - **Stack do projeto**: [`STACK.md`](STACK.md)
 - **Segurança**: [`SECURITY.md`](SECURITY.md)
 - **Apresentação do projeto**: [`PRESENTATION.md`](PRESENTATION.md)
+- **Dicas rápidas (comandos, Alembic, MinIO, ngrok)**: [`TIPS.md`](TIPS.md)
 - **Migração do backend para `backend/`**: [`BACKEND_MIGRATION_CHECKLIST.md`](BACKEND_MIGRATION_CHECKLIST.md)

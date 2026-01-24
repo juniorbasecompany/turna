@@ -2,6 +2,13 @@
 
 Sistema inteligente para geração automática de escalas cirúrgicas otimizadas, facilitando a alocação de demandas cirúrgicas aos profissionais médicos disponíveis.
 
+## Status atual vs. roadmap
+
+- **Implementado (MVP web admin)**: Login OAuth Google, multi-tenant (clínicas, associados), hospitais, upload de arquivos (PDF/imagens), extração de demandas via IA (OpenAI), CRUD de demandas, geração de escalas (solver greedy), publicação e download de PDF, jobs assíncronos (Arq). Frontend Next.js com painéis de Dashboard, Hospitais, Clínicas, Associados, Arquivos e Demandas.
+- **Pendente / futuro**: Página de listagem e detalhe de escalas no frontend (`/schedules`), app mobile (React Native), solver CP-SAT (otimização avançada), abstração completa do AI Provider para múltiplos provedores.
+
+As seções abaixo descrevem a visão do produto (funcionalidades principais e benefícios), alinhada ao que já existe e ao que está previsto.
+
 ## Funcionalidades Principais
 
 ### **Extração Automática de Demandas**
