@@ -25,6 +25,8 @@ export interface CalendarProps {
     width?: string
     /** Mostrar botões de ação (Limpar e Hoje) */
     showActionButtons?: boolean
+    /** Conteúdo customizado para o topo da área do calendário (ex: exibição de data/hora) */
+    headerContent?: React.ReactNode
     /** Conteúdo customizado para o rodapé (ex: exibição de data/hora) */
     footerContent?: React.ReactNode
 }
@@ -51,17 +53,26 @@ export function Calendar({
     maxDate,
     width = 'w-[380px]',
     showActionButtons = true,
+    headerContent,
     footerContent,
 }: CalendarProps) {
     const { settings } = useTenantSettings()
 
-    // Navegação do calendário
+    // Navegação do calendário (mês e ano separados)
     const goToPreviousMonth = () => {
         onDisplayMonthChange(new Date(displayMonth.getFullYear(), displayMonth.getMonth() - 1, 1))
     }
 
     const goToNextMonth = () => {
         onDisplayMonthChange(new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 1))
+    }
+
+    const goToPreviousYear = () => {
+        onDisplayMonthChange(new Date(displayMonth.getFullYear() - 1, displayMonth.getMonth(), 1))
+    }
+
+    const goToNextYear = () => {
+        onDisplayMonthChange(new Date(displayMonth.getFullYear() + 1, displayMonth.getMonth(), 1))
     }
 
     // Gerar dias do mês
@@ -114,31 +125,64 @@ export function Calendar({
 
     return (
         <div className={`${width} flex-shrink-0 flex flex-col relative`}>
-            {/* Header do calendário */}
-            <div className="flex items-center justify-between mb-4">
-                <button
-                    type="button"
-                    onClick={goToPreviousMonth}
-                    className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                    aria-label="Mês anterior"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <div className="font-medium text-gray-900">
-                    {monthNames[displayMonth.getMonth()]} {displayMonth.getFullYear()}
+            {/* Conteúdo customizado do topo (ex: exibição de data/hora) */}
+            {headerContent && (
+                <div className="mb-3">
+                    {headerContent}
                 </div>
-                <button
-                    type="button"
-                    onClick={goToNextMonth}
-                    className="p-1 text-gray-600 hover:text-gray-900 focus:outline-none"
-                    aria-label="Próximo mês"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+            )}
+            {/* Header do calendário: < mês > … < ano > */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={goToPreviousMonth}
+                        className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        aria-label="Mês anterior"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </button>
+                    <span className="text-sm text-gray-700 min-w-[7rem] text-center">
+                        {monthNames[displayMonth.getMonth()]}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={goToNextMonth}
+                        className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        aria-label="Próximo mês"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={goToPreviousYear}
+                        className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        aria-label="Ano anterior"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </button>
+                    <span className="text-sm text-gray-700 min-w-[3.5rem] text-center">
+                        {displayMonth.getFullYear()}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={goToNextYear}
+                        className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        aria-label="Próximo ano"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Dias da semana */}
@@ -167,7 +211,7 @@ export function Calendar({
                             onClick={() => !disabled && onDateSelect(day)}
                             disabled={disabled}
                             className={`w-full py-2 px-1 text-sm rounded-md min-w-[48px] ${selected
-                                ? 'bg-blue-600 text-white font-medium'
+                                ? 'bg-gray-200 text-gray-800'
                                 : disabled
                                     ? 'text-gray-300 cursor-not-allowed'
                                     : 'text-gray-700 hover:bg-gray-100'
@@ -187,7 +231,7 @@ export function Calendar({
                         <button
                             type="button"
                             onClick={onClear}
-                            className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
+                            className="text-sm text-gray-400 hover:text-gray-600 focus:outline-none pb-4"
                         >
                             Limpar
                         </button>
@@ -196,7 +240,7 @@ export function Calendar({
                         <button
                             type="button"
                             onClick={onToday}
-                            className="text-sm text-gray-600 hover:text-gray-900 focus:outline-none pb-4"
+                            className="text-sm text-gray-400 hover:text-gray-600 focus:outline-none pb-4"
                         >
                             Hoje
                         </button>

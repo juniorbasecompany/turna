@@ -283,9 +283,9 @@ export function TenantDateTimePicker({
                         maxDate={maxDate}
                         width="w-[380px]"
                         showActionButtons={true}
-                        footerContent={
+                        headerContent={
                             tempDate && (
-                                <div className="text-sm font-medium text-gray-700">
+                                <div className="text-base font-medium text-blue-600">
                                     {(() => {
                                         const finalDate = new Date(tempDate)
                                         let hour24 = tempHour12
@@ -340,7 +340,7 @@ export function TenantDateTimePicker({
                                             type="button"
                                             onClick={() => setTempHour12(hour)}
                                             className={`w-full py-2 text-sm rounded-md ${tempHour12 === hour
-                                                ? 'bg-blue-600 text-white font-medium'
+                                                ? 'bg-gray-200 text-gray-800'
                                                 : 'text-gray-700 hover:bg-gray-100'
                                                 }`}
                                         >
@@ -363,7 +363,7 @@ export function TenantDateTimePicker({
                                                     type="button"
                                                     onClick={() => setTempMinuteTens(tens)}
                                                     className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
-                                                        ? 'bg-blue-600 text-white font-medium'
+                                                        ? 'bg-gray-200 text-gray-800'
                                                         : 'text-gray-700 hover:bg-gray-100'
                                                         }`}
                                                 >
@@ -382,7 +382,7 @@ export function TenantDateTimePicker({
                                                     type="button"
                                                     onClick={() => setTempMinuteUnits(unit)}
                                                     className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
-                                                        ? 'bg-blue-600 text-white font-medium'
+                                                        ? 'bg-gray-200 text-gray-800'
                                                         : 'text-gray-700 hover:bg-gray-100'
                                                         }`}
                                                 >
@@ -403,7 +403,7 @@ export function TenantDateTimePicker({
                                             type="button"
                                             onClick={() => setTempAmPm(ampm)}
                                             className={`w-full py-2 text-sm rounded-md ${tempAmPm === ampm
-                                                ? 'bg-blue-600 text-white font-medium'
+                                                ? 'bg-gray-200 text-gray-800'
                                                 : 'text-gray-700 hover:bg-gray-100'
                                                 }`}
                                         >
