@@ -1736,7 +1736,7 @@ export default function FilesPage() {
                                         {getStatusIcon(file.job_status)}
                                         <span className="text-base font-normal text-gray-900 flex items-center gap-2">
                                             {getJobStatusText(file.job_status)}
-                                            {file.job_status === 'RUNNING' && <LoadingSpinner />}
+                                            {(file.job_status === 'RUNNING' || file.job_status === 'PENDING') && <LoadingSpinner />}
                                         </span>
                                     </div>
                                 </EntityCard>
