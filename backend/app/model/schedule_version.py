@@ -24,7 +24,7 @@ class ScheduleVersion(BaseModel, table=True):
       - `generated_at` e `published_at` seguem diretiva `_at` com timestamptz
     """
 
-    __tablename__ = "schedule_version"
+    __tablename__ = "schedule"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
 

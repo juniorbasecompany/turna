@@ -273,7 +273,7 @@ def download_schedule_pdf(
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if not sv.pdf_file_id:
-        raise HTTPException(status_code=404, detail="PDF não encontrado (schedule_version ainda não publicada)")
+        raise HTTPException(status_code=404, detail="PDF não encontrado (schedule ainda não publicada)")
 
     file_model = session.get(File, sv.pdf_file_id)
     if not file_model:
