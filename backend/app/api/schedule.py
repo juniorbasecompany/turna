@@ -286,6 +286,8 @@ def download_schedule_pdf(
 @router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])
 def list_schedules(
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
+    period_start_at: Optional[datetime] = Query(None, description="Filtrar por period_start_at >= period_start_at (timestamptz em ISO 8601)"),
+    period_end_at: Optional[datetime] = Query(None, description="Filtrar por period_end_at <= period_end_at (timestamptz em ISO 8601)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
     member: Member = Depends(get_current_member),
@@ -302,15 +304,37 @@ def list_schedules(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
 
+    # Validar filtros de período
+    if period_start_at is not None:
+        if period_start_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="period_start_at deve ter timezone explícito (timestamptz)")
+    if period_end_at is not None:
+        if period_end_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="period_end_at deve ter timezone explícito (timestamptz)")
+    if period_start_at is not None and period_end_at is not None:
+        if period_start_at > period_end_at:
+            raise HTTPException(status_code=400, detail="period_start_at deve ser menor ou igual a period_end_at")
+
     # Query base
     query = select(ScheduleVersion).where(ScheduleVersion.tenant_id == member.tenant_id)
     if status_enum:
         query = query.where(ScheduleVersion.status == status_enum)
+    
+    # Filtrar por período: escala aparece se seu período se sobrepõe ao filtro
+    # Uma escala se sobrepõe se: period_start_at (escala) <= period_end_at (filtro) E period_end_at (escala) >= period_start_at (filtro)
+    if period_start_at is not None:
+        query = query.where(ScheduleVersion.period_end_at >= period_start_at)
+    if period_end_at is not None:
+        query = query.where(ScheduleVersion.period_start_at <= period_end_at)
 
     # Contar total antes de aplicar paginação
     count_query = select(func.count(ScheduleVersion.id)).where(ScheduleVersion.tenant_id == member.tenant_id)
     if status_enum:
         count_query = count_query.where(ScheduleVersion.status == status_enum)
+    if period_start_at is not None:
+        count_query = count_query.where(ScheduleVersion.period_end_at >= period_start_at)
+    if period_end_at is not None:
+        count_query = count_query.where(ScheduleVersion.period_start_at <= period_end_at)
     total = session.exec(count_query).one()
 
     # Aplicar ordenação e paginação

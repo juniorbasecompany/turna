@@ -180,6 +180,21 @@ export interface ScheduleGenerateResponse {
     schedule_version_id: number
 }
 
+export interface ScheduleCreateRequest {
+    name: string
+    period_start_at: string
+    period_end_at: string
+    version_number?: number
+}
+
+export interface ScheduleUpdateRequest {
+    name?: string
+    period_start_at?: string
+    period_end_at?: string
+    version_number?: number
+    status?: string
+}
+
 export interface GoogleTokenRequest {
     id_token: string
 }
