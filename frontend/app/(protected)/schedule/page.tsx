@@ -14,14 +14,14 @@ import { Pagination } from '@/components/Pagination'
 import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
+import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
-import { formatDateTime, localDateToUtcStart, localDateToUtcEndExclusive } from '@/lib/tenantFormat'
+import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     ScheduleCreateRequest,
-    ScheduleVersionResponse,
     ScheduleUpdateRequest,
+    ScheduleVersionResponse,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -35,22 +35,25 @@ type ScheduleFormData = {
 
 export default function SchedulePage() {
     const { settings } = useTenantSettings()
-    
+
     // Constantes para filtros
     const ALL_STATUS_FILTERS: string[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED']
-    
+
     // Estados auxiliares
     const [nameFilter, setNameFilter] = useState('')
-    
+
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
         allFilters: ALL_STATUS_FILTERS,
         initialFilters: new Set(ALL_STATUS_FILTERS),
     })
-    
+
     // Filtros de período usando TenantDatePicker (Date objects)
     const [periodStartDate, setPeriodStartDate] = useState<Date | null>(null)
     const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
+    const [createCardFlash, setCreateCardFlash] = useState(false)
+    const [periodStartFlash, setPeriodStartFlash] = useState(false)
+    const [periodEndFlash, setPeriodEndFlash] = useState(false)
 
     // Configuração inicial
     const initialFormData: ScheduleFormData = {
@@ -75,7 +78,7 @@ export default function SchedulePage() {
     const mapFormDataToCreateRequest = (formData: ScheduleFormData): ScheduleCreateRequest => {
         const startIso = formData.period_start_at?.toISOString()
         const endIso = formData.period_end_at?.toISOString()
-        
+
         return {
             name: formData.name.trim(),
             period_start_at: startIso!,
@@ -87,7 +90,7 @@ export default function SchedulePage() {
     const mapFormDataToUpdateRequest = (formData: ScheduleFormData): ScheduleUpdateRequest => {
         const startIso = formData.period_start_at?.toISOString()
         const endIso = formData.period_end_at?.toISOString()
-        
+
         return {
             name: formData.name.trim(),
             period_start_at: startIso,
@@ -102,19 +105,19 @@ export default function SchedulePage() {
         if (!formData.name.trim()) {
             return 'Nome é obrigatório'
         }
-        
+
         if (!formData.period_start_at || !formData.period_end_at) {
             return 'Data/hora de início e fim são obrigatórias'
         }
-        
+
         if (formData.period_end_at <= formData.period_start_at) {
             return 'Data/hora de fim deve ser maior que a de início'
         }
-        
+
         if (formData.version_number < 1) {
             return 'Número da versão deve ser maior ou igual a 1'
         }
-        
+
         return null
     }
 
@@ -134,32 +137,32 @@ export default function SchedulePage() {
             period_start_at: periodStartDate ? localDateToUtcStart(periodStartDate, settings) : null,
             period_end_at: periodEndDate ? localDateToUtcEndExclusive(periodEndDate, settings) : null,
         }
-        
+
         // Status: passar apenas se exatamente 1 estiver selecionado
         if (statusFilters.selectedFilters.size === 1) {
             const status = Array.from(statusFilters.selectedFilters)[0]
             params.status = status
         }
-        
+
         return params
     }, [periodStartDate, periodEndDate, statusFilters.selectedFilters, settings])
-    
+
     // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
     const needsFrontendFilter = useMemo(() => {
         const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
-        
+
         // Se todos estão selecionados, não precisa filtrar
         if (allStatusSelected) {
             return false
         }
-        
+
         // Se apenas 1 está selecionado, backend filtra (não precisa filtrar no frontend)
         const singleStatusSelected = statusFilters.selectedFilters.size === 1
-        
+
         if (singleStatusSelected) {
             return false
         }
-        
+
         // Se múltiplos estão selecionados, precisa filtrar no frontend
         return true
     }, [statusFilters.selectedFilters])
@@ -202,6 +205,30 @@ export default function SchedulePage() {
         listEnabled: !!settings,
     })
 
+    const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
+        setCreateCardFlash(true)
+        setPeriodStartFlash(isStartMissing)
+        setPeriodEndFlash(isEndMissing)
+        // Remover o flash após 1 segundo
+        setTimeout(() => {
+            setCreateCardFlash(false)
+            setPeriodStartFlash(false)
+            setPeriodEndFlash(false)
+        }, 1000)
+    }
+
+    const handleCreateCardClick = () => {
+        const isStartMissing = isEditing ? !formData.period_start_at : !periodStartDate
+        const isEndMissing = isEditing ? !formData.period_end_at : !periodEndDate
+
+        if (isStartMissing || isEndMissing) {
+            triggerPeriodFlash(isStartMissing, isEndMissing)
+            return
+        }
+
+        handleCreateClick()
+    }
+
     // Validar intervalo de datas
     useEffect(() => {
         if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
@@ -242,7 +269,7 @@ export default function SchedulePage() {
 
         return filtered
     }, [schedules, nameFilter, statusFilters.selectedFilters, needsFrontendFilter])
-    
+
     // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedSchedules = useMemo(() => {
         if (!needsFrontendFilter) {
@@ -253,7 +280,7 @@ export default function SchedulePage() {
         const end = start + pagination.limit
         return filteredSchedules.slice(start, end)
     }, [filteredSchedules, needsFrontendFilter, pagination.offset, pagination.limit])
-    
+
     // Ajustar total para refletir filtro de status
     const displayTotal = useMemo(() => {
         if (!needsFrontendFilter) {
@@ -261,7 +288,7 @@ export default function SchedulePage() {
         }
         return filteredSchedules.length  // Total após filtro no frontend
     }, [filteredSchedules, needsFrontendFilter, total])
-    
+
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
@@ -306,7 +333,7 @@ export default function SchedulePage() {
                 return status
         }
     }
-    
+
     // Opções para o filtro de status
     const statusOptions: FilterOption<string>[] = [
         { value: 'DRAFT', label: 'Rascunho', color: 'text-gray-600' },
@@ -338,6 +365,7 @@ export default function SchedulePage() {
                             value={formData.period_start_at}
                             onChange={(date) => setFormData({ ...formData, period_start_at: date })}
                             disabled={submitting}
+                            showFlash={periodStartFlash}
                         />
                         <TenantDateTimePicker
                             id="period_end_at"
@@ -345,6 +373,7 @@ export default function SchedulePage() {
                             value={formData.period_end_at}
                             onChange={(date) => setFormData({ ...formData, period_end_at: date })}
                             disabled={submitting}
+                            showFlash={periodEndFlash}
                         />
                     </FormFieldGrid>
 
@@ -404,7 +433,9 @@ export default function SchedulePage() {
                     <CreateCard
                         label="Criar nova escala"
                         subtitle="Clique para adicionar"
-                        onClick={handleCreateClick}
+                        onClick={handleCreateCardClick}
+                        showFlash={createCardFlash}
+                        flashMessage="Informe o período inicial e final"
                     />
                 }
                 filterContent={
@@ -426,6 +457,7 @@ export default function SchedulePage() {
                                     onChange={handlePeriodStartDateChange}
                                     id="period_start_at_filter"
                                     name="period_start_at_filter"
+                                    showFlash={periodStartFlash}
                                 />
                                 <TenantDatePicker
                                     label="Período fim"
@@ -433,6 +465,7 @@ export default function SchedulePage() {
                                     onChange={handlePeriodEndDateChange}
                                     id="period_end_at_filter"
                                     name="period_end_at_filter"
+                                    showFlash={periodEndFlash}
                                 />
                             </FormFieldGrid>
                             <FilterButtons
