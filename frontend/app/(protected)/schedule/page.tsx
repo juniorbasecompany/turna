@@ -430,13 +430,76 @@ export default function SchedulePage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    <CreateCard
-                        label="Criar nova escala"
-                        subtitle="Clique para adicionar"
-                        onClick={handleCreateCardClick}
-                        showFlash={createCardFlash}
-                        flashMessage="Informe o período inicial e final"
-                    />
+                    <>
+                        <CreateCard
+                            label="Criar uma escala"
+                            subtitle="Clique para adicionar"
+                            onClick={handleCreateClick}
+                        />
+                        <CreateCard
+                            label="Calcular a escala"
+                            subtitle="Clique para adicionar"
+                            onClick={handleCreateCardClick}
+                            showFlash={createCardFlash}
+                            flashMessage="Informe o período inicial e final"
+                            customIcon={
+                                <svg
+                                    className="w-full h-full"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    {/* Corpo do Calendário */}
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M15 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9"
+                                    />
+                                    {/* Argolas do topo */}
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M16 2v4"
+                                    />
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M8 2v4"
+                                    />
+                                    {/* Linha horizontal do cabeçalho */}
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M3 10h18"
+                                    />
+                                    {/* Linhas de conteúdo interno */}
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 13h6 M15 13h3 M7 16h3 M12 16h3"
+                                    />
+                                    {/* Sinal de mais (+) no canto inferior direito */}
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M21 18v4"
+                                    />
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M19 20h4"
+                                    />
+                                </svg>
+                            }
+                        />
+                    </>
                 }
                 filterContent={
                     !isEditing ? (
