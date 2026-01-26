@@ -13,11 +13,10 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useEntityPage } from '@/hooks/useEntityPage'
-import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityFilters } from '@/hooks/useEntityFilters'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
-import { getActionBarErrorProps } from '@/lib/entityUtils'
 import {
     MemberCreateRequest,
     MemberResponse,
@@ -35,7 +34,7 @@ type MemberFormData = {
 
 export default function MemberPage() {
     const { settings } = useTenantSettings()
-    
+
     // Estados auxiliares (não gerenciados por useEntityPage)
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
@@ -118,11 +117,11 @@ export default function MemberPage() {
         if (formData.attribute === null || formData.attribute === undefined) {
             return 'Atributos não podem estar vazios'
         }
-        
+
         if (typeof formData.attribute !== 'object') {
             return 'Atributos devem ser um objeto'
         }
-        
+
         if (Array.isArray(formData.attribute)) {
             return 'Atributos devem ser um objeto, não um array'
         }
@@ -141,40 +140,40 @@ export default function MemberPage() {
     // Calcular additionalListParams reativo baseado nos filtros
     const additionalListParams = useMemo(() => {
         const params: Record<string, string | number | boolean | null> = {}
-        
+
         // Status: passar apenas se exatamente 1 estiver selecionado
         if (statusFilters.selectedFilters.size === 1) {
             const status = Array.from(statusFilters.selectedFilters)[0]
             params.status = status
         }
-        
+
         // Role: passar apenas se exatamente 1 estiver selecionado
         if (roleFilters.selectedFilters.size === 1) {
             const role = Array.from(roleFilters.selectedFilters)[0]
             params.role = role
         }
-        
+
         return params
     }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
-    
+
     // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
     const needsFrontendFilter = useMemo(() => {
         const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
         const allRoleSelected = roleFilters.selectedFilters.size === ALL_ROLE_FILTERS.length
-        
+
         // Se todos estão selecionados, não precisa filtrar
         if (allStatusSelected && allRoleSelected) {
             return false
         }
-        
+
         // Se apenas 1 de cada está selecionado, backend filtra (não precisa filtrar no frontend)
         const singleStatusSelected = statusFilters.selectedFilters.size === 1
         const singleRoleSelected = roleFilters.selectedFilters.size === 1
-        
+
         if (singleStatusSelected && singleRoleSelected) {
             return false
         }
-        
+
         // Se múltiplos estão selecionados, precisa filtrar no frontend
         return true
     }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
@@ -233,7 +232,7 @@ export default function MemberPage() {
         if (!needsFrontendFilter) {
             return members
         }
-        
+
         // Filtrar no frontend
         return members.filter((member) => {
             const statusMatch = statusFilters.selectedFilters.has(member.status)
@@ -241,13 +240,13 @@ export default function MemberPage() {
             return statusMatch && roleMatch
         })
     }, [members, statusFilters.selectedFilters, roleFilters.selectedFilters, needsFrontendFilter])
-    
+
     // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedMembers = useMemo(() => {
         if (!needsFrontendFilter) {
             return filteredMembers  // Backend já paginou
         }
-        
+
         // Paginar no frontend
         const start = pagination.offset
         const end = start + pagination.limit
@@ -259,15 +258,15 @@ export default function MemberPage() {
         if (attribute === null || attribute === undefined) {
             return { valid: false, error: 'Atributos não podem estar vazios' }
         }
-        
+
         if (typeof attribute !== 'object') {
             return { valid: false, error: 'Atributos devem ser um objeto' }
         }
-        
+
         if (Array.isArray(attribute)) {
             return { valid: false, error: 'Atributos devem ser um objeto, não um array' }
         }
-        
+
         return { valid: true, parsed: attribute as Record<string, unknown> }
     }
 
@@ -522,8 +521,8 @@ export default function MemberPage() {
         onCancel: handleCancelCustom,
         onDelete: handleDeleteSelectedCustom,
         onSave: handleSave,
-        saveLabel: submitting 
-            ? (editingMember ? 'Salvando...' : 'Criando...') 
+        saveLabel: submitting
+            ? (editingMember ? 'Salvando...' : 'Criando...')
             : (editingMember ? 'Salvar' : 'Criar'),
         deleteLabel: 'Remover',
     })
@@ -700,11 +699,21 @@ export default function MemberPage() {
                                                 stroke="currentColor"
                                                 viewBox="0 0 24 24"
                                             >
+                                                {/* Cabeça */}
+                                                <circle
+                                                    cx="12"
+                                                    cy="8"
+                                                    r="4"
+                                                    strokeWidth={2}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                                {/* Corpo */}
                                                 <path
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                     strokeWidth={2}
-                                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                                                    d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"
                                                 />
                                             </svg>
                                         </div>
