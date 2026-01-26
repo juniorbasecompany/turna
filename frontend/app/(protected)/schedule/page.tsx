@@ -433,12 +433,12 @@ export default function SchedulePage() {
                     <>
                         <CreateCard
                             label="Criar uma escala"
-                            subtitle="Clique para adicionar"
+                            subtitle="Clique para adicionar uma nova escala"
                             onClick={handleCreateClick}
                         />
                         <CreateCard
                             label="Calcular a escala"
-                            subtitle="Clique para adicionar"
+                            subtitle="Clique para calcular a escala do período"
                             onClick={handleCreateCardClick}
                             showFlash={createCardFlash}
                             flashMessage="Informe o período inicial e final"
