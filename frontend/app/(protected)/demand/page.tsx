@@ -12,8 +12,8 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useEntityPage } from '@/hooks/useEntityPage'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
 import { formatDateTime } from '@/lib/tenantFormat'
 import {
@@ -43,7 +43,7 @@ type DemandFormData = {
 
 export default function DemandPage() {
     const { settings } = useTenantSettings()
-    
+
     // Estados auxiliares (não gerenciados por useEntityPage)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
@@ -89,7 +89,7 @@ export default function DemandPage() {
     const mapFormDataToCreateRequest = (formData: DemandFormData): DemandCreateRequest => {
         const startIso = formData.start_time?.toISOString()
         const endIso = formData.end_time?.toISOString()
-        
+
         return {
             hospital_id: formData.hospital_id,
             job_id: formData.job_id,
@@ -110,7 +110,7 @@ export default function DemandPage() {
     const mapFormDataToUpdateRequest = (formData: DemandFormData): DemandUpdateRequest => {
         const startIso = formData.start_time?.toISOString()
         const endIso = formData.end_time?.toISOString()
-        
+
         return {
             hospital_id: formData.hospital_id,
             job_id: formData.job_id,
@@ -133,15 +133,15 @@ export default function DemandPage() {
         if (!formData.procedure.trim()) {
             return 'Procedimento é obrigatório'
         }
-        
+
         if (!formData.start_time || !formData.end_time) {
             return 'Data/hora de início e fim são obrigatórias'
         }
-        
+
         if (formData.end_time <= formData.start_time) {
             return 'Data/hora de fim deve ser maior que a de início'
         }
-        
+
         return null
     }
 
@@ -264,151 +264,151 @@ export default function DemandPage() {
             {/* Área de edição */}
             <EditForm title="Demanda" isEditing={isEditing}>
                 <div className="space-y-4">
-                            <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <FormField label="Hospital">
-                                    <select
-                                        id="hospital_id"
-                                        value={formData.hospital_id || ''}
-                                        onChange={(e) =>
-                                            setFormData({
-                                                ...formData,
-                                                hospital_id: e.target.value ? parseInt(e.target.value) : null,
-                                            })
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting || loadingHospitals}
-                                    >
-                                        <option value="">Selecione um hospital</option>
-                                        {hospitals.map((hospital) => (
-                                            <option key={hospital.id} value={hospital.id}>
-                                                {hospital.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </FormField>
-                                <FormField label="Procedimento" required>
-                                    <input
-                                        type="text"
-                                        id="procedure"
-                                        value={formData.procedure}
-                                        onChange={(e) => setFormData({ ...formData, procedure: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        required
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                            </FormFieldGrid>
-
-                            <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <TenantDateTimePicker
-                                    id="start_time"
-                                    label="Data/Hora Início"
-                                    value={formData.start_time}
-                                    onChange={(date) => setFormData({ ...formData, start_time: date })}
-                                    disabled={submitting}
-                                />
-                                <TenantDateTimePicker
-                                    id="end_time"
-                                    label="Data/Hora Fim"
-                                    value={formData.end_time}
-                                    onChange={(date) => setFormData({ ...formData, end_time: date })}
-                                    disabled={submitting}
-                                />
-                            </FormFieldGrid>
-
-                            <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <FormField label="Sala/Quarto">
-                                    <input
-                                        type="text"
-                                        id="room"
-                                        value={formData.room}
-                                        onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                                <FormField label="Prioridade">
-                                    <select
-                                        id="priority"
-                                        value={formData.priority || ''}
-                                        onChange={(e) =>
-                                            setFormData({
-                                                ...formData,
-                                                priority: e.target.value || null,
-                                            })
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    >
-                                        <option value="">Nenhuma</option>
-                                        <option value="Urgente">Urgente</option>
-                                        <option value="Emergência">Emergência</option>
-                                    </select>
-                                </FormField>
-                            </FormFieldGrid>
-
-                            <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <FormField label="Tipo de Anestesia">
-                                    <input
-                                        type="text"
-                                        id="anesthesia_type"
-                                        value={formData.anesthesia_type}
-                                        onChange={(e) => setFormData({ ...formData, anesthesia_type: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                                <FormField label="Complexidade">
-                                    <input
-                                        type="text"
-                                        id="complexity"
-                                        value={formData.complexity}
-                                        onChange={(e) => setFormData({ ...formData, complexity: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={submitting}
-                                    />
-                                </FormField>
-                            </FormFieldGrid>
-
-                            <FormField
-                                label="Habilidades (separadas por vírgula)"
-                                helperText="Ex: Obstétrica, Cardíaca"
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Hospital">
+                            <select
+                                id="hospital_id"
+                                value={formData.hospital_id || ''}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        hospital_id: e.target.value ? parseInt(e.target.value) : null,
+                                    })
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting || loadingHospitals}
                             >
-                                <input
-                                    type="text"
-                                    id="skills"
-                                    value={skillsInput}
-                                    onChange={(e) => updateSkills(e.target.value)}
-                                    placeholder="Ex: Obstétrica, Cardíaca"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    disabled={submitting}
-                                />
-                            </FormField>
+                                <option value="">Selecione um hospital</option>
+                                {hospitals.map((hospital) => (
+                                    <option key={hospital.id} value={hospital.id}>
+                                        {hospital.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </FormField>
+                        <FormField label="Procedimento" required>
+                            <input
+                                type="text"
+                                id="procedure"
+                                value={formData.procedure}
+                                onChange={(e) => setFormData({ ...formData, procedure: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                required
+                                disabled={submitting}
+                            />
+                        </FormField>
+                    </FormFieldGrid>
 
-                            <div>
-                                <label className="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.is_pediatric}
-                                        onChange={(e) => setFormData({ ...formData, is_pediatric: e.target.checked })}
-                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        disabled={submitting}
-                                    />
-                                    <span className="ml-2 text-sm text-gray-700">Pediátrica</span>
-                                </label>
-                            </div>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <TenantDateTimePicker
+                            id="start_time"
+                            label="Data/Hora Início"
+                            value={formData.start_time}
+                            onChange={(date) => setFormData({ ...formData, start_time: date })}
+                            disabled={submitting}
+                        />
+                        <TenantDateTimePicker
+                            id="end_time"
+                            label="Data/Hora Fim"
+                            value={formData.end_time}
+                            onChange={(date) => setFormData({ ...formData, end_time: date })}
+                            disabled={submitting}
+                        />
+                    </FormFieldGrid>
 
-                            <FormField label="Observações">
-                                <textarea
-                                    id="notes"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    disabled={submitting}
-                                />
-                            </FormField>
-                        </div>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Sala/Quarto">
+                            <input
+                                type="text"
+                                id="room"
+                                value={formData.room}
+                                onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                        <FormField label="Prioridade">
+                            <select
+                                id="priority"
+                                value={formData.priority || ''}
+                                onChange={(e) =>
+                                    setFormData({
+                                        ...formData,
+                                        priority: e.target.value || null,
+                                    })
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            >
+                                <option value="">Nenhuma</option>
+                                <option value="Urgente">Urgente</option>
+                                <option value="Emergência">Emergência</option>
+                            </select>
+                        </FormField>
+                    </FormFieldGrid>
+
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Tipo de Anestesia">
+                            <input
+                                type="text"
+                                id="anesthesia_type"
+                                value={formData.anesthesia_type}
+                                onChange={(e) => setFormData({ ...formData, anesthesia_type: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                        <FormField label="Complexidade">
+                            <input
+                                type="text"
+                                id="complexity"
+                                value={formData.complexity}
+                                onChange={(e) => setFormData({ ...formData, complexity: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                    </FormFieldGrid>
+
+                    <FormField
+                        label="Habilidades (separadas por vírgula)"
+                        helperText="Ex: Obstétrica, Cardíaca"
+                    >
+                        <input
+                            type="text"
+                            id="skills"
+                            value={skillsInput}
+                            onChange={(e) => updateSkills(e.target.value)}
+                            placeholder="Ex: Obstétrica, Cardíaca"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            disabled={submitting}
+                        />
+                    </FormField>
+
+                    <div>
+                        <label className="flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={formData.is_pediatric}
+                                onChange={(e) => setFormData({ ...formData, is_pediatric: e.target.checked })}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                disabled={submitting}
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Pediátrica</span>
+                        </label>
+                    </div>
+
+                    <FormField label="Observações">
+                        <textarea
+                            id="notes"
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            disabled={submitting}
+                        />
+                    </FormField>
+                </div>
             </EditForm>
 
             <CardPanel
@@ -484,15 +484,13 @@ export default function DemandPage() {
                                             <svg
                                                 className="w-full h-full"
                                                 fill="none"
-                                                stroke="currentColor"
                                                 viewBox="0 0 24 24"
+                                                stroke="currentColor"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                                                />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" />
+                                                <rect x="4" y="4" width="16" height="3" fill="currentColor" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 3v18M12 4v16" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 11h16M4 16h16M4" />
                                             </svg>
                                         </div>
                                         <h3
