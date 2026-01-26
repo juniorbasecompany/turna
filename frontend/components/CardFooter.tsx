@@ -23,6 +23,8 @@ interface CardFooterProps {
     deleteTitle?: string
     /** Título do botão de editar */
     editTitle?: string
+    /** Se deve mostrar o botão de editar (padrão: true) */
+    showEdit?: boolean
     /** Texto secundário opcional (ex: tamanho do arquivo) */
     secondaryText?: string
     /** Elemento React opcional para renderizar antes dos botões de ação (ex: checkbox) */
@@ -72,6 +74,7 @@ export function CardFooter({
     disabled = false,
     deleteTitle,
     editTitle,
+    showEdit = true,
     secondaryText,
     beforeActions,
 }: CardFooterProps) {
@@ -102,6 +105,7 @@ export function CardFooter({
                     disabled={disabled}
                     deleteTitle={deleteTitle}
                     editTitle={editTitle}
+                    showEdit={showEdit}
                 />
             </div>
         </div>

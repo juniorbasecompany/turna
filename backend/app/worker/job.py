@@ -423,7 +423,9 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
         session.commit()
 
         try:
-            logger.info(f"[GENERATE_SCHEDULE] Iniciando job_id={job_id}, tenant_id={job.tenant_id}")
+            job_start_time = utc_now()
+            elapsed_seconds = 0
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando job_id={job_id}, tenant_id={job.tenant_id} às {job_start_time.isoformat()}")
             input_data = job.input_data or {}
             logger.debug(f"[GENERATE_SCHEDULE] input_data keys: {list(input_data.keys()) if input_data else 'None'}")
             logger.debug(f"[GENERATE_SCHEDULE] input_data completo: {input_data}")
@@ -501,13 +503,16 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     logger.debug(f"[GENERATE_SCHEDULE] period_end_at do ScheduleVersion: {period_end_at}")
 
                 logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}")
+                elapsed_seconds = (utc_now() - job_start_time).total_seconds()
+                logger.info(f"[GENERATE_SCHEDULE] Tempo decorrido até leitura de demandas: {elapsed_seconds:.2f}s")
                 demands, days = _demands_from_database(
                     session,
                     tenant_id=job.tenant_id,
                     period_start_at=period_start_at,
                     period_end_at=period_end_at,
                 )
-                logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias")
+                elapsed_seconds = (utc_now() - job_start_time).total_seconds()
+                logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
                 extract_job_id = None
             else:
                 # Modo original: ler de job de extração
@@ -541,6 +546,8 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if not demands:
                 raise RuntimeError("Nenhuma demanda dentro do período informado")
 
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando solver greedy: {len(demands)} demandas, {days} dias, {len(pros_by_sequence)} profissionais")
+            solve_start_time = utc_now()
             per_day, total_cost = solve_greedy(
                 demands=demands,
                 pros_by_sequence=pros_by_sequence,
@@ -549,8 +556,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 ped_unassigned_extra_penalty=1000,
                 base_shift=0,
             )
+            solve_duration = (utc_now() - solve_start_time).total_seconds()
+            elapsed_seconds = (utc_now() - job_start_time).total_seconds()
+            logger.info(f"[GENERATE_SCHEDULE] Solver greedy concluído em {solve_duration:.2f} segundos. Total cost: {total_cost}, Dias processados: {len(per_day)}. Tempo total decorrido: {elapsed_seconds:.2f}s")
 
             # Extrair alocações individuais
+            extract_start_time = utc_now()
             logger.info(f"[GENERATE_SCHEDULE] Iniciando extração de alocações individuais. per_day tem {len(per_day)} dias")
             
             # Log detalhado da estrutura antes da extração
@@ -573,7 +584,9 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 pros_by_sequence=pros_by_sequence,
             )
             
-            logger.info(f"[GENERATE_SCHEDULE] Extraídas {len(individual_allocations)} alocações individuais")
+            extract_duration = (utc_now() - extract_start_time).total_seconds()
+            elapsed_seconds = (utc_now() - job_start_time).total_seconds()
+            logger.info(f"[GENERATE_SCHEDULE] Extraídas {len(individual_allocations)} alocações individuais em {extract_duration:.2f}s. Tempo total decorrido: {elapsed_seconds:.2f}s")
             
             if len(individual_allocations) == 0:
                 logger.warning(f"[GENERATE_SCHEDULE] Nenhuma alocação individual extraída! Total de demandas alocadas era {total_assigned}")
@@ -599,8 +612,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             session.add(sv)
 
             # Criar registros individuais para cada alocação
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando criação de {len(individual_allocations)} registros individuais de schedule")
             schedule_records = []
+            create_records_start_time = utc_now()
             for idx, allocation in enumerate(individual_allocations):
+                if (idx + 1) % 100 == 0:
+                    logger.debug(f"[GENERATE_SCHEDULE] Criando registro {idx + 1}/{len(individual_allocations)}")
                 # Adicionar metadados à alocação individual
                 allocation_with_metadata = {
                     **allocation,
@@ -630,6 +647,9 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     updated_at=now,
                 )
                 schedule_records.append(sv_item)
+            
+            create_records_duration = (utc_now() - create_records_start_time).total_seconds()
+            logger.info(f"[GENERATE_SCHEDULE] Criação de {len(schedule_records)} registros concluída em {create_records_duration:.2f} segundos")
 
             # Gravar todos os registros em lote
             if schedule_records:
@@ -652,7 +672,10 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             session.add(job)
 
             logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: 1 registro mestre + {len(schedule_records)} registros individuais")
+            commit_start_time = utc_now()
             session.commit()
+            commit_duration = (utc_now() - commit_start_time).total_seconds()
+            logger.info(f"[GENERATE_SCHEDULE] Commit concluído em {commit_duration:.2f} segundos")
             
             # Verificar se os registros foram realmente salvos
             if schedule_records:
@@ -665,6 +688,8 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros individuais encontrados no banco")
             
             session.refresh(job)
+            total_duration = (utc_now() - job_start_time).total_seconds()
+            logger.info(f"[GENERATE_SCHEDULE] Job {job_id} CONCLUÍDO com sucesso em {total_duration:.2f} segundos")
             return {"ok": True, "job_id": job.id, "schedule_version_id": sv.id}
         except Exception as e:
             job.status = JobStatus.FAILED

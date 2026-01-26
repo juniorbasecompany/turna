@@ -7,6 +7,7 @@ interface CardActionButtonsProps {
     disabled?: boolean
     deleteTitle?: string
     editTitle?: string
+    showEdit?: boolean // Se false, oculta o botão de editar
 }
 
 /**
@@ -38,6 +39,7 @@ export function CardActionButtons({
     disabled = false,
     deleteTitle,
     editTitle,
+    showEdit = true, // Por padrão mostra o botão de editar
 }: CardActionButtonsProps) {
     return (
         <div className="flex items-center gap-1 shrink-0">
@@ -65,26 +67,28 @@ export function CardActionButtons({
                     />
                 </svg>
             </button>
-            {/* 2. Ícone para editar */}
-            <button
-                onClick={onEdit}
-                className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
-                title={editTitle || 'Editar'}
-            >
-                <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+            {/* 2. Ícone para editar (oculto se showEdit for false) */}
+            {showEdit && (
+                <button
+                    onClick={onEdit}
+                    className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
+                    title={editTitle || 'Editar'}
                 >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                    />
-                </svg>
-            </button>
+                    <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                    </svg>
+                </button>
+            )}
         </div>
     )
 }

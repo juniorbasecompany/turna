@@ -489,8 +489,10 @@ export default function JobPage() {
                                         e.stopPropagation()
                                         toggleJobSelection(job.id)
                                     }}
+                                    onEdit={() => {}} // Função vazia (não usada)
                                     disabled={false}
                                     deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
+                                    showEdit={false} // Ocultar botão de editar
                                 />
                             }
                         >
@@ -521,18 +523,6 @@ export default function JobPage() {
 
                                     {/* Detalhes adicionais */}
                                     <div className="space-y-1 text-sm">
-                                        <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
-                                            <span className="font-medium">Criado em:</span>{' '}
-                                            {settings
-                                                ? formatDateTime(job.created_at, settings)
-                                                : new Date(job.created_at).toLocaleString('pt-BR', {
-                                                      day: '2-digit',
-                                                      month: '2-digit',
-                                                      year: 'numeric',
-                                                      hour: '2-digit',
-                                                      minute: '2-digit',
-                                                  })}
-                                        </p>
                                         {job.started_at && (
                                             <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
                                                 <span className="font-medium">Iniciado em:</span>{' '}

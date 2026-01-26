@@ -2,7 +2,11 @@
 Estratégia ambiciosa: função de resolução usada pelo app (orquestrador).
 """
 
+import logging
+
 from .allocate import greedy_allocate
+
+logger = logging.getLogger(__name__)
 
 
 def solve_greedy(
@@ -19,19 +23,30 @@ def solve_greedy(
       - per_day: lista de dicts com campos necessários para impressão (mesmo layout)
       - total_cost_all_days: custo agregado (int)
     """
+    import time
+    
     total_cost_all_days = 0
     n_pros = len(pros_by_sequence)
     per_day: list[dict] = []
 
+    logger.info(f"[SOLVE_GREEDY] Iniciando processamento: {days} dias, {len(demands)} demandas totais, {n_pros} profissionais")
+    
     for day in range(days):
+        day_start_time = time.time()
         day_num = day + 1
         demands_day = [d for d in demands if d["day"] == day_num]
+        
+        logger.debug(f"[SOLVE_GREEDY] Dia {day_num}: {len(demands_day)} demandas")
 
         start_idx = (base_shift + day) % n_pros
         pros_for_day = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
 
+        allocate_start_time = time.time()
         assigned_by_demand, assigned_demands_by_pro, _used_count = greedy_allocate(demands_day, pros_for_day)
+        allocate_duration = time.time() - allocate_start_time
         _ = _used_count
+        
+        logger.debug(f"[SOLVE_GREEDY] Dia {day_num}: alocação concluída em {allocate_duration:.3f}s, {len(assigned_demands_by_pro)} profissionais com alocações")
 
         unassigned_count = sum(1 for di in range(len(demands_day)) if assigned_by_demand.get(di) is None)
         ped_unassigned_count = sum(
@@ -55,6 +70,10 @@ def solve_greedy(
                 "assigned_pids": assigned_pids,
             }
         )
+        
+        day_duration = time.time() - day_start_time
+        logger.info(f"[SOLVE_GREEDY] Dia {day_num}/{days} concluído em {day_duration:.3f}s: {len(demands_day)} demandas, {unassigned_count} não alocadas, {ped_unassigned_count} pediátricas não alocadas, custo: {total_cost}")
 
+    logger.info(f"[SOLVE_GREEDY] Processamento completo: {days} dias processados, custo total: {total_cost_all_days}")
     return per_day, total_cost_all_days
 

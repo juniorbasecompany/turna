@@ -38,7 +38,16 @@ class ScheduleVersion(BaseModel, table=True):
         nullable=False,
     )
 
-    status: ScheduleStatus = Field(default=ScheduleStatus.DRAFT, index=True)
+    status: ScheduleStatus = Field(
+        default=ScheduleStatus.DRAFT,
+        sa_type=sa.Enum(
+            ScheduleStatus,
+            name="schedule_status",
+            native_enum=False,
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        index=True,
+    )
     version_number: int = Field(default=1)
 
     job_id: Optional[int] = Field(default=None, foreign_key="job.id", index=True)
