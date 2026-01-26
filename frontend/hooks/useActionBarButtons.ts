@@ -35,6 +35,7 @@ interface UseActionBarButtonsOptions {
         [key: string]: boolean | undefined
     }
     customActions?: CustomAction[] // Ações customizadas (ex: "Ler conteúdo")
+    hideDefaultDelete?: boolean // Se true, oculta o botão "Excluir" padrão (útil quando usando customActions)
 }
 
 /**
@@ -104,6 +105,7 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
         additionalSelectedCount = 0,
         additionalStates = {},
         customActions = [],
+        hideDefaultDelete = false,
     } = options
 
     // Usar showEditArea se fornecido, caso contrário usar isEditing
@@ -134,8 +136,8 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
             })
         }
 
-        // Botão Excluir (aparece se houver seleção principal)
-        if (selectedCount > 0) {
+        // Botão Excluir (aparece se houver seleção principal, a menos que hideDefaultDelete seja true)
+        if (selectedCount > 0 && !hideDefaultDelete) {
             buttons.push({
                 label: deleteLabel,
                 onClick: onDelete,

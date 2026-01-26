@@ -122,6 +122,114 @@ def _load_pros_from_repo_test() -> list[dict]:
     return sorted(pros, key=lambda p: p.get("sequence", 0))
 
 
+def _extract_individual_allocations(
+    per_day: list[dict],
+    pros_by_sequence: list[dict],
+) -> list[dict]:
+    """
+    Extrai alocações individuais do resultado do solver.
+    
+    Transforma a estrutura agregada (per_day) em uma lista de alocações individuais,
+    onde cada alocação representa um profissional alocado a uma demanda específica.
+    
+    Args:
+        per_day: Lista de dicts com estrutura do solver (day_number, pros_for_day, assigned_demands_by_pro, etc.)
+        pros_by_sequence: Lista de profissionais (para obter nomes completos)
+    
+    Returns:
+        Lista de dicts, cada um representando uma alocação individual:
+        {
+            "professional": str,      # nome do profissional
+            "professional_id": str,  # ID do profissional
+            "id": str,               # ID da demanda
+            "day": int,              # dia (1..N)
+            "start": float,          # hora início
+            "end": float,            # hora fim
+            "is_pediatric": bool,
+            "source": dict           # dados originais da demanda
+        }
+    """
+    allocations = []
+    
+    # Criar mapa profissional_id -> nome completo (busca em pros_by_sequence primeiro)
+    pro_id_to_name: dict[str, str] = {}
+    for pro in pros_by_sequence:
+        pro_id = str(pro.get("id") or "").strip()
+        pro_name = str(pro.get("name") or pro_id).strip()
+        if pro_id:
+            pro_id_to_name[pro_id] = pro_name
+    
+    for day_item in per_day:
+        if not isinstance(day_item, dict):
+            continue
+            
+        day_number = day_item.get("day_number", 0)
+        if day_number <= 0:
+            continue
+            
+        pros_for_day = day_item.get("pros_for_day", [])
+        assigned_demands_by_pro = day_item.get("assigned_demands_by_pro", {})
+        
+        logger.debug(f"[EXTRACT_ALLOCATIONS] Dia {day_number}: {len(pros_for_day)} profissionais, {len(assigned_demands_by_pro)} profissionais com alocações")
+        
+        # Atualizar mapa com profissionais do dia (pode ter nomes diferentes)
+        for pro in pros_for_day:
+            if not isinstance(pro, dict):
+                continue
+            # pro_id pode ser string ou outro tipo - normalizar para string
+            pro_id_raw = pro.get("id")
+            pro_id = str(pro_id_raw).strip() if pro_id_raw is not None else ""
+            if pro_id:
+                # Priorizar nome do pros_for_day, fallback para pros_by_sequence
+                pro_name = str(pro.get("name") or pro_id_to_name.get(pro_id, pro_id)).strip()
+                pro_id_to_name[pro_id] = pro_name
+        
+        # Iterar sobre alocações por profissional
+        for pro_id_raw, demands in assigned_demands_by_pro.items():
+            # Normalizar pro_id para string (pode vir como int ou outro tipo)
+            pro_id = str(pro_id_raw).strip() if pro_id_raw is not None else ""
+            if not pro_id:
+                logger.debug(f"[EXTRACT_ALLOCATIONS] pro_id_raw inválido: {pro_id_raw} (tipo: {type(pro_id_raw)})")
+                continue
+                
+            if not isinstance(demands, list):
+                logger.warning(f"[EXTRACT_ALLOCATIONS] Demands não é lista para pro_id={pro_id}, tipo={type(demands)}, valor={demands}")
+                continue
+                
+            # Buscar nome do profissional (tentar com pro_id como string e também como tipo original)
+            professional_name = pro_id_to_name.get(pro_id)
+            if professional_name is None:
+                # Tentar buscar com o valor original também
+                professional_name = pro_id_to_name.get(str(pro_id_raw), pro_id)
+            logger.debug(f"[EXTRACT_ALLOCATIONS] Profissional {pro_id} ({professional_name}): {len(demands)} demandas")
+            
+            for demand in demands:
+                if not isinstance(demand, dict):
+                    continue
+                    
+                # Extrair dados da demanda
+                demand_id = demand.get("id")
+                if not demand_id:
+                    logger.debug(f"[EXTRACT_ALLOCATIONS] Demanda sem ID, pulando: {demand}")
+                    continue
+                    
+                allocation = {
+                    "professional": professional_name,
+                    "professional_id": pro_id,
+                    "id": str(demand_id),
+                    "day": int(day_number),
+                    "start": float(demand.get("start", 0)),
+                    "end": float(demand.get("end", 0)),
+                    "is_pediatric": bool(demand.get("is_pediatric", False)),
+                    "source": demand.get("source", {}),
+                }
+                allocations.append(allocation)
+                logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['professional']} - Dia {allocation['day']} - {allocation['id']}")
+    
+    logger.info(f"[EXTRACT_ALLOCATIONS] Total de alocações extraídas: {len(allocations)}")
+    return allocations
+
+
 def _demands_from_extract_result(result_data: dict, *, period_start_at, period_end_at) -> tuple[list[dict], int]:
     """
     Converte `result_data` do EXTRACT_DEMAND para o formato esperado pelos solvers:
@@ -442,30 +550,120 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 base_shift=0,
             )
 
-            result_data: dict[str, Any] = {
+            # Extrair alocações individuais
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando extração de alocações individuais. per_day tem {len(per_day)} dias")
+            
+            # Log detalhado da estrutura antes da extração
+            total_assigned = 0
+            for idx, day_item in enumerate(per_day):
+                if isinstance(day_item, dict):
+                    assigned = day_item.get("assigned_demands_by_pro", {})
+                    day_num = day_item.get("day_number", idx + 1)
+                    logger.debug(f"[GENERATE_SCHEDULE] Dia {day_num}: assigned_demands_by_pro tem {len(assigned)} profissionais com alocações")
+                    for pro_id, demands_list in assigned.items():
+                        if isinstance(demands_list, list):
+                            total_assigned += len(demands_list)
+                            logger.debug(f"[GENERATE_SCHEDULE]   - Profissional {pro_id} (tipo: {type(pro_id)}): {len(demands_list)} demandas")
+                        else:
+                            logger.warning(f"[GENERATE_SCHEDULE]   - Profissional {pro_id}: demands_list não é lista (tipo: {type(demands_list)})")
+            logger.info(f"[GENERATE_SCHEDULE] Total de demandas alocadas encontradas: {total_assigned}")
+            
+            individual_allocations = _extract_individual_allocations(
+                per_day=per_day,
+                pros_by_sequence=pros_by_sequence,
+            )
+            
+            logger.info(f"[GENERATE_SCHEDULE] Extraídas {len(individual_allocations)} alocações individuais")
+            
+            if len(individual_allocations) == 0:
+                logger.warning(f"[GENERATE_SCHEDULE] Nenhuma alocação individual extraída! Total de demandas alocadas era {total_assigned}")
+
+            # Manter o registro original (sv) como "mestre" com metadados para compatibilidade
+            # e criar registros individuais para cada alocação
+            result_data_master: dict[str, Any] = {
                 "allocation_mode": "greedy",
                 "days": days,
                 "total_cost": total_cost,
-                "per_day": per_day,
+                "per_day": per_day,  # Manter estrutura original para compatibilidade
                 "mode": mode,
+                "fragmented": True,  # Flag indicando que há registros fragmentados
+                "allocation_count": len(individual_allocations),
             }
             if extract_job_id is not None:
-                result_data["extract_job_id"] = extract_job_id
+                result_data_master["extract_job_id"] = extract_job_id
 
-            sv.result_data = result_data
+            sv.result_data = result_data_master
             sv.generated_at = now
             sv.updated_at = now
             sv.status = ScheduleStatus.DRAFT
             session.add(sv)
 
+            # Criar registros individuais para cada alocação
+            schedule_records = []
+            for idx, allocation in enumerate(individual_allocations):
+                # Adicionar metadados à alocação individual
+                allocation_with_metadata = {
+                    **allocation,
+                    "metadata": {
+                        "allocation_mode": "greedy",
+                        "total_cost": total_cost,
+                        "mode": mode,
+                        "generated_at": now.isoformat(),
+                        "job_id": job.id,
+                        "parent_schedule_id": sv.id,
+                        "sequence": idx + 1,
+                    }
+                }
+                if extract_job_id is not None:
+                    allocation_with_metadata["metadata"]["extract_job_id"] = extract_job_id
+
+                sv_item = ScheduleVersion(
+                    tenant_id=sv.tenant_id,
+                    name=f"{sv.name} - {allocation['professional']} - Dia {allocation['day']}",
+                    period_start_at=sv.period_start_at,
+                    period_end_at=sv.period_end_at,
+                    status=ScheduleStatus.DRAFT,
+                    version_number=sv.version_number,
+                    job_id=job.id,
+                    result_data=allocation_with_metadata,
+                    generated_at=now,
+                    updated_at=now,
+                )
+                schedule_records.append(sv_item)
+
+            # Gravar todos os registros em lote
+            if schedule_records:
+                logger.info(f"[GENERATE_SCHEDULE] Preparando para gravar {len(schedule_records)} registros individuais de schedule")
+                session.add_all(schedule_records)
+                logger.info(f"[GENERATE_SCHEDULE] {len(schedule_records)} registros individuais adicionados à sessão")
+            else:
+                logger.warning(f"[GENERATE_SCHEDULE] Nenhum registro individual para gravar! individual_allocations tinha {len(individual_allocations)} itens")
+
             job.status = JobStatus.COMPLETED
             job.completed_at = utc_now()
             job.updated_at = job.completed_at
-            job.result_data = {"schedule_version_id": sv.id, "total_cost": total_cost}
+            job.result_data = {
+                "schedule_version_id": sv.id,
+                "total_cost": total_cost,
+                "allocation_count": len(individual_allocations),
+                "fragmented_records_count": len(schedule_records),
+            }
             job.error_message = None
             session.add(job)
 
+            logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: 1 registro mestre + {len(schedule_records)} registros individuais")
             session.commit()
+            
+            # Verificar se os registros foram realmente salvos
+            if schedule_records:
+                from sqlmodel import select
+                saved_count = session.exec(
+                    select(ScheduleVersion)
+                    .where(ScheduleVersion.job_id == job.id)
+                    .where(ScheduleVersion.id != sv.id)
+                ).all()
+                logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros individuais encontrados no banco")
+            
             session.refresh(job)
             return {"ok": True, "job_id": job.id, "schedule_version_id": sv.id}
         except Exception as e:

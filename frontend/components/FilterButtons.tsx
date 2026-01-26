@@ -53,7 +53,15 @@ export function FilterButtons<T = string>({
     }, [sortedOptions, selectedValues])
 
     // Componente interno para checkbox customizado
-    const CustomCheckbox = ({ checked, color }: { checked: boolean; color?: string }) => {
+    const CustomCheckbox = ({ 
+        checked, 
+        color, 
+        onClick 
+    }: { 
+        checked: boolean
+        color?: string
+        onClick?: (e: React.MouseEvent) => void
+    }) => {
         const backgroundColor = checked
             ? (color ? getColorFromClass(color) : '#1f2937')
             : undefined
@@ -61,12 +69,23 @@ export function FilterButtons<T = string>({
             ? (color ? getColorFromClass(color) : '#1f2937')
             : undefined
 
+        const handleClick = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            if (onClick) {
+                onClick(e)
+            }
+        }
+
         return (
-            <div className="relative w-4 h-4 flex items-center justify-center">
+            <div 
+                className="relative w-4 h-4 flex items-center justify-center cursor-pointer"
+                onClick={handleClick}
+            >
                 <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => { }} // Controlado pelo onClick do button
+                    onChange={() => { }} // Controlado pelo onClick
+                    onClick={handleClick}
                     className="w-4 h-4 appearance-none border rounded focus:ring-purple-500 cursor-pointer bg-white border-gray-300"
                     style={checked
                         ? {
@@ -77,6 +96,7 @@ export function FilterButtons<T = string>({
                     }
                     disabled={disabled}
                     readOnly
+                    tabIndex={-1}
                 />
                 {checked && (
                     <svg
@@ -139,7 +159,13 @@ export function FilterButtons<T = string>({
                             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                         `}
                     >
-                        <CustomCheckbox checked={allSelected} />
+                        <CustomCheckbox 
+                            checked={allSelected} 
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleAll()
+                            }}
+                        />
                         <span className={allSelected ? 'text-gray-900' : 'text-gray-700'}>
                             {allOptionLabel}
                         </span>
@@ -164,7 +190,14 @@ export function FilterButtons<T = string>({
                                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                             `}
                         >
-                            <CustomCheckbox checked={isSelected} color={option.color} />
+                            <CustomCheckbox 
+                                checked={isSelected} 
+                                color={option.color}
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onToggle(option.value)
+                                }}
+                            />
                             <span className={option.color || (isSelected ? 'text-gray-900' : 'text-gray-700')}>
                                 {option.label}
                             </span>

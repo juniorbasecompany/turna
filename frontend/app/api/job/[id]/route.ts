@@ -110,3 +110,57 @@ export async function PUT(
     )
   }
 }
+
+/**
+ * DELETE /api/job/[id]
+ *
+ * Exclui um job que está COMPLETED ou FAILED.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const jobId = params.id
+
+    if (!jobId) {
+      return NextResponse.json(
+        { detail: 'ID do job é obrigatório' },
+        { status: 400 }
+      )
+    }
+
+    // Obter access_token do cookie
+    const accessToken = request.cookies.get('access_token')?.value
+
+    // Chamar backend
+    const response = await fetch(`${API_URL}/job/${jobId}`, {
+      method: 'DELETE',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({
+        detail: `Erro HTTP ${response.status}`,
+      }))
+      return NextResponse.json(errorData, { status: response.status })
+    }
+
+    // DELETE retorna 204 No Content
+    return new NextResponse(null, { status: 204 })
+  } catch (error) {
+    console.error('Erro ao excluir job:', error)
+    return NextResponse.json(
+      {
+        detail:
+          error instanceof Error
+            ? error.message
+            : 'Erro desconhecido ao excluir job',
+      },
+      { status: 500 }
+    )
+  }
+}

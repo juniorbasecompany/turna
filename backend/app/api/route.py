@@ -1274,6 +1274,72 @@ def update_job(
         ) from e
 
 
+@router.post("/job/{job_id}/cancel", response_model=JobResponse, tags=["Job"])
+def cancel_job(
+    job_id: int,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Cancela um job, mudando seu status para FAILED.
+    Valida que o job pertence ao tenant atual.
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Se já está COMPLETED ou FAILED, não faz nada
+    if job.status == JobStatus.COMPLETED:
+        return job
+    if job.status == JobStatus.FAILED:
+        return job
+
+    # Marcar como FAILED
+    job.status = JobStatus.FAILED
+    job.error_message = "Cancelado manualmente pelo usuário"
+    if not job.completed_at:
+        job.completed_at = utc_now()
+    job.updated_at = utc_now()
+
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    return job
+
+
+@router.delete("/job/{job_id}", status_code=204, tags=["Job"])
+def delete_job(
+    job_id: int,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Exclui um job que está COMPLETED ou FAILED.
+    Valida que o job pertence ao tenant atual.
+    """
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Só permite excluir jobs que já terminaram (COMPLETED ou FAILED)
+    if job.status not in (JobStatus.COMPLETED, JobStatus.FAILED):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Não é possível excluir job com status {job.status}. Apenas jobs COMPLETED ou FAILED podem ser excluídos."
+        )
+
+    # Excluir job
+    session.delete(job)
+    session.commit()
+
+    return Response(status_code=204)
+
+
 @router.post("/job/{job_id}/requeue", response_model=JobRequeueResponse, status_code=202, tags=["Job"])
 async def requeue_job(
     job_id: int,

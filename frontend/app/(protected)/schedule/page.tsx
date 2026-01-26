@@ -21,8 +21,6 @@ import { protectedFetch } from '@/lib/api'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     ScheduleCreateRequest,
-    ScheduleGenerateFromDemandsRequest,
-    ScheduleGenerateFromDemandsResponse,
     ScheduleUpdateRequest,
     ScheduleVersionResponse,
 } from '@/types/api'
@@ -44,7 +42,6 @@ export default function SchedulePage() {
 
     // Estados auxiliares
     const [nameFilter, setNameFilter] = useState('')
-    const [generating, setGenerating] = useState(false)
 
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
@@ -55,9 +52,6 @@ export default function SchedulePage() {
     // Filtros de período usando TenantDatePicker (Date objects)
     const [periodStartDate, setPeriodStartDate] = useState<Date | null>(null)
     const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
-    const [createCardFlash, setCreateCardFlash] = useState(false)
-    const [periodStartFlash, setPeriodStartFlash] = useState(false)
-    const [periodEndFlash, setPeriodEndFlash] = useState(false)
 
     // Configuração inicial
     const initialFormData: ScheduleFormData = {
@@ -210,98 +204,6 @@ export default function SchedulePage() {
         listEnabled: !!settings,
     })
 
-    const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
-        setCreateCardFlash(true)
-        setPeriodStartFlash(isStartMissing)
-        setPeriodEndFlash(isEndMissing)
-        // Remover o flash após 1 segundo
-        setTimeout(() => {
-            setCreateCardFlash(false)
-            setPeriodStartFlash(false)
-            setPeriodEndFlash(false)
-        }, 1000)
-    }
-
-    const handleCreateCardClick = async () => {
-        const isStartMissing = isEditing ? !formData.period_start_at : !periodStartDate
-        const isEndMissing = isEditing ? !formData.period_end_at : !periodEndDate
-
-        if (isStartMissing || isEndMissing) {
-            triggerPeriodFlash(isStartMissing, isEndMissing)
-            return
-        }
-
-        // Usar datas do filtro ou do formulário
-        const startDate = isEditing ? formData.period_start_at : periodStartDate
-        const endDate = isEditing ? formData.period_end_at : periodEndDate
-
-        if (!startDate || !endDate || !settings) {
-            setError('Período inválido')
-            return
-        }
-
-        // Validar que data final é maior que inicial
-        if (startDate > endDate) {
-            setError('Data final deve ser maior que a data inicial')
-            return
-        }
-
-        try {
-            setGenerating(true)
-            setError(null)
-
-            // Converter datas para UTC usando timezone do tenant
-            const periodStartAt = localDateToUtcStart(startDate, settings)
-            const periodEndAt = localDateToUtcEndExclusive(endDate, settings)
-
-            // Criar nome padrão baseado no período
-            const name = `Escala ${startDate.toLocaleDateString('pt-BR')} - ${endDate.toLocaleDateString('pt-BR')}`
-
-            const request: ScheduleGenerateFromDemandsRequest = {
-                name,
-                period_start_at: periodStartAt,
-                period_end_at: periodEndAt,
-                allocation_mode: 'greedy',
-                version_number: 1,
-            }
-
-            const response = await protectedFetch<ScheduleGenerateFromDemandsResponse>(
-                '/api/schedule/generate-from-demands',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(request),
-                }
-            )
-
-            // Recarregar lista para mostrar a nova escala
-            await loadItems()
-
-            // Limpar filtros de período (opcional - pode manter se preferir)
-            // setPeriodStartDate(null)
-            // setPeriodEndDate(null)
-        } catch (err) {
-            let message = 'Erro ao gerar escala'
-            if (err instanceof Error) {
-                message = err.message
-                // Melhorar mensagem para erro 405
-                if (message.includes('405') || message.includes('Method Not Allowed')) {
-                    message = 'Erro 405: Método HTTP não permitido. Verifique se o endpoint está configurado corretamente no backend.'
-                }
-                // Melhorar mensagem para erro 404
-                if (message.includes('404') || message.includes('Not Found')) {
-                    message = 'Erro 404: Endpoint não encontrado. Verifique se o backend está rodando e se a rota está correta.'
-                }
-            }
-            setError(message)
-            console.error('Erro ao gerar escala:', err)
-        } finally {
-            setGenerating(false)
-        }
-    }
-
     // Validar intervalo de datas
     useEffect(() => {
         if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
@@ -438,7 +340,6 @@ export default function SchedulePage() {
                             value={formData.period_start_at}
                             onChange={(date) => setFormData({ ...formData, period_start_at: date })}
                             disabled={submitting}
-                            showFlash={periodStartFlash}
                         />
                         <TenantDateTimePicker
                             id="period_end_at"
@@ -446,7 +347,6 @@ export default function SchedulePage() {
                             value={formData.period_end_at}
                             onChange={(date) => setFormData({ ...formData, period_end_at: date })}
                             disabled={submitting}
-                            showFlash={periodEndFlash}
                         />
                     </FormFieldGrid>
 
@@ -503,77 +403,11 @@ export default function SchedulePage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    <>
-                        <CreateCard
-                            label="Criar uma escala"
-                            subtitle="Clique para adicionar uma nova escala"
-                            onClick={handleCreateClick}
-                        />
-                        <CreateCard
-                            label={generating ? "Gerando escala..." : "Calcular a escala"}
-                            subtitle={generating ? "Aguarde enquanto a escala é calculada" : "Clique para calcular a escala do período"}
-                            onClick={handleCreateCardClick}
-                            showFlash={createCardFlash}
-                            flashMessage="Informe o período inicial e final"
-                            disabled={isEditing || generating}
-                            customIcon={
-                                <svg
-                                    className="w-full h-full"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    {/* Corpo do Calendário */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M16 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9"
-                                    />
-                                    {/* Argolas do topo */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M16 2v4"
-                                    />
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M8 2v4"
-                                    />
-                                    {/* Linha horizontal do cabeçalho */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M3 10h18"
-                                    />
-                                    {/* Linhas de conteúdo interno */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M6 13h6 M15 13h3 M7 16h3 M12 16h3"
-                                    />
-                                    {/* Sinal de mais (+) no canto inferior direito */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M21 18v4"
-                                    />
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M19 20h4"
-                                    />
-                                </svg>
-                            }
-                        />
-                    </>
+                    <CreateCard
+                        label="Criar uma escala"
+                        subtitle="Clique para adicionar uma nova escala"
+                        onClick={handleCreateClick}
+                    />
                 }
                 filterContent={
                     !isEditing ? (
@@ -594,7 +428,6 @@ export default function SchedulePage() {
                                     onChange={handlePeriodStartDateChange}
                                     id="period_start_at_filter"
                                     name="period_start_at_filter"
-                                    showFlash={periodStartFlash}
                                 />
                                 <TenantDatePicker
                                     label="Período fim"
@@ -602,7 +435,6 @@ export default function SchedulePage() {
                                     onChange={handlePeriodEndDateChange}
                                     id="period_end_at_filter"
                                     name="period_end_at_filter"
-                                    showFlash={periodEndFlash}
                                 />
                             </FormFieldGrid>
                             <FilterButtons

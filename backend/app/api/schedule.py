@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Optional, Any
+from collections import defaultdict
 
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -87,9 +88,95 @@ def _to_minutes(h: int | float) -> int:
     return int(round(float(h) * 60))
 
 
-def _day_schedules_from_result(*, sv: ScheduleVersion) -> list:
+def _reconstruct_per_day_from_fragments(fragments: list[ScheduleVersion]) -> list[dict]:
+    """
+    Reconstrói a estrutura per_day a partir de registros fragmentados.
+    
+    Args:
+        fragments: Lista de ScheduleVersion com alocações individuais em result_data
+    
+    Returns:
+        Lista de dicts no formato per_day (compatível com formato original do solver)
+    """
+    # Agrupar por dia
+    by_day: dict[int, dict] = {}
+    
+    # Mapa de profissionais já vistos (para evitar duplicatas em pros_for_day)
+    pros_seen: dict[tuple[int, str], dict] = {}
+    
+    for fragment in fragments:
+        result_data = fragment.result_data or {}
+        if not isinstance(result_data, dict):
+            continue
+            
+        day = result_data.get("day")
+        professional_id = result_data.get("professional_id")
+        professional = result_data.get("professional")
+        
+        if not day or not professional_id:
+            continue
+            
+        day_num = int(day)
+        
+        # Inicializar estrutura do dia se não existir
+        if day_num not in by_day:
+            by_day[day_num] = {
+                "day_number": day_num,
+                "pros_for_day": [],
+                "assigned_demands_by_pro": defaultdict(list),
+                "demands_day": [],
+                "assigned_pids": [],
+            }
+        
+        # Adicionar profissional a pros_for_day (se ainda não foi adicionado)
+        pro_key = (day_num, professional_id)
+        if pro_key not in pros_seen:
+            pros_seen[pro_key] = {
+                "id": professional_id,
+                "name": professional,
+                "can_peds": False,  # Não temos essa info nos fragmentos
+                "vacation": [],
+            }
+            by_day[day_num]["pros_for_day"].append(pros_seen[pro_key])
+        
+        # Adicionar demanda a assigned_demands_by_pro
+        demand_data = {
+            "id": result_data.get("id"),
+            "day": day_num,
+            "start": result_data.get("start"),
+            "end": result_data.get("end"),
+            "is_pediatric": result_data.get("is_pediatric", False),
+            "source": result_data.get("source", {}),
+        }
+        by_day[day_num]["assigned_demands_by_pro"][professional_id].append(demand_data)
+        
+        # Adicionar a demands_day também
+        by_day[day_num]["demands_day"].append(demand_data)
+        by_day[day_num]["assigned_pids"].append(professional_id)
+    
+    # Converter defaultdict para dict normal e ordenar por dia
+    result = []
+    for day_num in sorted(by_day.keys()):
+        day_data = by_day[day_num]
+        # Converter assigned_demands_by_pro de defaultdict para dict normal
+        if isinstance(day_data["assigned_demands_by_pro"], defaultdict):
+            day_data["assigned_demands_by_pro"] = dict(day_data["assigned_demands_by_pro"])
+        result.append(day_data)
+    
+    return result
+
+
+def _day_schedules_from_result(*, sv: ScheduleVersion, session: Optional[Session] = None) -> list:
     """
     Converte `ScheduleVersion.result_data` (formato do solver) para uma lista de DaySchedule.
+    
+    Suporta dois formatos:
+    1. Estrutura completa com `per_day` (formato original)
+    2. Registro fragmentado - busca registros relacionados pelo job_id e reconstrói estrutura
+    
+    Args:
+        sv: ScheduleVersion a ser processado
+        session: Session do banco (necessário apenas se precisar buscar registros fragmentados)
     """
     try:
         from output.day import DaySchedule, Event, Interval, Row, Vacation, _pick_color_from_text
@@ -98,8 +185,27 @@ def _day_schedules_from_result(*, sv: ScheduleVersion) -> list:
 
     result_data = sv.result_data or {}
     per_day = result_data.get("per_day") or []
+    
+    # Se não tem per_day, pode ser um registro fragmentado - tentar reconstruir
+    if (not isinstance(per_day, list) or not per_day) and session is not None and sv.job_id is not None:
+        # Buscar registros relacionados pelo job_id
+        from sqlmodel import select
+        related_records = session.exec(
+            select(ScheduleVersion)
+            .where(ScheduleVersion.job_id == sv.job_id)
+            .where(ScheduleVersion.tenant_id == sv.tenant_id)
+            .where(ScheduleVersion.id != sv.id)  # Excluir o próprio registro
+        ).all()
+        
+        if related_records:
+            # Reconstruir estrutura per_day a partir dos registros fragmentados
+            per_day = _reconstruct_per_day_from_fragments(related_records)
+    
     if not isinstance(per_day, list) or not per_day:
-        raise HTTPException(status_code=400, detail="ScheduleVersion não possui result_data.per_day")
+        raise HTTPException(
+            status_code=400, 
+            detail="ScheduleVersion não possui result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
+        )
 
     # Gera um DaySchedule por item de per_day.
     schedules: list[DaySchedule] = []
@@ -254,7 +360,7 @@ def publish_schedule(
             presigned_url=presigned_url,
         )
 
-    schedules = _day_schedules_from_result(sv=sv)
+    schedules = _day_schedules_from_result(sv=sv, session=session)
     try:
         from output.day import render_multi_day_pdf_bytes
     except Exception as e:
