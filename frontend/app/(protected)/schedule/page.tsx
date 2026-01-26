@@ -442,6 +442,7 @@ export default function SchedulePage() {
                             onClick={handleCreateCardClick}
                             showFlash={createCardFlash}
                             flashMessage="Informe o período inicial e final"
+                            disabled={isEditing}
                             customIcon={
                                 <svg
                                     className="w-full h-full"
@@ -454,7 +455,7 @@ export default function SchedulePage() {
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         strokeWidth={2}
-                                        d="M15 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9"
+                                        d="M16 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9"
                                     />
                                     {/* Argolas do topo */}
                                     <path
