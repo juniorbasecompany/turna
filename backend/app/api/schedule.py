@@ -1,21 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Any
 
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel as PydanticBaseModel
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlmodel import Session, select
 from sqlalchemy import func
+
+from zoneinfo import ZoneInfo
 
 from app.auth.dependencies import get_current_member
 from app.db.session import get_session
 from app.model.base import utc_now
+from app.model.demand import Demand
 from app.model.file import File
+from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
 from app.model.schedule_version import ScheduleStatus, ScheduleVersion
+from app.model.tenant import Tenant
 from app.storage.service import StorageService
+from app.worker.worker_settings import WorkerSettings
 
 
 router = APIRouter(prefix="/schedule", tags=["Schedule"])
@@ -57,6 +67,20 @@ class ScheduleCreateRequest(PydanticBaseModel):
     period_start_at: datetime
     period_end_at: datetime
     version_number: int = 1
+
+
+class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
+    name: str
+    period_start_at: datetime
+    period_end_at: datetime
+    allocation_mode: str = "greedy"  # "greedy" | "cp-sat"
+    pros_by_sequence: Optional[list[dict[str, Any]]] = None
+    version_number: int = 1
+
+
+class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
+    job_id: int
+    schedule_version_id: int
 
 
 def _to_minutes(h: int | float) -> int:
@@ -345,6 +369,153 @@ def list_schedules(
         items=[ScheduleVersionResponse.model_validate(item) for item in items],
         total=total,
     )
+
+
+@router.post("/generate-from-demands", response_model=ScheduleGenerateFromDemandsResponse, status_code=201, tags=["Schedule"])
+async def generate_schedule_from_demands(
+    body: ScheduleGenerateFromDemandsRequest,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Gera escala a partir de demandas da tabela demand (campo source).
+    
+    Lê demandas do banco de dados no período informado e cria um job assíncrono
+    para gerar a escala usando o solver (greedy ou cp-sat).
+    """
+    # Validar período
+    if body.period_end_at <= body.period_start_at:
+        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
+    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
+
+    # Buscar timezone do tenant para formatação das datas
+    tenant = session.get(Tenant, member.tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant não encontrado")
+    
+    tenant_tz = ZoneInfo(tenant.timezone)
+
+    # Validar que há demandas no período (query rápida)
+    # As datas já estão em UTC (timestamptz), então a comparação direta funciona
+    demands_count = session.exec(
+        select(func.count(Demand.id)).where(
+            Demand.tenant_id == member.tenant_id,
+            Demand.start_time >= body.period_start_at,
+            Demand.start_time < body.period_end_at,
+        )
+    ).one()
+    
+    # Se não encontrou, buscar informações para ajudar no debug
+    if demands_count == 0:
+        # Buscar total de demandas do tenant para contexto
+        total_demands = session.exec(
+            select(func.count(Demand.id)).where(
+                Demand.tenant_id == member.tenant_id,
+            )
+        ).one()
+        
+        # Construir mensagem detalhada
+        detail_msg = "Nenhuma demanda encontrada no período informado."
+        
+        if total_demands == 0:
+            detail_msg += " Não há demandas cadastradas para este tenant. Cadastre demandas antes de gerar a escala."
+        else:
+            # Buscar primeira e última demanda do tenant para referência
+            first_demand = session.exec(
+                select(Demand)
+                .where(Demand.tenant_id == member.tenant_id)
+                .order_by(Demand.start_time.asc())
+                .limit(1)
+            ).first()
+            
+            last_demand = session.exec(
+                select(Demand)
+                .where(Demand.tenant_id == member.tenant_id)
+                .order_by(Demand.start_time.desc())
+                .limit(1)
+            ).first()
+            
+            # Formatar datas usando o timezone da clínica
+            def format_datetime_for_user(dt: datetime) -> str:
+                """Formata datetime para exibição ao usuário no timezone da clínica"""
+                # Converter para timezone da clínica
+                dt_local = dt.astimezone(tenant_tz)
+                return dt_local.strftime("%d/%m/%Y %H:%M")
+            
+            detail_msg += f"\n\nPeríodo selecionado (fuso horário {tenant.timezone}):"
+            detail_msg += f"\n- Início: {format_datetime_for_user(body.period_start_at)}"
+            detail_msg += f"\n- Fim: {format_datetime_for_user(body.period_end_at)}"
+            
+            if first_demand and last_demand:
+                detail_msg += f"\n\nDemandas disponíveis no sistema (fuso horário {tenant.timezone}):"
+                detail_msg += f"\n- Primeira demanda: {format_datetime_for_user(first_demand.start_time)}"
+                detail_msg += f"\n- Última demanda: {format_datetime_for_user(last_demand.start_time)}"
+                detail_msg += f"\n\nTotal de demandas cadastradas: {total_demands}"
+                detail_msg += "\n\nDica: Ajuste o período para incluir as demandas disponíveis."
+        
+        raise HTTPException(
+            status_code=400,
+            detail=detail_msg,
+        )
+
+    # Validar allocation_mode
+    if body.allocation_mode not in ("greedy", "cp-sat"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"allocation_mode inválido: {body.allocation_mode}. Use 'greedy' ou 'cp-sat'",
+        )
+
+    # Criar ScheduleVersion
+    sv = ScheduleVersion(
+        tenant_id=member.tenant_id,
+        name=body.name,
+        period_start_at=body.period_start_at,
+        period_end_at=body.period_end_at,
+        status=ScheduleStatus.DRAFT,
+        version_number=body.version_number,
+        result_data=None,
+    )
+    session.add(sv)
+    session.commit()
+    session.refresh(sv)
+
+    # Criar Job
+    job = Job(
+        tenant_id=member.tenant_id,
+        job_type=JobType.GENERATE_SCHEDULE,
+        status=JobStatus.PENDING,
+        input_data={
+            "schedule_version_id": sv.id,
+            "mode": "from_demands",
+            "period_start_at": body.period_start_at.isoformat(),
+            "period_end_at": body.period_end_at.isoformat(),
+            "allocation_mode": body.allocation_mode,
+            "pros_by_sequence": body.pros_by_sequence,
+        },
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    # Atualizar vínculo ScheduleVersion -> Job
+    sv.job_id = job.id
+    sv.updated_at = utc_now()
+    session.add(sv)
+    session.commit()
+
+    # Enfileirar job no Arq
+    redis_dsn = WorkerSettings.redis_dsn()
+    try:
+        redis = await create_pool(RedisSettings.from_dsn(redis_dsn))
+        await redis.enqueue_job("generate_schedule_job", job.id)
+    except (RedisTimeoutError, RedisConnectionError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
+        ) from e
+
+    return ScheduleGenerateFromDemandsResponse(job_id=job.id, schedule_version_id=sv.id)
 
 
 @router.get("/{schedule_version_id}", response_model=ScheduleVersionResponse, tags=["Schedule"])

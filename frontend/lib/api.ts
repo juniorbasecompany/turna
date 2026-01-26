@@ -92,6 +92,13 @@ export async function protectedFetch<T>(
             throw new Error('Sessão expirada. Por favor, faça login novamente.')
         }
 
+        // Tratamento específico para 405 (Method Not Allowed)
+        if (response.status === 405) {
+            const method = options.method || 'GET'
+            const errorMsg = extractErrorMessage(errorData, `Método HTTP ${method} não permitido para este endpoint`)
+            throw new Error(`Erro 405: ${errorMsg}. Verifique se o endpoint está correto e se o método HTTP (${method}) é suportado.`)
+        }
+
         // Outros erros usam extractErrorMessage
         throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
     }

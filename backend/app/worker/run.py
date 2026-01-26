@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +18,14 @@ try:
     load_dotenv(project_root / ".env")
 except Exception:
     pass
+
+# Configurar logging antes de importar outros módulos
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 from arq.worker import run_worker
 

@@ -17,9 +17,12 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { protectedFetch } from '@/lib/api'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     ScheduleCreateRequest,
+    ScheduleGenerateFromDemandsRequest,
+    ScheduleGenerateFromDemandsResponse,
     ScheduleUpdateRequest,
     ScheduleVersionResponse,
 } from '@/types/api'
@@ -41,6 +44,7 @@ export default function SchedulePage() {
 
     // Estados auxiliares
     const [nameFilter, setNameFilter] = useState('')
+    const [generating, setGenerating] = useState(false)
 
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
@@ -191,6 +195,7 @@ export default function SchedulePage() {
         paginationHandlers,
         handleSave,
         handleDeleteSelected,
+        loadItems,
         actionBarErrorProps,
     } = useEntityPage<ScheduleFormData, ScheduleVersionResponse, ScheduleCreateRequest, ScheduleUpdateRequest>({
         endpoint: '/api/schedule',
@@ -217,7 +222,7 @@ export default function SchedulePage() {
         }, 1000)
     }
 
-    const handleCreateCardClick = () => {
+    const handleCreateCardClick = async () => {
         const isStartMissing = isEditing ? !formData.period_start_at : !periodStartDate
         const isEndMissing = isEditing ? !formData.period_end_at : !periodEndDate
 
@@ -226,7 +231,75 @@ export default function SchedulePage() {
             return
         }
 
-        handleCreateClick()
+        // Usar datas do filtro ou do formulário
+        const startDate = isEditing ? formData.period_start_at : periodStartDate
+        const endDate = isEditing ? formData.period_end_at : periodEndDate
+
+        if (!startDate || !endDate || !settings) {
+            setError('Período inválido')
+            return
+        }
+
+        // Validar que data final é maior que inicial
+        if (startDate > endDate) {
+            setError('Data final deve ser maior que a data inicial')
+            return
+        }
+
+        try {
+            setGenerating(true)
+            setError(null)
+
+            // Converter datas para UTC usando timezone do tenant
+            const periodStartAt = localDateToUtcStart(startDate, settings)
+            const periodEndAt = localDateToUtcEndExclusive(endDate, settings)
+
+            // Criar nome padrão baseado no período
+            const name = `Escala ${startDate.toLocaleDateString('pt-BR')} - ${endDate.toLocaleDateString('pt-BR')}`
+
+            const request: ScheduleGenerateFromDemandsRequest = {
+                name,
+                period_start_at: periodStartAt,
+                period_end_at: periodEndAt,
+                allocation_mode: 'greedy',
+                version_number: 1,
+            }
+
+            const response = await protectedFetch<ScheduleGenerateFromDemandsResponse>(
+                '/api/schedule/generate-from-demands',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(request),
+                }
+            )
+
+            // Recarregar lista para mostrar a nova escala
+            await loadItems()
+
+            // Limpar filtros de período (opcional - pode manter se preferir)
+            // setPeriodStartDate(null)
+            // setPeriodEndDate(null)
+        } catch (err) {
+            let message = 'Erro ao gerar escala'
+            if (err instanceof Error) {
+                message = err.message
+                // Melhorar mensagem para erro 405
+                if (message.includes('405') || message.includes('Method Not Allowed')) {
+                    message = 'Erro 405: Método HTTP não permitido. Verifique se o endpoint está configurado corretamente no backend.'
+                }
+                // Melhorar mensagem para erro 404
+                if (message.includes('404') || message.includes('Not Found')) {
+                    message = 'Erro 404: Endpoint não encontrado. Verifique se o backend está rodando e se a rota está correta.'
+                }
+            }
+            setError(message)
+            console.error('Erro ao gerar escala:', err)
+        } finally {
+            setGenerating(false)
+        }
     }
 
     // Validar intervalo de datas
@@ -437,12 +510,12 @@ export default function SchedulePage() {
                             onClick={handleCreateClick}
                         />
                         <CreateCard
-                            label="Calcular a escala"
-                            subtitle="Clique para calcular a escala do período"
+                            label={generating ? "Gerando escala..." : "Calcular a escala"}
+                            subtitle={generating ? "Aguarde enquanto a escala é calculada" : "Clique para calcular a escala do período"}
                             onClick={handleCreateCardClick}
                             showFlash={createCardFlash}
                             flashMessage="Informe o período inicial e final"
-                            disabled={isEditing}
+                            disabled={isEditing || generating}
                             customIcon={
                                 <svg
                                     className="w-full h-full"

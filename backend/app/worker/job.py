@@ -1,21 +1,27 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from datetime import timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
 
 from app.db.session import engine
 from app.model.base import utc_now
+from app.model.demand import Demand
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.schedule_version import ScheduleStatus, ScheduleVersion
+from app.model.tenant import Tenant
 from app.storage.client import S3Client
 
 from demand.read import extract_demand
 from strategy.greedy.solve import solve_greedy
+
+logger = logging.getLogger(__name__)
 
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
@@ -170,9 +176,127 @@ def _demands_from_extract_result(result_data: dict, *, period_start_at, period_e
     return out, days
 
 
+def _demands_from_database(
+    session: Session,
+    *,
+    tenant_id: int,
+    period_start_at,
+    period_end_at,
+) -> tuple[list[dict], int]:
+    """
+    Lê demandas do banco de dados (tabela demand) e converte para o formato esperado pelos solvers:
+      - day: 1..N
+      - start/end: horas em float (ex.: 9.5 = 09:30)
+      - is_pediatric: bool (default False)
+
+    Filtra por tenant_id e período (start_time dentro do intervalo).
+    Usa o timezone da clínica para calcular dias e horas relativas.
+    """
+    from datetime import datetime
+
+    logger.debug(f"[_demands_from_database] Iniciando - tenant_id={tenant_id}, period_start_at={period_start_at}, period_end_at={period_end_at}")
+
+    # Buscar timezone do tenant
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise RuntimeError(f"Tenant não encontrado (id={tenant_id})")
+
+    tenant_tz = ZoneInfo(tenant.timezone)
+    logger.debug(f"[_demands_from_database] Timezone do tenant: {tenant.timezone}")
+
+    # Converter períodos para timezone da clínica para cálculo de datas
+    period_start_local = period_start_at.astimezone(tenant_tz)
+    period_end_local = period_end_at.astimezone(tenant_tz)
+    logger.debug(f"[_demands_from_database] Período no timezone local: {period_start_local} até {period_end_local}")
+
+    # Validar período usando datas no timezone da clínica
+    start_date = period_start_local.date()
+    end_date = period_end_local.date()
+    days = (end_date - start_date).days
+    logger.debug(f"[_demands_from_database] start_date={start_date}, end_date={end_date}, days={days}")
+    
+    if days <= 0:
+        raise RuntimeError(f"Período inválido: period_end_at deve ser maior que period_start_at (days={days})")
+
+    # Buscar demandas do banco no período
+    # Filtra por tenant_id (segurança multi-tenant) e start_time dentro do intervalo
+    # As datas de comparação já estão em UTC (timestamptz), então a comparação direta funciona
+    query = (
+        select(Demand)
+        .where(
+            Demand.tenant_id == tenant_id,
+            Demand.start_time >= period_start_at,
+            Demand.start_time < period_end_at,
+        )
+        .order_by(Demand.start_time)
+    )
+    demands_db = session.exec(query).all()
+
+    if not demands_db:
+        raise RuntimeError("Nenhuma demanda encontrada no período informado")
+
+    out: list[dict] = []
+    logger.debug(f"[_demands_from_database] Processando {len(demands_db)} demandas do banco")
+    
+    for i, d in enumerate(demands_db):
+        # Converter para timezone da clínica para cálculos de dia e hora
+        st_local = d.start_time.astimezone(tenant_tz)
+        en_local = d.end_time.astimezone(tenant_tz)
+
+        if en_local <= st_local:
+            logger.warning(f"[_demands_from_database] Demanda {i} ignorada: end_time <= start_time")
+            continue
+
+        # Dia relativo ao period_start_at usando data no timezone da clínica
+        day_idx = (st_local.date() - start_date).days + 1
+        logger.debug(f"[_demands_from_database] Demanda {i}: day_idx={day_idx} (st_local.date()={st_local.date()}, start_date={start_date})")
+        
+        if day_idx is None:
+            raise RuntimeError(f"day_idx é None para demanda {i} (st_local.date()={st_local.date()}, start_date={start_date})")
+        
+        if day_idx < 1 or day_idx > days:
+            logger.warning(f"[_demands_from_database] Demanda {i} ignorada: day_idx={day_idx} fora do intervalo [1, {days}]")
+            continue
+
+        # Converter para horas float usando hora no timezone da clínica (ex.: 9.5 = 09:30)
+        start_h = st_local.hour + (st_local.minute / 60.0) + (st_local.second / 3600.0)
+        end_h = en_local.hour + (en_local.minute / 60.0) + (en_local.second / 3600.0)
+
+        # ID da demanda: usar room se disponível, senão usar procedure ou índice
+        did = str(d.room or d.procedure or f"D{i+1}")
+
+        try:
+            day_int = int(day_idx)
+        except (ValueError, TypeError) as e:
+            raise RuntimeError(
+                f"Erro ao converter day_idx para int: day_idx={day_idx} (tipo: {type(day_idx)}), "
+                f"st_local.date()={st_local.date()}, start_date={start_date}, days={days}. "
+                f"Erro: {str(e)}"
+            ) from e
+
+        out.append(
+            {
+                "id": did,
+                "day": day_int,
+                "start": float(start_h),
+                "end": float(end_h),
+                "is_pediatric": bool(d.is_pediatric),
+                "source": d.source,  # Preservar source original
+            }
+        )
+
+    logger.info(f"[_demands_from_database] Retornando {len(out)} demandas processadas em {days} dias")
+    return out, days
+
+
 async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
     """
-    Gera escala a partir de um Job de extração (EXTRACT_DEMAND) e grava em ScheduleVersion.result_data.
+    Gera escala e grava em ScheduleVersion.result_data.
+
+    Suporta dois modos:
+    - "from_extract": Lê demandas de um Job de extração (EXTRACT_DEMAND) - modo original
+    - "from_demands": Lê demandas diretamente da tabela demand - novo modo
+
     MVP: usa solver greedy.
     """
     with Session(engine) as session:
@@ -191,10 +315,38 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
         session.commit()
 
         try:
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando job_id={job_id}, tenant_id={job.tenant_id}")
             input_data = job.input_data or {}
-            schedule_version_id = int(input_data.get("schedule_version_id"))
-            extract_job_id = int(input_data.get("extract_job_id"))
+            logger.debug(f"[GENERATE_SCHEDULE] input_data keys: {list(input_data.keys()) if input_data else 'None'}")
+            logger.debug(f"[GENERATE_SCHEDULE] input_data completo: {input_data}")
+            
+            # Validar e obter schedule_version_id com logs detalhados
+            schedule_version_id_raw = input_data.get("schedule_version_id")
+            logger.debug(f"[GENERATE_SCHEDULE] schedule_version_id_raw: {schedule_version_id_raw} (tipo: {type(schedule_version_id_raw)})")
+            
+            if schedule_version_id_raw is None:
+                error_msg = (
+                    f"schedule_version_id ausente no input_data. "
+                    f"input_data keys: {list(input_data.keys()) if input_data else 'None'}, "
+                    f"input_data completo: {input_data}"
+                )
+                logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
+                raise RuntimeError(error_msg)
+            
+            try:
+                schedule_version_id = int(schedule_version_id_raw)
+                logger.debug(f"[GENERATE_SCHEDULE] schedule_version_id convertido: {schedule_version_id}")
+            except (ValueError, TypeError) as e:
+                error_msg = (
+                    f"schedule_version_id inválido: {schedule_version_id_raw} (tipo: {type(schedule_version_id_raw)}). "
+                    f"Erro: {str(e)}"
+                )
+                logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
+                raise RuntimeError(error_msg) from e
+            
+            mode = str(input_data.get("mode") or "from_extract").strip().lower()
             allocation_mode = str(input_data.get("allocation_mode") or "greedy").strip().lower()
+            logger.debug(f"[GENERATE_SCHEDULE] mode={mode}, allocation_mode={allocation_mode}")
 
             if allocation_mode != "greedy":
                 raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
@@ -205,14 +357,6 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if sv.tenant_id != job.tenant_id:
                 raise RuntimeError("Acesso negado (tenant mismatch)")
 
-            extract_job = session.get(Job, extract_job_id)
-            if not extract_job:
-                raise RuntimeError(f"Job de extração não encontrado (id={extract_job_id})")
-            if extract_job.tenant_id != job.tenant_id:
-                raise RuntimeError("Acesso negado (tenant mismatch)")
-            if extract_job.status != JobStatus.COMPLETED or not isinstance(extract_job.result_data, dict):
-                raise RuntimeError("Job de extração não está COMPLETED (ou result_data ausente)")
-
             # Profissionais: payload > fallback dev
             pros_by_sequence = input_data.get("pros_by_sequence")
             if pros_by_sequence is None:
@@ -220,11 +364,72 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
                 raise RuntimeError("pros_by_sequence ausente/ inválido")
 
-            demands, days = _demands_from_extract_result(
-                extract_job.result_data,
-                period_start_at=sv.period_start_at,
-                period_end_at=sv.period_end_at,
-            )
+            # Carregar demandas conforme o modo
+            if mode == "from_demands":
+                logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco")
+                # Modo novo: ler do banco de dados
+                from datetime import datetime
+
+                # Obter período do input_data ou do ScheduleVersion
+                period_start_at = input_data.get("period_start_at")
+                period_end_at = input_data.get("period_end_at")
+                logger.debug(f"[GENERATE_SCHEDULE] period_start_at do input_data: {period_start_at} (tipo: {type(period_start_at)})")
+                logger.debug(f"[GENERATE_SCHEDULE] period_end_at do input_data: {period_end_at} (tipo: {type(period_end_at)})")
+
+                if period_start_at:
+                    if isinstance(period_start_at, str):
+                        period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
+                        logger.debug(f"[GENERATE_SCHEDULE] period_start_at convertido de string: {period_start_at}")
+                else:
+                    period_start_at = sv.period_start_at
+                    logger.debug(f"[GENERATE_SCHEDULE] period_start_at do ScheduleVersion: {period_start_at}")
+
+                if period_end_at:
+                    if isinstance(period_end_at, str):
+                        period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
+                        logger.debug(f"[GENERATE_SCHEDULE] period_end_at convertido de string: {period_end_at}")
+                else:
+                    period_end_at = sv.period_end_at
+                    logger.debug(f"[GENERATE_SCHEDULE] period_end_at do ScheduleVersion: {period_end_at}")
+
+                logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}")
+                demands, days = _demands_from_database(
+                    session,
+                    tenant_id=job.tenant_id,
+                    period_start_at=period_start_at,
+                    period_end_at=period_end_at,
+                )
+                logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias")
+                extract_job_id = None
+            else:
+                # Modo original: ler de job de extração
+                extract_job_id_raw = input_data.get("extract_job_id")
+                if extract_job_id_raw is None:
+                    error_msg = f"extract_job_id ausente no input_data para modo 'from_extract'"
+                    logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
+                    raise RuntimeError(error_msg)
+                try:
+                    extract_job_id = int(extract_job_id_raw)
+                    logger.debug(f"[GENERATE_SCHEDULE] extract_job_id: {extract_job_id}")
+                except (ValueError, TypeError) as e:
+                    error_msg = f"extract_job_id inválido: {extract_job_id_raw} (tipo: {type(extract_job_id_raw)}). Erro: {str(e)}"
+                    logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
+                    raise RuntimeError(error_msg) from e
+
+                extract_job = session.get(Job, extract_job_id)
+                if not extract_job:
+                    raise RuntimeError(f"Job de extração não encontrado (id={extract_job_id})")
+                if extract_job.tenant_id != job.tenant_id:
+                    raise RuntimeError("Acesso negado (tenant mismatch)")
+                if extract_job.status != JobStatus.COMPLETED or not isinstance(extract_job.result_data, dict):
+                    raise RuntimeError("Job de extração não está COMPLETED (ou result_data ausente)")
+
+                demands, days = _demands_from_extract_result(
+                    extract_job.result_data,
+                    period_start_at=sv.period_start_at,
+                    period_end_at=sv.period_end_at,
+                )
+
             if not demands:
                 raise RuntimeError("Nenhuma demanda dentro do período informado")
 
@@ -237,13 +442,17 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 base_shift=0,
             )
 
-            sv.result_data = {
+            result_data: dict[str, Any] = {
                 "allocation_mode": "greedy",
                 "days": days,
                 "total_cost": total_cost,
                 "per_day": per_day,
-                "extract_job_id": extract_job_id,
+                "mode": mode,
             }
+            if extract_job_id is not None:
+                result_data["extract_job_id"] = extract_job_id
+
+            sv.result_data = result_data
             sv.generated_at = now
             sv.updated_at = now
             sv.status = ScheduleStatus.DRAFT

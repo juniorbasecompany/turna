@@ -195,6 +195,20 @@ export interface ScheduleUpdateRequest {
     status?: string
 }
 
+export interface ScheduleGenerateFromDemandsRequest {
+    name: string
+    period_start_at: string
+    period_end_at: string
+    allocation_mode?: string
+    pros_by_sequence?: Array<Record<string, unknown>>
+    version_number?: number
+}
+
+export interface ScheduleGenerateFromDemandsResponse {
+    job_id: number
+    schedule_version_id: number
+}
+
 export interface GoogleTokenRequest {
     id_token: string
 }
