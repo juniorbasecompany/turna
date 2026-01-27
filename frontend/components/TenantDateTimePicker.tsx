@@ -80,19 +80,30 @@ export function TenantDateTimePicker({
     // Estado para controlar posicionamento do popover
     const [popoverPosition, setPopoverPosition] = useState<'left' | 'right'>('left')
 
-    // Calcular posição do popover quando abre
-    useEffect(() => {
-        if (isOpen && containerRef.current) {
+    // Função para calcular posição do popover
+    const calculatePopoverPosition = () => {
+        if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect()
             const popoverWidth = 700 // Largura aproximada do popover (calendário + horas)
             const viewportWidth = window.innerWidth
 
-            // Se não há espaço suficiente à direita, posiciona à esquerda
+            // Se não há espaço suficiente à direita, posiciona à direita
             if (rect.left + popoverWidth > viewportWidth) {
                 setPopoverPosition('right')
             } else {
                 setPopoverPosition('left')
             }
+        }
+    }
+
+    // Calcular posição do popover quando abre e quando a janela é redimensionada
+    useEffect(() => {
+        if (isOpen) {
+            calculatePopoverPosition()
+
+            // Recalcular ao redimensionar a janela
+            window.addEventListener('resize', calculatePopoverPosition)
+            return () => window.removeEventListener('resize', calculatePopoverPosition)
         }
     }, [isOpen])
 
