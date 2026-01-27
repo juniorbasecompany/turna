@@ -334,7 +334,7 @@ export default function DemandPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 disabled={submitting || loadingHospitals}
                             >
-                                <option value="">Selecione um hospital</option>
+                                <option value=""></option>
                                 {hospitals.map((hospital) => (
                                     <option key={hospital.id} value={hospital.id}>
                                         {hospital.name}
