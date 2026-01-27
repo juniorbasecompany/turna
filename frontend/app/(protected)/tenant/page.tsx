@@ -7,18 +7,18 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterPanel } from '@/components/FilterPanel'
-import { Pagination } from '@/components/Pagination'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
+import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useMemo, useState } from 'react'
+import { useEntityPage } from '@/hooks/useEntityPage'
+import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     TenantCreateRequest,
     TenantResponse,
     TenantUpdateRequest,
 } from '@/types/api'
-import { useEntityPage } from '@/hooks/useEntityPage'
-import { getCardTextClasses } from '@/lib/cardStyles'
+import { useMemo, useState } from 'react'
 
 type TenantFormData = {
     name: string
@@ -232,7 +232,6 @@ export default function TenantPage() {
                                     type="text"
                                     value={nameFilter}
                                     onChange={(e) => setNameFilter(e.target.value)}
-                                    placeholder="Filtrar por nome..."
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </FormField>

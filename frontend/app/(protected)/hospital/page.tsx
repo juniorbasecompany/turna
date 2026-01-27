@@ -12,14 +12,14 @@ import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useMemo, useState } from 'react'
+import { useEntityPage } from '@/hooks/useEntityPage'
+import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
     HospitalResponse,
     HospitalUpdateRequest,
 } from '@/types/api'
-import { useEntityPage } from '@/hooks/useEntityPage'
-import { getCardTextClasses } from '@/lib/cardStyles'
+import { useMemo, useState } from 'react'
 
 type HospitalFormData = {
     name: string
@@ -164,7 +164,6 @@ export default function HospitalPage() {
                                     type="text"
                                     value={nameFilter}
                                     onChange={(e) => setNameFilter(e.target.value)}
-                                    placeholder="Filtrar por nome..."
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </FormField>

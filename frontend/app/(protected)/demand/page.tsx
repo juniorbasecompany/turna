@@ -48,6 +48,7 @@ export default function DemandPage() {
     // Estados auxiliares (não gerenciados por useEntityPage)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
+    const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
     const [procedureFilter, setProcedureFilter] = useState('')
     const [skillsInput, setSkillsInput] = useState('')
 
@@ -257,9 +258,14 @@ export default function DemandPage() {
         setSkillsInput('')
     }
 
-    // Filtrar demandas por procedimento e período (filtro no frontend)
+    // Filtrar demandas por hospital, procedimento e período (filtro no frontend)
     const filteredDemands = useMemo(() => {
         let filtered = demands
+
+        // Filtro por hospital
+        if (filterHospitalId !== null) {
+            filtered = filtered.filter((demand) => demand.hospital_id === filterHospitalId)
+        }
 
         // Filtro por procedimento
         if (procedureFilter.trim()) {
@@ -285,7 +291,7 @@ export default function DemandPage() {
         }
 
         return filtered
-    }, [demands, procedureFilter, periodStartDate, periodEndDate])
+    }, [demands, filterHospitalId, procedureFilter, periodStartDate, periodEndDate])
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {
@@ -429,7 +435,6 @@ export default function DemandPage() {
                             id="skills"
                             value={skillsInput}
                             onChange={(e) => updateSkills(e.target.value)}
-                            placeholder="Ex: Obstétrica, Cardíaca"
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             disabled={submitting}
                         />
@@ -484,16 +489,34 @@ export default function DemandPage() {
                 filterContent={
                     !isEditing ? (
                         <FilterPanel>
-                            <FormFieldGrid cols={1} smCols={3} gap={4}>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <FormField label="Hospital">
+                                    <select
+                                        value={filterHospitalId || ''}
+                                        onChange={(e) =>
+                                            setFilterHospitalId(e.target.value ? parseInt(e.target.value) : null)
+                                        }
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        disabled={loadingHospitals}
+                                    >
+                                        <option value=""></option>
+                                        {hospitals.map((hospital) => (
+                                            <option key={hospital.id} value={hospital.id}>
+                                                {hospital.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </FormField>
                                 <FormField label="Procedimento">
                                     <input
                                         type="text"
                                         value={procedureFilter}
                                         onChange={(e) => setProcedureFilter(e.target.value)}
-                                        placeholder="Filtrar por procedimento..."
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </FormField>
+                            </FormFieldGrid>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
                                 <TenantDateTimePicker
                                     label="Desde"
                                     value={periodStartDate}
