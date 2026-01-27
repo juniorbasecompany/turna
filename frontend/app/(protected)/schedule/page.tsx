@@ -195,6 +195,7 @@ export default function SchedulePage() {
         toggleSelection: toggleScheduleSelection,
         toggleAll: toggleAllSchedules,
         selectedCount: selectedSchedulesCount,
+        selectAllMode: selectAllSchedulesMode,
         pagination,
         total,
         paginationHandlers,
@@ -830,6 +831,8 @@ export default function SchedulePage() {
                 selection={{
                     selectedCount: selectedSchedulesCount,
                     totalCount: filteredSchedules.length,
+                    grandTotal: displayTotal,
+                    selectAllMode: selectAllSchedulesMode,
                     onToggleAll: () => toggleAllSchedules(filteredSchedules.map((s) => s.id)),
                 }}
                 pagination={

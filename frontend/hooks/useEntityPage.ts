@@ -60,6 +60,17 @@ interface UseEntityPageReturn<TFormData, TEntity extends { id: number }> {
     selectAll: (ids: number[]) => void
     toggleAll: (ids: number[]) => void
     selectedCount: number
+    /**
+     * Indica se o usuário está no modo "selecionar todos".
+     * Quando true, as ações devem considerar TODOS os registros (não apenas os visíveis).
+     */
+    selectAllMode: boolean
+    /**
+     * Retorna os IDs para uma ação.
+     * - Se selectAllMode é true, retorna null (indica que o backend deve processar todos com filtros)
+     * - Se selectAllMode é false, retorna o array de IDs selecionados
+     */
+    getSelectedIdsForAction: () => number[] | null
 
     // Paginação
     pagination: ReturnType<typeof usePagination>['pagination']
@@ -214,7 +225,41 @@ export function useEntityPage<
         setError(null)
 
         try {
-            const deletePromises = Array.from(selection.selectedItems).map(async (id) => {
+            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
+            const idsForAction = selection.getSelectedIdsForAction()
+            let idsToDelete: number[]
+
+            if (idsForAction === null) {
+                // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
+                const params = new URLSearchParams()
+                // Usar limit alto para buscar todos (ou poderia ser um endpoint específico)
+                params.set('limit', '10000')
+                params.set('offset', '0')
+
+                // Adicionar filtros atuais
+                if (additionalListParams) {
+                    Object.entries(additionalListParams).forEach(([key, value]) => {
+                        if (value !== null && value !== undefined) {
+                            params.set(key, String(value))
+                        }
+                    })
+                }
+
+                const response = await protectedFetch<{ items: TEntity[]; total: number }>(
+                    `${endpoint}/list?${params.toString()}`
+                )
+                idsToDelete = response.items.map((item) => item.id)
+            } else {
+                idsToDelete = idsForAction
+            }
+
+            if (idsToDelete.length === 0) {
+                setError('Nenhum item para excluir')
+                return
+            }
+
+            // Deletar todos os IDs
+            const deletePromises = idsToDelete.map(async (id) => {
                 await protectedFetch(`${endpoint}/${id}`, {
                     method: 'DELETE',
                 })
@@ -236,7 +281,7 @@ export function useEntityPage<
         } finally {
             setDeleting(false)
         }
-    }, [selection, endpoint, entityName, loadItems, onDeleteSuccess, setError])
+    }, [selection, endpoint, entityName, loadItems, onDeleteSuccess, setError, additionalListParams])
 
     // Handler de cancelar (combinado)
     const handleCancel = useCallback(() => {
@@ -289,6 +334,8 @@ export function useEntityPage<
         selectAll: selection.selectAll,
         toggleAll: selection.toggleAll,
         selectedCount: selection.selectedCount,
+        selectAllMode: selection.selectAllMode,
+        getSelectedIdsForAction: selection.getSelectedIdsForAction,
 
         // Paginação
         pagination: paginationState,

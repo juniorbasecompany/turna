@@ -124,6 +124,8 @@ export default function JobPage() {
         clearSelection: clearJobSelection,
         toggleAll: toggleAllJobs,
         selectedCount: selectedJobsCount,
+        selectAllMode: selectAllJobsMode,
+        getSelectedIdsForAction: getSelectedJobIdsForAction,
         pagination,
         total,
         paginationHandlers,
@@ -170,11 +172,36 @@ export default function JobPage() {
         setError(null)
 
         try {
+            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
+            const idsForAction = getSelectedJobIdsForAction()
+            let jobsToProcess: JobResponse[]
+
+            if (idsForAction === null) {
+                // Modo "todos": buscar todos os jobs que atendem aos filtros atuais
+                const params = new URLSearchParams()
+                params.set('limit', '10000')
+                params.set('offset', '0')
+
+                if (additionalListParams) {
+                    Object.entries(additionalListParams).forEach(([key, value]) => {
+                        if (value !== null && value !== undefined) {
+                            params.set(key, String(value))
+                        }
+                    })
+                }
+
+                const response = await protectedFetch<{ items: JobResponse[]; total: number }>(
+                    `/api/job/list?${params.toString()}`
+                )
+                jobsToProcess = response.items
+            } else {
+                // Usar apenas os jobs selecionados
+                jobsToProcess = jobs.filter((job) => idsForAction.includes(job.id))
+            }
+
             // Filtrar apenas jobs que podem ser interrompidos
-            const jobsToInterrupt = jobs.filter(
-                (job) =>
-                    selectedJobs.has(job.id) &&
-                    (job.status === 'PENDING' || job.status === 'RUNNING')
+            const jobsToInterrupt = jobsToProcess.filter(
+                (job) => job.status === 'PENDING' || job.status === 'RUNNING'
             )
 
             if (jobsToInterrupt.length === 0) {
@@ -572,6 +599,8 @@ export default function JobPage() {
                 selection={{
                     selectedCount: selectedJobsCount,
                     totalCount: filteredJobs.length,
+                    grandTotal: displayTotal,
+                    selectAllMode: selectAllJobsMode,
                     onToggleAll: () => toggleAllJobs(filteredJobs.map((j) => j.id)),
                 }}
                 pagination={

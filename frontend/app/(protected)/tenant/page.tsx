@@ -59,6 +59,7 @@ export default function TenantPage() {
         toggleSelection: toggleTenantSelection,
         toggleAll: toggleAllTenants,
         selectedCount: selectedTenantsCount,
+        selectAllMode: selectAllTenantsMode,
         pagination,
         total,
         paginationHandlers,
@@ -299,6 +300,8 @@ export default function TenantPage() {
                 selection={{
                     selectedCount: selectedTenantsCount,
                     totalCount: filteredTenants.length,
+                    grandTotal: total,
+                    selectAllMode: selectAllTenantsMode,
                     onToggleAll: () => toggleAllTenants(filteredTenants.map((t) => t.id)),
                 }}
                 pagination={

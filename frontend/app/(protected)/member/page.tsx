@@ -199,6 +199,8 @@ export default function MemberPage() {
         toggleSelection: toggleMemberSelection,
         toggleAll: toggleAllMembers,
         selectedCount: selectedMembersCount,
+        selectAllMode: selectAllMembersMode,
+        getSelectedIdsForAction: getSelectedMemberIdsForAction,
         pagination,
         total,
         paginationHandlers,
@@ -426,7 +428,38 @@ export default function MemberPage() {
         try {
             setError(null)
 
-            const deletePromises = Array.from(selectedMembers).map(async (memberId) => {
+            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
+            const idsForAction = getSelectedMemberIdsForAction()
+            let idsToDelete: number[]
+
+            if (idsForAction === null) {
+                // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
+                const params = new URLSearchParams()
+                params.set('limit', '10000')
+                params.set('offset', '0')
+
+                if (additionalListParams) {
+                    Object.entries(additionalListParams).forEach(([key, value]) => {
+                        if (value !== null && value !== undefined) {
+                            params.set(key, String(value))
+                        }
+                    })
+                }
+
+                const response = await protectedFetch<{ items: MemberResponse[]; total: number }>(
+                    `/api/member/list?${params.toString()}`
+                )
+                idsToDelete = response.items.map((item) => item.id)
+            } else {
+                idsToDelete = idsForAction
+            }
+
+            if (idsToDelete.length === 0) {
+                setError('Nenhum item para excluir')
+                return
+            }
+
+            const deletePromises = idsToDelete.map(async (memberId) => {
                 try {
                     await protectedFetch(`/api/member/${memberId}`, {
                         method: 'DELETE',
@@ -746,6 +779,8 @@ export default function MemberPage() {
                 selection={{
                     selectedCount: selectedMembersCount,
                     totalCount: filteredMembers.length,
+                    grandTotal: needsFrontendFilter ? filteredMembers.length : total,
+                    selectAllMode: selectAllMembersMode,
                     onToggleAll: () => toggleAllMembers(filteredMembers.map((m) => m.id)),
                 }}
                 pagination={

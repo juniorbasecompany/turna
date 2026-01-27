@@ -52,6 +52,7 @@ export default function HospitalPage() {
         toggleSelection: toggleHospitalSelection,
         toggleAll: toggleAllHospitals,
         selectedCount: selectedHospitalsCount,
+        selectAllMode: selectAllHospitalsMode,
         pagination,
         total,
         paginationHandlers,
@@ -240,6 +241,8 @@ export default function HospitalPage() {
                 selection={{
                     selectedCount: selectedHospitalsCount,
                     totalCount: filteredHospitals.length,
+                    grandTotal: total,
+                    selectAllMode: selectAllHospitalsMode,
                     onToggleAll: () => toggleAllHospitals(filteredHospitals.map((h) => h.id)),
                 }}
                 pagination={

@@ -182,6 +182,7 @@ export default function DemandPage() {
         toggleSelection: toggleDemandSelection,
         toggleAll: toggleAllDemands,
         selectedCount: selectedDemandsCount,
+        selectAllMode: selectAllDemandsMode,
         pagination,
         total,
         paginationHandlers,
@@ -649,6 +650,8 @@ export default function DemandPage() {
                 selection={{
                     selectedCount: selectedDemandsCount,
                     totalCount: filteredDemands.length,
+                    grandTotal: total,
+                    selectAllMode: selectAllDemandsMode,
                     onToggleAll: () => toggleAllDemands(filteredDemands.map((d) => d.id)),
                 }}
                 pagination={

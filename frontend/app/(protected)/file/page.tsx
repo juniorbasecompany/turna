@@ -655,6 +655,8 @@ export default function FilesPage() {
         clearSelection,
         toggleAll: toggleAllFiles,
         selectedCount: selectedFilesCount,
+        selectAllMode: selectAllFilesMode,
+        getSelectedIdsForAction: getSelectedFileIdsForAction,
         pagination,
         total,
         paginationHandlers,
@@ -1248,10 +1250,39 @@ export default function FilesPage() {
         setError(null)
 
         try {
-            // Processar cada arquivo selecionado para leitura
-            const fileIds = Array.from(selectedFiles)
+            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
+            const idsForAction = getSelectedFileIdsForAction()
+            let fileIdsToRead: number[]
 
-            for (const fileId of fileIds) {
+            if (idsForAction === null) {
+                // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
+                const params = new URLSearchParams()
+                params.set('limit', '10000')
+                params.set('offset', '0')
+
+                if (additionalListParams) {
+                    Object.entries(additionalListParams).forEach(([key, value]) => {
+                        if (value !== null && value !== undefined) {
+                            params.set(key, String(value))
+                        }
+                    })
+                }
+
+                const response = await protectedFetch<{ items: FileResponse[]; total: number }>(
+                    `/api/file/list?${params.toString()}`
+                )
+                fileIdsToRead = response.items.map((item) => item.id)
+            } else {
+                fileIdsToRead = idsForAction
+            }
+
+            if (fileIdsToRead.length === 0) {
+                setError('Nenhum arquivo para ler')
+                return
+            }
+
+            // Processar cada arquivo para leitura
+            for (const fileId of fileIdsToRead) {
                 try {
                     // Criar job de extração
                     await protectedFetch('/api/job/extract', {
@@ -1710,6 +1741,8 @@ export default function FilesPage() {
                 selection={{
                     selectedCount: selectedFilesCount,
                     totalCount: filteredFiles.length,
+                    grandTotal: displayTotal,
+                    selectAllMode: selectAllFilesMode,
                     onToggleAll: () => toggleAllFiles(filteredFiles.map((f) => f.id)),
                 }}
                 pagination={
