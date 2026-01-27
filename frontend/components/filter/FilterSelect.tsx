@@ -1,7 +1,8 @@
 'use client'
 
 import { FormField } from '../FormField'
-import { FILTER_SELECT_CLASS, FILTER_INPUT_DISABLED_CLASS } from './filterStyles'
+import { LoadingSpinner } from '../LoadingSpinner'
+import { FILTER_SELECT_CLASS, FILTER_INPUT_DISABLED_CLASS, FILTER_INPUT_FLASH_CLASS } from './filterStyles'
 
 export interface FilterSelectOption<T extends string | number = string | number> {
   /** Valor da opção */
@@ -23,6 +24,10 @@ interface FilterSelectProps<T extends string | number = string | number> {
   emptyLabel?: string
   /** Se o campo está desabilitado */
   disabled?: boolean
+  /** Se está carregando opções (mostra spinner) */
+  loading?: boolean
+  /** Mostrar efeito flash (destaque vermelho temporário) */
+  showFlash?: boolean
   /** Classe CSS adicional */
   className?: string
 }
@@ -41,6 +46,18 @@ interface FilterSelectProps<T extends string | number = string | number> {
  *   emptyLabel="Todos os hospitais"
  * />
  * ```
+ * 
+ * @example Com loading e efeito flash
+ * ```tsx
+ * <FilterSelect
+ *   label="Hospital"
+ *   value={filterHospitalId}
+ *   onChange={setFilterHospitalId}
+ *   options={hospitalList}
+ *   loading={loadingHospitalList}
+ *   showFlash={hospitalFieldFlash}
+ * />
+ * ```
  */
 export function FilterSelect<T extends string | number = string | number>({
   label,
@@ -49,6 +66,8 @@ export function FilterSelect<T extends string | number = string | number>({
   options,
   emptyLabel = '',
   disabled = false,
+  loading = false,
+  showFlash = false,
   className = '',
 }: FilterSelectProps<T>) {
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -66,21 +85,34 @@ export function FilterSelect<T extends string | number = string | number>({
     }
   }
 
+  // Determina a classe CSS baseada no estado
+  const getSelectClass = () => {
+    if (disabled) return FILTER_INPUT_DISABLED_CLASS
+    if (showFlash) return FILTER_INPUT_FLASH_CLASS
+    return FILTER_SELECT_CLASS
+  }
+
   return (
     <FormField label={label} className={className}>
-      <select
-        value={value ?? ''}
-        onChange={handleChange}
-        disabled={disabled}
-        className={disabled ? FILTER_INPUT_DISABLED_CLASS : FILTER_SELECT_CLASS}
-      >
-        <option value="">{emptyLabel}</option>
-        {options.map((option) => (
-          <option key={String(option.value)} value={String(option.value)}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      {loading ? (
+        <div className="flex justify-center py-2">
+          <LoadingSpinner />
+        </div>
+      ) : (
+        <select
+          value={value ?? ''}
+          onChange={handleChange}
+          disabled={disabled}
+          className={getSelectClass()}
+        >
+          <option value="">{emptyLabel}</option>
+          {options.map((option) => (
+            <option key={String(option.value)} value={String(option.value)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )}
     </FormField>
   )
 }

@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons, FilterPanel } from '@/components/filter'
+import { FilterButtons, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
@@ -775,8 +775,8 @@ export default function FilesPage() {
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
-    const handleHospitalChange = (hospitalId: string) => {
-        setFilterHospitalId(hospitalId ? parseInt(hospitalId) : null)
+    const handleHospitalChange = (hospitalId: number | null) => {
+        setFilterHospitalId(hospitalId)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
@@ -1379,30 +1379,14 @@ export default function FilesPage() {
                 >
                     {/* Primeira linha: Hospital e Datas */}
                     <FormFieldGrid cols={1} smCols={3} gap={4}>
-                        <FormField label="Hospital">
-                            {loadingHospitalList ? (
-                                <div className="flex justify-center py-2">
-                                    <LoadingSpinner />
-                                </div>
-                            ) : (
-                                <select
-                                    id="hospital-filter"
-                                    value={filterHospitalId || ''}
-                                    onChange={(e) => handleHospitalChange(e.target.value)}
-                                    className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
-                                        ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
-                                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                        }`}
-                                >
-                                    <option value=""></option>
-                                    {hospitalList.map((hospital) => (
-                                        <option key={hospital.id} value={hospital.id}>
-                                            {hospital.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </FormField>
+                        <FilterSelect
+                            label="Hospital"
+                            value={filterHospitalId}
+                            onChange={handleHospitalChange}
+                            options={hospitalList.map((h) => ({ value: h.id, label: h.name }))}
+                            loading={loadingHospitalList}
+                            showFlash={hospitalFieldFlash}
+                        />
                         <TenantDateTimePicker
                             label="Cadastrados desde"
                             value={filterStartDate}
