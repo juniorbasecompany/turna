@@ -50,6 +50,7 @@ export default function HospitalPage() {
         handleCancel,
         selectedItems: selectedHospitals,
         toggleSelection: toggleHospitalSelection,
+        toggleAll: toggleAllHospitals,
         selectedCount: selectedHospitalsCount,
         pagination,
         total,
@@ -236,6 +237,11 @@ export default function HospitalPage() {
 
             {/* Barra inferior fixa com ações */}
             <ActionBar
+                selection={{
+                    selectedCount: selectedHospitalsCount,
+                    totalCount: filteredHospitals.length,
+                    onToggleAll: () => toggleAllHospitals(filteredHospitals.map((h) => h.id)),
+                }}
                 pagination={
                     total > 0 ? (
                         <Pagination

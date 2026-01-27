@@ -57,6 +57,8 @@ interface UseEntityPageReturn<TFormData, TEntity extends { id: number }> {
     selectedItems: Set<number>
     toggleSelection: (id: number) => void
     clearSelection: () => void
+    selectAll: (ids: number[]) => void
+    toggleAll: (ids: number[]) => void
     selectedCount: number
 
     // Paginação
@@ -284,6 +286,8 @@ export function useEntityPage<
         selectedItems: selection.selectedItems,
         toggleSelection: selection.toggleSelection,
         clearSelection: selection.clearSelection,
+        selectAll: selection.selectAll,
+        toggleAll: selection.toggleAll,
         selectedCount: selection.selectedCount,
 
         // Paginação

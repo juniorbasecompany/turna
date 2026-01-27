@@ -26,6 +26,21 @@ interface ActionBarButton {
     loading?: boolean
 }
 
+interface SelectionInfo {
+    /**
+     * Quantidade de itens selecionados
+     */
+    selectedCount: number
+    /**
+     * Quantidade total de itens (opcional, para exibir "X de Y")
+     */
+    totalCount?: number
+    /**
+     * Callback chamado ao clicar no checkbox (para selecionar/desselecionar todos)
+     */
+    onToggleAll?: () => void
+}
+
 interface ActionBarProps {
     /**
      * Mensagem a ser exibida na barra (opcional)
@@ -47,6 +62,11 @@ interface ActionBarProps {
      * Botões de ação (array de botões)
      */
     buttons?: ActionBarButton[]
+    /**
+     * Informações de seleção (checkbox com contagem de itens selecionados)
+     * Exibido antes dos botões de paginação
+     */
+    selection?: SelectionInfo
     /**
      * Componente de paginação a ser exibido junto com os botões à direita
      */
@@ -84,6 +104,7 @@ export function ActionBar({
     leftContent,
     error,
     buttons = [],
+    selection,
     pagination,
     show,
 }: ActionBarProps) {
@@ -153,8 +174,51 @@ export function ActionBar({
                         )
                     ) : null}
                 </div>
-                {/* Botões de ação e paginação - alinhados à direita, podem quebrar para linha de baixo */}
+                {/* Seleção, paginação e botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {/* Checkbox de seleção com contagem */}
+                    {selection && (() => {
+                        const isPartial = selection.totalCount !== undefined && 
+                            selection.selectedCount > 0 && 
+                            selection.selectedCount < selection.totalCount
+                        const isAllSelected = selection.totalCount !== undefined && 
+                            selection.selectedCount > 0 && 
+                            selection.selectedCount >= selection.totalCount
+                        const hasSelection = selection.selectedCount > 0
+
+                        return (
+                            <button
+                                type="button"
+                                onClick={selection.onToggleAll}
+                                className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
+                            >
+                                <span
+                                    className={`w-4 h-4 flex items-center justify-center rounded border transition-colors ${
+                                        isAllSelected
+                                            ? 'bg-blue-600 border-blue-600'
+                                            : 'bg-white border-gray-300'
+                                    }`}
+                                >
+                                    {hasSelection && (
+                                        <svg
+                                            className={`w-3 h-3 ${isAllSelected ? 'text-white' : 'text-gray-400'}`}
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={3}
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                    )}
+                                </span>
+                                <span>{selection.selectedCount}</span>
+                            </button>
+                        )
+                    })()}
                     {pagination}
                     {renderButtons()}
                 </div>

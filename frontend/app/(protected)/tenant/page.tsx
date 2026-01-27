@@ -57,6 +57,7 @@ export default function TenantPage() {
         handleCancel,
         selectedItems: selectedTenants,
         toggleSelection: toggleTenantSelection,
+        toggleAll: toggleAllTenants,
         selectedCount: selectedTenantsCount,
         pagination,
         total,
@@ -295,6 +296,11 @@ export default function TenantPage() {
 
             {/* Barra inferior fixa com ações */}
             <ActionBar
+                selection={{
+                    selectedCount: selectedTenantsCount,
+                    totalCount: filteredTenants.length,
+                    onToggleAll: () => toggleAllTenants(filteredTenants.map((t) => t.id)),
+                }}
                 pagination={
                     total > 0 ? (
                         <Pagination

@@ -197,6 +197,7 @@ export default function MemberPage() {
         handleCancel,
         selectedItems: selectedMembers,
         toggleSelection: toggleMemberSelection,
+        toggleAll: toggleAllMembers,
         selectedCount: selectedMembersCount,
         pagination,
         total,
@@ -742,6 +743,11 @@ export default function MemberPage() {
             <ActionBarSpacer />
 
             <ActionBar
+                selection={{
+                    selectedCount: selectedMembersCount,
+                    totalCount: filteredMembers.length,
+                    onToggleAll: () => toggleAllMembers(filteredMembers.map((m) => m.id)),
+                }}
                 pagination={
                     (needsFrontendFilter ? filteredMembers.length : total) > 0 ? (
                         <Pagination

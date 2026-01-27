@@ -180,6 +180,7 @@ export default function DemandPage() {
         handleCancel,
         selectedItems: selectedDemands,
         toggleSelection: toggleDemandSelection,
+        toggleAll: toggleAllDemands,
         selectedCount: selectedDemandsCount,
         pagination,
         total,
@@ -645,6 +646,11 @@ export default function DemandPage() {
             <ActionBarSpacer />
 
             <ActionBar
+                selection={{
+                    selectedCount: selectedDemandsCount,
+                    totalCount: filteredDemands.length,
+                    onToggleAll: () => toggleAllDemands(filteredDemands.map((d) => d.id)),
+                }}
                 pagination={
                     total > 0 ? (
                         <Pagination

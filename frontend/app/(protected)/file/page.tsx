@@ -653,6 +653,7 @@ export default function FilesPage() {
         selectedItems: selectedFiles,
         toggleSelection: toggleFileSelection,
         clearSelection,
+        toggleAll: toggleAllFiles,
         selectedCount: selectedFilesCount,
         pagination,
         total,
@@ -1706,6 +1707,11 @@ export default function FilesPage() {
 
             {/* Barra inferior fixa com ações */}
             <ActionBar
+                selection={{
+                    selectedCount: selectedFilesCount,
+                    totalCount: filteredFiles.length,
+                    onToggleAll: () => toggleAllFiles(filteredFiles.map((f) => f.id)),
+                }}
                 pagination={
                     displayTotal > 0 ? (
                         <Pagination

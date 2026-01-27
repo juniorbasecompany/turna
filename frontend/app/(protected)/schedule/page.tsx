@@ -193,6 +193,7 @@ export default function SchedulePage() {
         handleCancel,
         selectedItems: selectedSchedules,
         toggleSelection: toggleScheduleSelection,
+        toggleAll: toggleAllSchedules,
         selectedCount: selectedSchedulesCount,
         pagination,
         total,
@@ -826,6 +827,11 @@ export default function SchedulePage() {
             <ActionBarSpacer />
 
             <ActionBar
+                selection={{
+                    selectedCount: selectedSchedulesCount,
+                    totalCount: filteredSchedules.length,
+                    onToggleAll: () => toggleAllSchedules(filteredSchedules.map((s) => s.id)),
+                }}
                 pagination={
                     displayTotal > 0 ? (
                         <Pagination

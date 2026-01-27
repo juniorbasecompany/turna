@@ -122,6 +122,7 @@ export default function JobPage() {
         selectedItems: selectedJobs,
         toggleSelection: toggleJobSelection,
         clearSelection: clearJobSelection,
+        toggleAll: toggleAllJobs,
         selectedCount: selectedJobsCount,
         pagination,
         total,
@@ -568,6 +569,11 @@ export default function JobPage() {
             <ActionBarSpacer />
 
             <ActionBar
+                selection={{
+                    selectedCount: selectedJobsCount,
+                    totalCount: filteredJobs.length,
+                    onToggleAll: () => toggleAllJobs(filteredJobs.map((j) => j.id)),
+                }}
                 pagination={
                     displayTotal > 0 ? (
                         <Pagination
