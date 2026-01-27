@@ -231,24 +231,37 @@ export function useEntityPage<
 
             if (isSelectAllMode) {
                 // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
-                const params = new URLSearchParams()
-                // Usar limit alto para buscar todos (ou poderia ser um endpoint específico)
-                params.set('limit', '10000')
-                params.set('offset', '0')
+                // Buscar em batches de 100 (limite máximo da API)
+                const BATCH_SIZE = 100
+                idsToDelete = []
+                let offset = 0
+                let hasMore = true
 
-                // Adicionar filtros atuais
-                if (additionalListParams) {
-                    Object.entries(additionalListParams).forEach(([key, value]) => {
-                        if (value !== null && value !== undefined) {
-                            params.set(key, String(value))
-                        }
-                    })
+                while (hasMore) {
+                    const params = new URLSearchParams()
+                    params.set('limit', String(BATCH_SIZE))
+                    params.set('offset', String(offset))
+
+                    // Adicionar filtros atuais
+                    if (additionalListParams) {
+                        Object.entries(additionalListParams).forEach(([key, value]) => {
+                            if (value !== null && value !== undefined) {
+                                params.set(key, String(value))
+                            }
+                        })
+                    }
+
+                    const response = await protectedFetch<{ items: TEntity[]; total: number }>(
+                        `${endpoint}/list?${params.toString()}`
+                    )
+                    
+                    const batchIds = response.items.map((item) => item.id)
+                    idsToDelete.push(...batchIds)
+                    
+                    // Verificar se há mais páginas
+                    offset += BATCH_SIZE
+                    hasMore = offset < response.total
                 }
-
-                const response = await protectedFetch<{ items: TEntity[]; total: number }>(
-                    `${endpoint}/list?${params.toString()}`
-                )
-                idsToDelete = response.items.map((item) => item.id)
             } else {
                 // Modo parcial: usar apenas os IDs selecionados
                 idsToDelete = Array.from(selection.selectedItems)
@@ -259,15 +272,18 @@ export function useEntityPage<
                 return
             }
 
-            // Deletar todos os IDs
-            const deletePromises = idsToDelete.map(async (id) => {
-                await protectedFetch(`${endpoint}/${id}`, {
-                    method: 'DELETE',
+            // Deletar todos os IDs em batches para não sobrecarregar
+            const DELETE_BATCH_SIZE = 10
+            for (let i = 0; i < idsToDelete.length; i += DELETE_BATCH_SIZE) {
+                const batch = idsToDelete.slice(i, i + DELETE_BATCH_SIZE)
+                const deletePromises = batch.map(async (id) => {
+                    await protectedFetch(`${endpoint}/${id}`, {
+                        method: 'DELETE',
+                    })
+                    return id
                 })
-                return id
-            })
-
-            await Promise.all(deletePromises)
+                await Promise.all(deletePromises)
+            }
 
             // Recarregar lista
             await loadItems()
