@@ -150,6 +150,8 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 4. Associados (admin-only)
 5. Arquivos
 6. Demandas
+7. Escalas
+8. Jobs
 
 **Itens admin-only**: Clínicas e Associados são visíveis apenas para usuários com role `admin`.
 

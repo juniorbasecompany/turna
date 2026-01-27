@@ -144,25 +144,75 @@ Endpoints em `/auth/*` não validam tenant_id porque:
 
 ### Endpoints Admin
 Alguns endpoints requerem role ADMIN:
+
+**Tenant**:
 - `POST /tenant`: Requer admin (criação de tenant)
 - `GET /tenant/list`: Requer admin
 - `PUT /tenant/{tenant_id}`: Requer admin
 - `DELETE /tenant/{tenant_id}`: Requer admin
 - `POST /tenant/{tenant_id}/invite`: Requer admin no tenant
-- `POST /job/{job_id}/requeue`: Requer admin no tenant
+
+**Member**:
 - `POST /member`: Requer admin
 - `GET /member/list`: Requer admin
 - `GET /member/{member_id}`: Requer admin
 - `PUT /member/{member_id}`: Requer admin
 - `DELETE /member/{member_id}`: Requer admin
 - `POST /member/{member_id}/invite`: Requer admin
+
+**Account**:
 - `POST /account`: Requer admin
 - `GET /account/list`: Requer admin
 - `PUT /account/{account_id}`: Requer admin
 - `DELETE /account/{account_id}`: Requer admin
+
+**Hospital**:
 - `POST /hospital`: Requer admin
 - `PUT /hospital/{hospital_id}`: Requer admin
 - `DELETE /hospital/{hospital_id}`: Requer admin
+
+**Job**:
+- `POST /job/{job_id}/requeue`: Requer admin no tenant
+
+### Endpoints de Recursos do Tenant (requerem membro ativo)
+Endpoints que acessam recursos do tenant (validam `get_current_member()`):
+
+**Hospital** (leitura disponível para todos os membros):
+- `GET /hospital/list`: Lista hospitais do tenant
+- `GET /hospital/{hospital_id}`: Detalhes do hospital
+
+**File**:
+- `POST /file/upload`: Upload de arquivo (requer `hospital_id`)
+- `GET /file/list`: Lista arquivos do tenant
+- `GET /file/{file_id}`: Detalhes do arquivo
+- `GET /file/{file_id}/download`: Download do arquivo
+- `GET /file/{file_id}/thumbnail`: Thumbnail do arquivo
+- `DELETE /file/{file_id}`: Exclui arquivo
+
+**Demand**:
+- `POST /demand`: Cria demanda
+- `GET /demand/list`: Lista demandas do tenant
+- `GET /demand/{demand_id}`: Detalhes da demanda
+- `PUT /demand/{demand_id}`: Atualiza demanda
+- `DELETE /demand/{demand_id}`: Exclui demanda
+
+**Schedule**:
+- `POST /schedule`: Cria schedule manual
+- `GET /schedule/list`: Lista schedules do tenant
+- `GET /schedule/{schedule_id}`: Detalhes do schedule
+- `POST /schedule/{schedule_id}/publish`: Publica schedule e gera PDF
+- `GET /schedule/{schedule_id}/pdf`: Download do PDF
+- `POST /schedule/generate-from-demands`: Gera escala a partir de demandas
+- `DELETE /schedule/{schedule_id}`: Exclui schedule
+
+**Job**:
+- `POST /job/ping`: Cria job PING (teste)
+- `POST /job/extract`: Cria job EXTRACT_DEMAND
+- `GET /job/list`: Lista jobs do tenant
+- `GET /job/{job_id}`: Detalhes do job
+- `GET /job/{job_id}/stream`: Stream de logs (SSE)
+- `POST /job/{job_id}/cancel`: Cancela job
+- `DELETE /job/{job_id}`: Exclui job
 
 ## Checklist de Validação
 

@@ -1,64 +1,111 @@
 # Turna
 
-## Estrutura
+Sistema inteligente para geração automática de escalas cirúrgicas otimizadas.
 
-- **`backend/`** — API FastAPI, worker Arq, modelos, Alembic, demand, output, strategy. Toda a lógica do backend vive aqui. Docker usa `context: ./backend` e volume `./backend:/app`.
-- **`frontend/`** — Next.js; comunica com a API apenas via HTTP (ver `DIRECTIVES.md`).
-- **`docker-compose.yml`** — Na raiz do repositório. Orquestra Postgres, Redis, MinIO, API e worker. Comandos Docker e Alembic são executados a partir da raiz.
+## Visão Geral
 
-## Execução (Docker Compose)
+O Turna é um SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com:
+- **Web (admin)**: cadastros, importação, geração/publicação de escalas, relatórios
+- **Mobile (profissionais)**: consulta de escalas publicadas (futuro)
 
-Na raiz do repositório:
+## Estrutura do Repositório
 
-```bash
-docker compose up -d --build
+```
+turna/
+├── backend/           # API FastAPI, worker Arq, modelos, Alembic
+│   ├── app/           # Código principal (api, auth, model, services, worker, storage)
+│   ├── alembic/       # Migrações de banco de dados
+│   ├── demand/        # Extração de demandas (IA/OpenAI)
+│   ├── output/        # Geração de PDFs (ReportLab)
+│   └── strategy/      # Algoritmos de alocação (Greedy, CP-SAT)
+├── frontend/          # Next.js (App Router) - comunica via API HTTP
+├── docker-compose.yml # Orquestra Postgres, Redis, MinIO, API e worker
+└── *.md               # Documentação do projeto
 ```
 
-- API: `http://localhost:8000` — health: `GET /health`
-- Comandos Alembic: `docker compose exec api alembic upgrade head` (ou `alembic` rodando em `backend/`)
+## Funcionalidades Implementadas
 
-## Como rodar (a partir do login)
+- **Autenticação**: OAuth Google + JWT + multi-tenant
+- **Hospitais**: CRUD com prompt customizável para extração IA
+- **Arquivos**: Upload de PDF/imagens, extração automática de demandas via IA
+- **Demandas**: CRUD completo de demandas cirúrgicas
+- **Escalas**: Geração automática com solver Greedy, publicação em PDF
+- **Jobs**: Sistema de jobs assíncronos (Arq/Redis) para processamento pesado
+- **Membros**: Gestão de usuários com convites por email (Resend)
+- **Clínicas**: Multi-tenant com isolamento de dados
 
-1. **Subir a API e a infra** (na raiz):
-   ```bash
-   docker compose up -d --build
-   ```
-   Validar: `Invoke-RestMethod http://localhost:8000/health` (PowerShell) ou `curl -s http://localhost:8000/health`.
+## Execução Rápida
 
-2. **Configurar o frontend** (`frontend/`):
-   - Copie `env.example` para `.env.local` (se ainda não existir).
-   - Em `.env.local`:
-     - `NEXT_PUBLIC_API_URL=http://localhost:8000`
-     - `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<seu Client ID do Google>`
+```bash
+# Na raiz do repositório
+docker compose up -d --build    # Sobe infra + backend
+cd frontend && npm run dev      # Sobe frontend em http://localhost:3001
+```
 
-3. **Google OAuth** (para o login funcionar):
-   - Crie um projeto no [Google Cloud Console](https://console.cloud.google.com/).
-   - Em **APIs e Serviços → Credenciais**, crie um **ID de cliente OAuth 2.0** (tipo "Aplicativo da Web").
-   - Em **Origens JavaScript autorizadas**, adicione `http://localhost:3001`.
-   - Use o **Client ID** em `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+- **API**: `http://localhost:8000` (health: `GET /health`)
+- **MinIO Console**: `http://localhost:9001` (minio / minio12345)
+- **Frontend**: `http://localhost:3001`
 
-4. **Rodar o frontend**:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   O app sobe em **http://localhost:3001**.
+## Configuração
 
-5. **Acessar**: abra **http://localhost:3001/login**, faça login com Google e siga o fluxo (seleção de clínica, se houver).
+### Backend (`backend/.env`)
+O Docker Compose usa `env_file: backend/.env`. Variáveis principais:
+- `DATABASE_URL`, `REDIS_URL` - conexões (Docker usa valores internos)
+- `JWT_SECRET`, `JWT_ISSUER` - autenticação
+- `GOOGLE_OAUTH_CLIENT_ID` - login Google
+- `S3_*` - storage (MinIO em dev)
+- `OPENAI_API_KEY` - extração de demandas via IA
+- `RESEND_API_KEY`, `EMAIL_FROM` - envio de emails
 
-## .env
+### Frontend (`frontend/.env.local`)
+Copie de `frontend/env.example`:
+- `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<seu Client ID>`
 
-- **Backend**: `backend/.env`. O código carrega `backend/.env` e, como fallback, `../.env` (raiz). O Docker Compose usa `env_file: backend/.env` para os serviços `api` e `worker`.
-- **Frontend**: `frontend/.env.local` (copie de `frontend/env.example`). Variáveis `NEXT_PUBLIC_*` são usadas pelo Next.js.
-- **Docker**: variáveis do `environment` no `docker-compose.yml` sobrescrevem as do `env_file` quando coincidem. Para dev local (fora do Docker), use `backend/.env`.
+### Google OAuth
+1. Crie projeto no [Google Cloud Console](https://console.cloud.google.com/)
+2. Em **APIs e Serviços → Credenciais**, crie ID de cliente OAuth 2.0
+3. Em **Origens JavaScript autorizadas**, adicione `http://localhost:3001`
 
-## Documentos
+## Comandos Úteis
 
-- **Fonte da verdade (diretivas)**: [`DIRECTIVES.md`](DIRECTIVES.md)
-- **Checklist de execução/entrega**: [`CHECKLIST.md`](CHECKLIST.md)
-- **Stack do projeto**: [`STACK.md`](STACK.md)
-- **Segurança**: [`SECURITY.md`](SECURITY.md)
-- **Apresentação do projeto**: [`PRESENTATION.md`](PRESENTATION.md)
-- **Dicas rápidas (comandos, Alembic, MinIO, ngrok)**: [`TIPS.md`](TIPS.md)
-- **Migração do backend para `backend/`**: [`BACKEND_MIGRATION_CHECKLIST.md`](BACKEND_MIGRATION_CHECKLIST.md)
+```bash
+# Alembic (migrações)
+docker compose exec api alembic upgrade head
+docker compose exec api alembic revision --autogenerate -m "descrição"
+
+# Logs
+docker compose logs -f api      # Logs da API
+docker compose logs -f worker   # Logs do worker
+
+# Reiniciar serviços
+docker compose restart api
+docker compose restart worker
+```
+
+## Documentação
+
+### Arquivos Principais
+| Arquivo | Descrição |
+|---------|-----------|
+| [`DIRECTIVES.md`](DIRECTIVES.md) | Diretivas do projeto (fonte da verdade) |
+| [`STACK.md`](STACK.md) | Stack tecnológico (ferramentas e bibliotecas) |
+| [`SECURITY.md`](SECURITY.md) | Padrões de segurança e validação multi-tenant |
+| [`CHECKLIST.md`](CHECKLIST.md) | Checklist de implementação com status |
+| [`PRESENTATION.md`](PRESENTATION.md) | Apresentação e funcionalidades do produto |
+| [`TIPS.md`](TIPS.md) | Dicas rápidas (comandos, MinIO, ngrok) |
+
+### Arquivos de Planejamento
+| Arquivo | Descrição |
+|---------|-----------|
+| [`PLANO_GERACAO_ESCALA_FROM_DEMANDS.md`](PLANO_GERACAO_ESCALA_FROM_DEMANDS.md) | Plano de geração de escalas |
+| [`PLANO_FRAGMENTACAO_SCHEDULE.md`](PLANO_FRAGMENTACAO_SCHEDULE.md) | Plano de fragmentação de schedules |
+| [`DEMAND_VALIDATION_CHECKLIST.md`](DEMAND_VALIDATION_CHECKLIST.md) | Checklist de validação de demandas |
+
+## Status do Projeto
+
+**MVP Web Admin**: ~90% implementado
+- ✅ Autenticação, multi-tenant, hospitais, arquivos, demandas, escalas, jobs, membros
+- 🔄 Página de listagem de escalas no frontend (em progresso)
+- 📋 App mobile React Native (futuro)
+- 📋 Solver CP-SAT otimizado (futuro)
