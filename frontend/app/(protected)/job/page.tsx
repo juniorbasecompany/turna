@@ -8,8 +8,8 @@ import { FilterButtons, FilterOption } from '@/components/FilterButtons'
 import { FilterPanel } from '@/components/FilterPanel'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { Pagination } from '@/components/Pagination'
+import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
@@ -18,7 +18,7 @@ import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
 import { JobResponse } from '@/types/api'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // Tipo vazio para formulário (jobs não são editáveis)
 type JobFormData = Record<string, never>
@@ -128,6 +128,9 @@ export default function JobPage() {
     const [interrupting, setInterrupting] = useState(false)
     const [deletingJobs, setDeletingJobs] = useState(false)
 
+    // Ref para armazenar os AbortControllers dos SSE (um por job monitorado)
+    const sseAbortControllersRef = useRef<Map<number, AbortController>>(new Map())
+
     // useEntityPage
     const {
         items: jobs,
@@ -157,6 +160,128 @@ export default function JobPage() {
         additionalListParams,
         listEnabled: !!settings,
     })
+
+    // Função para monitorar um job via SSE e recarregar a lista quando terminar
+    const monitorJob = useCallback((jobId: number) => {
+        // Se já está monitorando este job, não iniciar novamente
+        if (sseAbortControllersRef.current.has(jobId)) {
+            return
+        }
+
+        const abortController = new AbortController()
+        sseAbortControllersRef.current.set(jobId, abortController)
+
+        fetch(`/api/job/${jobId}/stream`, {
+            credentials: 'include',
+            signal: abortController.signal,
+        })
+            .then(async (response) => {
+                if (!response.ok) {
+                    throw new Error(`Erro ao conectar com SSE: ${response.status}`)
+                }
+
+                const reader = response.body?.getReader()
+                if (!reader) {
+                    throw new Error('Stream não disponível')
+                }
+
+                const decoder = new TextDecoder()
+                let buffer = ''
+
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read()
+                        if (done) break
+
+                        buffer += decoder.decode(value, { stream: true })
+
+                        // Parser SSE: eventos são separados por \n\n
+                        let eventEnd: number
+                        while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
+                            const eventBlock = buffer.slice(0, eventEnd)
+                            buffer = buffer.slice(eventEnd + 2)
+
+                            // Processar linhas do evento
+                            let eventType = 'message'
+                            let eventData = ''
+
+                            for (const line of eventBlock.split('\n')) {
+                                if (line.startsWith('event: ')) {
+                                    eventType = line.slice(7).trim()
+                                } else if (line.startsWith('data: ')) {
+                                    eventData = line.slice(6)
+                                }
+                            }
+
+                            // Quando o job termina (COMPLETED ou FAILED), recarregar a lista
+                            if (eventType === 'status' && eventData) {
+                                try {
+                                    const data = JSON.parse(eventData)
+                                    if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                                        // Remover do mapa de monitoramento
+                                        sseAbortControllersRef.current.delete(jobId)
+                                        // Recarregar lista para atualizar o card
+                                        loadItems()
+                                        return
+                                    }
+                                } catch {
+                                    // Ignorar dados que não são JSON válido
+                                }
+                            }
+
+                            // Se houver erro ou timeout, também recarregar
+                            if (eventType === 'error' || eventType === 'timeout') {
+                                sseAbortControllersRef.current.delete(jobId)
+                                loadItems()
+                                return
+                            }
+                        }
+                    }
+                } finally {
+                    reader.releaseLock()
+                }
+            })
+            .catch((err) => {
+                // Ignorar erro de abort (usuário saiu da página ou job foi cancelado)
+                if (err.name === 'AbortError') {
+                    return
+                }
+                // Remover do mapa e ignorar outros erros
+                sseAbortControllersRef.current.delete(jobId)
+            })
+    }, [loadItems])
+
+    // Monitorar jobs RUNNING ou PENDING visíveis na lista
+    useEffect(() => {
+        // Identificar jobs que precisam ser monitorados
+        const jobsToMonitor = jobs.filter(
+            (job) => job.status === 'RUNNING' || job.status === 'PENDING'
+        )
+
+        // Iniciar monitoramento para cada job
+        jobsToMonitor.forEach((job) => {
+            monitorJob(job.id)
+        })
+
+        // Cancelar monitoramento de jobs que não estão mais na lista ou mudaram de status
+        const currentJobIds = new Set(jobsToMonitor.map((job) => job.id))
+        sseAbortControllersRef.current.forEach((controller, jobId) => {
+            if (!currentJobIds.has(jobId)) {
+                controller.abort()
+                sseAbortControllersRef.current.delete(jobId)
+            }
+        })
+    }, [jobs, monitorJob])
+
+    // Cleanup: cancelar todos os SSE ao desmontar componente
+    useEffect(() => {
+        return () => {
+            sseAbortControllersRef.current.forEach((controller) => {
+                controller.abort()
+            })
+            sseAbortControllersRef.current.clear()
+        }
+    }, [])
 
     // Verificar se há jobs interrompíveis (PENDING ou RUNNING) selecionados
     const hasInterruptableJobs = useMemo(() => {

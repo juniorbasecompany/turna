@@ -12,7 +12,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
-import { TenantDatePicker } from '@/components/TenantDatePicker'
+import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
@@ -20,7 +20,6 @@ import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
 import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
-import { localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface FileResponse {
@@ -583,17 +582,14 @@ export default function FilesPage() {
     const [uploading, setUploading] = useState(false)
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
 
-    // Filtros de período usando TenantDatePicker (Date objects)
-    // Inicializar com data de hoje
+    // Filtros de período usando TenantDateTimePicker (Date objects com hora)
+    // Inicializar startDate com primeiro dia do mês atual às 00:00, endDate vazio
     const [startDate, setStartDate] = useState<Date | null>(() => {
         const today = new Date()
-        return new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
+        return new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0)
     })
 
-    const [endDate, setEndDate] = useState<Date | null>(() => {
-        const today = new Date()
-        return new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
-    })
+    const [endDate, setEndDate] = useState<Date | null>(null)
 
     // Filtro de hospital
     const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
@@ -637,8 +633,8 @@ export default function FilesPage() {
     const additionalListParams = useMemo(() => {
         if (!settings) return undefined
         return {
-            start_at: startDate ? localDateToUtcStart(startDate, settings) : null,
-            end_at: endDate ? localDateToUtcEndExclusive(endDate, settings) : null,
+            start_at: startDate ? startDate.toISOString() : null,
+            end_at: endDate ? endDate.toISOString() : null,
             hospital_id: selectedHospitalId || null,
         }
     }, [startDate, endDate, selectedHospitalId, settings])
@@ -764,7 +760,7 @@ export default function FilesPage() {
         return filteredFiles.length  // Total após filtro no frontend
     }, [filteredFiles, needsFrontendFilter, total])
 
-    // Handlers para mudança de data no TenantDatePicker
+    // Handlers para mudança de data no TenantDateTimePicker
     const handleStartDateChange = (date: Date | null) => {
         setStartDate(date)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
@@ -1403,14 +1399,14 @@ export default function FilesPage() {
                                 </select>
                             )}
                         </FormField>
-                        <TenantDatePicker
-                            label="Cadastrados deste"
+                        <TenantDateTimePicker
+                            label="Cadastrados desde"
                             value={startDate}
                             onChange={handleStartDateChange}
                             id="start_at"
                             name="start_at"
                         />
-                        <TenantDatePicker
+                        <TenantDateTimePicker
                             label="Cadastrados até"
                             value={endDate}
                             onChange={handleEndDateChange}
