@@ -64,6 +64,6 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 
 ## Princípios de arquitetura (Fase 1)
 1. **Requests HTTP nunca rodam solver/IA**: sempre criam **Job** e retornam `job_id`.
-2. **ScheduleVersion**: cada geração cria uma versão imutável; publicação é um passo separado.
+2. **Schedule**: cada geração cria uma versão imutável; publicação é um passo separado.
 3. **Multi-tenant por `tenant_id`** em todas as tabelas (enforcement na camada de repositório/serviço no MVP).
 4. **Storage fora do banco**: arquivos sempre em object storage; banco guarda apenas metadados/URLs.

@@ -22,7 +22,7 @@ import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from 
 import {
     ScheduleCreateRequest,
     ScheduleUpdateRequest,
-    ScheduleVersionResponse,
+    ScheduleResponse,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -63,7 +63,7 @@ export default function SchedulePage() {
     }
 
     // Mapeamentos
-    const mapEntityToFormData = (schedule: ScheduleVersionResponse): ScheduleFormData => {
+    const mapEntityToFormData = (schedule: ScheduleResponse): ScheduleFormData => {
         return {
             name: schedule.name,
             period_start_at: schedule.period_start_at ? new Date(schedule.period_start_at) : null,
@@ -191,7 +191,7 @@ export default function SchedulePage() {
         handleDeleteSelected,
         loadItems,
         actionBarErrorProps,
-    } = useEntityPage<ScheduleFormData, ScheduleVersionResponse, ScheduleCreateRequest, ScheduleUpdateRequest>({
+    } = useEntityPage<ScheduleFormData, ScheduleResponse, ScheduleCreateRequest, ScheduleUpdateRequest>({
         endpoint: '/api/schedule',
         entityName: 'escala',
         initialFormData,

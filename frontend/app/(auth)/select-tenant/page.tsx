@@ -155,14 +155,11 @@ export default function SelectTenantPage() {
                     })
                     result = await response.json()
 
-                    // Se falhar por não estar autenticado, redirecionar para login
+                    // Se falhar por não estar autenticado, redirecionar imediatamente para login
                     if (response.status === 401) {
-                        setError(result.detail || 'Sessão expirada. Por favor, faça login novamente.')
-                        setSelecting(false)
+                        sessionStorage.removeItem('login_id_token')
                         sessionStorage.removeItem('login_response')
-                        setTimeout(() => {
-                            router.push('/login')
-                        }, 2000)
+                        router.push('/login')
                         return
                     }
                 }
@@ -211,11 +208,8 @@ export default function SelectTenantPage() {
 
                 // Se não temos id_token, precisamos autenticar primeiro
                 if (!idToken) {
-                    setError('Sessão expirada. Por favor, faça login novamente.')
-                    setCreating(false)
-                    setTimeout(() => {
-                        router.push('/login')
-                    }, 2000)
+                    sessionStorage.removeItem('login_response')
+                    router.push('/login')
                     return
                 }
 
@@ -313,14 +307,11 @@ export default function SelectTenantPage() {
                         }),
                     })
 
-                    // Se falhar por não estar autenticado, o backend retornará 401
+                    // Se falhar por não estar autenticado, redirecionar imediatamente para login
                     if (selectResponse.status === 401) {
-                        const selectResult = await selectResponse.json()
-                        setError(selectResult.detail || 'Sessão expirada. Por favor, faça login novamente.')
-                        setProcessingInvite(null)
-                        setTimeout(() => {
-                            router.push('/login')
-                        }, 2000)
+                        sessionStorage.removeItem('login_id_token')
+                        sessionStorage.removeItem('login_response')
+                        router.push('/login')
                         return
                     }
                 }
@@ -413,11 +404,8 @@ export default function SelectTenantPage() {
                 // Se não há tenant ativo, precisamos obter token via id_token para rejeitar
                 if (tenants.length === 0) {
                     if (!idToken) {
-                        setError('Sessão expirada. Por favor, faça login novamente.')
-                        setProcessingInvite(null)
-                        setTimeout(() => {
-                            router.push('/login')
-                        }, 2000)
+                        sessionStorage.removeItem('login_response')
+                        router.push('/login')
                         return
                     }
 
@@ -471,14 +459,11 @@ export default function SelectTenantPage() {
                             }),
                         })
 
-                        // Se falhar por não estar autenticado, redirecionar para login
+                        // Se falhar por não estar autenticado, redirecionar imediatamente para login
                         if (selectResponse.status === 401) {
-                            const selectResult = await selectResponse.json()
-                            setError(selectResult.detail || 'Sessão expirada. Por favor, faça login novamente.')
-                            setProcessingInvite(null)
-                            setTimeout(() => {
-                                router.push('/login')
-                            }, 2000)
+                            sessionStorage.removeItem('login_id_token')
+                            sessionStorage.removeItem('login_response')
+                            router.push('/login')
                             return
                         }
                     }

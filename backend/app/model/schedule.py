@@ -15,9 +15,9 @@ class ScheduleStatus(str, enum.Enum):
     ARCHIVED = "ARCHIVED"
 
 
-class ScheduleVersion(BaseModel, table=True):
+class Schedule(BaseModel, table=True):
     """
-    Versão imutável de uma escala gerada.
+    Escala gerada.
 
     Observações:
       - `period_start_at` / `period_end_at` representam intervalo meio-aberto [start, end)

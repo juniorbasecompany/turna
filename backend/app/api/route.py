@@ -28,7 +28,7 @@ from app.model.account import Account
 from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
-from app.model.schedule_version import ScheduleVersion, ScheduleStatus
+from app.model.schedule import Schedule, ScheduleStatus
 from app.model.hospital import Hospital
 from app.model.demand import Demand
 from app.services.hospital_service import create_default_hospital_for_tenant
@@ -1483,7 +1483,7 @@ class ScheduleGenerateRequest(PydanticBaseModel):
 
 class ScheduleGenerateResponse(PydanticBaseModel):
     job_id: int
-    schedule_version_id: int
+    schedule_id: int
 
 
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
@@ -1925,7 +1925,7 @@ async def schedule_generate(
     if not extract_job.result_data:
         raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
 
-    sv = ScheduleVersion(
+    sv = Schedule(
                     tenant_id=member.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
@@ -1943,7 +1943,7 @@ async def schedule_generate(
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
-            "schedule_version_id": sv.id,
+            "schedule_id": sv.id,
             "extract_job_id": body.extract_job_id,
             "allocation_mode": body.allocation_mode,
             "pros_by_sequence": body.pros_by_sequence,
@@ -1953,7 +1953,7 @@ async def schedule_generate(
     session.commit()
     session.refresh(job)
 
-    # Atualiza vínculo ScheduleVersion -> Job (útil para rastreabilidade)
+    # Atualiza vínculo Schedule -> Job (útil para rastreabilidade)
     sv.job_id = job.id
     sv.updated_at = utc_now()
     session.add(sv)
@@ -1969,7 +1969,7 @@ async def schedule_generate(
             detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
         ) from e
 
-    return ScheduleGenerateResponse(job_id=job.id, schedule_version_id=sv.id)
+    return ScheduleGenerateResponse(job_id=job.id, schedule_id=sv.id)
 
 
 # ============================================================================

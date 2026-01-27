@@ -2,7 +2,7 @@
 
 ## Contexto Atual
 
-Atualmente, quando uma escala é gerada, o resultado completo é armazenado em um único registro na tabela `schedule` (modelo `ScheduleVersion`), no campo `result_data`. A estrutura atual é:
+Atualmente, quando uma escala é gerada, o resultado completo é armazenado em um único registro na tabela `schedule` (modelo `Schedule`), no campo `result_data`. A estrutura atual é:
 
 ```json
 {
@@ -87,7 +87,7 @@ Para criar cada registro individual, precisamos:
 - [ ] Identificar se precisamos manter algum registro "mestre" com metadados
 
 #### 1.2 Verificar Dependências
-- [ ] Verificar onde `ScheduleVersion.result_data` é lido/consumido
+- [ ] Verificar onde `Schedule.result_data` é lido/consumido
 - [ ] Identificar impactos em:
   - `backend/app/api/schedule.py` (função `_day_schedules_from_result`)
   - Frontend (se houver consumo direto)
@@ -167,12 +167,12 @@ def _extract_individual_allocations(
 #### 3.2 Modificação em `generate_schedule_job()`
 - [ ] Após obter `per_day` do solver (linha ~443)
 - [ ] Chamar função de transformação para extrair alocações individuais
-- [ ] Em vez de gravar um único `sv.result_data`, criar múltiplos registros `ScheduleVersion`:
+- [ ] Em vez de gravar um único `sv.result_data`, criar múltiplos registros `Schedule`:
   ```python
   # Criar registros individuais
   schedule_records = []
   for allocation in individual_allocations:
-      sv_item = ScheduleVersion(
+      sv_item = Schedule(
           tenant_id=sv.tenant_id,
           name=f"{sv.name} - {allocation['professional']} - Dia {allocation['day']}",
           period_start_at=sv.period_start_at,
@@ -205,7 +205,7 @@ def _extract_individual_allocations(
   - Reconstruir estrutura esperada pelo gerador de PDF
 
 #### 4.2 Endpoints de API
-- [ ] Verificar endpoints que retornam `ScheduleVersion`:
+- [ ] Verificar endpoints que retornam `Schedule`:
   - `GET /schedule/{id}` - pode precisar retornar lista ou grupo
   - `GET /schedule` - listagem pode precisar agrupar
 - [ ] Atualizar response models se necessário

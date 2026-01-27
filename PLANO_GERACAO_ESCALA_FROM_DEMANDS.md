@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao sistema, lendo demandas diretamente da tabela `demand` (campo `source`) em vez de arquivo JSON, usando o intervalo definido pelos filtros do painel de schedule, e salvando o resultado na tabela `schedule` (ScheduleVersion).
+Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao sistema, lendo demandas diretamente da tabela `demand` (campo `source`) em vez de arquivo JSON, usando o intervalo definido pelos filtros do painel de schedule, e salvando o resultado na tabela `schedule` (Schedule).
 
 ## Contexto Atual
 
@@ -17,7 +17,7 @@ Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao 
 1. **Frontend**: Painel de schedule com filtros de período (`periodStartDate`, `periodEndDate`)
 2. **Backend**: 
    - Tabela `demand` com campo `source` (JSON) contendo dados originais
-   - Tabela `schedule` (ScheduleVersion) para armazenar escalas geradas
+   - Tabela `schedule` (Schedule) para armazenar escalas geradas
    - Job `GENERATE_SCHEDULE` que lê de `Job.result_data` (extração de arquivo)
    - Worker assíncrono processa jobs
 
@@ -57,16 +57,16 @@ Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao 
 **Localização**: `frontend/app/(protected)/schedule/page.tsx`
 - Função: `handleCreateCardClick()`
 - Validação: Verifica se `periodStartDate` e `periodEndDate` estão definidos
-- Ação atual: Chama `handleCreateClick()` (cria ScheduleVersion vazia)
+- Ação atual: Chama `handleCreateClick()` (cria Schedule vazia)
 
 **Mudança necessária**:
-- Em vez de criar ScheduleVersion vazia, criar ScheduleVersion + Job GENERATE_SCHEDULE
+- Em vez de criar Schedule vazia, criar Schedule + Job GENERATE_SCHEDULE
 - Passar período como parâmetros
 
 ### 4. Saída: Tabela `schedule`
 
 **Estrutura atual**:
-- `ScheduleVersion` já existe e suporta `result_data` (JSON)
+- `Schedule` já existe e suporta `result_data` (JSON)
 - Campo `result_data` armazena resultado do solver
 - Status: DRAFT, PUBLISHED, ARCHIVED
 
@@ -87,7 +87,7 @@ Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao 
 #### 1.2 Mapear Formato de Dados
 - [ ] Documentar formato de entrada esperado pelo solver
 - [ ] Documentar formato de saída do solver
-- [ ] Garantir compatibilidade com `ScheduleVersion.result_data`
+- [ ] Garantir compatibilidade com `Schedule.result_data`
 
 ### Fase 2: Backend - Adaptação do Worker
 
@@ -122,7 +122,7 @@ Adaptar o fluxo de geração de escalas do `app.py` para funcionar integrado ao 
 **Input do Job**:
 ```python
 {
-    "schedule_version_id": int,
+    "schedule_id": int,
     "mode": "from_demands" | "from_extract",  # novo campo
     "extract_job_id": int | None,  # opcional se mode == "from_demands"
     "period_start_at": str,  # ISO 8601, se mode == "from_demands"
@@ -151,10 +151,10 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 **Lógica**:
 - [ ] Validar período (start < end, timezone explícito)
 - [ ] Validar que há demandas no período (query rápida)
-- [ ] Criar `ScheduleVersion` (status DRAFT)
+- [ ] Criar `Schedule` (status DRAFT)
 - [ ] Criar `Job` (tipo GENERATE_SCHEDULE, status PENDING)
 - [ ] Enfileirar job no Arq
-- [ ] Retornar `{job_id, schedule_version_id}`
+- [ ] Retornar `{job_id, schedule_id}`
 
 **Validações de Segurança**:
 - [ ] Usar `get_current_member()` para obter `tenant_id`
@@ -174,7 +174,7 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 - [ ] Validar que `periodStartDate` e `periodEndDate` estão definidos (já existe)
 - [ ] Converter datas para UTC (usar `localDateToUtcStart` e `localDateToUtcEndExclusive`)
 - [ ] Chamar endpoint `POST /schedule/generate-from-demands`
-- [ ] Criar ScheduleVersion + Job
+- [ ] Criar Schedule + Job
 - [ ] Mostrar feedback (loading, sucesso, erro)
 - [ ] Redirecionar ou atualizar lista após sucesso
 
@@ -185,7 +185,7 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 
 #### 3.3 Polling de Status do Job (Opcional)
 - [ ] Após criar job, iniciar polling de status
-- [ ] Atualizar ScheduleVersion quando job completar
+- [ ] Atualizar Schedule quando job completar
 - [ ] Mostrar erro se job falhar
 - [ ] Considerar usar WebSocket no futuro (não na Fase 1)
 
@@ -232,7 +232,7 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 - [ ] Testar geração com período sem demandas
 - [ ] Testar geração com demandas sem `source`
 - [ ] Testar validação de tenant (não deve ver demandas de outros tenants)
-- [ ] Verificar que ScheduleVersion é criada corretamente
+- [ ] Verificar que Schedule é criada corretamente
 - [ ] Verificar que `result_data` tem formato correto
 
 #### 6.2 Validação de Compatibilidade
@@ -254,7 +254,7 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 - ✅ Todas as queries de demandas devem filtrar por `tenant_id` do member
 - ✅ Endpoint usa `get_current_member()` para obter `tenant_id`
 - ✅ Nunca aceitar `tenant_id` do body
-- ✅ Validar que ScheduleVersion pertence ao tenant
+- ✅ Validar que Schedule pertence ao tenant
 
 ### Validação de Dados
 - ✅ Validar formato de `demand.source` antes de processar

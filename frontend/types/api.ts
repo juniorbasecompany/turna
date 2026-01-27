@@ -139,7 +139,7 @@ export interface FileListResponse {
     total: number
 }
 
-export interface ScheduleVersionResponse {
+export interface ScheduleResponse {
     id: number
     tenant_id: number
     name: string
@@ -156,12 +156,12 @@ export interface ScheduleVersionResponse {
 }
 
 export interface ScheduleListResponse {
-    items: ScheduleVersionResponse[]
+    items: ScheduleResponse[]
     total: number
 }
 
 export interface SchedulePublishResponse {
-    schedule_version_id: number
+    schedule_id: number
     status: string
     pdf_file_id: number
     presigned_url: string
@@ -177,7 +177,7 @@ export interface ScheduleGenerateRequest {
 
 export interface ScheduleGenerateResponse {
     job_id: number
-    schedule_version_id: number
+    schedule_id: number
 }
 
 export interface ScheduleCreateRequest {
@@ -206,7 +206,7 @@ export interface ScheduleGenerateFromDemandsRequest {
 
 export interface ScheduleGenerateFromDemandsResponse {
     job_id: number
-    schedule_version_id: number
+    schedule_id: number
 }
 
 export interface GoogleTokenRequest {

@@ -18,7 +18,7 @@ Este documento descreve os padrões de segurança implementados no sistema, com 
 
 ### Endpoints que Acessam Recursos do Tenant
 
-Todos os endpoints que acessam recursos (Job, File, ScheduleVersion, etc.) devem seguir este padrão:
+Todos os endpoints que acessam recursos (Job, File, Schedule, etc.) devem seguir este padrão:
 
 ```python
 @router.get("/resource/{resource_id}")

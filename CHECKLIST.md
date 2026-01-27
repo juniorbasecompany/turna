@@ -8,7 +8,7 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
 - **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
-- **Modelos**: ✅ Tenant, Account, Member, Job, File, ScheduleVersion, AuditLog, Hospital, Demand criados e migrados
+- **Modelos**: ✅ Tenant, Account, Member, Job, File, Schedule, AuditLog, Hospital, Demand criados e migrados
 - **Autenticação**: ✅ OAuth Google, JWT, Member, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
@@ -49,10 +49,10 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
 - [x] Salvar resultado como JSON no `Job.result_data`
 - [x] Endpoint `POST /job/extract` (recebe file_id)
 
-### Etapa 6: ScheduleVersion + GenerateSchedule
-- [x] Modelo ScheduleVersion
+### Etapa 6: Schedule + GenerateSchedule
+- [x] Modelo Schedule
 - [x] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
-- [x] Salvar resultado no ScheduleVersion
+- [x] Salvar resultado no Schedule
 - [x] Endpoint `POST /schedule/generate`
 
 ### Etapa 7: PDF + Publicação
@@ -90,8 +90,8 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] **Nota**: `result_data` guarda Demandas como JSON inicialmente
 - [x] Criar `app/model/file.py`:
   - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
-- [x] Criar `app/model/schedule_version.py`:
-  - [x] Modelo `ScheduleVersion` (id, tenant_id, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
+- [x] Criar `app/model/schedule.py`:
+  - [x] Modelo `Schedule` (id, tenant_id, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
   - [x] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
   - [x] **Nota**: `result_data` guarda resultado da geração (alocação) como JSON
 
@@ -250,7 +250,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Criar `app/storage/service.py`:
   - [x] Classe `StorageService` que usa `S3Client`
   - [x] Método `upload_imported_file(session, tenant_id, file, filename) -> File`
-  - [x] Método `upload_schedule_pdf(session, tenant_id, schedule_version_id, pdf_bytes) -> File`
+  - [x] Método `upload_schedule_pdf(session, tenant_id, schedule_id, pdf_bytes) -> File`
   - [x] Método `get_file_presigned_url(s3_key, expiration) -> str`
   - [x] Padrão de S3 keys: `{tenant_id}/{file_type}/{filename}` (com sufixo UUID pra evitar colisão)
 
@@ -303,19 +303,19 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Função `generate_schedule_job(ctx, job_id)`
   - [x] Lógica (MVP):
     1. Buscar `Job` e marcar `RUNNING` + `started_at`
-    2. Buscar `ScheduleVersion` do banco (validar tenant)
+    2. Buscar `Schedule` do banco (validar tenant)
     3. Buscar job de extração (`extract_job_id`) e ler demandas do `result_data`
     4. Buscar profissionais (`pros_by_sequence` no input; mock no script)
     5. Chamar solver greedy (código de `strategy/`)
-    6. Salvar resultado no `ScheduleVersion.result_data` e `generated_at`
+    6. Salvar resultado no `Schedule.result_data` e `generated_at`
     7. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`
   - [x] PDF + S3 + `pdf_file_id` (Etapa 7) (via endpoint `POST /schedule/{id}/publish`)
 - [x] Criar endpoint `POST /schedule/generate`:
   - [x] Receber `extract_job_id`, `period_start_at`, `period_end_at`, `allocation_mode`, `pros_by_sequence` (opcional)
-  - [x] Criar `ScheduleVersion` (DRAFT) e vincular `job_id`
+  - [x] Criar `Schedule` (DRAFT) e vincular `job_id`
   - [x] Criar Job (tipo GENERATE_SCHEDULE, status PENDING)
 - [x] Enfileirar `generate_schedule_job` no Arq
-- [x] Retornar `{job_id, schedule_version_id}`
+- [x] Retornar `{job_id, schedule_id}`
 
 **Nota**: Abstração completa de AI Provider (interface formal) fica para depois, quando precisar plugar outro provedor.
 
@@ -332,8 +332,8 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 ### 5.2 Endpoints de Schedule
 - [x] Criar `app/api/schedule.py`:
-  - [x] `GET /schedule/list` (listar ScheduleVersions - filtrado por tenant)
-  - [x] `POST /schedule` (criar ScheduleVersion - filtrado por tenant)
+  - [x] `GET /schedule/list` (listar Schedules - filtrado por tenant)
+  - [x] `POST /schedule` (criar Schedule - filtrado por tenant)
   - [x] `GET /schedule/{id}` (detalhes - validar tenant)
   - [x] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
   - [x] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
@@ -415,7 +415,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Revisar `strategy/greedy/solve.py`:
   - [x] Adaptar para receber demandas como List[dict] (do JSON) - já recebe `demands: list[dict]`
   - [x] Adaptar para receber profissionais como List[dict] - já recebe `pros_by_sequence: list[dict]`
-  - [x] Retornar resultado como dict (compatível com ScheduleVersion.result_data) - retorna `tuple[list[dict], int]` que é usado diretamente
+  - [x] Retornar resultado como dict (compatível com Schedule.result_data) - retorna `tuple[list[dict], int]` que é usado diretamente
 - [ ] Revisar `strategy/cd_sat/solve.py`:
   - [ ] Mesma adaptação acima (CP-SAT ainda não integrado no worker, apenas greedy)
 - [ ] Criar `app/services/schedule_service.py`:
@@ -427,7 +427,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Integrar geração de PDF (via endpoint `POST /schedule/{id}/publish`):
   - [x] Gerar PDF em memória (`render_multi_day_pdf_bytes()`)
   - [x] Upload para S3 via StorageService (`upload_schedule_pdf()`)
-  - [x] **Nota**: PDF é gerado no endpoint de publicação, não no job de geração (conforme arquitetura: ScheduleVersion imutável, publicação separada)
+  - [x] **Nota**: PDF é gerado no endpoint de publicação, não no job de geração (conforme arquitetura: Schedule imutável, publicação separada)
 
 ### 6.3 Manutenção de Compatibilidade
 - [x] Manter `app.py` funcionando (código legado mantido e funcional)
@@ -747,7 +747,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 Antes de considerar completo, verificar:
 
-- [x] Modelos SQLModel criados e migrados (Tenant, Account, Member, Job, File, ScheduleVersion, AuditLog)
+- [x] Modelos SQLModel criados e migrados (Tenant, Account, Member, Job, File, Schedule, AuditLog)
 - [x] Modelo Account sem tenant_id (email único global)
 - [x] Modelo Member implementado (vínculo Account↔Tenant com role e status)
 - [x] Autenticação funcionando com tenant_id no JWT (role do Member)

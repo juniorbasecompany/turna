@@ -27,7 +27,7 @@ except Exception:
     pass
 
 from sqlmodel import Session, select, create_engine
-from app.model.schedule_version import ScheduleVersion
+from app.model.schedule import Schedule
 from app.model.job import Job, JobType, JobStatus
 import os
 
@@ -71,7 +71,7 @@ def analyze_logs(logs_text):
         "preparando_gravar": r"\[GENERATE_SCHEDULE\] Preparando para gravar (\d+) registros individuais",
         "adicionados_sessao": r"\[GENERATE_SCHEDULE\] (\d+) registros individuais adicionados a sessao",
         "verificacao_pos_commit": r"\[GENERATE_SCHEDULE\] Verificacao pos-commit: (\d+) registros individuais encontrados",
-        "job_completed": r"generate_schedule_job.*'ok': True.*'job_id': (\d+).*'schedule_version_id': (\d+)",
+        "job_completed": r"generate_schedule_job.*'ok': True.*'job_id': (\d+).*'schedule_id': (\d+)",
         "profissional_demandas": r"\[EXTRACT_ALLOCATIONS\] Profissional (.+?): (\d+) demandas",
     }
     
@@ -83,7 +83,7 @@ def analyze_logs(logs_text):
         "adicionados_sessao": None,
         "verificacao_pos_commit": None,
         "job_id": None,
-        "schedule_version_id": None,
+        "schedule_id": None,
         "profissionais": [],
         "linhas_relevantes": [],
     }
@@ -99,7 +99,7 @@ def analyze_logs(logs_text):
                 if match:
                     if key == "job_completed":
                         results["job_id"] = int(match.group(1))
-                        results["schedule_version_id"] = int(match.group(2))
+                        results["schedule_id"] = int(match.group(2))
                     elif key == "profissional_demandas":
                         results["profissionais"].append({
                             "id": match.group(1),
@@ -111,7 +111,7 @@ def analyze_logs(logs_text):
     return results
 
 
-def check_database(job_id=None, schedule_version_id=None):
+def check_database(job_id=None, schedule_id=None):
     """Verifica no banco de dados quantos registros foram criados."""
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
@@ -133,10 +133,10 @@ def check_database(job_id=None, schedule_version_id=None):
                         "result_data": job.result_data,
                     }
                     
-                    # Buscar todos os ScheduleVersion relacionados ao job
+                    # Buscar todos os Schedule relacionados ao job
                     schedules = session.exec(
-                        select(ScheduleVersion)
-                        .where(ScheduleVersion.job_id == job_id)
+                        select(Schedule)
+                        .where(Schedule.job_id == job_id)
                     ).all()
                     
                     results["schedules"] = {
@@ -163,12 +163,12 @@ def check_database(job_id=None, schedule_version_id=None):
                                     "day": result_data.get("day"),
                                 })
             
-            # Se temos schedule_version_id, verificar diretamente
-            if schedule_version_id:
-                sv = session.get(ScheduleVersion, schedule_version_id)
+            # Se temos schedule_id, verificar diretamente
+            if schedule_id:
+                sv = session.get(Schedule, schedule_id)
                 if sv:
                     result_data = sv.result_data or {}
-                    results["schedule_version"] = {
+                    results["schedule"] = {
                         "id": sv.id,
                         "name": sv.name,
                         "fragmented": result_data.get("fragmented", False),
@@ -235,8 +235,8 @@ def print_report(log_analysis, db_check):
         
         if log_analysis["job_id"]:
             print(f"[OK] Job ID: {log_analysis['job_id']}")
-        if log_analysis["schedule_version_id"]:
-            print(f"[OK] Schedule Version ID: {log_analysis['schedule_version_id']}")
+        if log_analysis["schedule_id"]:
+            print(f"[OK] Schedule ID: {log_analysis['schedule_id']}")
         
         if log_analysis["profissionais"]:
             print(f"\n[OK] Profissionais com alocacoes: {len(log_analysis['profissionais'])}")
@@ -265,7 +265,7 @@ def print_report(log_analysis, db_check):
         
         if "schedules" in db_check:
             schedules = db_check["schedules"]
-            print(f"\n[OK] Total de registros ScheduleVersion relacionados: {schedules['total']}")
+            print(f"\n[OK] Total de registros Schedule relacionados: {schedules['total']}")
             
             if schedules["mestre"]:
                 m = schedules["mestre"]
@@ -284,9 +284,9 @@ def print_report(log_analysis, db_check):
             else:
                 print("      [ERRO] NENHUM registro fragmentado encontrado no banco!")
         
-        if "schedule_version" in db_check:
-            sv = db_check["schedule_version"]
-            print(f"\n[OK] Schedule Version {sv['id']}:")
+        if "schedule" in db_check:
+            sv = db_check["schedule"]
+            print(f"\n[OK] Schedule {sv['id']}:")
             print(f"   - Nome: {sv['name']}")
             print(f"   - Fragmented: {sv['fragmented']}")
             print(f"   - Allocation count: {sv['allocation_count']}")
@@ -366,11 +366,11 @@ def main():
     # 3. Verificar banco de dados
     db_check = None
     job_id = None
-    schedule_version_id = None
+    schedule_id = None
     
     if log_analysis:
         job_id = log_analysis.get("job_id")
-        schedule_version_id = log_analysis.get("schedule_version_id")
+        schedule_id = log_analysis.get("schedule_id")
     
     # Se não temos job_id dos logs, buscar o último job de geração de escala
     if not job_id:
@@ -389,16 +389,16 @@ def main():
                     if last_job:
                         job_id = last_job.id
                         result_data = last_job.result_data or {}
-                        schedule_version_id = result_data.get("schedule_version_id")
-                        print(f"   Encontrado job_id={job_id}, schedule_version_id={schedule_version_id}")
+                        schedule_id = result_data.get("schedule_id")
+                        print(f"   Encontrado job_id={job_id}, schedule_id={schedule_id}")
         except Exception as e:
             print(f"   [AVISO] Erro ao buscar ultimo job: {e}")
     
-    if job_id or schedule_version_id:
+    if job_id or schedule_id:
         print("Verificando banco de dados...")
         db_check = check_database(
             job_id=job_id,
-            schedule_version_id=schedule_version_id
+            schedule_id=schedule_id
         )
     
     # 4. Imprimir relatório

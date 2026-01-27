@@ -23,7 +23,7 @@ from app.model.demand import Demand
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
-from app.model.schedule_version import ScheduleStatus, ScheduleVersion
+from app.model.schedule import ScheduleStatus, Schedule
 from app.model.tenant import Tenant
 from app.storage.service import StorageService
 from app.worker.worker_settings import WorkerSettings
@@ -33,13 +33,13 @@ router = APIRouter(prefix="/schedule", tags=["Schedule"])
 
 
 class SchedulePublishResponse(PydanticBaseModel):
-    schedule_version_id: int
+    schedule_id: int
     status: str
     pdf_file_id: int
     presigned_url: str
 
 
-class ScheduleVersionResponse(PydanticBaseModel):
+class ScheduleResponse(PydanticBaseModel):
     id: int
     tenant_id: int
     name: str
@@ -59,7 +59,7 @@ class ScheduleVersionResponse(PydanticBaseModel):
 
 
 class ScheduleListResponse(PydanticBaseModel):
-    items: list[ScheduleVersionResponse]
+    items: list[ScheduleResponse]
     total: int
 
 
@@ -81,19 +81,19 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 
 class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
     job_id: int
-    schedule_version_id: int
+    schedule_id: int
 
 
 def _to_minutes(h: int | float) -> int:
     return int(round(float(h) * 60))
 
 
-def _reconstruct_per_day_from_fragments(fragments: list[ScheduleVersion]) -> list[dict]:
+def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]:
     """
     Reconstrói a estrutura per_day a partir de registros fragmentados.
     
     Args:
-        fragments: Lista de ScheduleVersion com alocações individuais em result_data
+        fragments: Lista de Schedule com alocações individuais em result_data
     
     Returns:
         Lista de dicts no formato per_day (compatível com formato original do solver)
@@ -166,16 +166,16 @@ def _reconstruct_per_day_from_fragments(fragments: list[ScheduleVersion]) -> lis
     return result
 
 
-def _day_schedules_from_result(*, sv: ScheduleVersion, session: Optional[Session] = None) -> list:
+def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = None) -> list:
     """
-    Converte `ScheduleVersion.result_data` (formato do solver) para uma lista de DaySchedule.
+    Converte `Schedule.result_data` (formato do solver) para uma lista de DaySchedule.
     
     Suporta dois formatos:
     1. Estrutura completa com `per_day` (formato original)
     2. Registro fragmentado - busca registros relacionados pelo job_id e reconstrói estrutura
     
     Args:
-        sv: ScheduleVersion a ser processado
+        sv: Schedule a ser processado
         session: Session do banco (necessário apenas se precisar buscar registros fragmentados)
     """
     try:
@@ -191,10 +191,10 @@ def _day_schedules_from_result(*, sv: ScheduleVersion, session: Optional[Session
         # Buscar registros relacionados pelo job_id
         from sqlmodel import select
         related_records = session.exec(
-            select(ScheduleVersion)
-            .where(ScheduleVersion.job_id == sv.job_id)
-            .where(ScheduleVersion.tenant_id == sv.tenant_id)
-            .where(ScheduleVersion.id != sv.id)  # Excluir o próprio registro
+            select(Schedule)
+            .where(Schedule.job_id == sv.job_id)
+            .where(Schedule.tenant_id == sv.tenant_id)
+            .where(Schedule.id != sv.id)  # Excluir o próprio registro
         ).all()
         
         if related_records:
@@ -204,7 +204,7 @@ def _day_schedules_from_result(*, sv: ScheduleVersion, session: Optional[Session
     if not isinstance(per_day, list) or not per_day:
         raise HTTPException(
             status_code=400, 
-            detail="ScheduleVersion não possui result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
+            detail="Schedule não possui result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
         )
 
     # Gera um DaySchedule por item de per_day.
@@ -329,19 +329,19 @@ def _day_schedules_from_result(*, sv: ScheduleVersion, session: Optional[Session
 
     schedules.sort(key=lambda s: s.title)
     if not schedules:
-        raise HTTPException(status_code=400, detail="ScheduleVersion não possui dias válidos para PDF")
+        raise HTTPException(status_code=400, detail="Schedule não possui dias válidos para PDF")
     return schedules
 
 
-@router.post("/{schedule_version_id}/publish", response_model=SchedulePublishResponse, tags=["Schedule"])
+@router.post("/{schedule_id}/publish", response_model=SchedulePublishResponse, tags=["Schedule"])
 def publish_schedule(
-    schedule_version_id: int,
+    schedule_id: int,
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    sv = session.get(ScheduleVersion, schedule_version_id)
+    sv = session.get(Schedule, schedule_id)
     if not sv:
-        raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
+        raise HTTPException(status_code=404, detail="Schedule não encontrado")
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -354,7 +354,7 @@ def publish_schedule(
             raise HTTPException(status_code=500, detail="pdf_file_id aponta para um File inexistente")
         presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
         return SchedulePublishResponse(
-            schedule_version_id=sv.id,
+            schedule_id=sv.id,
             status=str(sv.status),
             pdf_file_id=file_model.id,
             presigned_url=presigned_url,
@@ -370,7 +370,7 @@ def publish_schedule(
     file_model = storage_service.upload_schedule_pdf(
         session=session,
         tenant_id=member.tenant_id,
-        schedule_version_id=sv.id,
+        schedule_id=sv.id,
         pdf_bytes=pdf_bytes,
     )
 
@@ -384,22 +384,22 @@ def publish_schedule(
 
     presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
     return SchedulePublishResponse(
-        schedule_version_id=sv.id,
+        schedule_id=sv.id,
         status=str(sv.status),
         pdf_file_id=file_model.id,
         presigned_url=presigned_url,
     )
 
 
-@router.get("/{schedule_version_id}/pdf", tags=["Schedule"])
+@router.get("/{schedule_id}/pdf", tags=["Schedule"])
 def download_schedule_pdf(
-    schedule_version_id: int,
+    schedule_id: int,
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    sv = session.get(ScheduleVersion, schedule_version_id)
+    sv = session.get(Schedule, schedule_id)
     if not sv:
-        raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
+        raise HTTPException(status_code=404, detail="Schedule não encontrado")
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if not sv.pdf_file_id:
@@ -424,7 +424,7 @@ def list_schedules(
     session: Session = Depends(get_session),
 ):
     """
-    Lista ScheduleVersions do tenant atual, com filtros opcionais.
+    Lista Schedules do tenant atual, com filtros opcionais.
     """
     # Validar status se fornecido
     status_enum = None
@@ -446,33 +446,33 @@ def list_schedules(
             raise HTTPException(status_code=400, detail="period_start_at deve ser menor ou igual a period_end_at")
 
     # Query base
-    query = select(ScheduleVersion).where(ScheduleVersion.tenant_id == member.tenant_id)
+    query = select(Schedule).where(Schedule.tenant_id == member.tenant_id)
     if status_enum:
-        query = query.where(ScheduleVersion.status == status_enum)
+        query = query.where(Schedule.status == status_enum)
     
     # Filtrar por período: escala aparece se seu período se sobrepõe ao filtro
     # Uma escala se sobrepõe se: period_start_at (escala) <= period_end_at (filtro) E period_end_at (escala) >= period_start_at (filtro)
     if period_start_at is not None:
-        query = query.where(ScheduleVersion.period_end_at >= period_start_at)
+        query = query.where(Schedule.period_end_at >= period_start_at)
     if period_end_at is not None:
-        query = query.where(ScheduleVersion.period_start_at <= period_end_at)
+        query = query.where(Schedule.period_start_at <= period_end_at)
 
     # Contar total antes de aplicar paginação
-    count_query = select(func.count(ScheduleVersion.id)).where(ScheduleVersion.tenant_id == member.tenant_id)
+    count_query = select(func.count(Schedule.id)).where(Schedule.tenant_id == member.tenant_id)
     if status_enum:
-        count_query = count_query.where(ScheduleVersion.status == status_enum)
+        count_query = count_query.where(Schedule.status == status_enum)
     if period_start_at is not None:
-        count_query = count_query.where(ScheduleVersion.period_end_at >= period_start_at)
+        count_query = count_query.where(Schedule.period_end_at >= period_start_at)
     if period_end_at is not None:
-        count_query = count_query.where(ScheduleVersion.period_start_at <= period_end_at)
+        count_query = count_query.where(Schedule.period_start_at <= period_end_at)
     total = session.exec(count_query).one()
 
     # Aplicar ordenação e paginação
-    query = query.order_by(ScheduleVersion.created_at.desc()).limit(limit).offset(offset)
+    query = query.order_by(Schedule.created_at.desc()).limit(limit).offset(offset)
 
     items = session.exec(query).all()
     return ScheduleListResponse(
-        items=[ScheduleVersionResponse.model_validate(item) for item in items],
+        items=[ScheduleResponse.model_validate(item) for item in items],
         total=total,
     )
 
@@ -572,8 +572,8 @@ async def generate_schedule_from_demands(
             detail=f"allocation_mode inválido: {body.allocation_mode}. Use 'greedy' ou 'cp-sat'",
         )
 
-    # Criar ScheduleVersion
-    sv = ScheduleVersion(
+    # Criar Schedule
+    sv = Schedule(
         tenant_id=member.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
@@ -592,7 +592,7 @@ async def generate_schedule_from_demands(
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
-            "schedule_version_id": sv.id,
+            "schedule_id": sv.id,
             "mode": "from_demands",
             "period_start_at": body.period_start_at.isoformat(),
             "period_end_at": body.period_end_at.isoformat(),
@@ -604,7 +604,7 @@ async def generate_schedule_from_demands(
     session.commit()
     session.refresh(job)
 
-    # Atualizar vínculo ScheduleVersion -> Job
+    # Atualizar vínculo Schedule -> Job
     sv.job_id = job.id
     sv.updated_at = utc_now()
     session.add(sv)
@@ -621,34 +621,34 @@ async def generate_schedule_from_demands(
             detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
         ) from e
 
-    return ScheduleGenerateFromDemandsResponse(job_id=job.id, schedule_version_id=sv.id)
+    return ScheduleGenerateFromDemandsResponse(job_id=job.id, schedule_id=sv.id)
 
 
-@router.get("/{schedule_version_id}", response_model=ScheduleVersionResponse, tags=["Schedule"])
+@router.get("/{schedule_id}", response_model=ScheduleResponse, tags=["Schedule"])
 def get_schedule(
-    schedule_version_id: int,
+    schedule_id: int,
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
-    Retorna detalhes de uma ScheduleVersion específica.
+    Retorna detalhes de uma Schedule específica.
     """
-    sv = session.get(ScheduleVersion, schedule_version_id)
+    sv = session.get(Schedule, schedule_id)
     if not sv:
-        raise HTTPException(status_code=404, detail="ScheduleVersion não encontrado")
+        raise HTTPException(status_code=404, detail="Schedule não encontrado")
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    return ScheduleVersionResponse.model_validate(sv)
+    return ScheduleResponse.model_validate(sv)
 
 
-@router.post("", response_model=ScheduleVersionResponse, status_code=201, tags=["Schedule"])
+@router.post("", response_model=ScheduleResponse, status_code=201, tags=["Schedule"])
 def create_schedule(
     body: ScheduleCreateRequest,
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
-    Cria uma ScheduleVersion manualmente (sem job de geração).
+    Cria uma Schedule manualmente (sem job de geração).
     Útil para criar escalas vazias ou importar de outras fontes.
     """
     # Validar período
@@ -657,7 +657,7 @@ def create_schedule(
     if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
         raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
 
-    sv = ScheduleVersion(
+    sv = Schedule(
         tenant_id=member.tenant_id,
         name=body.name,
         period_start_at=body.period_start_at,
@@ -669,5 +669,36 @@ def create_schedule(
     session.commit()
     session.refresh(sv)
 
-    return ScheduleVersionResponse.model_validate(sv)
+    return ScheduleResponse.model_validate(sv)
+
+
+@router.delete("/{schedule_id}", status_code=204, tags=["Schedule"])
+def delete_schedule(
+    schedule_id: int,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Exclui uma Schedule.
+    
+    Apenas escalas em status DRAFT podem ser excluídas.
+    Escalas publicadas devem ser arquivadas em vez de excluídas.
+    """
+    sv = session.get(Schedule, schedule_id)
+    if not sv:
+        raise HTTPException(status_code=404, detail="Schedule não encontrado")
+    if sv.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Impedir exclusão de escalas publicadas
+    if sv.status == ScheduleStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível excluir uma escala publicada. Arquive-a em vez disso."
+        )
+    
+    session.delete(sv)
+    session.commit()
+    
+    return None
 

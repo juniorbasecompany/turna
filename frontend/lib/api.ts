@@ -54,15 +54,15 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
 
 /**
  * Fetch protegido para páginas protegidas.
- * Trata 401 automaticamente e padroniza mensagens de erro.
+ * Trata 401 automaticamente redirecionando para a página de login.
  *
  * Esta função deve ser usada em todas as páginas protegidas para garantir
- * que erros 401 sempre retornem a mensagem padronizada e sejam exibidos no ActionBar.
+ * que erros 401 sempre redirecionem para login automaticamente.
  *
  * @param url - URL da API (relativa, ex: '/api/hospital/list')
  * @param options - Opções do fetch (method, headers, body, etc)
  * @returns Promise com os dados da resposta
- * @throws Error com mensagem padronizada (401 sempre retorna "Sessão expirada...")
+ * @throws Error com mensagem do backend para outros erros HTTP
  *
  * @example
  * ```typescript
@@ -86,10 +86,17 @@ export async function protectedFetch<T>(
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
 
-        // SEMPRE tratar 401 primeiro, antes de extractErrorMessage
-        // Isso garante que a mensagem seja sempre padronizada
+        // 401: Sessão expirada → redirecionar imediatamente para login
         if (response.status === 401) {
-            throw new Error('Sessão expirada. Por favor, faça login novamente.')
+            if (typeof window !== 'undefined') {
+                // Limpar dados de sessão
+                sessionStorage.removeItem('login_id_token')
+                sessionStorage.removeItem('login_response')
+                // Redirecionar para login
+                window.location.href = '/login'
+            }
+            // Lançar erro para interromper execução (não será exibido pois haverá redirect)
+            throw new Error('Redirecionando para login...')
         }
 
         // Tratamento específico para 405 (Method Not Allowed)

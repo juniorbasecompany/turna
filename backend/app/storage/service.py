@@ -104,7 +104,7 @@ class StorageService:
         return file_model
 
     def upload_schedule_pdf(
-        self, session: Session, tenant_id: int, schedule_version_id: int, pdf_bytes: bytes
+        self, session: Session, tenant_id: int, schedule_id: int, pdf_bytes: bytes
     ) -> File:
         """
         Faz upload de PDF de escala e cria registro File.
@@ -112,13 +112,13 @@ class StorageService:
         Args:
             session: Sessão do banco
             tenant_id: ID do tenant
-            schedule_version_id: ID da versão da escala
+            schedule_id: ID da escala
             pdf_bytes: Bytes do PDF
 
         Returns:
             Modelo File criado
         """
-        filename = f"schedule_{schedule_version_id}.pdf"
+        filename = f"schedule_{schedule_id}.pdf"
         content_type = "application/pdf"
         file_size = len(pdf_bytes)
 
