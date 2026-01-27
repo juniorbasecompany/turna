@@ -7,7 +7,7 @@ import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterPanel } from '@/components/FilterPanel'
+import { FilterInput, FilterPanel } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -29,7 +29,7 @@ type HospitalFormData = {
 
 export default function HospitalPage() {
     const { settings } = useTenantSettings()
-    const [nameFilter, setNameFilter] = useState('')
+    const [filterName, setFilterName] = useState('')
 
     const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
 
@@ -92,12 +92,12 @@ export default function HospitalPage() {
 
     // Filtrar hospitais por nome
     const filteredHospitals = useMemo(() => {
-        if (!nameFilter.trim()) {
+        if (!filterName.trim()) {
             return hospitals
         }
-        const filterLower = nameFilter.toLowerCase().trim()
+        const filterLower = filterName.toLowerCase().trim()
         return hospitals.filter((hospital) => hospital.name.toLowerCase().includes(filterLower))
-    }, [hospitals, nameFilter])
+    }, [hospitals, filterName])
 
     return (
         <>
@@ -159,14 +159,11 @@ export default function HospitalPage() {
                 filterContent={
                     !isEditing ? (
                         <FilterPanel>
-                            <FormField label="Nome">
-                                <input
-                                    type="text"
-                                    value={nameFilter}
-                                    onChange={(e) => setNameFilter(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </FormField>
+                            <FilterInput
+                                label="Nome"
+                                value={filterName}
+                                onChange={setFilterName}
+                            />
                         </FilterPanel>
                     ) : undefined
                 }

@@ -6,7 +6,7 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterPanel } from '@/components/FilterPanel'
+import { FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -49,13 +49,13 @@ export default function DemandPage() {
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
-    const [procedureFilter, setProcedureFilter] = useState('')
+    const [filterProcedure, setFilterProcedure] = useState('')
     const [skillsInput, setSkillsInput] = useState('')
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
     // "Desde" inicia com a data/hora atual, "Até" inicia vazio
-    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(() => new Date())
-    const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
+    const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Configuração inicial
     const initialFormData: DemandFormData = {
@@ -223,7 +223,7 @@ export default function DemandPage() {
 
     // Validar intervalo de datas
     useEffect(() => {
-        if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
+        if (filterStartDate && filterEndDate && filterStartDate > filterEndDate) {
             setError('Data inicial deve ser menor ou igual à data final')
         } else {
             // Limpar erro de validação de datas quando as datas forem válidas
@@ -231,16 +231,7 @@ export default function DemandPage() {
                 setError(null)
             }
         }
-    }, [periodStartDate, periodEndDate, setError, error])
-
-    // Handlers para mudança de data no filtro
-    const handlePeriodStartDateChange = (date: Date | null) => {
-        setPeriodStartDate(date)
-    }
-
-    const handlePeriodEndDateChange = (date: Date | null) => {
-        setPeriodEndDate(date)
-    }
+    }, [filterStartDate, filterEndDate, setError, error])
 
     // Wrappers customizados para skillsInput
     const handleCreateClickCustom = () => {
@@ -268,30 +259,30 @@ export default function DemandPage() {
         }
 
         // Filtro por procedimento
-        if (procedureFilter.trim()) {
-            const filterLower = procedureFilter.toLowerCase().trim()
+        if (filterProcedure.trim()) {
+            const filterLower = filterProcedure.toLowerCase().trim()
             filtered = filtered.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
         }
 
         // Filtro por período: start_time >= "Desde" e start_time <= "Até"
-        if (periodStartDate) {
+        if (filterStartDate) {
             filtered = filtered.filter((demand) => {
                 if (!demand.start_time) return false
                 const demandStart = new Date(demand.start_time)
-                return demandStart >= periodStartDate
+                return demandStart >= filterStartDate
             })
         }
 
-        if (periodEndDate) {
+        if (filterEndDate) {
             filtered = filtered.filter((demand) => {
                 if (!demand.start_time) return false
                 const demandStart = new Date(demand.start_time)
-                return demandStart <= periodEndDate
+                return demandStart <= filterEndDate
             })
         }
 
         return filtered
-    }, [demands, filterHospitalId, procedureFilter, periodStartDate, periodEndDate])
+    }, [demands, filterHospitalId, filterProcedure, filterStartDate, filterEndDate])
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {
@@ -490,44 +481,27 @@ export default function DemandPage() {
                     !isEditing ? (
                         <FilterPanel>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <FormField label="Hospital">
-                                    <select
-                                        value={filterHospitalId || ''}
-                                        onChange={(e) =>
-                                            setFilterHospitalId(e.target.value ? parseInt(e.target.value) : null)
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={loadingHospitals}
-                                    >
-                                        <option value=""></option>
-                                        {hospitals.map((hospital) => (
-                                            <option key={hospital.id} value={hospital.id}>
-                                                {hospital.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </FormField>
-                                <FormField label="Procedimento">
-                                    <input
-                                        type="text"
-                                        value={procedureFilter}
-                                        onChange={(e) => setProcedureFilter(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </FormField>
+                                <FilterSelect
+                                    label="Hospital"
+                                    value={filterHospitalId}
+                                    onChange={setFilterHospitalId}
+                                    options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                                    disabled={loadingHospitals}
+                                />
+                                <FilterInput
+                                    label="Procedimento"
+                                    value={filterProcedure}
+                                    onChange={setFilterProcedure}
+                                />
                             </FormFieldGrid>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <TenantDateTimePicker
-                                    label="Desde"
-                                    value={periodStartDate}
-                                    onChange={handlePeriodStartDateChange}
-                                    id="period_start_at_filter"
-                                />
-                                <TenantDateTimePicker
-                                    label="Até"
-                                    value={periodEndDate}
-                                    onChange={handlePeriodEndDateChange}
-                                    id="period_end_at_filter"
+                                <FilterDateRange
+                                    startValue={filterStartDate}
+                                    endValue={filterEndDate}
+                                    onStartChange={setFilterStartDate}
+                                    onEndChange={setFilterEndDate}
+                                    startId="filter_start_date"
+                                    endId="filter_end_date"
                                 />
                             </FormFieldGrid>
                         </FilterPanel>

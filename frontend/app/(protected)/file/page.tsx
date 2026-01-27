@@ -5,8 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons } from '@/components/FilterButtons'
-import { FilterPanel } from '@/components/FilterPanel'
+import { FilterButtons, FilterPanel } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
@@ -583,16 +582,21 @@ export default function FilesPage() {
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
-    // Inicializar startDate com primeiro dia do mês atual às 00:00, endDate vazio
-    const [startDate, setStartDate] = useState<Date | null>(() => {
+    // Inicializar filterStartDate com primeiro dia da semana atual (segunda-feira) às 00:00, filterEndDate vazio
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => {
         const today = new Date()
-        return new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0)
+        const dayOfWeek = today.getDay() // 0=domingo, 1=segunda, ..., 6=sábado
+        // Calcular quantos dias voltar para chegar na segunda-feira
+        // Se hoje é domingo (0), volta 6 dias; se segunda (1), volta 0; se terça (2), volta 1, etc.
+        const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+        const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysToSubtract, 0, 0, 0, 0)
+        return monday
     })
 
-    const [endDate, setEndDate] = useState<Date | null>(null)
+    const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Filtro de hospital
-    const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
+    const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
@@ -633,11 +637,11 @@ export default function FilesPage() {
     const additionalListParams = useMemo(() => {
         if (!settings) return undefined
         return {
-            start_at: startDate ? startDate.toISOString() : null,
-            end_at: endDate ? endDate.toISOString() : null,
-            hospital_id: selectedHospitalId || null,
+            start_at: filterStartDate ? filterStartDate.toISOString() : null,
+            end_at: filterEndDate ? filterEndDate.toISOString() : null,
+            hospital_id: filterHospitalId || null,
         }
-    }, [startDate, endDate, selectedHospitalId, settings])
+    }, [filterStartDate, filterEndDate, filterHospitalId, settings])
 
     // useEntityPage
     const {
@@ -715,10 +719,10 @@ export default function FilesPage() {
 
     // Validar intervalo de datas
     useEffect(() => {
-        if (startDate && endDate && startDate > endDate) {
+        if (filterStartDate && filterEndDate && filterStartDate > filterEndDate) {
             setError('Data inicial deve ser menor ou igual à data final')
         }
-    }, [startDate, endDate, setError])
+    }, [filterStartDate, filterEndDate, setError])
 
     // Resetar offset quando filtros mudarem
     useEffect(() => {
@@ -762,17 +766,17 @@ export default function FilesPage() {
 
     // Handlers para mudança de data no TenantDateTimePicker
     const handleStartDateChange = (date: Date | null) => {
-        setStartDate(date)
+        setFilterStartDate(date)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
     const handleEndDateChange = (date: Date | null) => {
-        setEndDate(date)
+        setFilterEndDate(date)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
     const handleHospitalChange = (hospitalId: string) => {
-        setSelectedHospitalId(hospitalId ? parseInt(hospitalId) : null)
+        setFilterHospitalId(hospitalId ? parseInt(hospitalId) : null)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
@@ -962,7 +966,7 @@ export default function FilesPage() {
         try {
             // 1. Upload do arquivo
             // Validar que há hospital selecionado
-            if (!selectedHospitalId) {
+            if (!filterHospitalId) {
                 throw new Error('Selecione o hospital')
             }
 
@@ -970,7 +974,7 @@ export default function FilesPage() {
             formData.append('file', pendingFile.file)
 
             // Upload usa FormData - protectedFetch suporta FormData via options.body
-            const uploadData = await protectedFetch<FileUploadResponse>(`/api/file/upload?hospital_id=${selectedHospitalId}`, {
+            const uploadData = await protectedFetch<FileUploadResponse>(`/api/file/upload?hospital_id=${filterHospitalId}`, {
                 method: 'POST',
                 body: formData,
             })
@@ -994,7 +998,7 @@ export default function FilesPage() {
                 return newPending
             })
         }
-    }, [selectedHospitalId])
+    }, [filterHospitalId])
 
     // Função para adicionar arquivos à lista (usada tanto pelo input quanto pelo drag&drop)
     const addFilesToList = useCallback((files: File[]) => {
@@ -1071,7 +1075,7 @@ export default function FilesPage() {
 
     // Abrir seletor de arquivos ao clicar no card
     const handleUploadCardClick = useCallback(() => {
-        if (!selectedHospitalId) {
+        if (!filterHospitalId) {
             setUploadCardFlash(true)
             setHospitalFieldFlash(true)
             // Remover o flash após 1 segundo
@@ -1083,7 +1087,7 @@ export default function FilesPage() {
         }
         setBottomBarMessage(null)
         fileInputRef.current?.click()
-    }, [selectedHospitalId])
+    }, [filterHospitalId])
 
 
     // Remover arquivo pendente
@@ -1366,7 +1370,7 @@ export default function FilesPage() {
                 /* Filtro por período e hospital */
                 <FilterPanel
                     validationErrors={
-                        startDate && endDate && startDate > endDate ? (
+                        filterStartDate && filterEndDate && filterStartDate > filterEndDate ? (
                             <p className="mt-2 text-sm text-red-600">
                                 Data inicial deve ser menor ou igual à data final
                             </p>
@@ -1383,7 +1387,7 @@ export default function FilesPage() {
                             ) : (
                                 <select
                                     id="hospital-filter"
-                                    value={selectedHospitalId || ''}
+                                    value={filterHospitalId || ''}
                                     onChange={(e) => handleHospitalChange(e.target.value)}
                                     className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none transition-all duration-200 ${hospitalFieldFlash
                                         ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
@@ -1401,17 +1405,17 @@ export default function FilesPage() {
                         </FormField>
                         <TenantDateTimePicker
                             label="Cadastrados desde"
-                            value={startDate}
+                            value={filterStartDate}
                             onChange={handleStartDateChange}
-                            id="start_at"
-                            name="start_at"
+                            id="filter_start_date"
+                            name="filter_start_date"
                         />
                         <TenantDateTimePicker
                             label="Cadastrados até"
-                            value={endDate}
+                            value={filterEndDate}
                             onChange={handleEndDateChange}
-                            id="end_at"
-                            name="end_at"
+                            id="filter_end_date"
+                            name="filter_end_date"
                         />
                     </FormFieldGrid>
 

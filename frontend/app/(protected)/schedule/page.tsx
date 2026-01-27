@@ -6,8 +6,8 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons, FilterOption } from '@/components/FilterButtons'
-import { FilterPanel } from '@/components/FilterPanel'
+import { FilterButtons, FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
+import type { FilterOption } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -48,13 +48,13 @@ export default function SchedulePage() {
     // Estados auxiliares - Hospitais
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
-    const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
+    const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
 
     // Estados auxiliares
-    const [nameFilter, setNameFilter] = useState('')
+    const [filterName, setFilterName] = useState('')
     const [generating, setGenerating] = useState(false)
-    const [periodStartFlash, setPeriodStartFlash] = useState(false)
-    const [periodEndFlash, setPeriodEndFlash] = useState(false)
+    const [filterStartFlash, setFilterStartFlash] = useState(false)
+    const [filterEndFlash, setFilterEndFlash] = useState(false)
 
     // Ref para AbortController do SSE (permite cancelar ao sair da página)
     const sseAbortControllerRef = useRef<AbortController | null>(null)
@@ -67,8 +67,8 @@ export default function SchedulePage() {
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
     // "Desde" inicia com a data/hora atual, "Até" inicia vazio
-    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(() => new Date())
-    const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
+    const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Configuração inicial
     const initialFormData: ScheduleFormData = {
@@ -158,8 +158,8 @@ export default function SchedulePage() {
         if (!settings) return undefined
         const params: Record<string, string | number | boolean | null> = {
             // Usar data/hora diretamente (ISO string) para filtro de período
-            period_start_at: periodStartDate ? periodStartDate.toISOString() : null,
-            period_end_at: periodEndDate ? periodEndDate.toISOString() : null,
+            period_start_at: filterStartDate ? filterStartDate.toISOString() : null,
+            period_end_at: filterEndDate ? filterEndDate.toISOString() : null,
         }
 
         // Status: passar apenas se exatamente 1 estiver selecionado
@@ -169,7 +169,7 @@ export default function SchedulePage() {
         }
 
         return params
-    }, [periodStartDate, periodEndDate, statusFilters.selectedFilters, settings])
+    }, [filterStartDate, filterEndDate, statusFilters.selectedFilters, settings])
 
     // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
     const needsFrontendFilter = useMemo(() => {
@@ -240,7 +240,7 @@ export default function SchedulePage() {
                 setHospitals(response.items || [])
                 // Se houver apenas um hospital, selecioná-lo automaticamente
                 if (response.items?.length === 1) {
-                    setSelectedHospitalId(response.items[0].id)
+                    setFilterHospitalId(response.items[0].id)
                 }
             } catch (err) {
                 console.error('Erro ao carregar hospitais:', err)
@@ -253,7 +253,7 @@ export default function SchedulePage() {
 
     // Validar intervalo de datas
     useEffect(() => {
-        if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
+        if (filterStartDate && filterEndDate && filterStartDate > filterEndDate) {
             setError('Data inicial deve ser menor ou igual à data final')
         } else {
             // Limpar erro de validação de datas quando as datas forem válidas
@@ -261,17 +261,17 @@ export default function SchedulePage() {
                 setError(null)
             }
         }
-    }, [periodStartDate, periodEndDate, setError, error])
+    }, [filterStartDate, filterEndDate, setError, error])
 
-    // Handlers para mudança de data no filtro
-    const handlePeriodStartDateChange = (date: Date | null) => {
-        setPeriodStartDate(date)
-        paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
+    // Handlers para mudança de data no filtro (com reset de paginação)
+    const handleFilterStartDateChange = (date: Date | null) => {
+        setFilterStartDate(date)
+        paginationHandlers.onFirst()
     }
 
-    const handlePeriodEndDateChange = (date: Date | null) => {
-        setPeriodEndDate(date)
-        paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
+    const handleFilterEndDateChange = (date: Date | null) => {
+        setFilterEndDate(date)
+        paginationHandlers.onFirst()
     }
 
     // Cleanup: cancelar SSE ao desmontar componente
@@ -286,12 +286,12 @@ export default function SchedulePage() {
 
     // Função para disparar flash nos campos de período
     const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
-        setPeriodStartFlash(isStartMissing)
-        setPeriodEndFlash(isEndMissing)
+        setFilterStartFlash(isStartMissing)
+        setFilterEndFlash(isEndMissing)
         // Remover o flash após 1 segundo
         setTimeout(() => {
-            setPeriodStartFlash(false)
-            setPeriodEndFlash(false)
+            setFilterStartFlash(false)
+            setFilterEndFlash(false)
         }, 1000)
     }
 
@@ -392,13 +392,13 @@ export default function SchedulePage() {
     // Handler para gerar escala (mesma ação do painel de demandas)
     const handleGenerateSchedule = async () => {
         // Hospital é obrigatório
-        if (!selectedHospitalId) {
+        if (!filterHospitalId) {
             setError('Selecione um hospital')
             return
         }
 
         // Apenas período inicial é obrigatório
-        if (!periodStartDate) {
+        if (!filterStartDate) {
             triggerPeriodFlash(true, false)
             setError('Informe o período inicial')
             return
@@ -410,7 +410,7 @@ export default function SchedulePage() {
         }
 
         // Validar que data final é maior que inicial (se informada)
-        if (periodEndDate && periodStartDate > periodEndDate) {
+        if (filterEndDate && filterStartDate > filterEndDate) {
             setError('Data final deve ser maior que a data inicial')
             return
         }
@@ -420,20 +420,20 @@ export default function SchedulePage() {
             setError(null)
 
             // Converter datas para UTC usando timezone do tenant
-            const periodStartAt = localDateToUtcStart(periodStartDate, settings)
+            const periodStartAt = localDateToUtcStart(filterStartDate, settings)
             // Se período final não informado, usar data muito futura (10 anos)
-            const effectiveEndDate = periodEndDate || new Date(periodStartDate.getTime() + 10 * 365 * 24 * 60 * 60 * 1000)
+            const effectiveEndDate = filterEndDate || new Date(filterStartDate.getTime() + 10 * 365 * 24 * 60 * 60 * 1000)
             const periodEndAt = localDateToUtcEndExclusive(effectiveEndDate, settings)
 
             // Criar nome padrão baseado no período
-            const selectedHospital = hospitals.find(h => h.id === selectedHospitalId)
+            const selectedHospital = hospitals.find(h => h.id === filterHospitalId)
             const hospitalName = selectedHospital?.name || 'Hospital'
-            const name = periodEndDate
-                ? `${hospitalName} - ${periodStartDate.toLocaleDateString('pt-BR')} a ${periodEndDate.toLocaleDateString('pt-BR')}`
-                : `${hospitalName} - a partir de ${periodStartDate.toLocaleDateString('pt-BR')}`
+            const name = filterEndDate
+                ? `${hospitalName} - ${filterStartDate.toLocaleDateString('pt-BR')} a ${filterEndDate.toLocaleDateString('pt-BR')}`
+                : `${hospitalName} - a partir de ${filterStartDate.toLocaleDateString('pt-BR')}`
 
             const request: ScheduleGenerateFromDemandsRequest = {
-                hospital_id: selectedHospitalId,
+                hospital_id: filterHospitalId,
                 name,
                 period_start_at: periodStartAt,
                 period_end_at: periodEndAt,
@@ -485,8 +485,8 @@ export default function SchedulePage() {
         let filtered = schedules
 
         // Filtro por nome (sempre no frontend, pois não é suportado pela API)
-        if (nameFilter.trim()) {
-            const filterLower = nameFilter.toLowerCase().trim()
+        if (filterName.trim()) {
+            const filterLower = filterName.toLowerCase().trim()
             filtered = filtered.filter((schedule) => schedule.name.toLowerCase().includes(filterLower))
         }
 
@@ -496,7 +496,7 @@ export default function SchedulePage() {
         }
 
         return filtered
-    }, [schedules, nameFilter, statusFilters.selectedFilters, needsFrontendFilter])
+    }, [schedules, filterName, statusFilters.selectedFilters, needsFrontendFilter])
 
     // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedSchedules = useMemo(() => {
@@ -704,46 +704,29 @@ export default function SchedulePage() {
                     !isEditing ? (
                         <FilterPanel>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <FormField label="Hospital" required>
-                                    <select
-                                        value={selectedHospitalId || ''}
-                                        onChange={(e) =>
-                                            setSelectedHospitalId(e.target.value ? parseInt(e.target.value) : null)
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={loadingHospitals}
-                                    >
-                                        <option value=""></option>
-                                        {hospitals.map((hospital) => (
-                                            <option key={hospital.id} value={hospital.id}>
-                                                {hospital.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </FormField>
-                                <FormField label="Nome">
-                                    <input
-                                        type="text"
-                                        value={nameFilter}
-                                        onChange={(e) => setNameFilter(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </FormField>
+                                <FilterSelect
+                                    label="Hospital"
+                                    value={filterHospitalId}
+                                    onChange={setFilterHospitalId}
+                                    options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                                    disabled={loadingHospitals}
+                                />
+                                <FilterInput
+                                    label="Nome"
+                                    value={filterName}
+                                    onChange={setFilterName}
+                                />
                             </FormFieldGrid>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>
-                                <TenantDateTimePicker
-                                    label="Desde"
-                                    value={periodStartDate}
-                                    onChange={handlePeriodStartDateChange}
-                                    id="period_start_at_filter"
-                                    showFlash={periodStartFlash}
-                                />
-                                <TenantDateTimePicker
-                                    label="Até"
-                                    value={periodEndDate}
-                                    onChange={handlePeriodEndDateChange}
-                                    id="period_end_at_filter"
-                                    showFlash={periodEndFlash}
+                                <FilterDateRange
+                                    startValue={filterStartDate}
+                                    endValue={filterEndDate}
+                                    onStartChange={handleFilterStartDateChange}
+                                    onEndChange={handleFilterEndDateChange}
+                                    startId="filter_start_date"
+                                    endId="filter_end_date"
+                                    startShowFlash={filterStartFlash}
+                                    endShowFlash={filterEndFlash}
                                 />
                             </FormFieldGrid>
                             <FilterButtons

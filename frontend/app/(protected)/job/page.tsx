@@ -4,8 +4,8 @@ import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons, FilterOption } from '@/components/FilterButtons'
-import { FilterPanel } from '@/components/FilterPanel'
+import { FilterButtons, FilterDateRange, FilterPanel } from '@/components/filter'
+import type { FilterOption } from '@/components/filter'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
@@ -47,8 +47,8 @@ export default function JobPage() {
 
     // Filtros de período de início (started_at)
     // "Desde" inicia vazio, "Até" inicia vazio
-    const [startedAtFrom, setStartedAtFrom] = useState<Date | null>(null)
-    const [startedAtTo, setStartedAtTo] = useState<Date | null>(null)
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(null)
+    const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Configuração inicial (vazio, pois jobs não são editáveis)
     const initialFormData: JobFormData = {}
@@ -100,7 +100,7 @@ export default function JobPage() {
     // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados ou há filtros de data)
     const needsFrontendFilter = useMemo(() => {
         // Se há filtros de data, sempre filtra no frontend (para evitar problemas de timezone)
-        if (startedAtFrom || startedAtTo) {
+        if (filterStartDate || filterEndDate) {
             return true
         }
 
@@ -122,7 +122,7 @@ export default function JobPage() {
 
         // Se múltiplos estão selecionados, precisa filtrar no frontend
         return true
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, startedAtFrom, startedAtTo])
+    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, filterStartDate, filterEndDate])
 
     // Estado para controlar interrupção e exclusão customizada
     const [interrupting, setInterrupting] = useState(false)
@@ -473,24 +473,24 @@ export default function JobPage() {
         }
 
         // Filtro por período: started_at >= "Desde" e started_at <= "Até"
-        if (startedAtFrom) {
+        if (filterStartDate) {
             filtered = filtered.filter((job) => {
                 if (!job.started_at) return false
                 const jobStarted = new Date(job.started_at)
-                return jobStarted >= startedAtFrom
+                return jobStarted >= filterStartDate
             })
         }
 
-        if (startedAtTo) {
+        if (filterEndDate) {
             filtered = filtered.filter((job) => {
                 if (!job.started_at) return false
                 const jobStarted = new Date(job.started_at)
-                return jobStarted <= startedAtTo
+                return jobStarted <= filterEndDate
             })
         }
 
         return filtered
-    }, [jobs, jobTypeFilters.selectedFilters, statusFilters.selectedFilters, needsFrontendFilter, startedAtFrom, startedAtTo])
+    }, [jobs, jobTypeFilters.selectedFilters, statusFilters.selectedFilters, needsFrontendFilter, filterStartDate, filterEndDate])
 
     // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedJobs = useMemo(() => {
@@ -514,7 +514,7 @@ export default function JobPage() {
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, startedAtFrom, startedAtTo])
+    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, filterStartDate, filterEndDate])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -726,17 +726,15 @@ export default function JobPage() {
                 filterContent={
                     <FilterPanel>
                         <FormFieldGrid cols={1} smCols={2} gap={4}>
-                            <TenantDateTimePicker
-                                label="Iniciado desde"
-                                value={startedAtFrom}
-                                onChange={setStartedAtFrom}
-                                id="started_at_from_filter"
-                            />
-                            <TenantDateTimePicker
-                                label="Iniciado até"
-                                value={startedAtTo}
-                                onChange={setStartedAtTo}
-                                id="started_at_to_filter"
+                            <FilterDateRange
+                                startLabel="Iniciado desde"
+                                endLabel="Iniciado até"
+                                startValue={filterStartDate}
+                                endValue={filterEndDate}
+                                onStartChange={setFilterStartDate}
+                                onEndChange={setFilterEndDate}
+                                startId="filter_start_date"
+                                endId="filter_end_date"
                             />
                         </FormFieldGrid>
                         <FilterButtons
