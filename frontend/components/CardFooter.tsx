@@ -13,18 +13,20 @@ interface CardFooterProps {
     date: string
     /** Configurações do tenant para formatação de data */
     settings: TenantFormatSettings | null
-    /** Callback quando o botão de exclusão é clicado */
-    onToggleSelection: (e: React.MouseEvent) => void
+    /** Callback quando o checkbox de exclusão é alterado */
+    onToggleSelection: (e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => void
     /** Callback quando o botão de editar é clicado */
     onEdit: () => void
     /** Se os botões estão desabilitados */
     disabled?: boolean
-    /** Título do botão de exclusão */
+    /** Título do checkbox de exclusão */
     deleteTitle?: string
     /** Título do botão de editar */
     editTitle?: string
     /** Se deve mostrar o botão de editar (padrão: true) */
     showEdit?: boolean
+    /** Se deve mostrar o checkbox de exclusão (padrão: true) */
+    showDelete?: boolean
     /** Texto secundário opcional (ex: tamanho do arquivo) */
     secondaryText?: string
     /** Elemento React opcional para renderizar antes dos botões de ação (ex: checkbox) */
@@ -36,7 +38,7 @@ interface CardFooterProps {
  *
  * Padroniza o rodapé usado em Hospital, Demand, File, etc:
  * - Data formatada à esquerda (com texto secundário opcional)
- * - Botões de ação (excluir/editar) à direita (com elemento opcional antes)
+ * - Ações à direita: checkbox para exclusão e botão de editar (com elemento opcional antes)
  *
  * @example
  * ```tsx
@@ -53,7 +55,7 @@ interface CardFooterProps {
  *   disabled={deleting}
  * />
  *
- * // Uso com texto secundário e elemento antes dos botões (File)
+ * // Uso com texto secundário e elemento antes das ações (File)
  * <CardFooter
  *   isSelected={isSelected}
  *   date={file.created_at}
@@ -75,6 +77,7 @@ export function CardFooter({
     deleteTitle,
     editTitle,
     showEdit = true,
+    showDelete = true,
     secondaryText,
     beforeActions,
 }: CardFooterProps) {
@@ -106,6 +109,7 @@ export function CardFooter({
                     deleteTitle={deleteTitle}
                     editTitle={editTitle}
                     showEdit={showEdit}
+                    showDelete={showDelete}
                 />
             </div>
         </div>

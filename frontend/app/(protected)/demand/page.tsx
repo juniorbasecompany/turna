@@ -16,6 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
+import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     DemandCreateRequest,
@@ -720,8 +721,7 @@ export default function DemandPage() {
                                             </svg>
                                         </div>
                                         <h3
-                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                }`}
+                                            className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
                                             title={demand.procedure}
                                         >
                                             {demand.procedure}
@@ -753,11 +753,11 @@ export default function DemandPage() {
                             {/* Detalhes adicionais */}
                             <div className="mb-3 space-y-1 text-sm">
                                 {demand.room && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Sala:</span> {demand.room}
                                     </p>
                                 )}
-                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                     <span className="font-medium">Início:</span>{' '}
                                     {settings
                                         ? formatDateTime(demand.start_time, settings)
@@ -769,7 +769,7 @@ export default function DemandPage() {
                                             minute: '2-digit',
                                         })}
                                 </p>
-                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                     <span className="font-medium">Fim:</span>{' '}
                                     {settings
                                         ? formatDateTime(demand.end_time, settings)
@@ -782,22 +782,22 @@ export default function DemandPage() {
                                         })}
                                 </p>
                                 {demand.anesthesia_type && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Anestesia:</span> {demand.anesthesia_type}
                                     </p>
                                 )}
                                 {demand.complexity && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Complexidade:</span> {demand.complexity}
                                     </p>
                                 )}
                                 {demand.skills && demand.skills.length > 0 && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Habilidades:</span> {demand.skills.join(', ')}
                                     </p>
                                 )}
                                 {demand.notes && (
-                                    <p className={`text-xs ${isSelected ? 'text-red-700' : 'text-gray-500'} line-clamp-2`}>
+                                    <p className={`text-xs ${getCardTertiaryTextClasses(isSelected)} line-clamp-2`}>
                                         <span className="font-medium">Obs:</span> {demand.notes}
                                     </p>
                                 )}

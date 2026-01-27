@@ -578,8 +578,6 @@ export default function FilesPage() {
     const processingRef = useRef(false)
     const processedFilesRef = useRef<Set<string>>(new Set())
     const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
-    // Seleção de leitura separada (não gerenciada por useEntityPage)
-    const [selectedFilesForReading, setSelectedFilesForReading] = useState<Set<number>>(new Set())
     const [reading, setReading] = useState(false)
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [uploading, setUploading] = useState(false)
@@ -654,6 +652,7 @@ export default function FilesPage() {
         deleting,
         selectedItems: selectedFiles,
         toggleSelection: toggleFileSelection,
+        clearSelection,
         selectedCount: selectedFilesCount,
         pagination,
         total,
@@ -779,34 +778,6 @@ export default function FilesPage() {
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
 
-    // Wrapper para toggleFileSelection que também remove da seleção de leitura
-    const toggleFileSelectionWrapper = useCallback((fileId: number) => {
-        toggleFileSelection(fileId)
-        // Ao selecionar para exclusão, remover da seleção de leitura
-        setSelectedFilesForReading((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(fileId)
-            return newSet
-        })
-    }, [toggleFileSelection])
-
-    // Toggle seleção de arquivo para leitura
-    const toggleFileSelectionForReading = useCallback((fileId: number) => {
-        setSelectedFilesForReading((prev) => {
-            const newSet = new Set(prev)
-            if (newSet.has(fileId)) {
-                newSet.delete(fileId)
-            } else {
-                newSet.add(fileId)
-            }
-            return newSet
-        })
-        // Ao selecionar para leitura, remover da seleção de exclusão
-        if (selectedFiles.has(fileId)) {
-            toggleFileSelection(fileId)
-        }
-    }, [selectedFiles, toggleFileSelection])
-
     // Buscar JSON do arquivo através do job
     const fetchFileJson = useCallback(async (fileId: number): Promise<{ json: string; jobId: number | null }> => {
         try {
@@ -916,7 +887,7 @@ export default function FilesPage() {
         }
     }, [editingFile, editingJobId, jsonContent, loadItems])
 
-    // Cancelar edição
+    // Cancelar edição e limpar seleção
     const handleCancel = useCallback(() => {
         setShowEditArea(false)
         setEditingFile(null)
@@ -924,7 +895,8 @@ export default function FilesPage() {
         setJsonContent('')
         setOriginalJsonContent('')
         setError(null)
-    }, [])
+        clearSelection()
+    }, [clearSelection])
 
     // Polling do status do job
     const pollJobStatus = useCallback(async (jobId: number, fileIndex: number) => {
@@ -1269,14 +1241,14 @@ export default function FilesPage() {
 
     // Ler conteúdo dos arquivos selecionados
     const handleReadSelected = async () => {
-        if (selectedFilesForReading.size === 0) return
+        if (selectedFilesCount === 0) return
 
         setReading(true)
         setError(null)
 
         try {
             // Processar cada arquivo selecionado para leitura
-            const fileIds = Array.from(selectedFilesForReading)
+            const fileIds = Array.from(selectedFiles)
 
             for (const fileId of fileIds) {
                 try {
@@ -1300,7 +1272,7 @@ export default function FilesPage() {
             await loadItems()
 
             // Limpar seleção após iniciar leitura
-            setSelectedFilesForReading(new Set())
+            clearSelection()
         } catch (err) {
             setError(
                 err instanceof Error
@@ -1322,10 +1294,9 @@ export default function FilesPage() {
         submitting,
         deleting,
         showEditArea, // Flag alternativa para File
-        additionalSelectedCount: selectedFilesForReading.size,
         additionalStates: { reading },
         customActions:
-            selectedFilesForReading.size > 0
+            selectedFilesCount > 0
                 ? [
                     {
                         label: 'Ler conteúdo',
@@ -1344,7 +1315,7 @@ export default function FilesPage() {
     const actionBarErrorProps = getActionBarErrorProps(
         error,
         showEditArea, // File usa showEditArea em vez de isEditing
-        selectedFilesCount + selectedFilesForReading.size // Contar ambas as seleções
+        selectedFilesCount
     )
 
     return (
@@ -1647,7 +1618,6 @@ export default function FilesPage() {
                         {paginatedFiles.map((file) => {
                             const fileTypeInfo = getFileTypeInfo(file.content_type)
                             const isSelected = selectedFiles.has(file.id)
-                            const isSelectedForReading = selectedFilesForReading.has(file.id)
                             const jobStatusClasses = getJobStatusCardClasses(file.job_status)
 
                             // Calcular cor do hospital (com fallback para branco se não houver cor)
@@ -1666,28 +1636,13 @@ export default function FilesPage() {
                                             date={file.created_at}
                                             settings={settings}
                                             secondaryText={formatFileSize(file.file_size)}
-                                            beforeActions={
-                                                <label className="flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelectedForReading}
-                                                        onChange={(e) => {
-                                                            e.stopPropagation()
-                                                            toggleFileSelectionForReading(file.id)
-                                                        }}
-                                                        disabled={reading}
-                                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
-                                                    />
-                                                </label>
-                                            }
                                             onToggleSelection={(e) => {
                                                 e.stopPropagation()
-                                                toggleFileSelectionWrapper(file.id)
+                                                toggleFileSelection(file.id)
                                             }}
                                             onEdit={() => handleEditClick(file)}
-                                            disabled={deleting}
-                                            deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
+                                            disabled={deleting || reading}
+                                            deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
                                             editTitle="Editar arquivo"
                                         />
                                     }
@@ -1720,7 +1675,7 @@ export default function FilesPage() {
                                             <div className="flex-1 min-h-0 relative">
                                                 <FileThumbnail
                                                     file={file}
-                                                    onClick={() => toggleFileSelectionForReading(file.id)}
+                                                    onClick={() => toggleFileSelection(file.id)}
                                                 />
                                             </div>
                                         </div>
@@ -1730,8 +1685,8 @@ export default function FilesPage() {
                                     <div
                                         className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4 cursor-pointer"
                                         style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
-                                        onClick={() => toggleFileSelectionForReading(file.id)}
-                                        title={isSelectedForReading ? 'Desmarcar para leitura' : 'Marcar para leitura'}
+                                        onClick={() => toggleFileSelection(file.id)}
+                                        title={isSelected ? 'Desmarcar' : 'Marcar'}
                                     >
                                         {getStatusIcon(file.job_status)}
                                         <span className="text-base font-normal text-gray-900 flex items-center gap-2">

@@ -18,11 +18,14 @@ import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
+import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     ScheduleCreateRequest,
     ScheduleUpdateRequest,
     ScheduleResponse,
+    ScheduleGenerateFromDemandsRequest,
+    ScheduleGenerateFromDemandsResponse,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -42,6 +45,9 @@ export default function SchedulePage() {
 
     // Estados auxiliares
     const [nameFilter, setNameFilter] = useState('')
+    const [generating, setGenerating] = useState(false)
+    const [periodStartFlash, setPeriodStartFlash] = useState(false)
+    const [periodEndFlash, setPeriodEndFlash] = useState(false)
 
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
@@ -227,6 +233,91 @@ export default function SchedulePage() {
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
+    // Função para disparar flash nos campos de período
+    const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
+        setPeriodStartFlash(isStartMissing)
+        setPeriodEndFlash(isEndMissing)
+        // Remover o flash após 1 segundo
+        setTimeout(() => {
+            setPeriodStartFlash(false)
+            setPeriodEndFlash(false)
+        }, 1000)
+    }
+
+    // Handler para gerar escala (mesma ação do painel de demandas)
+    const handleGenerateSchedule = async () => {
+        const isStartMissing = !periodStartDate
+        const isEndMissing = !periodEndDate
+
+        if (isStartMissing || isEndMissing) {
+            triggerPeriodFlash(isStartMissing, isEndMissing)
+            setError('Informe o período inicial e final')
+            return
+        }
+
+        if (!periodStartDate || !periodEndDate || !settings) {
+            setError('Período inválido')
+            return
+        }
+
+        // Validar que data final é maior que inicial
+        if (periodStartDate > periodEndDate) {
+            setError('Data final deve ser maior que a data inicial')
+            return
+        }
+
+        try {
+            setGenerating(true)
+            setError(null)
+
+            // Converter datas para UTC usando timezone do tenant
+            const periodStartAt = localDateToUtcStart(periodStartDate, settings)
+            const periodEndAt = localDateToUtcEndExclusive(periodEndDate, settings)
+
+            // Criar nome padrão baseado no período
+            const name = `Escala ${periodStartDate.toLocaleDateString('pt-BR')} - ${periodEndDate.toLocaleDateString('pt-BR')}`
+
+            const request: ScheduleGenerateFromDemandsRequest = {
+                name,
+                period_start_at: periodStartAt,
+                period_end_at: periodEndAt,
+                allocation_mode: 'greedy',
+                version_number: 1,
+            }
+
+            await protectedFetch<ScheduleGenerateFromDemandsResponse>(
+                '/api/schedule/generate-from-demands',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(request),
+                }
+            )
+
+            // Recarregar a lista de escalas após gerar
+            loadItems()
+        } catch (err) {
+            let message = 'Erro ao gerar escala'
+            if (err instanceof Error) {
+                message = err.message
+                // Melhorar mensagem para erro 405
+                if (message.includes('405') || message.includes('Method Not Allowed')) {
+                    message = 'Erro 405: Método HTTP não permitido. Verifique se o endpoint está configurado corretamente no backend.'
+                }
+                // Melhorar mensagem para erro 404
+                if (message.includes('404') || message.includes('Not Found')) {
+                    message = 'Erro 404: Endpoint não encontrado. Verifique se o backend está rodando e se a rota está correta.'
+                }
+            }
+            setError(message)
+            console.error('Erro ao gerar escala:', err)
+        } finally {
+            setGenerating(false)
+        }
+    }
+
     // Filtrar schedules por nome e status (filtro no frontend quando necessário)
     const filteredSchedules = useMemo(() => {
         let filtered = schedules
@@ -269,8 +360,8 @@ export default function SchedulePage() {
         paginationHandlers.onFirst()
     }, [statusFilters.selectedFilters])
 
-    // Botões do ActionBar
-    const actionBarButtons = useActionBarButtons({
+    // Botões do ActionBar (com botão fixo "Calcular escala")
+    const baseActionBarButtons = useActionBarButtons({
         isEditing,
         selectedCount: selectedSchedulesCount,
         hasChanges: hasChanges(),
@@ -280,6 +371,22 @@ export default function SchedulePage() {
         onDelete: handleDeleteSelected,
         onSave: handleSave,
     })
+
+    // Botão "Calcular" (oculto no modo edição) + botões do hook
+    const actionBarButtons = useMemo(() => {
+        // Ocultar botão no modo edição
+        if (isEditing) {
+            return baseActionBarButtons
+        }
+        const generateButton = {
+            label: generating ? 'Calculando...' : 'Calcular',
+            onClick: handleGenerateSchedule,
+            variant: 'primary' as const,
+            disabled: generating,
+            loading: generating,
+        }
+        return [...baseActionBarButtons, generateButton]
+    }, [baseActionBarButtons, generating, isEditing, handleGenerateSchedule])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -428,6 +535,7 @@ export default function SchedulePage() {
                                     onChange={handlePeriodStartDateChange}
                                     id="period_start_at_filter"
                                     name="period_start_at_filter"
+                                    showFlash={periodStartFlash}
                                 />
                                 <TenantDatePicker
                                     label="Período fim"
@@ -435,6 +543,7 @@ export default function SchedulePage() {
                                     onChange={handlePeriodEndDateChange}
                                     id="period_end_at_filter"
                                     name="period_end_at_filter"
+                                    showFlash={periodEndFlash}
                                 />
                             </FormFieldGrid>
                             <FilterButtons
@@ -521,8 +630,7 @@ export default function SchedulePage() {
                                             </svg>
                                         </div>
                                         <h3
-                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                }`}
+                                            className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
                                             title={schedule.name}
                                         >
                                             {schedule.name}
@@ -543,7 +651,7 @@ export default function SchedulePage() {
 
                             {/* Detalhes adicionais */}
                             <div className="mb-3 space-y-1 text-sm">
-                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                     <span className="font-medium">Início:</span>{' '}
                                     {settings
                                         ? formatDateTime(schedule.period_start_at, settings)
@@ -555,7 +663,7 @@ export default function SchedulePage() {
                                             minute: '2-digit',
                                         })}
                                 </p>
-                                <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                     <span className="font-medium">Fim:</span>{' '}
                                     {settings
                                         ? formatDateTime(schedule.period_end_at, settings)
@@ -568,7 +676,7 @@ export default function SchedulePage() {
                                         })}
                                 </p>
                                 {schedule.generated_at && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Gerada em:</span>{' '}
                                         {settings
                                             ? formatDateTime(schedule.generated_at, settings)
@@ -582,7 +690,7 @@ export default function SchedulePage() {
                                     </p>
                                 )}
                                 {schedule.published_at && (
-                                    <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                    <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                         <span className="font-medium">Publicada em:</span>{' '}
                                         {settings
                                             ? formatDateTime(schedule.published_at, settings)

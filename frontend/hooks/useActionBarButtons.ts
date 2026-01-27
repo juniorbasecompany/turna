@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 interface ActionButton {
     label: string
     onClick: () => void
-    variant: 'primary' | 'secondary'
+    variant: 'primary' | 'secondary' | 'danger'
     disabled?: boolean
     loading?: boolean
 }
@@ -141,7 +141,7 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
             buttons.push({
                 label: deleteLabel,
                 onClick: onDelete,
-                variant: 'primary',
+                variant: 'danger',
                 disabled: deleting || submitting,
                 loading: deleting,
             })

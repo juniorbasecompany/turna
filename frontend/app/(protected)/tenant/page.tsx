@@ -18,6 +18,7 @@ import {
     TenantUpdateRequest,
 } from '@/types/api'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { getCardTextClasses } from '@/lib/cardStyles'
 
 type TenantFormData = {
     name: string
@@ -275,9 +276,7 @@ export default function TenantPage() {
                                             </svg>
                                         </div>
                                         <h3
-                                            className={`text-sm font-semibold text-center px-2 ${
-                                                isSelected ? 'text-red-900' : 'text-gray-900'
-                                            }`}
+                                            className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
                                             title={tenant.name}
                                         >
                                             {tenant.name}

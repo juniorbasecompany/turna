@@ -13,6 +13,7 @@ import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
+import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
 import { JobResponse } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
@@ -190,7 +191,7 @@ export default function JobPage() {
 
             // Recarregar lista para atualizar os cards
             await loadItems()
-            
+
             // Limpar seleção
             clearJobSelection()
         } catch (err) {
@@ -315,7 +316,7 @@ export default function JobPage() {
     const getStatusIcon = (status: string) => {
         const iconClass = "w-full h-full"
         const statusColor = getStatusBackgroundColor(status)
-        
+
         switch (status) {
             case 'PENDING':
                 return (
@@ -427,19 +428,19 @@ export default function JobPage() {
         deleting: deleting,
         onCancel: clearJobSelection,
         onDelete: handleDeleteSelected, // Botão padrão "Excluir" (só aparece se selectedCount > 0, ou seja, se houver excluíveis)
-        onSave: async () => {},
+        onSave: async () => { },
         // Usar additionalSelectedCount para fazer o botão "Cancelar" aparecer mesmo quando não há excluíveis
         additionalSelectedCount: hasInterruptableJobs && !hasDeletableJobs ? selectedJobsCount : 0,
         customActions: hasInterruptableJobs
             ? [
-                  // Botão "Interromper" aparece quando há jobs interrompíveis selecionados
-                  {
-                      label: 'Interromper',
-                      onClick: handleInterruptSelected,
-                      disabled: interrupting || deleting,
-                      loading: interrupting,
-                  },
-              ]
+                // Botão "Interromper" aparece quando há jobs interrompíveis selecionados
+                {
+                    label: 'Interromper',
+                    onClick: handleInterruptSelected,
+                    disabled: interrupting || deleting,
+                    loading: interrupting,
+                },
+            ]
             : [],
     })
 
@@ -489,7 +490,7 @@ export default function JobPage() {
                                         e.stopPropagation()
                                         toggleJobSelection(job.id)
                                     }}
-                                    onEdit={() => {}} // Função vazia (não usada)
+                                    onEdit={() => { }} // Função vazia (não usada)
                                     disabled={false}
                                     deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
                                     showEdit={false} // Ocultar botão de editar
@@ -504,9 +505,7 @@ export default function JobPage() {
                                             {getStatusIcon(job.status)}
                                         </div>
                                         <h3
-                                            className={`text-sm font-semibold text-center px-2 ${
-                                                isSelected ? 'text-red-900' : 'text-gray-900'
-                                            }`}
+                                            className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
                                             title={getJobTypeLabel(job.job_type)}
                                         >
                                             {getJobTypeLabel(job.job_type)}
@@ -524,31 +523,31 @@ export default function JobPage() {
                                     {/* Detalhes adicionais */}
                                     <div className="space-y-1 text-sm">
                                         {job.started_at && (
-                                            <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                            <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                                 <span className="font-medium">Iniciado em:</span>{' '}
                                                 {settings
                                                     ? formatDateTime(job.started_at, settings)
                                                     : new Date(job.started_at).toLocaleString('pt-BR', {
-                                                          day: '2-digit',
-                                                          month: '2-digit',
-                                                          year: 'numeric',
-                                                          hour: '2-digit',
-                                                          minute: '2-digit',
-                                                      })}
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
                                             </p>
                                         )}
                                         {job.completed_at && (
-                                            <p className={`${isSelected ? 'text-red-800' : 'text-gray-600'}`}>
+                                            <p className={`${getCardInfoTextClasses(isSelected)}`}>
                                                 <span className="font-medium">Concluído em:</span>{' '}
                                                 {settings
                                                     ? formatDateTime(job.completed_at, settings)
                                                     : new Date(job.completed_at).toLocaleString('pt-BR', {
-                                                          day: '2-digit',
-                                                          month: '2-digit',
-                                                          year: 'numeric',
-                                                          hour: '2-digit',
-                                                          minute: '2-digit',
-                                                      })}
+                                                        day: '2-digit',
+                                                        month: '2-digit',
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
                                             </p>
                                         )}
                                         {job.error_message && (

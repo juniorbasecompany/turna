@@ -17,9 +17,9 @@ interface ActionBarButton {
      */
     disabled?: boolean
     /**
-     * Tipo do botão (primary = azul, secondary = cinza)
+     * Tipo do botão (primary = azul, secondary = cinza, danger = vermelho)
      */
-    variant?: 'primary' | 'secondary'
+    variant?: 'primary' | 'secondary' | 'danger'
     /**
      * Se true, mostra estado de loading no botão
      */
@@ -104,6 +104,7 @@ export function ActionBar({
     const buttonClasses = {
         primary: 'bg-blue-600 border-blue-700 text-white hover:bg-blue-700',
         secondary: 'bg-gray-200 border-gray-300 text-gray-800 hover:bg-gray-300',
+        danger: 'bg-red-200 border-red-300 text-gray-800 hover:bg-red-300',
     }
 
     // Renderizar botões

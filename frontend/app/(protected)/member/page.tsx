@@ -17,6 +17,7 @@ import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
+import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     MemberCreateRequest,
     MemberResponse,
@@ -524,7 +525,6 @@ export default function MemberPage() {
         saveLabel: submitting
             ? (editingMember ? 'Salvando...' : 'Criando...')
             : (editingMember ? 'Salvar' : 'Criar'),
-        deleteLabel: 'Remover',
     })
 
     // Props de erro do ActionBar (customizado para incluir emailMessage)
@@ -718,8 +718,7 @@ export default function MemberPage() {
                                             </svg>
                                         </div>
                                         <h3
-                                            className={`text-sm font-semibold text-center px-2 ${isSelected ? 'text-red-900' : 'text-gray-900'
-                                                }`}
+                                            className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
                                             title={member.member_name || member.member_email || 'Não disponível'}
                                         >
                                             {member.member_name || member.member_email || 'Não disponível'}
