@@ -53,8 +53,21 @@ export function extractErrorMessage(errorData: unknown, defaultMessage = 'Erro d
 }
 
 /**
+ * Redireciona para a página de login, limpando dados de sessão.
+ * Função auxiliar para evitar duplicação de código.
+ */
+function redirectToLogin(): void {
+    if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('login_id_token')
+        sessionStorage.removeItem('login_response')
+        window.location.href = '/login'
+    }
+}
+
+/**
  * Fetch protegido para páginas protegidas.
  * Trata 401 automaticamente redirecionando para a página de login.
+ * Trata erros de rede (servidor indisponível) redirecionando para login.
  *
  * Esta função deve ser usada em todas as páginas protegidas para garantir
  * que erros 401 sempre redirecionem para login automaticamente.
@@ -78,25 +91,64 @@ export async function protectedFetch<T>(
     url: string,
     options: RequestInit = {}
 ): Promise<T> {
-    const response = await fetch(url, {
-        ...options,
-        credentials: 'include',
-    })
+    let response: Response
+
+    console.log(`[protectedFetch] Iniciando fetch para: ${url}`)
+
+    try {
+        response = await fetch(url, {
+            ...options,
+            credentials: 'include',
+        })
+        console.log(`[protectedFetch] Resposta recebida: ${url} - status ${response.status}`)
+    } catch (error) {
+        // Erro de rede (servidor indisponível, conexão perdida, etc.)
+        // Redirecionar para login para reautenticação
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`[protectedFetch] ERRO DE CONEXÃO no cliente:`, {
+            url,
+            errorType: error?.constructor?.name,
+            message: errorMessage,
+        })
+        redirectToLogin()
+        throw new Error('Conexão perdida. Redirecionando para login...')
+    }
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        const errorMessage = extractErrorMessage(errorData, '')
+        
+        console.log(`[protectedFetch] Resposta não-ok:`, {
+            url,
+            status: response.status,
+            errorData,
+            errorMessage,
+        })
 
         // 401: Sessão expirada → redirecionar imediatamente para login
         if (response.status === 401) {
-            if (typeof window !== 'undefined') {
-                // Limpar dados de sessão
-                sessionStorage.removeItem('login_id_token')
-                sessionStorage.removeItem('login_response')
-                // Redirecionar para login
-                window.location.href = '/login'
-            }
-            // Lançar erro para interromper execução (não será exibido pois haverá redirect)
+            console.log(`[protectedFetch] Status 401 detectado, redirecionando para login`)
+            redirectToLogin()
             throw new Error('Redirecionando para login...')
+        }
+
+        // 500 com indicação de erro de conexão → também redirecionar para login
+        // Isso acontece quando o backend está indisponível e a API route retorna 500
+        if (response.status === 500) {
+            const isConnectionError = 
+                errorMessage.toLowerCase().includes('fetch') ||
+                errorMessage.toLowerCase().includes('conexão') ||
+                errorMessage.toLowerCase().includes('connection') ||
+                errorMessage.toLowerCase().includes('econnrefused') ||
+                errorMessage.toLowerCase().includes('interno do servidor')
+            
+            console.log(`[protectedFetch] Status 500 detectado:`, { isConnectionError, errorMessage })
+            
+            if (isConnectionError) {
+                console.log(`[protectedFetch] Erro de conexão detectado no 500, redirecionando para login`)
+                redirectToLogin()
+                throw new Error('Conexão perdida com o servidor. Redirecionando para login...')
+            }
         }
 
         // Tratamento específico para 405 (Method Not Allowed)
@@ -107,7 +159,7 @@ export async function protectedFetch<T>(
         }
 
         // Outros erros usam extractErrorMessage
-        throw new Error(extractErrorMessage(errorData, `Erro HTTP ${response.status}`))
+        throw new Error(errorMessage || `Erro HTTP ${response.status}`)
     }
 
     // Resposta vazia (204 No Content)

@@ -1,8 +1,6 @@
 import { TenantListResponse } from '@/types/api'
 import { NextRequest, NextResponse } from 'next/server'
-import { api } from '@/lib/api'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { backendFetch, requireToken } from '@/lib/backend-fetch'
 
 /**
  * Handler Next.js para listar tenants disponíveis
@@ -11,38 +9,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Requer autenticação via cookie httpOnly.
  */
 export async function GET(request: NextRequest) {
-    try {
-        // Obter token do cookie
-        const token = request.cookies.get('access_token')?.value
-
-        if (!token) {
-            return NextResponse.json(
-                { detail: 'Não autenticado' },
-                { status: 401 }
-            )
-        }
-
-        // Chamar backend com token no header
-        const response = await fetch(`${API_URL}/auth/tenant/list`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-        })
-
-        const data: TenantListResponse = await response.json()
-
-        if (!response.ok) {
-            return NextResponse.json(data, { status: response.status })
-        }
-
-        return NextResponse.json(data)
-    } catch (error) {
-        console.error('Erro no handler de listar tenants:', error)
-        return NextResponse.json(
-            { detail: 'Erro interno do servidor' },
-            { status: 500 }
-        )
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
     }
+
+    const result = await backendFetch<TenantListResponse>('/auth/tenant/list', {
+        token: auth.token,
+    })
+
+    if (!result.ok) {
+        return result.error
+    }
+
+    return NextResponse.json(result.data)
 }

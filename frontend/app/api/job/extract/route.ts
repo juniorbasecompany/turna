@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { backendFetch, errorResponse, requireToken } from '@/lib/backend-fetch'
 
 /**
  * POST /api/job/extract
@@ -9,49 +8,26 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Retorna job_id para polling de status.
  */
 export async function POST(request: NextRequest) {
-  try {
     const body = await request.json()
 
     if (!body.file_id) {
-      return NextResponse.json(
-        { detail: 'file_id é obrigatório' },
-        { status: 400 }
-      )
+        return errorResponse('file_id é obrigatório', 400)
     }
 
-    // Obter access_token do cookie
-    const accessToken = request.cookies.get('access_token')?.value
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
+    }
 
-    // Chamar backend
-    const response = await fetch(`${API_URL}/job/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify({ file_id: body.file_id }),
-      credentials: 'include',
+    const result = await backendFetch('/job/extract', {
+        method: 'POST',
+        token: auth.token,
+        body: { file_id: body.file_id },
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        detail: `Erro HTTP ${response.status}`,
-      }))
-      return NextResponse.json(errorData, { status: response.status })
+    if (!result.ok) {
+        return result.error
     }
 
-    const data = await response.json()
-    return NextResponse.json(data)
-  } catch (error) {
-    console.error('Erro ao criar job:', error)
-    return NextResponse.json(
-      {
-        detail:
-          error instanceof Error
-            ? error.message
-            : 'Erro desconhecido ao criar job',
-      },
-      { status: 500 }
-    )
-  }
+    return NextResponse.json(result.data)
 }

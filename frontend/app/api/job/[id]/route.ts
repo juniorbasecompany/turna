@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { backendFetch, errorResponse, requireToken } from '@/lib/backend-fetch'
 
 /**
  * GET /api/job/[id]
@@ -8,52 +7,27 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Obtém o status e resultado de um job específico.
  */
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const jobId = params.id
-
-    if (!jobId) {
-      return NextResponse.json(
-        { detail: 'ID do job é obrigatório' },
-        { status: 400 }
-      )
+    if (!params.id) {
+        return errorResponse('ID do job é obrigatório', 400)
     }
 
-    // Obter access_token do cookie
-    const accessToken = request.cookies.get('access_token')?.value
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
+    }
 
-    // Chamar backend
-    const response = await fetch(`${API_URL}/job/${jobId}`, {
-      method: 'GET',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      credentials: 'include',
+    const result = await backendFetch(`/job/${params.id}`, {
+        token: auth.token,
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        detail: `Erro HTTP ${response.status}`,
-      }))
-      return NextResponse.json(errorData, { status: response.status })
+    if (!result.ok) {
+        return result.error
     }
 
-    const data = await response.json()
-    return NextResponse.json(data)
-  } catch (error) {
-    console.error('Erro ao obter job:', error)
-    return NextResponse.json(
-      {
-        detail:
-          error instanceof Error
-            ? error.message
-            : 'Erro desconhecido ao obter job',
-      },
-      { status: 500 }
-    )
-  }
+    return NextResponse.json(result.data)
 }
 
 /**
@@ -62,53 +36,31 @@ export async function GET(
  * Atualiza um job específico (apenas result_data).
  */
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const jobId = params.id
+    if (!params.id) {
+        return errorResponse('ID do job é obrigatório', 400)
+    }
 
-    if (!jobId) {
-      return NextResponse.json(
-        { detail: 'ID do job é obrigatório' },
-        { status: 400 }
-      )
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
     }
 
     const body = await request.json()
-    const accessToken = request.cookies.get('access_token')?.value
 
-    const response = await fetch(`${API_URL}/job/${jobId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      credentials: 'include',
-      body: JSON.stringify(body),
+    const result = await backendFetch(`/job/${params.id}`, {
+        method: 'PUT',
+        token: auth.token,
+        body,
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        detail: `Erro HTTP ${response.status}`,
-      }))
-      return NextResponse.json(errorData, { status: response.status })
+    if (!result.ok) {
+        return result.error
     }
 
-    const data = await response.json()
-    return NextResponse.json(data)
-  } catch (error) {
-    console.error('Erro ao atualizar job:', error)
-    return NextResponse.json(
-      {
-        detail:
-          error instanceof Error
-            ? error.message
-            : 'Erro desconhecido ao atualizar job',
-      },
-      { status: 500 }
-    )
-  }
+    return NextResponse.json(result.data)
 }
 
 /**
@@ -117,50 +69,26 @@ export async function PUT(
  * Exclui um job que está COMPLETED ou FAILED.
  */
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const jobId = params.id
-
-    if (!jobId) {
-      return NextResponse.json(
-        { detail: 'ID do job é obrigatório' },
-        { status: 400 }
-      )
+    if (!params.id) {
+        return errorResponse('ID do job é obrigatório', 400)
     }
 
-    // Obter access_token do cookie
-    const accessToken = request.cookies.get('access_token')?.value
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
+    }
 
-    // Chamar backend
-    const response = await fetch(`${API_URL}/job/${jobId}`, {
-      method: 'DELETE',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      credentials: 'include',
+    const result = await backendFetch(`/job/${params.id}`, {
+        method: 'DELETE',
+        token: auth.token,
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        detail: `Erro HTTP ${response.status}`,
-      }))
-      return NextResponse.json(errorData, { status: response.status })
+    if (!result.ok) {
+        return result.error
     }
 
-    // DELETE retorna 204 No Content
     return new NextResponse(null, { status: 204 })
-  } catch (error) {
-    console.error('Erro ao excluir job:', error)
-    return NextResponse.json(
-      {
-        detail:
-          error instanceof Error
-            ? error.message
-            : 'Erro desconhecido ao excluir job',
-      },
-      { status: 500 }
-    )
-  }
 }

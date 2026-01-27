@@ -23,6 +23,35 @@ const TenantSettingsContext = createContext<TenantSettingsContextType>({
 export const useTenantSettings = () => useContext(TenantSettingsContext)
 
 /**
+ * Verifica se é erro de conexão (fetch falhou ou 500 com mensagem de conexão).
+ */
+function isConnectionError(error?: Error | unknown, response?: Response, errorData?: { detail?: string }): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    return msg.includes('fetch') || msg.includes('network') || msg.includes('connection')
+  }
+  if (response?.status === 500 && errorData?.detail) {
+    const detail = errorData.detail.toLowerCase()
+    return detail.includes('fetch') || detail.includes('conexão') || detail.includes('interno do servidor')
+  }
+  if (response?.status === 401) {
+    return true
+  }
+  return false
+}
+
+/**
+ * Redireciona para login, limpando dados de sessão.
+ */
+function redirectToLogin() {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('login_id_token')
+    sessionStorage.removeItem('login_response')
+    window.location.href = '/login'
+  }
+}
+
+/**
  * Provider que gerencia as configurações do tenant atual (timezone, locale, currency).
  * Carrega as configurações uma única vez via GET /tenant/me.
  */
@@ -42,12 +71,23 @@ export function TenantSettingsProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        if (isConnectionError(undefined, response, errorData)) {
+          console.log('[TenantSettingsContext] Erro de conexão, redirecionando para login')
+          redirectToLogin()
+          return
+        }
         throw new Error('Erro ao carregar configurações do tenant')
       }
 
       const data: TenantResponse = await response.json()
       setTenant(data)
     } catch (err) {
+      if (isConnectionError(err)) {
+        console.log('[TenantSettingsContext] Erro de conexão (catch), redirecionando para login')
+        redirectToLogin()
+        return
+      }
       const message = err instanceof Error ? err.message : 'Erro desconhecido'
       setError(message)
       console.error('Erro ao carregar configurações do tenant:', err)

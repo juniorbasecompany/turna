@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { backendFetch, requireToken } from '@/lib/backend-fetch'
 
 /**
  * POST /api/tenant/[id]/invite
@@ -8,45 +7,25 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Cria/atualiza um convite (Member PENDING) para um email no tenant (apenas admin).
  */
 export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: { id: string } }
 ) {
-  try {
-    const accessToken = request.cookies.get('access_token')?.value
-    const body = await request.json()
-
-    const response = await fetch(`${API_URL}/tenant/${params.id}/invite`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      credentials: 'include',
-      body: JSON.stringify(body),
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        detail: `Erro HTTP ${response.status}`,
-      }))
-      console.error(
-        `[INVITE-FRONTEND] ❌ FALHA - Erro ao criar convite para tenant ID=${params.id}:`,
-        errorData
-      )
-      return NextResponse.json(errorData, { status: response.status })
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
     }
 
-    const data = await response.json()
-    return NextResponse.json(data)
-  } catch (error) {
-    return NextResponse.json(
-      {
-        detail:
-          error instanceof Error
-            ? error.message
-            : 'Erro desconhecido ao criar convite',
-      },
-      { status: 500 }
-    )
-  }
+    const body = await request.json()
+
+    const result = await backendFetch(`/tenant/${params.id}/invite`, {
+        method: 'POST',
+        token: auth.token,
+        body,
+    })
+
+    if (!result.ok) {
+        return result.error
+    }
+
+    return NextResponse.json(result.data)
 }

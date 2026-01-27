@@ -6,6 +6,35 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { LoadingSpinner } from './LoadingSpinner'
 
+/**
+ * Verifica se é erro de conexão (fetch falhou ou 500 com mensagem de conexão).
+ */
+function isConnectionError(error?: Error | unknown, response?: Response, errorData?: { detail?: string }): boolean {
+    if (error instanceof Error) {
+        const msg = error.message.toLowerCase()
+        return msg.includes('fetch') || msg.includes('network') || msg.includes('connection')
+    }
+    if (response?.status === 500 && errorData?.detail) {
+        const detail = errorData.detail.toLowerCase()
+        return detail.includes('fetch') || detail.includes('conexão') || detail.includes('interno do servidor')
+    }
+    if (response?.status === 401) {
+        return true // 401 também deve redirecionar
+    }
+    return false
+}
+
+/**
+ * Redireciona para login, limpando dados de sessão.
+ */
+function redirectToLogin() {
+    if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('login_id_token')
+        sessionStorage.removeItem('login_response')
+        window.location.href = '/login'
+    }
+}
+
 export function Header() {
     const router = useRouter()
     const { openDrawer } = useDrawer()
@@ -28,9 +57,20 @@ export function Header() {
                 if (tenantRes.ok) {
                     const tenantData: TenantResponse = await tenantRes.json()
                     setTenant(tenantData)
+                } else {
+                    const errorData = await tenantRes.json().catch(() => ({}))
+                    if (isConnectionError(undefined, tenantRes, errorData)) {
+                        console.log('[Header] Erro de conexão em /api/tenant/me, redirecionando para login')
+                        redirectToLogin()
+                        return
+                    }
                 }
             } catch (err) {
-                // Se API falhar, continuar (não quebrar Header)
+                if (isConnectionError(err)) {
+                    console.log('[Header] Erro de conexão (catch) em /api/tenant/me, redirecionando para login')
+                    redirectToLogin()
+                    return
+                }
             }
 
             // Carregar conta do usuário
@@ -46,9 +86,20 @@ export function Header() {
                     // Usar member_name se disponível, senão usar name
                     const meData = accountData.account || accountData
                     setAccount(meData || null)
+                } else {
+                    const errorData = await accountRes.json().catch(() => ({}))
+                    if (isConnectionError(undefined, accountRes, errorData)) {
+                        console.log('[Header] Erro de conexão em /api/auth/me, redirecionando para login')
+                        redirectToLogin()
+                        return
+                    }
                 }
             } catch (err) {
-                // Se API falhar, continuar (não quebrar Header)
+                if (isConnectionError(err)) {
+                    console.log('[Header] Erro de conexão (catch) em /api/auth/me, redirecionando para login')
+                    redirectToLogin()
+                    return
+                }
             }
 
             // Carregar lista de tenants disponíveis
@@ -61,12 +112,26 @@ export function Header() {
                 if (tenantsRes.ok) {
                     const tenantsData: TenantListResponse = await tenantsRes.json()
                     setAvailableTenants(tenantsData.tenants || [])
+                } else {
+                    const errorData = await tenantsRes.json().catch(() => ({}))
+                    if (isConnectionError(undefined, tenantsRes, errorData)) {
+                        console.log('[Header] Erro de conexão em /api/auth/tenant/list, redirecionando para login')
+                        redirectToLogin()
+                        return
+                    }
                 }
             } catch (err) {
-                // Se API falhar, continuar (não quebrar Header)
+                if (isConnectionError(err)) {
+                    console.log('[Header] Erro de conexão (catch) em /api/auth/tenant/list, redirecionando para login')
+                    redirectToLogin()
+                    return
+                }
             }
         } catch (err) {
-            // Erro geral - Header continua funcionando
+            if (isConnectionError(err)) {
+                console.log('[Header] Erro de conexão geral, redirecionando para login')
+                redirectToLogin()
+            }
         }
     }, [])
 

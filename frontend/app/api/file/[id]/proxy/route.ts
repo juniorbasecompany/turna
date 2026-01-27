@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { errorResponse, requireToken } from '@/lib/backend-fetch'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -7,31 +8,30 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  *
  * Proxy para obter arquivo do MinIO e servir ao cliente.
  * Resolve o problema de URLs do MinIO não serem acessíveis do navegador.
+ * 
+ * Nota: Esta rota não usa backendFetch pois retorna blob, não JSON.
  */
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
+    const fileId = params.id
+
+    if (!fileId) {
+        return errorResponse('ID do arquivo é obrigatório', 400)
+    }
+
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
+    }
+
     try {
-        const fileId = params.id
-
-        if (!fileId) {
-            return NextResponse.json(
-                { detail: 'ID do arquivo é obrigatório' },
-                { status: 400 }
-            )
-        }
-
-        // Obter access_token do cookie
-        const accessToken = request.cookies.get('access_token')?.value
-
-        // Usar endpoint do backend que serve o arquivo diretamente do MinIO
         const downloadResponse = await fetch(`${API_URL}/file/${fileId}/download`, {
             method: 'GET',
             headers: {
-                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                'Authorization': `Bearer ${auth.token}`,
             },
-            credentials: 'include',
         })
 
         if (!downloadResponse.ok) {
@@ -49,9 +49,6 @@ export async function GET(
 
         const blob = await downloadResponse.blob()
         const contentType = downloadResponse.headers.get('content-type') || 'application/octet-stream'
-
-        // Retornar o arquivo com headers apropriados
-        // Usar inline para permitir visualização no navegador quando possível
         const contentDisposition = downloadResponse.headers.get('content-disposition') || `inline; filename="file"`
 
         return new NextResponse(blob, {
@@ -63,14 +60,16 @@ export async function GET(
         })
     } catch (error) {
         console.error('Erro ao fazer proxy do arquivo:', error)
+        
+        const isConnectionError = error instanceof TypeError || 
+            (error instanceof Error && error.message.includes('fetch'))
+        
         return NextResponse.json(
-            {
-                detail:
-                    error instanceof Error
-                        ? error.message
-                        : 'Erro desconhecido ao obter arquivo',
+            { detail: isConnectionError 
+                ? 'Servidor indisponível. Verifique sua conexão e tente novamente.'
+                : (error instanceof Error ? error.message : 'Erro desconhecido ao obter arquivo')
             },
-            { status: 500 }
+            { status: isConnectionError ? 503 : 500 }
         )
     }
 }
