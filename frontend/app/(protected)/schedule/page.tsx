@@ -237,7 +237,7 @@ export default function SchedulePage() {
     useEffect(() => {
         const loadHospitals = async () => {
             try {
-                const response = await protectedFetch<HospitalListResponse>('/api/hospital?limit=100')
+                const response = await protectedFetch<HospitalListResponse>('/api/hospital/list')
                 setHospitals(response.items || [])
                 // Se houver apenas um hospital, selecioná-lo automaticamente
                 if (response.items?.length === 1) {
