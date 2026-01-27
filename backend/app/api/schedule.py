@@ -23,6 +23,7 @@ from app.model.demand import Demand
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
+from app.model.hospital import Hospital
 from app.model.schedule import ScheduleStatus, Schedule
 from app.model.tenant import Tenant
 from app.storage.service import StorageService
@@ -42,6 +43,9 @@ class SchedulePublishResponse(PydanticBaseModel):
 class ScheduleResponse(PydanticBaseModel):
     id: int
     tenant_id: int
+    hospital_id: Optional[int]
+    hospital_name: Optional[str]
+    hospital_color: Optional[str]  # Cor do hospital em formato hexadecimal (#RRGGBB)
     name: str
     period_start_at: datetime
     period_end_at: datetime
@@ -82,6 +86,34 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
     job_id: int
     schedule_id: Optional[int]  # None quando modo from_demands (registros criados pelo worker)
+
+
+def _build_schedule_response(schedule: Schedule, session: Session) -> ScheduleResponse:
+    """
+    Constrói um ScheduleResponse incluindo dados do hospital (nome e cor).
+    """
+    hospital = None
+    if schedule.hospital_id:
+        hospital = session.get(Hospital, schedule.hospital_id)
+
+    return ScheduleResponse(
+        id=schedule.id,
+        tenant_id=schedule.tenant_id,
+        hospital_id=schedule.hospital_id,
+        hospital_name=hospital.name if hospital else None,
+        hospital_color=hospital.color if hospital else None,
+        name=schedule.name,
+        period_start_at=schedule.period_start_at,
+        period_end_at=schedule.period_end_at,
+        status=schedule.status.value,
+        version_number=schedule.version_number,
+        job_id=schedule.job_id,
+        pdf_file_id=schedule.pdf_file_id,
+        generated_at=schedule.generated_at,
+        published_at=schedule.published_at,
+        created_at=schedule.created_at,
+        updated_at=schedule.updated_at,
+    )
 
 
 def _to_minutes(h: int | float) -> int:
@@ -471,8 +503,46 @@ def list_schedules(
     query = query.order_by(Schedule.created_at.desc()).limit(limit).offset(offset)
 
     items = session.exec(query).all()
+
+    # Buscar hospitais das escalas para incluir hospital_name e hospital_color
+    hospital_ids = {item.hospital_id for item in items if item.hospital_id is not None}
+    hospital_dict = {}
+    if hospital_ids:
+        hospital_query = select(Hospital).where(
+            Hospital.tenant_id == member.tenant_id,
+            Hospital.id.in_(hospital_ids),
+        )
+        hospital_list = session.exec(hospital_query).all()
+        hospital_dict = {h.id: h for h in hospital_list}
+
+    # Construir resposta com hospital_id, hospital_name e hospital_color
+    schedule_responses = []
+    for item in items:
+        hospital = hospital_dict.get(item.hospital_id) if item.hospital_id else None
+        hospital_name = hospital.name if hospital else None
+        hospital_color = hospital.color if hospital else None
+        schedule_response = ScheduleResponse(
+            id=item.id,
+            tenant_id=item.tenant_id,
+            hospital_id=item.hospital_id,
+            hospital_name=hospital_name,
+            hospital_color=hospital_color,
+            name=item.name,
+            period_start_at=item.period_start_at,
+            period_end_at=item.period_end_at,
+            status=item.status.value,
+            version_number=item.version_number,
+            job_id=item.job_id,
+            pdf_file_id=item.pdf_file_id,
+            generated_at=item.generated_at,
+            published_at=item.published_at,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+        schedule_responses.append(schedule_response)
+
     return ScheduleListResponse(
-        items=[ScheduleResponse.model_validate(item) for item in items],
+        items=schedule_responses,
         total=total,
     )
 
@@ -619,7 +689,7 @@ def get_schedule(
         raise HTTPException(status_code=404, detail="Schedule não encontrado")
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    return ScheduleResponse.model_validate(sv)
+    return _build_schedule_response(sv, session)
 
 
 @router.post("", response_model=ScheduleResponse, status_code=201, tags=["Schedule"])
@@ -650,7 +720,7 @@ def create_schedule(
     session.commit()
     session.refresh(sv)
 
-    return ScheduleResponse.model_validate(sv)
+    return _build_schedule_response(sv, session)
 
 
 @router.delete("/{schedule_id}", status_code=204, tags=["Schedule"])

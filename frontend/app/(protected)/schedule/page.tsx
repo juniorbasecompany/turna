@@ -699,7 +699,8 @@ export default function SchedulePage() {
                             {/* Corpo - Nome principal */}
                             <div className="mb-3">
                                 <div
-                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200 bg-blue-50"
+                                    className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
+                                    style={{ backgroundColor: schedule.hospital_color || '#eff6ff' }}
                                 >
                                     <div className="flex flex-col items-center justify-center text-blue-500">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">

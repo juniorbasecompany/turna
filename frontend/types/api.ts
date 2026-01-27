@@ -142,6 +142,9 @@ export interface FileListResponse {
 export interface ScheduleResponse {
     id: number
     tenant_id: number
+    hospital_id: number | null
+    hospital_name: string | null
+    hospital_color: string | null  // Cor do hospital em formato hexadecimal (#RRGGBB)
     name: string
     period_start_at: string
     period_end_at: string
