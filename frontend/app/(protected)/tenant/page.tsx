@@ -7,6 +7,7 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterInput, FilterPanel } from '@/components/filter'
+import { FormInput, FormSelect } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -135,76 +136,65 @@ export default function TenantPage() {
             <EditForm title="Clínica" isEditing={isEditing}>
                 <div className="space-y-4">
                     <FormFieldGrid>
-                        <FormField label="Nome" required>
-                            <input
-                                type="text"
-                                id="name"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                                disabled={submitting}
-                            />
-                        </FormField>
-                        <FormField label="Slug" required>
-                            <input
-                                type="text"
-                                id="slug"
-                                value={formData.slug}
-                                onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                                disabled={submitting}
-                            />
-                            <p className="mt-1 text-xs text-gray-500">
-                                Identificador único da clínica (usado na URL). Será convertido automaticamente para minúsculas e hífens.
-                            </p>
-                        </FormField>
+                        <FormInput
+                            label="Nome"
+                            value={formData.name}
+                            onChange={(value) => setFormData({ ...formData, name: value })}
+                            id="name"
+                            required
+                            disabled={submitting}
+                        />
+                        <FormInput
+                            label="Slug"
+                            value={formData.slug}
+                            onChange={(value) => setFormData({ ...formData, slug: value.toLowerCase().replace(/\s+/g, '-') })}
+                            id="slug"
+                            required
+                            disabled={submitting}
+                            helperText="Identificador único da clínica (usado na URL). Será convertido automaticamente para minúsculas e hífens."
+                        />
                     </FormFieldGrid>
                     <FormFieldGrid>
-                        <FormField label="Fuso Horário">
-                            <select
-                                id="timezone"
-                                value={formData.timezone}
-                                onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            >
-                                <option value="America/Sao_Paulo">America/Sao_Paulo (Brasil)</option>
-                                <option value="America/New_York">America/New_York (EUA - Leste)</option>
-                                <option value="America/Los_Angeles">America/Los_Angeles (EUA - Oeste)</option>
-                                <option value="Europe/London">Europe/London (Reino Unido)</option>
-                                <option value="Europe/Paris">Europe/Paris (França)</option>
-                                <option value="Asia/Tokyo">Asia/Tokyo (Japão)</option>
-                            </select>
-                        </FormField>
-                        <FormField label="Localidade">
-                            <select
-                                id="locale"
-                                value={formData.locale}
-                                onChange={(e) => setFormData({ ...formData, locale: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            >
-                                <option value="pt-BR">pt-BR (Português - Brasil)</option>
-                                <option value="en-US">en-US (English - US)</option>
-                                <option value="es-ES">es-ES (Español - España)</option>
-                            </select>
-                        </FormField>
-                        <FormField label="Moeda">
-                            <select
-                                id="currency"
-                                value={formData.currency}
-                                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            >
-                                <option value="BRL">BRL (Real Brasileiro)</option>
-                                <option value="USD">USD (Dólar Americano)</option>
-                                <option value="EUR">EUR (Euro)</option>
-                                <option value="GBP">GBP (Libra Esterlina)</option>
-                            </select>
-                        </FormField>
+                        <FormSelect
+                            label="Fuso Horário"
+                            value={formData.timezone}
+                            onChange={(value) => setFormData({ ...formData, timezone: value || 'America/Sao_Paulo' })}
+                            options={[
+                                { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo (Brasil)' },
+                                { value: 'America/New_York', label: 'America/New_York (EUA - Leste)' },
+                                { value: 'America/Los_Angeles', label: 'America/Los_Angeles (EUA - Oeste)' },
+                                { value: 'Europe/London', label: 'Europe/London (Reino Unido)' },
+                                { value: 'Europe/Paris', label: 'Europe/Paris (França)' },
+                                { value: 'Asia/Tokyo', label: 'Asia/Tokyo (Japão)' },
+                            ]}
+                            id="timezone"
+                            disabled={submitting}
+                        />
+                        <FormSelect
+                            label="Localidade"
+                            value={formData.locale}
+                            onChange={(value) => setFormData({ ...formData, locale: value || 'pt-BR' })}
+                            options={[
+                                { value: 'pt-BR', label: 'pt-BR (Português - Brasil)' },
+                                { value: 'en-US', label: 'en-US (English - US)' },
+                                { value: 'es-ES', label: 'es-ES (Español - España)' },
+                            ]}
+                            id="locale"
+                            disabled={submitting}
+                        />
+                        <FormSelect
+                            label="Moeda"
+                            value={formData.currency}
+                            onChange={(value) => setFormData({ ...formData, currency: value || 'BRL' })}
+                            options={[
+                                { value: 'BRL', label: 'BRL (Real Brasileiro)' },
+                                { value: 'USD', label: 'USD (Dólar Americano)' },
+                                { value: 'EUR', label: 'EUR (Euro)' },
+                                { value: 'GBP', label: 'GBP (Libra Esterlina)' },
+                            ]}
+                            id="currency"
+                            disabled={submitting}
+                        />
                     </FormFieldGrid>
                 </div>
             </EditForm>

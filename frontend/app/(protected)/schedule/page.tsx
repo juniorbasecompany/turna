@@ -8,6 +8,7 @@ import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
 import type { FilterOption } from '@/components/filter'
+import { FormInput, FormSelect } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -590,39 +591,25 @@ export default function SchedulePage() {
             {/* Área de edição */}
             <EditForm title="Escala" isEditing={isEditing}>
                 <div className="space-y-4">
-                    <FormField label="Hospital" required>
-                        <select
-                            id="hospital_id"
-                            value={formData.hospital_id || ''}
-                            onChange={(e) =>
-                                setFormData({
-                                    ...formData,
-                                    hospital_id: e.target.value ? parseInt(e.target.value) : null,
-                                })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            disabled={submitting || loadingHospitals}
-                        >
-                            <option value=""></option>
-                            {hospitals.map((hospital) => (
-                                <option key={hospital.id} value={hospital.id}>
-                                    {hospital.name}
-                                </option>
-                            ))}
-                        </select>
-                    </FormField>
+                    <FormSelect
+                        label="Hospital"
+                        value={formData.hospital_id}
+                        onChange={(value) => setFormData({ ...formData, hospital_id: value })}
+                        options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                        id="hospital_id"
+                        required
+                        disabled={submitting}
+                        loading={loadingHospitals}
+                    />
 
-                    <FormField label="Nome" required>
-                        <input
-                            type="text"
-                            id="name"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            required
-                            disabled={submitting}
-                        />
-                    </FormField>
+                    <FormInput
+                        label="Nome"
+                        value={formData.name}
+                        onChange={(value) => setFormData({ ...formData, name: value })}
+                        id="name"
+                        required
+                        disabled={submitting}
+                    />
 
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
                         <TenantDateTimePicker
@@ -658,24 +645,18 @@ export default function SchedulePage() {
                                 disabled={submitting}
                             />
                         </FormField>
-                        <FormField label="Status">
-                            <select
-                                id="status"
-                                value={formData.status}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        status: e.target.value,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            >
-                                <option value="DRAFT">Rascunho</option>
-                                <option value="PUBLISHED">Publicada</option>
-                                <option value="ARCHIVED">Arquivada</option>
-                            </select>
-                        </FormField>
+                        <FormSelect
+                            label="Status"
+                            value={formData.status}
+                            onChange={(value) => setFormData({ ...formData, status: value || 'DRAFT' })}
+                            options={[
+                                { value: 'DRAFT', label: 'Rascunho' },
+                                { value: 'PUBLISHED', label: 'Publicada' },
+                                { value: 'ARCHIVED', label: 'Arquivada' },
+                            ]}
+                            id="status"
+                            disabled={submitting}
+                        />
                     </FormFieldGrid>
                 </div>
             </EditForm>

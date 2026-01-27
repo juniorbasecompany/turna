@@ -7,6 +7,7 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
+import { FormInput, FormSelect, FormTextarea } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -312,38 +313,23 @@ export default function DemandPage() {
             <EditForm title="Demanda" isEditing={isEditing}>
                 <div className="space-y-4">
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
-                        <FormField label="Hospital">
-                            <select
-                                id="hospital_id"
-                                value={formData.hospital_id || ''}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        hospital_id: e.target.value ? parseInt(e.target.value) : null,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting || loadingHospitals}
-                            >
-                                <option value=""></option>
-                                {hospitals.map((hospital) => (
-                                    <option key={hospital.id} value={hospital.id}>
-                                        {hospital.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </FormField>
-                        <FormField label="Procedimento" required>
-                            <input
-                                type="text"
-                                id="procedure"
-                                value={formData.procedure}
-                                onChange={(e) => setFormData({ ...formData, procedure: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                                disabled={submitting}
-                            />
-                        </FormField>
+                        <FormSelect
+                            label="Hospital"
+                            value={formData.hospital_id}
+                            onChange={(value) => setFormData({ ...formData, hospital_id: value })}
+                            options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                            id="hospital_id"
+                            disabled={submitting}
+                            loading={loadingHospitals}
+                        />
+                        <FormInput
+                            label="Procedimento"
+                            value={formData.procedure}
+                            onChange={(value) => setFormData({ ...formData, procedure: value })}
+                            id="procedure"
+                            required
+                            disabled={submitting}
+                        />
                     </FormFieldGrid>
 
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
@@ -364,57 +350,42 @@ export default function DemandPage() {
                     </FormFieldGrid>
 
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
-                        <FormField label="Sala/Quarto">
-                            <input
-                                type="text"
-                                id="room"
-                                value={formData.room}
-                                onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            />
-                        </FormField>
-                        <FormField label="Prioridade">
-                            <select
-                                id="priority"
-                                value={formData.priority || ''}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        priority: e.target.value || null,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            >
-                                <option value="">Nenhuma</option>
-                                <option value="Urgente">Urgente</option>
-                                <option value="Emergência">Emergência</option>
-                            </select>
-                        </FormField>
+                        <FormInput
+                            label="Sala/Quarto"
+                            value={formData.room}
+                            onChange={(value) => setFormData({ ...formData, room: value })}
+                            id="room"
+                            disabled={submitting}
+                        />
+                        <FormSelect
+                            label="Prioridade"
+                            value={formData.priority}
+                            onChange={(value) => setFormData({ ...formData, priority: value })}
+                            options={[
+                                { value: 'Urgente', label: 'Urgente' },
+                                { value: 'Emergência', label: 'Emergência' },
+                            ]}
+                            emptyLabel="Nenhuma"
+                            id="priority"
+                            disabled={submitting}
+                        />
                     </FormFieldGrid>
 
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
-                        <FormField label="Tipo de Anestesia">
-                            <input
-                                type="text"
-                                id="anesthesia_type"
-                                value={formData.anesthesia_type}
-                                onChange={(e) => setFormData({ ...formData, anesthesia_type: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            />
-                        </FormField>
-                        <FormField label="Complexidade">
-                            <input
-                                type="text"
-                                id="complexity"
-                                value={formData.complexity}
-                                onChange={(e) => setFormData({ ...formData, complexity: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                disabled={submitting}
-                            />
-                        </FormField>
+                        <FormInput
+                            label="Tipo de Anestesia"
+                            value={formData.anesthesia_type}
+                            onChange={(value) => setFormData({ ...formData, anesthesia_type: value })}
+                            id="anesthesia_type"
+                            disabled={submitting}
+                        />
+                        <FormInput
+                            label="Complexidade"
+                            value={formData.complexity}
+                            onChange={(value) => setFormData({ ...formData, complexity: value })}
+                            id="complexity"
+                            disabled={submitting}
+                        />
                     </FormFieldGrid>
 
                     <FormField
@@ -444,16 +415,14 @@ export default function DemandPage() {
                         </label>
                     </div>
 
-                    <FormField label="Observações">
-                        <textarea
-                            id="notes"
-                            value={formData.notes}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            disabled={submitting}
-                        />
-                    </FormField>
+                    <FormTextarea
+                        label="Observações"
+                        value={formData.notes}
+                        onChange={(value) => setFormData({ ...formData, notes: value })}
+                        id="notes"
+                        rows={3}
+                        disabled={submitting}
+                    />
                 </div>
             </EditForm>
 

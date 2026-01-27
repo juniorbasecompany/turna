@@ -8,6 +8,7 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterInput, FilterPanel } from '@/components/filter'
+import { FormInput, FormTextarea } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
@@ -105,17 +106,14 @@ export default function HospitalPage() {
             <EditForm title="Hospital" isEditing={isEditing}>
                 <div className="space-y-4">
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
-                        <FormField label="Nome" required>
-                            <input
-                                type="text"
-                                id="name"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                                disabled={submitting}
-                            />
-                        </FormField>
+                        <FormInput
+                            label="Nome"
+                            value={formData.name}
+                            onChange={(value) => setFormData({ ...formData, name: value })}
+                            id="name"
+                            required
+                            disabled={submitting}
+                        />
                         <FormField label="Cor">
                             <ColorPicker
                                 value={formData.color}
@@ -125,19 +123,16 @@ export default function HospitalPage() {
                             />
                         </FormField>
                     </FormFieldGrid>
-                    <FormField
+                    <FormTextarea
                         label="Como os arquivos devem ser lidos?"
+                        value={formData.prompt || ''}
+                        onChange={(value) => setFormData({ ...formData, prompt: value })}
+                        id="prompt"
+                        rows={15}
                         helperText="Escreva o prompt com as instruções para a IA extrair as demandas dos arquivos deste hospital."
-                    >
-                        <textarea
-                            id="prompt"
-                            value={formData.prompt || ''}
-                            onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
-                            rows={15}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                            disabled={submitting}
-                        />
-                    </FormField>
+                        monospace
+                        disabled={submitting}
+                    />
                 </div>
             </EditForm>
 
