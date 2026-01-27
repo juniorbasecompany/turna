@@ -75,6 +75,26 @@ export function TenantDateTimePicker({
     })
 
     const containerRef = useRef<HTMLDivElement>(null)
+    const popoverRef = useRef<HTMLDivElement>(null)
+
+    // Estado para controlar posicionamento do popover
+    const [popoverPosition, setPopoverPosition] = useState<'left' | 'right'>('left')
+
+    // Calcular posição do popover quando abre
+    useEffect(() => {
+        if (isOpen && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect()
+            const popoverWidth = 700 // Largura aproximada do popover (calendário + horas)
+            const viewportWidth = window.innerWidth
+
+            // Se não há espaço suficiente à direita, posiciona à esquerda
+            if (rect.left + popoverWidth > viewportWidth) {
+                setPopoverPosition('right')
+            } else {
+                setPopoverPosition('left')
+            }
+        }
+    }, [isOpen])
 
     // Atualizar valores temporários quando o popover abre
     useEffect(() => {
@@ -124,6 +144,7 @@ export function TenantDateTimePicker({
     }) : ''
 
     // Selecionar data (temporária, não confirma ainda)
+    // Ao clicar no dia, reseta hora e minutos para zero, e AM
     const handleDateSelect = (day: number) => {
         if (!tempDate) {
             setTempDate(new Date(displayMonth.getFullYear(), displayMonth.getMonth(), day))
@@ -134,6 +155,11 @@ export function TenantDateTimePicker({
             newDate.setDate(day)
             setTempDate(newDate)
         }
+        // Resetar hora, minutos e AM ao selecionar um dia
+        setTempHour12(0)
+        setTempMinuteTens(0)
+        setTempMinuteUnits(0)
+        setTempAmPm('AM')
     }
 
     // Confirmar seleção (botão OK)
@@ -174,8 +200,10 @@ export function TenantDateTimePicker({
     }
 
     // Handler para botão Limpar do calendário
+    // Limpa o valor e fecha o componente
     const handleCalendarClear = () => {
-        setTempDate(null)
+        onChange(null)
+        setIsOpen(false)
     }
 
     // Handler para botão Hoje do calendário
@@ -277,7 +305,11 @@ export function TenantDateTimePicker({
 
             {/* Calendário e Time Picker Popover */}
             {isOpen && (
-                <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col md:flex-row gap-6">
+                <div
+                    ref={popoverRef}
+                    className={`absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 flex flex-col lg:flex-row gap-6 max-w-[calc(100vw-2rem)] ${popoverPosition === 'right' ? 'right-0' : 'left-0'
+                        }`}
+                >
                     {/* Região do Calendário - Tamanho fixo */}
                     <Calendar
                         selectedDate={value}
@@ -285,11 +317,16 @@ export function TenantDateTimePicker({
                         displayMonth={displayMonth}
                         onDisplayMonthChange={setDisplayMonth}
                         onDateSelect={handleDateSelect}
+                        onDateDoubleClick={(day) => {
+                            handleDateSelect(day)
+                            // Confirma imediatamente após selecionar o dia
+                            setTimeout(handleConfirm, 0)
+                        }}
                         onClear={handleCalendarClear}
                         onToday={handleCalendarToday}
                         minDate={minDate}
                         maxDate={maxDate}
-                        width="w-[380px]"
+                        width="w-full lg:w-[380px] min-w-[280px]"
                         showActionButtons={true}
                         headerContent={
                             tempDate && (
@@ -334,8 +371,8 @@ export function TenantDateTimePicker({
                         }
                     />
 
-                    {/* Região das Horas - Tamanho fixo */}
-                    <div className="w-[270px] flex-shrink-0 pt-6 md:pt-0 md:pl-6 flex flex-col relative">
+                    {/* Região das Horas - Responsivo */}
+                    <div className="w-full lg:w-[270px] flex-shrink-0 pt-4 lg:pt-0 lg:pl-6 flex flex-col relative border-t lg:border-t-0 lg:border-l border-gray-200">
                         {/* Seletores de hora, minutos e AM/PM */}
                         <div className="flex gap-3 items-start justify-center">
                             {/* Hora (0-11) */}
@@ -346,7 +383,20 @@ export function TenantDateTimePicker({
                                         <button
                                             key={hour}
                                             type="button"
-                                            onClick={() => setTempHour12(hour)}
+                                            onClick={() => {
+                                                setTempHour12(hour)
+                                                if (hour === 11) {
+                                                    // Caso especial: hora 11 seta minutos 59 e PM
+                                                    setTempMinuteTens(50)
+                                                    setTempMinuteUnits(9)
+                                                    setTempAmPm('PM')
+                                                } else {
+                                                    // Ao clicar na hora, reseta minutos para zero
+                                                    setTempMinuteTens(0)
+                                                    setTempMinuteUnits(0)
+                                                }
+                                            }}
+                                            onDoubleClick={handleConfirm}
                                             className={`w-full py-2 text-sm rounded-md ${tempHour12 === hour
                                                 ? 'bg-gray-200 text-gray-800'
                                                 : 'text-gray-700 hover:bg-gray-100'
@@ -369,7 +419,12 @@ export function TenantDateTimePicker({
                                                 <button
                                                     key={tens}
                                                     type="button"
-                                                    onClick={() => setTempMinuteTens(tens)}
+                                                    onClick={() => {
+                                                        setTempMinuteTens(tens)
+                                                        // Ao clicar nas dezenas, reseta unidades para zero
+                                                        setTempMinuteUnits(0)
+                                                    }}
+                                                    onDoubleClick={handleConfirm}
                                                     className={`w-full py-2 text-sm rounded-md ${tempMinuteTens === tens
                                                         ? 'bg-gray-200 text-gray-800'
                                                         : 'text-gray-700 hover:bg-gray-100'
@@ -389,6 +444,7 @@ export function TenantDateTimePicker({
                                                     key={unit}
                                                     type="button"
                                                     onClick={() => setTempMinuteUnits(unit)}
+                                                    onDoubleClick={handleConfirm}
                                                     className={`w-full py-2 text-sm rounded-md ${tempMinuteUnits === unit
                                                         ? 'bg-gray-200 text-gray-800'
                                                         : 'text-gray-700 hover:bg-gray-100'
@@ -400,6 +456,20 @@ export function TenantDateTimePicker({
                                         </div>
                                     </div>
                                 </div>
+                                {/* Botão Agora - ajusta para o horário atual */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const now = new Date()
+                                        setTempHour12(get12Hour(now.getHours()))
+                                        setTempMinuteTens(Math.floor(now.getMinutes() / 10) * 10)
+                                        setTempMinuteUnits(now.getMinutes() % 10)
+                                        setTempAmPm(getAmPm(now.getHours()))
+                                    }}
+                                    className="mt-2 w-full py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+                                >
+                                    Agora
+                                </button>
                             </div>
 
                             {/* AM/PM */}
@@ -410,6 +480,7 @@ export function TenantDateTimePicker({
                                             key={ampm}
                                             type="button"
                                             onClick={() => setTempAmPm(ampm)}
+                                            onDoubleClick={handleConfirm}
                                             className={`w-full py-2 text-sm rounded-md ${tempAmPm === ampm
                                                 ? 'bg-gray-200 text-gray-800'
                                                 : 'text-gray-700 hover:bg-gray-100'

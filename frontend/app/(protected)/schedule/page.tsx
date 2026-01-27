@@ -11,7 +11,6 @@ import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
-import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
@@ -58,8 +57,9 @@ export default function SchedulePage() {
         initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
-    // Filtros de período usando TenantDatePicker (Date objects)
-    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(null)
+    // Filtros de período usando TenantDateTimePicker (Date objects com hora)
+    // "Desde" inicia com a data/hora atual, "Até" inicia vazio
+    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(() => new Date())
     const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
 
     // Configuração inicial
@@ -141,8 +141,9 @@ export default function SchedulePage() {
     const additionalListParams = useMemo(() => {
         if (!settings) return undefined
         const params: Record<string, string | number | boolean | null> = {
-            period_start_at: periodStartDate ? localDateToUtcStart(periodStartDate, settings) : null,
-            period_end_at: periodEndDate ? localDateToUtcEndExclusive(periodEndDate, settings) : null,
+            // Usar data/hora diretamente (ISO string) para filtro de período
+            period_start_at: periodStartDate ? periodStartDate.toISOString() : null,
+            period_end_at: periodEndDate ? periodEndDate.toISOString() : null,
         }
 
         // Status: passar apenas se exatamente 1 estiver selecionado
@@ -225,7 +226,7 @@ export default function SchedulePage() {
         }
     }, [periodStartDate, periodEndDate, setError, error])
 
-    // Handlers para mudança de data no TenantDatePicker
+    // Handlers para mudança de data no filtro
     const handlePeriodStartDateChange = (date: Date | null) => {
         setPeriodStartDate(date)
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
@@ -353,22 +354,20 @@ export default function SchedulePage() {
 
     // Handler para gerar escala (mesma ação do painel de demandas)
     const handleGenerateSchedule = async () => {
-        const isStartMissing = !periodStartDate
-        const isEndMissing = !periodEndDate
-
-        if (isStartMissing || isEndMissing) {
-            triggerPeriodFlash(isStartMissing, isEndMissing)
-            setError('Informe o período inicial e final')
+        // Apenas período inicial é obrigatório
+        if (!periodStartDate) {
+            triggerPeriodFlash(true, false)
+            setError('Informe o período inicial')
             return
         }
 
-        if (!periodStartDate || !periodEndDate || !settings) {
-            setError('Período inválido')
+        if (!settings) {
+            setError('Configurações não carregadas')
             return
         }
 
-        // Validar que data final é maior que inicial
-        if (periodStartDate > periodEndDate) {
+        // Validar que data final é maior que inicial (se informada)
+        if (periodEndDate && periodStartDate > periodEndDate) {
             setError('Data final deve ser maior que a data inicial')
             return
         }
@@ -379,10 +378,14 @@ export default function SchedulePage() {
 
             // Converter datas para UTC usando timezone do tenant
             const periodStartAt = localDateToUtcStart(periodStartDate, settings)
-            const periodEndAt = localDateToUtcEndExclusive(periodEndDate, settings)
+            // Se período final não informado, usar data muito futura (10 anos)
+            const effectiveEndDate = periodEndDate || new Date(periodStartDate.getTime() + 10 * 365 * 24 * 60 * 60 * 1000)
+            const periodEndAt = localDateToUtcEndExclusive(effectiveEndDate, settings)
 
             // Criar nome padrão baseado no período
-            const name = `Escala ${periodStartDate.toLocaleDateString('pt-BR')} - ${periodEndDate.toLocaleDateString('pt-BR')}`
+            const name = periodEndDate
+                ? `Escala ${periodStartDate.toLocaleDateString('pt-BR')} - ${periodEndDate.toLocaleDateString('pt-BR')}`
+                : `Escala a partir de ${periodStartDate.toLocaleDateString('pt-BR')}`
 
             const request: ScheduleGenerateFromDemandsRequest = {
                 name,
@@ -642,20 +645,18 @@ export default function SchedulePage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </FormField>
-                                <TenantDatePicker
-                                    label="Período início"
+                                <TenantDateTimePicker
+                                    label="Desde"
                                     value={periodStartDate}
                                     onChange={handlePeriodStartDateChange}
                                     id="period_start_at_filter"
-                                    name="period_start_at_filter"
                                     showFlash={periodStartFlash}
                                 />
-                                <TenantDatePicker
-                                    label="Período fim"
+                                <TenantDateTimePicker
+                                    label="Até"
                                     value={periodEndDate}
                                     onChange={handlePeriodEndDateChange}
                                     id="period_end_at_filter"
-                                    name="period_end_at_filter"
                                     showFlash={periodEndFlash}
                                 />
                             </FormFieldGrid>

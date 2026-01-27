@@ -10,22 +10,19 @@ import { FilterPanel } from '@/components/FilterPanel'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
-import { TenantDatePicker } from '@/components/TenantDatePicker'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
-import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
+import { formatDateTime } from '@/lib/tenantFormat'
 import {
     DemandCreateRequest,
     DemandResponse,
     DemandUpdateRequest,
     HospitalListResponse,
     HospitalResponse,
-    ScheduleGenerateFromDemandsRequest,
-    ScheduleGenerateFromDemandsResponse,
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -53,14 +50,11 @@ export default function DemandPage() {
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [procedureFilter, setProcedureFilter] = useState('')
     const [skillsInput, setSkillsInput] = useState('')
-    const [generating, setGenerating] = useState(false)
 
-    // Filtros de período usando TenantDatePicker (Date objects)
-    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(null)
+    // Filtros de período usando TenantDateTimePicker (Date objects com hora)
+    // "Desde" inicia com a data/hora atual, "Até" inicia vazio
+    const [periodStartDate, setPeriodStartDate] = useState<Date | null>(() => new Date())
     const [periodEndDate, setPeriodEndDate] = useState<Date | null>(null)
-    const [createCardFlash, setCreateCardFlash] = useState(false)
-    const [periodStartFlash, setPeriodStartFlash] = useState(false)
-    const [periodEndFlash, setPeriodEndFlash] = useState(false)
 
     // Configuração inicial
     const initialFormData: DemandFormData = {
@@ -224,91 +218,6 @@ export default function DemandPage() {
         loadHospitals()
     }, [])
 
-    const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
-        setCreateCardFlash(true)
-        setPeriodStartFlash(isStartMissing)
-        setPeriodEndFlash(isEndMissing)
-        // Remover o flash após 1 segundo
-        setTimeout(() => {
-            setCreateCardFlash(false)
-            setPeriodStartFlash(false)
-            setPeriodEndFlash(false)
-        }, 1000)
-    }
-
-    const handleCreateCardClick = async () => {
-        const isStartMissing = !periodStartDate
-        const isEndMissing = !periodEndDate
-
-        if (isStartMissing || isEndMissing) {
-            triggerPeriodFlash(isStartMissing, isEndMissing)
-            return
-        }
-
-        if (!periodStartDate || !periodEndDate || !settings) {
-            setError('Período inválido')
-            return
-        }
-
-        // Validar que data final é maior que inicial
-        if (periodStartDate > periodEndDate) {
-            setError('Data final deve ser maior que a data inicial')
-            return
-        }
-
-        try {
-            setGenerating(true)
-            setError(null)
-
-            // Converter datas para UTC usando timezone do tenant
-            const periodStartAt = localDateToUtcStart(periodStartDate, settings)
-            const periodEndAt = localDateToUtcEndExclusive(periodEndDate, settings)
-
-            // Criar nome padrão baseado no período
-            const name = `Escala ${periodStartDate.toLocaleDateString('pt-BR')} - ${periodEndDate.toLocaleDateString('pt-BR')}`
-
-            const request: ScheduleGenerateFromDemandsRequest = {
-                name,
-                period_start_at: periodStartAt,
-                period_end_at: periodEndAt,
-                allocation_mode: 'greedy',
-                version_number: 1,
-            }
-
-            const response = await protectedFetch<ScheduleGenerateFromDemandsResponse>(
-                '/api/schedule/generate-from-demands',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(request),
-                }
-            )
-
-            // Limpar filtros de período (opcional - pode manter se preferir)
-            // setPeriodStartDate(null)
-            // setPeriodEndDate(null)
-        } catch (err) {
-            let message = 'Erro ao gerar escala'
-            if (err instanceof Error) {
-                message = err.message
-                // Melhorar mensagem para erro 405
-                if (message.includes('405') || message.includes('Method Not Allowed')) {
-                    message = 'Erro 405: Método HTTP não permitido. Verifique se o endpoint está configurado corretamente no backend.'
-                }
-                // Melhorar mensagem para erro 404
-                if (message.includes('404') || message.includes('Not Found')) {
-                    message = 'Erro 404: Endpoint não encontrado. Verifique se o backend está rodando e se a rota está correta.'
-                }
-            }
-            setError(message)
-            console.error('Erro ao gerar escala:', err)
-        } finally {
-            setGenerating(false)
-        }
-    }
-
     // Validar intervalo de datas
     useEffect(() => {
         if (periodStartDate && periodEndDate && periodStartDate > periodEndDate) {
@@ -321,7 +230,7 @@ export default function DemandPage() {
         }
     }, [periodStartDate, periodEndDate, setError, error])
 
-    // Handlers para mudança de data no TenantDatePicker
+    // Handlers para mudança de data no filtro
     const handlePeriodStartDateChange = (date: Date | null) => {
         setPeriodStartDate(date)
     }
@@ -356,24 +265,20 @@ export default function DemandPage() {
             filtered = filtered.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
         }
 
-        // Filtro por período: start_time >= período inicial e end_time <= período final
+        // Filtro por período: start_time >= "Desde" e start_time <= "Até"
         if (periodStartDate) {
-            const periodStart = new Date(periodStartDate)
-            periodStart.setHours(0, 0, 0, 0)
             filtered = filtered.filter((demand) => {
                 if (!demand.start_time) return false
                 const demandStart = new Date(demand.start_time)
-                return demandStart >= periodStart
+                return demandStart >= periodStartDate
             })
         }
 
         if (periodEndDate) {
-            const periodEnd = new Date(periodEndDate)
-            periodEnd.setHours(23, 59, 59, 999)
             filtered = filtered.filter((demand) => {
-                if (!demand.end_time) return false
-                const demandEnd = new Date(demand.end_time)
-                return demandEnd <= periodEnd
+                if (!demand.start_time) return false
+                const demandStart = new Date(demand.start_time)
+                return demandStart <= periodEndDate
             })
         }
 
@@ -568,77 +473,11 @@ export default function DemandPage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    <>
-                        <CreateCard
-                            label="Criar nova demanda"
-                            subtitle="Clique para adicionar"
-                            onClick={handleCreateClickCustom}
-                        />
-                        <CreateCard
-                            label={generating ? "Gerando escala..." : "Calcular a escala"}
-                            subtitle={generating ? "Aguarde enquanto a escala é calculada" : "Clique para calcular a escala do período"}
-                            onClick={handleCreateCardClick}
-                            showFlash={createCardFlash}
-                            flashMessage="Informe o período inicial e final"
-                            disabled={isEditing || generating}
-                            customIcon={
-                                <svg
-                                    className="w-full h-full"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    {/* Corpo do Calendário */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M16 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9"
-                                    />
-                                    {/* Argolas do topo */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M16 2v4"
-                                    />
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M8 2v4"
-                                    />
-                                    {/* Linha horizontal do cabeçalho */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M3 10h18"
-                                    />
-                                    {/* Linhas de conteúdo interno */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M6 13h6 M15 13h3 M7 16h3 M12 16h3"
-                                    />
-                                    {/* Sinal de mais (+) no canto inferior direito */}
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M21 18v4"
-                                    />
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M19 20h4"
-                                    />
-                                </svg>
-                            }
-                        />
-                    </>
+                    <CreateCard
+                        label="Criar nova demanda"
+                        subtitle="Clique para adicionar"
+                        onClick={handleCreateClickCustom}
+                    />
                 }
                 filterContent={
                     !isEditing ? (
@@ -653,21 +492,17 @@ export default function DemandPage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </FormField>
-                                <TenantDatePicker
-                                    label="Período início"
+                                <TenantDateTimePicker
+                                    label="Desde"
                                     value={periodStartDate}
                                     onChange={handlePeriodStartDateChange}
                                     id="period_start_at_filter"
-                                    name="period_start_at_filter"
-                                    showFlash={periodStartFlash}
                                 />
-                                <TenantDatePicker
-                                    label="Período fim"
+                                <TenantDateTimePicker
+                                    label="Até"
                                     value={periodEndDate}
                                     onChange={handlePeriodEndDateChange}
                                     id="period_end_at_filter"
-                                    name="period_end_at_filter"
-                                    showFlash={periodEndFlash}
                                 />
                             </FormFieldGrid>
                         </FilterPanel>

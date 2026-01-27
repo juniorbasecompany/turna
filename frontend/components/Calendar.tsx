@@ -13,6 +13,8 @@ export interface CalendarProps {
     onDisplayMonthChange: (date: Date) => void
     /** Callback quando um dia é selecionado */
     onDateSelect: (day: number) => void
+    /** Callback quando um dia é selecionado com duplo clique (confirma e fecha) */
+    onDateDoubleClick?: (day: number) => void
     /** Callback para limpar seleção */
     onClear?: () => void
     /** Callback para selecionar hoje */
@@ -47,6 +49,7 @@ export function Calendar({
     displayMonth,
     onDisplayMonthChange,
     onDateSelect,
+    onDateDoubleClick,
     onClear,
     onToday,
     minDate,
@@ -209,6 +212,7 @@ export function Calendar({
                             key={index}
                             type="button"
                             onClick={() => !disabled && onDateSelect(day)}
+                            onDoubleClick={() => !disabled && onDateDoubleClick?.(day)}
                             disabled={disabled}
                             className={`w-full py-2 px-1 text-sm rounded-md min-w-[48px] ${selected
                                 ? 'bg-gray-200 text-gray-800'
@@ -226,12 +230,12 @@ export function Calendar({
 
             {/* Botões de ação do calendário */}
             {showActionButtons && (
-                <div className="flex justify-between items-center mb-3">
+                <div className="flex justify-between items-center">
                     {onClear && (
                         <button
                             type="button"
                             onClick={onClear}
-                            className="text-sm text-gray-400 hover:text-gray-600 focus:outline-none pb-4"
+                            className="py-1 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
                         >
                             Limpar
                         </button>
@@ -240,7 +244,7 @@ export function Calendar({
                         <button
                             type="button"
                             onClick={onToday}
-                            className="text-sm text-gray-400 hover:text-gray-600 focus:outline-none pb-4"
+                            className="py-1 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
                         >
                             Hoje
                         </button>
