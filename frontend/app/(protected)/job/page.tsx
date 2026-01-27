@@ -172,11 +172,10 @@ export default function JobPage() {
         setError(null)
 
         try {
-            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
-            const idsForAction = getSelectedJobIdsForAction()
+            // Verificar diretamente o selectAllMode para evitar stale closure
             let jobsToProcess: JobResponse[]
 
-            if (idsForAction === null) {
+            if (selectAllJobsMode) {
                 // Modo "todos": buscar todos os jobs que atendem aos filtros atuais
                 const params = new URLSearchParams()
                 params.set('limit', '10000')

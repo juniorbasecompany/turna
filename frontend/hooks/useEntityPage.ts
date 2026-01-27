@@ -225,11 +225,11 @@ export function useEntityPage<
         setError(null)
 
         try {
-            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
-            const idsForAction = selection.getSelectedIdsForAction()
+            // Verificar diretamente o selectAllMode para evitar stale closure
+            const isSelectAllMode = selection.selectAllMode
             let idsToDelete: number[]
 
-            if (idsForAction === null) {
+            if (isSelectAllMode) {
                 // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
                 const params = new URLSearchParams()
                 // Usar limit alto para buscar todos (ou poderia ser um endpoint específico)
@@ -250,7 +250,8 @@ export function useEntityPage<
                 )
                 idsToDelete = response.items.map((item) => item.id)
             } else {
-                idsToDelete = idsForAction
+                // Modo parcial: usar apenas os IDs selecionados
+                idsToDelete = Array.from(selection.selectedItems)
             }
 
             if (idsToDelete.length === 0) {
@@ -281,7 +282,7 @@ export function useEntityPage<
         } finally {
             setDeleting(false)
         }
-    }, [selection, endpoint, entityName, loadItems, onDeleteSuccess, setError, additionalListParams])
+    }, [selection.selectedItems, selection.selectAllMode, selection.clearSelection, endpoint, entityName, loadItems, onDeleteSuccess, setError, additionalListParams])
 
     // Handler de cancelar (combinado)
     const handleCancel = useCallback(() => {
