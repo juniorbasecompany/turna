@@ -141,14 +141,14 @@ def _extract_individual_allocations(
 ) -> list[dict]:
     """
     Extrai alocações individuais do resultado do solver.
-    
+
     Transforma a estrutura agregada (per_day) em uma lista de alocações individuais,
     onde cada alocação representa um profissional alocado a uma demanda específica.
-    
+
     Args:
         per_day: Lista de dicts com estrutura do solver (day_number, pros_for_day, assigned_demands_by_pro, etc.)
         pros_by_sequence: Lista de profissionais (para obter nomes completos)
-    
+
     Returns:
         Lista de dicts, cada um representando uma alocação individual:
         {
@@ -163,7 +163,7 @@ def _extract_individual_allocations(
         }
     """
     allocations = []
-    
+
     # Criar mapa profissional_id -> nome completo (busca em pros_by_sequence primeiro)
     pro_id_to_name: dict[str, str] = {}
     for pro in pros_by_sequence:
@@ -171,20 +171,20 @@ def _extract_individual_allocations(
         pro_name = str(pro.get("name") or pro_id).strip()
         if pro_id:
             pro_id_to_name[pro_id] = pro_name
-    
+
     for day_item in per_day:
         if not isinstance(day_item, dict):
             continue
-            
+
         day_number = day_item.get("day_number", 0)
         if day_number <= 0:
             continue
-            
+
         pros_for_day = day_item.get("pros_for_day", [])
         assigned_demands_by_pro = day_item.get("assigned_demands_by_pro", {})
-        
+
         logger.debug(f"[EXTRACT_ALLOCATIONS] Dia {day_number}: {len(pros_for_day)} profissionais, {len(assigned_demands_by_pro)} profissionais com alocações")
-        
+
         # Atualizar mapa com profissionais do dia (pode ter nomes diferentes)
         for pro in pros_for_day:
             if not isinstance(pro, dict):
@@ -196,7 +196,7 @@ def _extract_individual_allocations(
                 # Priorizar nome do pros_for_day, fallback para pros_by_sequence
                 pro_name = str(pro.get("name") or pro_id_to_name.get(pro_id, pro_id)).strip()
                 pro_id_to_name[pro_id] = pro_name
-        
+
         # Iterar sobre alocações por profissional
         for pro_id_raw, demands in assigned_demands_by_pro.items():
             # Normalizar pro_id para string (pode vir como int ou outro tipo)
@@ -204,28 +204,28 @@ def _extract_individual_allocations(
             if not pro_id:
                 logger.debug(f"[EXTRACT_ALLOCATIONS] pro_id_raw inválido: {pro_id_raw} (tipo: {type(pro_id_raw)})")
                 continue
-                
+
             if not isinstance(demands, list):
                 logger.warning(f"[EXTRACT_ALLOCATIONS] Demands não é lista para pro_id={pro_id}, tipo={type(demands)}, valor={demands}")
                 continue
-                
+
             # Buscar nome do profissional (tentar com pro_id como string e também como tipo original)
             professional_name = pro_id_to_name.get(pro_id)
             if professional_name is None:
                 # Tentar buscar com o valor original também
                 professional_name = pro_id_to_name.get(str(pro_id_raw), pro_id)
             logger.debug(f"[EXTRACT_ALLOCATIONS] Profissional {pro_id} ({professional_name}): {len(demands)} demandas")
-            
+
             for demand in demands:
                 if not isinstance(demand, dict):
                     continue
-                    
+
                 # Extrair dados da demanda
                 demand_id = demand.get("id")
                 if not demand_id:
                     logger.debug(f"[EXTRACT_ALLOCATIONS] Demanda sem ID, pulando: {demand}")
                     continue
-                    
+
                 allocation = {
                     "professional": professional_name,
                     "professional_id": pro_id,
@@ -238,7 +238,7 @@ def _extract_individual_allocations(
                 }
                 allocations.append(allocation)
                 logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['professional']} - Dia {allocation['day']} - {allocation['id']}")
-    
+
     logger.info(f"[EXTRACT_ALLOCATIONS] Total de alocações extraídas: {len(allocations)}")
     return allocations
 
@@ -335,7 +335,7 @@ def _demands_from_database(
     end_date = period_end_local.date()
     days = (end_date - start_date).days
     logger.debug(f"[_demands_from_database] start_date={start_date}, end_date={end_date}, days={days}")
-    
+
     if days <= 0:
         raise RuntimeError(f"Período inválido: period_end_at deve ser maior que period_start_at (days={days})")
 
@@ -358,7 +358,7 @@ def _demands_from_database(
 
     out: list[dict] = []
     logger.debug(f"[_demands_from_database] Processando {len(demands_db)} demandas do banco")
-    
+
     for i, d in enumerate(demands_db):
         # Converter para timezone da clínica para cálculos de dia e hora
         st_local = d.start_time.astimezone(tenant_tz)
@@ -371,10 +371,10 @@ def _demands_from_database(
         # Dia relativo ao period_start_at usando data no timezone da clínica
         day_idx = (st_local.date() - start_date).days + 1
         logger.debug(f"[_demands_from_database] Demanda {i}: day_idx={day_idx} (st_local.date()={st_local.date()}, start_date={start_date})")
-        
+
         if day_idx is None:
             raise RuntimeError(f"day_idx é None para demanda {i} (st_local.date()={st_local.date()}, start_date={start_date})")
-        
+
         if day_idx < 1 or day_idx > days:
             logger.warning(f"[_demands_from_database] Demanda {i} ignorada: day_idx={day_idx} fora do intervalo [1, {days}]")
             continue
@@ -442,7 +442,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             input_data = job.input_data or {}
             logger.debug(f"[GENERATE_SCHEDULE] input_data keys: {list(input_data.keys()) if input_data else 'None'}")
             logger.debug(f"[GENERATE_SCHEDULE] input_data completo: {input_data}")
-            
+
             mode = str(input_data.get("mode") or "from_extract").strip().lower()
             allocation_mode = str(input_data.get("allocation_mode") or "greedy").strip().lower()
             logger.debug(f"[GENERATE_SCHEDULE] mode={mode}, allocation_mode={allocation_mode}")
@@ -465,15 +465,21 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             schedule_version_number = 1
             extract_job_id = None
 
+            # hospital_id é obrigatório para criar Schedule
+            schedule_hospital_id = None
+
             # Carregar demandas conforme o modo
             if mode == "from_demands":
                 logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco (sem registro mestre)")
                 from datetime import datetime
 
                 # Obter dados do input_data (não há registro mestre no modo from_demands)
+                schedule_hospital_id = input_data.get("hospital_id")
+                if not schedule_hospital_id:
+                    raise RuntimeError("hospital_id é obrigatório no modo 'from_demands'")
                 schedule_name = input_data.get("name") or f"Escala Job {job_id}"
                 schedule_version_number = int(input_data.get("version_number") or 1)
-                
+
                 period_start_at = input_data.get("period_start_at")
                 period_end_at = input_data.get("period_end_at")
                 logger.debug(f"[GENERATE_SCHEDULE] period_start_at do input_data: {period_start_at} (tipo: {type(period_start_at)})")
@@ -508,22 +514,23 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 # Modo original: ler de job de extração (requer schedule_id)
                 schedule_id_raw = input_data.get("schedule_id")
                 logger.debug(f"[GENERATE_SCHEDULE] schedule_id_raw: {schedule_id_raw} (tipo: {type(schedule_id_raw)})")
-                
+
                 if schedule_id_raw is None:
                     raise RuntimeError("schedule_id ausente no input_data para modo 'from_extract'")
-                
+
                 try:
                     schedule_id = int(schedule_id_raw)
                     logger.debug(f"[GENERATE_SCHEDULE] schedule_id convertido: {schedule_id}")
                 except (ValueError, TypeError) as e:
                     raise RuntimeError(f"schedule_id inválido: {schedule_id_raw}") from e
-                
+
                 sv = session.get(Schedule, schedule_id)
                 if not sv:
                     raise RuntimeError(f"Schedule não encontrado (id={schedule_id})")
                 if sv.tenant_id != job.tenant_id:
                     raise RuntimeError("Acesso negado (tenant mismatch)")
-                
+
+                schedule_hospital_id = sv.hospital_id
                 schedule_name = sv.name
                 schedule_period_start_at = sv.period_start_at
                 schedule_period_end_at = sv.period_end_at
@@ -572,7 +579,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             # Extrair alocações individuais
             extract_start_time = utc_now()
             logger.info(f"[GENERATE_SCHEDULE] Iniciando extração de alocações individuais. per_day tem {len(per_day)} dias")
-            
+
             # Log detalhado da estrutura antes da extração
             total_assigned = 0
             for idx, day_item in enumerate(per_day):
@@ -587,16 +594,16 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                         else:
                             logger.warning(f"[GENERATE_SCHEDULE]   - Profissional {pro_id}: demands_list não é lista (tipo: {type(demands_list)})")
             logger.info(f"[GENERATE_SCHEDULE] Total de demandas alocadas encontradas: {total_assigned}")
-            
+
             individual_allocations = _extract_individual_allocations(
                 per_day=per_day,
                 pros_by_sequence=pros_by_sequence,
             )
-            
+
             extract_duration = (utc_now() - extract_start_time).total_seconds()
             elapsed_seconds = (utc_now() - job_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Extraídas {len(individual_allocations)} alocações individuais em {extract_duration:.2f}s. Tempo total decorrido: {elapsed_seconds:.2f}s")
-            
+
             if len(individual_allocations) == 0:
                 logger.warning(f"[GENERATE_SCHEDULE] Nenhuma alocação individual extraída! Total de demandas alocadas era {total_assigned}")
 
@@ -624,6 +631,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
 
                 sv_item = Schedule(
                     tenant_id=job.tenant_id,
+                    hospital_id=schedule_hospital_id,
                     name=f"{schedule_name} - {allocation['professional']} - Dia {allocation['day']}",
                     period_start_at=schedule_period_start_at,
                     period_end_at=schedule_period_end_at,
@@ -635,7 +643,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     updated_at=now,
                 )
                 schedule_records.append(sv_item)
-            
+
             create_records_duration = (utc_now() - create_records_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Criação de {len(schedule_records)} registros concluída em {create_records_duration:.2f} segundos")
 
@@ -688,7 +696,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             session.commit()
             commit_duration = (utc_now() - commit_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Commit concluído em {commit_duration:.2f} segundos")
-            
+
             # Verificar se os registros foram realmente salvos
             if schedule_records:
                 from sqlmodel import select
@@ -697,7 +705,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     .where(Schedule.job_id == job.id)
                 ).all()
                 logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros encontrados no banco")
-            
+
             session.refresh(job)
             total_duration = (utc_now() - job_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Job {job_id} CONCLUÍDO com sucesso em {total_duration:.2f} segundos")

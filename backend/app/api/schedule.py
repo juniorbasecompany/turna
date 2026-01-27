@@ -43,8 +43,8 @@ class SchedulePublishResponse(PydanticBaseModel):
 class ScheduleResponse(PydanticBaseModel):
     id: int
     tenant_id: int
-    hospital_id: Optional[int]
-    hospital_name: Optional[str]
+    hospital_id: int
+    hospital_name: str
     hospital_color: Optional[str]  # Cor do hospital em formato hexadecimal (#RRGGBB)
     name: str
     period_start_at: datetime
@@ -68,6 +68,7 @@ class ScheduleListResponse(PydanticBaseModel):
 
 
 class ScheduleCreateRequest(PydanticBaseModel):
+    hospital_id: int
     name: str
     period_start_at: datetime
     period_end_at: datetime
@@ -75,6 +76,7 @@ class ScheduleCreateRequest(PydanticBaseModel):
 
 
 class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
+    hospital_id: int
     name: str
     period_start_at: datetime
     period_end_at: datetime
@@ -92,16 +94,16 @@ def _build_schedule_response(schedule: Schedule, session: Session) -> ScheduleRe
     """
     Constrói um ScheduleResponse incluindo dados do hospital (nome e cor).
     """
-    hospital = None
-    if schedule.hospital_id:
-        hospital = session.get(Hospital, schedule.hospital_id)
+    hospital = session.get(Hospital, schedule.hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=500, detail=f"Hospital {schedule.hospital_id} não encontrado")
 
     return ScheduleResponse(
         id=schedule.id,
         tenant_id=schedule.tenant_id,
         hospital_id=schedule.hospital_id,
-        hospital_name=hospital.name if hospital else None,
-        hospital_color=hospital.color if hospital else None,
+        hospital_name=hospital.name,
+        hospital_color=hospital.color,
         name=schedule.name,
         period_start_at=schedule.period_start_at,
         period_end_at=schedule.period_end_at,
@@ -123,33 +125,33 @@ def _to_minutes(h: int | float) -> int:
 def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]:
     """
     Reconstrói a estrutura per_day a partir de registros fragmentados.
-    
+
     Args:
         fragments: Lista de Schedule com alocações individuais em result_data
-    
+
     Returns:
         Lista de dicts no formato per_day (compatível com formato original do solver)
     """
     # Agrupar por dia
     by_day: dict[int, dict] = {}
-    
+
     # Mapa de profissionais já vistos (para evitar duplicatas em pros_for_day)
     pros_seen: dict[tuple[int, str], dict] = {}
-    
+
     for fragment in fragments:
         result_data = fragment.result_data or {}
         if not isinstance(result_data, dict):
             continue
-            
+
         day = result_data.get("day")
         professional_id = result_data.get("professional_id")
         professional = result_data.get("professional")
-        
+
         if not day or not professional_id:
             continue
-            
+
         day_num = int(day)
-        
+
         # Inicializar estrutura do dia se não existir
         if day_num not in by_day:
             by_day[day_num] = {
@@ -159,7 +161,7 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
                 "demands_day": [],
                 "assigned_pids": [],
             }
-        
+
         # Adicionar profissional a pros_for_day (se ainda não foi adicionado)
         pro_key = (day_num, professional_id)
         if pro_key not in pros_seen:
@@ -170,7 +172,7 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
                 "vacation": [],
             }
             by_day[day_num]["pros_for_day"].append(pros_seen[pro_key])
-        
+
         # Adicionar demanda a assigned_demands_by_pro
         demand_data = {
             "id": result_data.get("id"),
@@ -181,11 +183,11 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
             "source": result_data.get("source", {}),
         }
         by_day[day_num]["assigned_demands_by_pro"][professional_id].append(demand_data)
-        
+
         # Adicionar a demands_day também
         by_day[day_num]["demands_day"].append(demand_data)
         by_day[day_num]["assigned_pids"].append(professional_id)
-    
+
     # Converter defaultdict para dict normal e ordenar por dia
     result = []
     for day_num in sorted(by_day.keys()):
@@ -194,18 +196,18 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
         if isinstance(day_data["assigned_demands_by_pro"], defaultdict):
             day_data["assigned_demands_by_pro"] = dict(day_data["assigned_demands_by_pro"])
         result.append(day_data)
-    
+
     return result
 
 
 def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = None) -> list:
     """
     Converte `Schedule.result_data` (formato do solver) para uma lista de DaySchedule.
-    
+
     Suporta dois formatos:
     1. Estrutura completa com `per_day` (formato original)
     2. Registro fragmentado - busca registros relacionados pelo job_id e reconstrói estrutura
-    
+
     Args:
         sv: Schedule a ser processado
         session: Session do banco (necessário apenas se precisar buscar registros fragmentados)
@@ -217,7 +219,7 @@ def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = Non
 
     result_data = sv.result_data or {}
     per_day = result_data.get("per_day") or []
-    
+
     # Se não tem per_day, pode ser um registro fragmentado - tentar reconstruir
     if (not isinstance(per_day, list) or not per_day) and session is not None and sv.job_id is not None:
         # Buscar registros relacionados pelo job_id
@@ -228,14 +230,14 @@ def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = Non
             .where(Schedule.tenant_id == sv.tenant_id)
             .where(Schedule.id != sv.id)  # Excluir o próprio registro
         ).all()
-        
+
         if related_records:
             # Reconstruir estrutura per_day a partir dos registros fragmentados
             per_day = _reconstruct_per_day_from_fragments(related_records)
-    
+
     if not isinstance(per_day, list) or not per_day:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Schedule não possui result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
         )
 
@@ -481,7 +483,7 @@ def list_schedules(
     query = select(Schedule).where(Schedule.tenant_id == member.tenant_id)
     if status_enum:
         query = query.where(Schedule.status == status_enum)
-    
+
     # Filtrar por período: escala aparece se seu período se sobrepõe ao filtro
     # Uma escala se sobrepõe se: period_start_at (escala) <= period_end_at (filtro) E period_end_at (escala) >= period_start_at (filtro)
     if period_start_at is not None:
@@ -505,7 +507,7 @@ def list_schedules(
     items = session.exec(query).all()
 
     # Buscar hospitais das escalas para incluir hospital_name e hospital_color
-    hospital_ids = {item.hospital_id for item in items if item.hospital_id is not None}
+    hospital_ids = {item.hospital_id for item in items}
     hospital_dict = {}
     if hospital_ids:
         hospital_query = select(Hospital).where(
@@ -518,15 +520,15 @@ def list_schedules(
     # Construir resposta com hospital_id, hospital_name e hospital_color
     schedule_responses = []
     for item in items:
-        hospital = hospital_dict.get(item.hospital_id) if item.hospital_id else None
-        hospital_name = hospital.name if hospital else None
-        hospital_color = hospital.color if hospital else None
+        hospital = hospital_dict.get(item.hospital_id)
+        if not hospital:
+            raise HTTPException(status_code=500, detail=f"Hospital {item.hospital_id} não encontrado")
         schedule_response = ScheduleResponse(
             id=item.id,
             tenant_id=item.tenant_id,
             hospital_id=item.hospital_id,
-            hospital_name=hospital_name,
-            hospital_color=hospital_color,
+            hospital_name=hospital.name,
+            hospital_color=hospital.color,
             name=item.name,
             period_start_at=item.period_start_at,
             period_end_at=item.period_end_at,
@@ -555,10 +557,17 @@ async def generate_schedule_from_demands(
 ):
     """
     Gera escala a partir de demandas da tabela demand (campo source).
-    
+
     Lê demandas do banco de dados no período informado e cria um job assíncrono
     para gerar a escala usando o solver (greedy ou cp-sat).
     """
+    # Validar hospital
+    hospital = session.get(Hospital, body.hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital não encontrado")
+    if hospital.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
     # Validar período
     if body.period_end_at <= body.period_start_at:
         raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
@@ -569,7 +578,7 @@ async def generate_schedule_from_demands(
     tenant = session.get(Tenant, member.tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant não encontrado")
-    
+
     tenant_tz = ZoneInfo(tenant.timezone)
 
     # Validar que há demandas no período (query rápida)
@@ -581,7 +590,7 @@ async def generate_schedule_from_demands(
             Demand.start_time < body.period_end_at,
         )
     ).one()
-    
+
     # Se não encontrou, buscar informações para ajudar no debug
     if demands_count == 0:
         # Buscar total de demandas do tenant para contexto
@@ -590,10 +599,10 @@ async def generate_schedule_from_demands(
                 Demand.tenant_id == member.tenant_id,
             )
         ).one()
-        
+
         # Construir mensagem detalhada
         detail_msg = "Nenhuma demanda encontrada no período informado."
-        
+
         if total_demands == 0:
             detail_msg += " Não há demandas cadastradas para este tenant. Cadastre demandas antes de gerar a escala."
         else:
@@ -604,32 +613,32 @@ async def generate_schedule_from_demands(
                 .order_by(Demand.start_time.asc())
                 .limit(1)
             ).first()
-            
+
             last_demand = session.exec(
                 select(Demand)
                 .where(Demand.tenant_id == member.tenant_id)
                 .order_by(Demand.start_time.desc())
                 .limit(1)
             ).first()
-            
+
             # Formatar datas usando o timezone da clínica
             def format_datetime_for_user(dt: datetime) -> str:
                 """Formata datetime para exibição ao usuário no timezone da clínica"""
                 # Converter para timezone da clínica
                 dt_local = dt.astimezone(tenant_tz)
                 return dt_local.strftime("%d/%m/%Y %H:%M")
-            
+
             detail_msg += f"\n\nPeríodo selecionado (fuso horário {tenant.timezone}):"
             detail_msg += f"\n- Início: {format_datetime_for_user(body.period_start_at)}"
             detail_msg += f"\n- Fim: {format_datetime_for_user(body.period_end_at)}"
-            
+
             if first_demand and last_demand:
                 detail_msg += f"\n\nDemandas disponíveis no sistema (fuso horário {tenant.timezone}):"
                 detail_msg += f"\n- Primeira demanda: {format_datetime_for_user(first_demand.start_time)}"
                 detail_msg += f"\n- Última demanda: {format_datetime_for_user(last_demand.start_time)}"
                 detail_msg += f"\n\nTotal de demandas cadastradas: {total_demands}"
                 detail_msg += "\n\nDica: Ajuste o período para incluir as demandas disponíveis."
-        
+
         raise HTTPException(
             status_code=400,
             detail=detail_msg,
@@ -649,6 +658,7 @@ async def generate_schedule_from_demands(
         status=JobStatus.PENDING,
         input_data={
             "mode": "from_demands",
+            "hospital_id": body.hospital_id,
             "name": body.name,
             "period_start_at": body.period_start_at.isoformat(),
             "period_end_at": body.period_end_at.isoformat(),
@@ -702,6 +712,13 @@ def create_schedule(
     Cria uma Schedule manualmente (sem job de geração).
     Útil para criar escalas vazias ou importar de outras fontes.
     """
+    # Validar hospital
+    hospital = session.get(Hospital, body.hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital não encontrado")
+    if hospital.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
     # Validar período
     if body.period_end_at <= body.period_start_at:
         raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
@@ -710,6 +727,7 @@ def create_schedule(
 
     sv = Schedule(
         tenant_id=member.tenant_id,
+        hospital_id=body.hospital_id,
         name=body.name,
         period_start_at=body.period_start_at,
         period_end_at=body.period_end_at,
@@ -731,7 +749,7 @@ def delete_schedule(
 ):
     """
     Exclui uma Schedule.
-    
+
     Apenas escalas em status DRAFT podem ser excluídas.
     Escalas publicadas devem ser arquivadas em vez de excluídas.
     """
@@ -740,16 +758,16 @@ def delete_schedule(
         raise HTTPException(status_code=404, detail="Schedule não encontrado")
     if sv.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    
+
     # Impedir exclusão de escalas publicadas
     if sv.status == ScheduleStatus.PUBLISHED:
         raise HTTPException(
             status_code=400,
             detail="Não é possível excluir uma escala publicada. Arquive-a em vez disso."
         )
-    
+
     session.delete(sv)
     session.commit()
-    
+
     return None
 

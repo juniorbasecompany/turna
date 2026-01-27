@@ -20,15 +20,18 @@ import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
+    HospitalListResponse,
+    HospitalResponse,
     ScheduleCreateRequest,
-    ScheduleUpdateRequest,
-    ScheduleResponse,
     ScheduleGenerateFromDemandsRequest,
     ScheduleGenerateFromDemandsResponse,
+    ScheduleResponse,
+    ScheduleUpdateRequest,
 } from '@/types/api'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type ScheduleFormData = {
+    hospital_id: number | null
     name: string
     period_start_at: Date | null
     period_end_at: Date | null
@@ -41,6 +44,11 @@ export default function SchedulePage() {
 
     // Constantes para filtros
     const ALL_STATUS_FILTERS: string[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED']
+
+    // Estados auxiliares - Hospitais
+    const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
+    const [loadingHospitals, setLoadingHospitals] = useState(true)
+    const [selectedHospitalId, setSelectedHospitalId] = useState<number | null>(null)
 
     // Estados auxiliares
     const [nameFilter, setNameFilter] = useState('')
@@ -64,6 +72,7 @@ export default function SchedulePage() {
 
     // Configuração inicial
     const initialFormData: ScheduleFormData = {
+        hospital_id: null,
         name: '',
         period_start_at: null,
         period_end_at: null,
@@ -74,6 +83,7 @@ export default function SchedulePage() {
     // Mapeamentos
     const mapEntityToFormData = (schedule: ScheduleResponse): ScheduleFormData => {
         return {
+            hospital_id: schedule.hospital_id,
             name: schedule.name,
             period_start_at: schedule.period_start_at ? new Date(schedule.period_start_at) : null,
             period_end_at: schedule.period_end_at ? new Date(schedule.period_end_at) : null,
@@ -87,6 +97,7 @@ export default function SchedulePage() {
         const endIso = formData.period_end_at?.toISOString()
 
         return {
+            hospital_id: formData.hospital_id!,
             name: formData.name.trim(),
             period_start_at: startIso!,
             period_end_at: endIso!,
@@ -109,6 +120,10 @@ export default function SchedulePage() {
 
     // Validação
     const validateFormData = (formData: ScheduleFormData): string | null => {
+        if (!formData.hospital_id) {
+            return 'Hospital é obrigatório'
+        }
+
         if (!formData.name.trim()) {
             return 'Nome é obrigatório'
         }
@@ -131,6 +146,7 @@ export default function SchedulePage() {
     // isEmptyCheck
     const isEmptyCheck = (formData: ScheduleFormData): boolean => {
         return (
+            formData.hospital_id === null &&
             formData.name.trim() === '' &&
             formData.period_start_at === null &&
             formData.period_end_at === null
@@ -215,6 +231,25 @@ export default function SchedulePage() {
         additionalListParams,
         listEnabled: !!settings,
     })
+
+    // Carregar hospitais para o seletor
+    useEffect(() => {
+        const loadHospitals = async () => {
+            try {
+                const response = await protectedFetch<HospitalListResponse>('/api/hospital?limit=100')
+                setHospitals(response.items || [])
+                // Se houver apenas um hospital, selecioná-lo automaticamente
+                if (response.items?.length === 1) {
+                    setSelectedHospitalId(response.items[0].id)
+                }
+            } catch (err) {
+                console.error('Erro ao carregar hospitais:', err)
+            } finally {
+                setLoadingHospitals(false)
+            }
+        }
+        loadHospitals()
+    }, [])
 
     // Validar intervalo de datas
     useEffect(() => {
@@ -356,6 +391,12 @@ export default function SchedulePage() {
 
     // Handler para gerar escala (mesma ação do painel de demandas)
     const handleGenerateSchedule = async () => {
+        // Hospital é obrigatório
+        if (!selectedHospitalId) {
+            setError('Selecione um hospital')
+            return
+        }
+
         // Apenas período inicial é obrigatório
         if (!periodStartDate) {
             triggerPeriodFlash(true, false)
@@ -385,11 +426,14 @@ export default function SchedulePage() {
             const periodEndAt = localDateToUtcEndExclusive(effectiveEndDate, settings)
 
             // Criar nome padrão baseado no período
+            const selectedHospital = hospitals.find(h => h.id === selectedHospitalId)
+            const hospitalName = selectedHospital?.name || 'Hospital'
             const name = periodEndDate
-                ? `Escala ${periodStartDate.toLocaleDateString('pt-BR')} - ${periodEndDate.toLocaleDateString('pt-BR')}`
-                : `Escala a partir de ${periodStartDate.toLocaleDateString('pt-BR')}`
+                ? `${hospitalName} - ${periodStartDate.toLocaleDateString('pt-BR')} a ${periodEndDate.toLocaleDateString('pt-BR')}`
+                : `${hospitalName} - a partir de ${periodStartDate.toLocaleDateString('pt-BR')}`
 
             const request: ScheduleGenerateFromDemandsRequest = {
+                hospital_id: selectedHospitalId,
                 name,
                 period_start_at: periodStartAt,
                 period_end_at: periodEndAt,
@@ -546,6 +590,28 @@ export default function SchedulePage() {
             {/* Área de edição */}
             <EditForm title="Escala" isEditing={isEditing}>
                 <div className="space-y-4">
+                    <FormField label="Hospital" required>
+                        <select
+                            id="hospital_id"
+                            value={formData.hospital_id || ''}
+                            onChange={(e) =>
+                                setFormData({
+                                    ...formData,
+                                    hospital_id: e.target.value ? parseInt(e.target.value) : null,
+                                })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            disabled={submitting || loadingHospitals}
+                        >
+                            <option value="">Selecione um hospital</option>
+                            {hospitals.map((hospital) => (
+                                <option key={hospital.id} value={hospital.id}>
+                                    {hospital.name}
+                                </option>
+                            ))}
+                        </select>
+                    </FormField>
+
                     <FormField label="Nome" required>
                         <input
                             type="text"
@@ -637,7 +703,24 @@ export default function SchedulePage() {
                 filterContent={
                     !isEditing ? (
                         <FilterPanel>
-                            <FormFieldGrid cols={1} smCols={3} gap={4}>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
+                                <FormField label="Hospital" required>
+                                    <select
+                                        value={selectedHospitalId || ''}
+                                        onChange={(e) =>
+                                            setSelectedHospitalId(e.target.value ? parseInt(e.target.value) : null)
+                                        }
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        disabled={loadingHospitals}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {hospitals.map((hospital) => (
+                                            <option key={hospital.id} value={hospital.id}>
+                                                {hospital.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </FormField>
                                 <FormField label="Nome">
                                     <input
                                         type="text"
@@ -647,6 +730,8 @@ export default function SchedulePage() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     />
                                 </FormField>
+                            </FormFieldGrid>
+                            <FormFieldGrid cols={1} smCols={2} gap={4}>
                                 <TenantDateTimePicker
                                     label="Desde"
                                     value={periodStartDate}

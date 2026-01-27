@@ -22,13 +22,13 @@ class Schedule(BaseModel, table=True):
     Observações:
       - `period_start_at` / `period_end_at` representam intervalo meio-aberto [start, end)
       - `generated_at` e `published_at` seguem diretiva `_at` com timestamptz
-      - `hospital_id` é opcional; quando presente, a escala é associada a um hospital específico
+      - `hospital_id` é obrigatório; cada escala pertence a um hospital
     """
 
     __tablename__ = "schedule"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
-    hospital_id: Optional[int] = Field(default=None, foreign_key="hospital.id", index=True, nullable=True)
+    hospital_id: int = Field(foreign_key="hospital.id", index=True, nullable=False)
 
     name: str = Field(default="Schedule")
     period_start_at: datetime = Field(
