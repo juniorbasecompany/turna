@@ -27,6 +27,16 @@ logger = logging.getLogger(__name__)
 _MAX_STALE_WINDOW = timedelta(hours=1)
 
 
+def _was_cancelled(session: Session, job: Job) -> bool:
+    """
+    Verifica se o job foi cancelado (status FAILED) durante a execução.
+    Faz um refresh no banco para obter o status mais recente.
+    Usado para evitar sobrescrever status FAILED com COMPLETED.
+    """
+    session.refresh(job)
+    return job.status == JobStatus.FAILED
+
+
 def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) -> timedelta:
     """
     Janela dinâmica:
@@ -83,6 +93,9 @@ async def ping_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
 
         try:
             job.result_data = {"pong": True}
+            # Verificar se foi cancelado antes de marcar como COMPLETED
+            if _was_cancelled(session, job):
+                return {"ok": False, "error": "job_cancelled", "job_id": job.id}
             job.status = JobStatus.COMPLETED
             now = utc_now()
             job.completed_at = now
@@ -654,6 +667,10 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 sv.status = ScheduleStatus.DRAFT
                 session.add(sv)
 
+            # Verificar se foi cancelado antes de marcar como COMPLETED
+            if _was_cancelled(session, job):
+                logger.warning(f"[GENERATE_SCHEDULE] Job {job.id} foi cancelado durante execução")
+                return {"ok": False, "error": "job_cancelled", "job_id": job.id}
             job.status = JobStatus.COMPLETED
             job.completed_at = utc_now()
             job.updated_at = job.completed_at
@@ -765,6 +782,10 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
                 meta["hospital_name"] = hospital.name
 
             job.result_data = result
+            # Verificar se foi cancelado antes de marcar como COMPLETED
+            if _was_cancelled(session, job):
+                logger.warning(f"[EXTRACT_DEMAND] Job {job.id} foi cancelado durante execução")
+                return {"ok": False, "error": "job_cancelled", "job_id": job.id}
             job.status = JobStatus.COMPLETED
             now = utc_now()
             job.completed_at = now
@@ -835,6 +856,9 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
             s3 = S3Client()
             if s3.file_exists(thumbnail_key):
                 # Thumbnail já existe, não regenerar
+                # Verificar se foi cancelado antes de marcar como COMPLETED
+                if _was_cancelled(session, job):
+                    return {"ok": False, "error": "job_cancelled", "job_id": job.id}
                 job.status = JobStatus.COMPLETED
                 job.completed_at = utc_now()
                 job.updated_at = job.completed_at
@@ -876,6 +900,9 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
             if not (is_image or is_pdf or is_excel):
                 # Outro tipo: não gerar thumbnail (frontend exibirá fallback)
                 logger.warning(f"[THUMBNAIL] Tipo não suportado para file_id={file_id}: mime={mime}, ext={ext}")
+                # Verificar se foi cancelado antes de marcar como COMPLETED
+                if _was_cancelled(session, job):
+                    return {"ok": False, "error": "job_cancelled", "job_id": job.id}
                 job.status = JobStatus.COMPLETED
                 job.completed_at = utc_now()
                 job.updated_at = job.completed_at
@@ -1037,6 +1064,10 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
             )
 
             # Sucesso
+            # Verificar se foi cancelado antes de marcar como COMPLETED
+            if _was_cancelled(session, job):
+                logger.warning(f"[THUMBNAIL] Job {job.id} foi cancelado durante execução")
+                return {"ok": False, "error": "job_cancelled", "job_id": job.id}
             job.status = JobStatus.COMPLETED
             job.completed_at = utc_now()
             job.updated_at = job.completed_at

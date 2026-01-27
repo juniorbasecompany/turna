@@ -1164,6 +1164,8 @@ class JobListResponse(PydanticBaseModel):
 def list_jobs(
     job_type: Optional[str] = Query(None, description="Filtrar por tipo (PING, EXTRACT_DEMAND, GENERATE_SCHEDULE)"),
     status: Optional[str] = Query(None, description="Filtrar por status (PENDING, RUNNING, COMPLETED, FAILED)"),
+    started_at_from: Optional[str] = Query(None, description="Filtrar jobs iniciados a partir desta data (ISO 8601)"),
+    started_at_to: Optional[str] = Query(None, description="Filtrar jobs iniciados até esta data (ISO 8601)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
     member: Member = Depends(get_current_member),
@@ -1187,12 +1189,31 @@ def list_jobs(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
 
+    # Parsear datas de filtro
+    started_from_dt = None
+    if started_at_from:
+        try:
+            started_from_dt = datetime.fromisoformat(started_at_from.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Data inválida para started_at_from: {started_at_from}")
+
+    started_to_dt = None
+    if started_at_to:
+        try:
+            started_to_dt = datetime.fromisoformat(started_at_to.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Data inválida para started_at_to: {started_at_to}")
+
     # Query base
     query = select(Job).where(Job.tenant_id == member.tenant_id)
     if job_type_enum:
         query = query.where(Job.job_type == job_type_enum)
     if status_enum:
         query = query.where(Job.status == status_enum)
+    if started_from_dt:
+        query = query.where(Job.started_at >= started_from_dt)  # type: ignore[attr-defined]
+    if started_to_dt:
+        query = query.where(Job.started_at <= started_to_dt)  # type: ignore[attr-defined]
 
     # Contar total antes de aplicar paginação
     count_query = select(func.count(Job.id)).where(Job.tenant_id == member.tenant_id)
@@ -1200,6 +1221,10 @@ def list_jobs(
         count_query = count_query.where(Job.job_type == job_type_enum)
     if status_enum:
         count_query = count_query.where(Job.status == status_enum)
+    if started_from_dt:
+        count_query = count_query.where(Job.started_at >= started_from_dt)  # type: ignore[attr-defined]
+    if started_to_dt:
+        count_query = count_query.where(Job.started_at <= started_to_dt)  # type: ignore[attr-defined]
     total = session.exec(count_query).one()
 
     # Aplicar ordenação e paginação

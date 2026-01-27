@@ -6,7 +6,9 @@ import { CardPanel } from '@/components/CardPanel'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterOption } from '@/components/FilterButtons'
 import { FilterPanel } from '@/components/FilterPanel'
+import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
@@ -42,6 +44,11 @@ export default function JobPage() {
         allFilters: ALL_STATUS_FILTERS,
         initialFilters: new Set(ALL_STATUS_FILTERS),
     })
+
+    // Filtros de período de início (started_at)
+    // "Desde" inicia vazio, "Até" inicia vazio
+    const [startedAtFrom, setStartedAtFrom] = useState<Date | null>(null)
+    const [startedAtTo, setStartedAtTo] = useState<Date | null>(null)
 
     // Configuração inicial (vazio, pois jobs não são editáveis)
     const initialFormData: JobFormData = {}
@@ -85,11 +92,18 @@ export default function JobPage() {
             params.status = status
         }
 
+        // Nota: filtros de data (started_at) são aplicados no frontend para evitar problemas de timezone
+
         return Object.keys(params).length > 0 ? params : undefined
     }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters])
 
-    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
+    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados ou há filtros de data)
     const needsFrontendFilter = useMemo(() => {
+        // Se há filtros de data, sempre filtra no frontend (para evitar problemas de timezone)
+        if (startedAtFrom || startedAtTo) {
+            return true
+        }
+
         const allJobTypesSelected = jobTypeFilters.selectedFilters.size === ALL_JOB_TYPE_FILTERS.length
         const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
 
@@ -108,10 +122,11 @@ export default function JobPage() {
 
         // Se múltiplos estão selecionados, precisa filtrar no frontend
         return true
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters])
+    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, startedAtFrom, startedAtTo])
 
-    // Estado para controlar interrupção
+    // Estado para controlar interrupção e exclusão customizada
     const [interrupting, setInterrupting] = useState(false)
+    const [deletingJobs, setDeletingJobs] = useState(false)
 
     // useEntityPage
     const {
@@ -125,13 +140,10 @@ export default function JobPage() {
         toggleAll: toggleAllJobs,
         selectedCount: selectedJobsCount,
         selectAllMode: selectAllJobsMode,
-        getSelectedIdsForAction: getSelectedJobIdsForAction,
         pagination,
         total,
         paginationHandlers,
         loadItems,
-        handleDeleteSelected,
-        deleting,
         actionBarErrorProps,
     } = useEntityPage<JobFormData, JobResponse, JobCreateRequest, JobUpdateRequest>({
         endpoint: '/api/job',
@@ -177,25 +189,36 @@ export default function JobPage() {
 
             if (selectAllJobsMode) {
                 // Modo "todos": buscar todos os jobs que atendem aos filtros atuais
-                const params = new URLSearchParams()
-                params.set('limit', '10000')
-                params.set('offset', '0')
+                // Buscar em batches de 100 (limite máximo da API)
+                const BATCH_SIZE = 100
+                jobsToProcess = []
+                let offset = 0
+                let hasMore = true
 
-                if (additionalListParams) {
-                    Object.entries(additionalListParams).forEach(([key, value]) => {
-                        if (value !== null && value !== undefined) {
-                            params.set(key, String(value))
-                        }
-                    })
+                while (hasMore) {
+                    const params = new URLSearchParams()
+                    params.set('limit', String(BATCH_SIZE))
+                    params.set('offset', String(offset))
+
+                    if (additionalListParams) {
+                        Object.entries(additionalListParams).forEach(([key, value]) => {
+                            if (value !== null && value !== undefined) {
+                                params.set(key, String(value))
+                            }
+                        })
+                    }
+
+                    const response = await protectedFetch<{ items: JobResponse[]; total: number }>(
+                        `/api/job/list?${params.toString()}`
+                    )
+                    jobsToProcess.push(...response.items)
+
+                    offset += BATCH_SIZE
+                    hasMore = offset < response.total
                 }
-
-                const response = await protectedFetch<{ items: JobResponse[]; total: number }>(
-                    `/api/job/list?${params.toString()}`
-                )
-                jobsToProcess = response.items
             } else {
                 // Usar apenas os jobs selecionados
-                jobsToProcess = jobs.filter((job) => idsForAction.includes(job.id))
+                jobsToProcess = jobs.filter((job) => selectedJobs.has(job.id))
             }
 
             // Filtrar apenas jobs que podem ser interrompidos
@@ -230,6 +253,82 @@ export default function JobPage() {
         }
     }
 
+    // Handler customizado para excluir jobs (apenas COMPLETED e FAILED)
+    const handleDeleteJobsSelected = async () => {
+        if (selectedJobs.size === 0) return
+
+        setDeletingJobs(true)
+        setError(null)
+
+        try {
+            let jobsToProcess: JobResponse[]
+
+            if (selectAllJobsMode) {
+                // Modo "todos": buscar todos os jobs que atendem aos filtros atuais
+                // Buscar em batches de 100 (limite máximo da API)
+                const BATCH_SIZE = 100
+                jobsToProcess = []
+                let offset = 0
+                let hasMore = true
+
+                while (hasMore) {
+                    const params = new URLSearchParams()
+                    params.set('limit', String(BATCH_SIZE))
+                    params.set('offset', String(offset))
+
+                    if (additionalListParams) {
+                        Object.entries(additionalListParams).forEach(([key, value]) => {
+                            if (value !== null && value !== undefined) {
+                                params.set(key, String(value))
+                            }
+                        })
+                    }
+
+                    const response = await protectedFetch<{ items: JobResponse[]; total: number }>(
+                        `/api/job/list?${params.toString()}`
+                    )
+                    jobsToProcess.push(...response.items)
+
+                    offset += BATCH_SIZE
+                    hasMore = offset < response.total
+                }
+            } else {
+                // Usar apenas os jobs selecionados
+                jobsToProcess = jobs.filter((job) => selectedJobs.has(job.id))
+            }
+
+            // Filtrar apenas jobs que podem ser excluídos (COMPLETED ou FAILED)
+            const jobsToDelete = jobsToProcess.filter(
+                (job) => job.status === 'COMPLETED' || job.status === 'FAILED'
+            )
+
+            if (jobsToDelete.length === 0) {
+                throw new Error('Nenhum job pode ser excluído')
+            }
+
+            // Chamar API para excluir
+            const deletePromises = jobsToDelete.map(async (job) => {
+                await protectedFetch(`/api/job/${job.id}`, {
+                    method: 'DELETE',
+                })
+            })
+
+            await Promise.all(deletePromises)
+
+            // Recarregar lista para atualizar os cards
+            await loadItems()
+
+            // Limpar seleção
+            clearJobSelection()
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Erro ao excluir jobs'
+            setError(message)
+            console.error('Erro ao excluir jobs:', err)
+        } finally {
+            setDeletingJobs(false)
+        }
+    }
+
     // Filtrar jobs no frontend quando necessário
     const filteredJobs = useMemo(() => {
         let filtered = jobs
@@ -248,8 +347,25 @@ export default function JobPage() {
             }
         }
 
+        // Filtro por período: started_at >= "Desde" e started_at <= "Até"
+        if (startedAtFrom) {
+            filtered = filtered.filter((job) => {
+                if (!job.started_at) return false
+                const jobStarted = new Date(job.started_at)
+                return jobStarted >= startedAtFrom
+            })
+        }
+
+        if (startedAtTo) {
+            filtered = filtered.filter((job) => {
+                if (!job.started_at) return false
+                const jobStarted = new Date(job.started_at)
+                return jobStarted <= startedAtTo
+            })
+        }
+
         return filtered
-    }, [jobs, jobTypeFilters.selectedFilters, statusFilters.selectedFilters, needsFrontendFilter])
+    }, [jobs, jobTypeFilters.selectedFilters, statusFilters.selectedFilters, needsFrontendFilter, startedAtFrom, startedAtTo])
 
     // Aplicar paginação no frontend quando há filtro no frontend
     const paginatedJobs = useMemo(() => {
@@ -273,7 +389,7 @@ export default function JobPage() {
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters])
+    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, startedAtFrom, startedAtTo])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -444,17 +560,17 @@ export default function JobPage() {
     ]
 
     // Botões do ActionBar
-    // Comportamento padrão: mostra "Excluir" se houver jobs excluíveis
-    // Adiciona "Interromper" como customAction se houver jobs interrompíveis
-    // Assim, se houver ambos os tipos selecionados, mostra ambos os botões
+    // Comportamento: mostra "Excluir" se houver jobs excluíveis (COMPLETED/FAILED)
+    // Mostra "Interromper" se houver jobs interrompíveis (PENDING/RUNNING)
+    // Regra de negócio: PENDING/RUNNING só podem ser interrompidos, COMPLETED/FAILED só podem ser excluídos
     const actionBarButtons = useActionBarButtons({
         isEditing: false,
         selectedCount: hasDeletableJobs ? selectedJobsCount : 0, // Botão "Excluir" só aparece se houver excluíveis
-        hasChanges: () => false,
+        hasChanges: false,
         submitting: false,
-        deleting: deleting,
+        deleting: deletingJobs,
         onCancel: clearJobSelection,
-        onDelete: handleDeleteSelected, // Botão padrão "Excluir" (só aparece se selectedCount > 0, ou seja, se houver excluíveis)
+        onDelete: handleDeleteJobsSelected, // Handler customizado que exclui apenas COMPLETED/FAILED
         onSave: async () => { },
         // Usar additionalSelectedCount para fazer o botão "Cancelar" aparecer mesmo quando não há excluíveis
         additionalSelectedCount: hasInterruptableJobs && !hasDeletableJobs ? selectedJobsCount : 0,
@@ -464,7 +580,7 @@ export default function JobPage() {
                 {
                     label: 'Interromper',
                     onClick: handleInterruptSelected,
-                    disabled: interrupting || deleting,
+                    disabled: interrupting || deletingJobs,
                     loading: interrupting,
                 },
             ]
@@ -484,6 +600,20 @@ export default function JobPage() {
                 error={error}
                 filterContent={
                     <FilterPanel>
+                        <FormFieldGrid cols={1} smCols={2} gap={4}>
+                            <TenantDateTimePicker
+                                label="Iniciado desde"
+                                value={startedAtFrom}
+                                onChange={setStartedAtFrom}
+                                id="started_at_from_filter"
+                            />
+                            <TenantDateTimePicker
+                                label="Iniciado até"
+                                value={startedAtTo}
+                                onChange={setStartedAtTo}
+                                id="started_at_to_filter"
+                            />
+                        </FormFieldGrid>
                         <FilterButtons
                             title="Tipo"
                             options={jobTypeOptions}
