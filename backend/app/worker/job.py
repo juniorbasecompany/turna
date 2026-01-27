@@ -430,42 +430,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             logger.debug(f"[GENERATE_SCHEDULE] input_data keys: {list(input_data.keys()) if input_data else 'None'}")
             logger.debug(f"[GENERATE_SCHEDULE] input_data completo: {input_data}")
             
-            # Validar e obter schedule_id com logs detalhados
-            schedule_id_raw = input_data.get("schedule_id")
-            logger.debug(f"[GENERATE_SCHEDULE] schedule_id_raw: {schedule_id_raw} (tipo: {type(schedule_id_raw)})")
-            
-            if schedule_id_raw is None:
-                error_msg = (
-                    f"schedule_id ausente no input_data. "
-                    f"input_data keys: {list(input_data.keys()) if input_data else 'None'}, "
-                    f"input_data completo: {input_data}"
-                )
-                logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
-                raise RuntimeError(error_msg)
-            
-            try:
-                schedule_id = int(schedule_id_raw)
-                logger.debug(f"[GENERATE_SCHEDULE] schedule_id convertido: {schedule_id}")
-            except (ValueError, TypeError) as e:
-                error_msg = (
-                    f"schedule_id inválido: {schedule_id_raw} (tipo: {type(schedule_id_raw)}). "
-                    f"Erro: {str(e)}"
-                )
-                logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
-                raise RuntimeError(error_msg) from e
-            
             mode = str(input_data.get("mode") or "from_extract").strip().lower()
             allocation_mode = str(input_data.get("allocation_mode") or "greedy").strip().lower()
             logger.debug(f"[GENERATE_SCHEDULE] mode={mode}, allocation_mode={allocation_mode}")
 
             if allocation_mode != "greedy":
                 raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
-
-            sv = session.get(Schedule, schedule_id)
-            if not sv:
-                raise RuntimeError(f"Schedule não encontrado (id={schedule_id})")
-            if sv.tenant_id != job.tenant_id:
-                raise RuntimeError("Acesso negado (tenant mismatch)")
 
             # Profissionais: payload > fallback dev
             pros_by_sequence = input_data.get("pros_by_sequence")
@@ -474,33 +444,41 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
                 raise RuntimeError("pros_by_sequence ausente/ inválido")
 
+            # Variáveis para armazenar dados do schedule (modo from_demands não tem registro mestre)
+            sv = None
+            schedule_name = None
+            schedule_period_start_at = None
+            schedule_period_end_at = None
+            schedule_version_number = 1
+            extract_job_id = None
+
             # Carregar demandas conforme o modo
             if mode == "from_demands":
-                logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco")
-                # Modo novo: ler do banco de dados
+                logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco (sem registro mestre)")
                 from datetime import datetime
 
-                # Obter período do input_data ou do Schedule
+                # Obter dados do input_data (não há registro mestre no modo from_demands)
+                schedule_name = input_data.get("name") or f"Escala Job {job_id}"
+                schedule_version_number = int(input_data.get("version_number") or 1)
+                
                 period_start_at = input_data.get("period_start_at")
                 period_end_at = input_data.get("period_end_at")
                 logger.debug(f"[GENERATE_SCHEDULE] period_start_at do input_data: {period_start_at} (tipo: {type(period_start_at)})")
                 logger.debug(f"[GENERATE_SCHEDULE] period_end_at do input_data: {period_end_at} (tipo: {type(period_end_at)})")
 
-                if period_start_at:
-                    if isinstance(period_start_at, str):
-                        period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
-                        logger.debug(f"[GENERATE_SCHEDULE] period_start_at convertido de string: {period_start_at}")
-                else:
-                    period_start_at = sv.period_start_at
-                    logger.debug(f"[GENERATE_SCHEDULE] period_start_at do Schedule: {period_start_at}")
+                if not period_start_at or not period_end_at:
+                    raise RuntimeError("period_start_at e period_end_at são obrigatórios no modo 'from_demands'")
 
-                if period_end_at:
-                    if isinstance(period_end_at, str):
-                        period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
-                        logger.debug(f"[GENERATE_SCHEDULE] period_end_at convertido de string: {period_end_at}")
-                else:
-                    period_end_at = sv.period_end_at
-                    logger.debug(f"[GENERATE_SCHEDULE] period_end_at do Schedule: {period_end_at}")
+                if isinstance(period_start_at, str):
+                    period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
+                    logger.debug(f"[GENERATE_SCHEDULE] period_start_at convertido de string: {period_start_at}")
+
+                if isinstance(period_end_at, str):
+                    period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
+                    logger.debug(f"[GENERATE_SCHEDULE] period_end_at convertido de string: {period_end_at}")
+
+                schedule_period_start_at = period_start_at
+                schedule_period_end_at = period_end_at
 
                 logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}")
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
@@ -513,21 +491,39 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 )
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
-                extract_job_id = None
             else:
-                # Modo original: ler de job de extração
+                # Modo original: ler de job de extração (requer schedule_id)
+                schedule_id_raw = input_data.get("schedule_id")
+                logger.debug(f"[GENERATE_SCHEDULE] schedule_id_raw: {schedule_id_raw} (tipo: {type(schedule_id_raw)})")
+                
+                if schedule_id_raw is None:
+                    raise RuntimeError("schedule_id ausente no input_data para modo 'from_extract'")
+                
+                try:
+                    schedule_id = int(schedule_id_raw)
+                    logger.debug(f"[GENERATE_SCHEDULE] schedule_id convertido: {schedule_id}")
+                except (ValueError, TypeError) as e:
+                    raise RuntimeError(f"schedule_id inválido: {schedule_id_raw}") from e
+                
+                sv = session.get(Schedule, schedule_id)
+                if not sv:
+                    raise RuntimeError(f"Schedule não encontrado (id={schedule_id})")
+                if sv.tenant_id != job.tenant_id:
+                    raise RuntimeError("Acesso negado (tenant mismatch)")
+                
+                schedule_name = sv.name
+                schedule_period_start_at = sv.period_start_at
+                schedule_period_end_at = sv.period_end_at
+                schedule_version_number = sv.version_number
+
                 extract_job_id_raw = input_data.get("extract_job_id")
                 if extract_job_id_raw is None:
-                    error_msg = f"extract_job_id ausente no input_data para modo 'from_extract'"
-                    logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
-                    raise RuntimeError(error_msg)
+                    raise RuntimeError("extract_job_id ausente no input_data para modo 'from_extract'")
                 try:
                     extract_job_id = int(extract_job_id_raw)
                     logger.debug(f"[GENERATE_SCHEDULE] extract_job_id: {extract_job_id}")
                 except (ValueError, TypeError) as e:
-                    error_msg = f"extract_job_id inválido: {extract_job_id_raw} (tipo: {type(extract_job_id_raw)}). Erro: {str(e)}"
-                    logger.error(f"[GENERATE_SCHEDULE] {error_msg}")
-                    raise RuntimeError(error_msg) from e
+                    raise RuntimeError(f"extract_job_id inválido: {extract_job_id_raw}") from e
 
                 extract_job = session.get(Job, extract_job_id)
                 if not extract_job:
@@ -591,26 +587,6 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if len(individual_allocations) == 0:
                 logger.warning(f"[GENERATE_SCHEDULE] Nenhuma alocação individual extraída! Total de demandas alocadas era {total_assigned}")
 
-            # Manter o registro original (sv) como "mestre" com metadados para compatibilidade
-            # e criar registros individuais para cada alocação
-            result_data_master: dict[str, Any] = {
-                "allocation_mode": "greedy",
-                "days": days,
-                "total_cost": total_cost,
-                "per_day": per_day,  # Manter estrutura original para compatibilidade
-                "mode": mode,
-                "fragmented": True,  # Flag indicando que há registros fragmentados
-                "allocation_count": len(individual_allocations),
-            }
-            if extract_job_id is not None:
-                result_data_master["extract_job_id"] = extract_job_id
-
-            sv.result_data = result_data_master
-            sv.generated_at = now
-            sv.updated_at = now
-            sv.status = ScheduleStatus.DRAFT
-            session.add(sv)
-
             # Criar registros individuais para cada alocação
             logger.info(f"[GENERATE_SCHEDULE] Iniciando criação de {len(individual_allocations)} registros individuais de schedule")
             schedule_records = []
@@ -627,7 +603,6 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                         "mode": mode,
                         "generated_at": now.isoformat(),
                         "job_id": job.id,
-                        "parent_schedule_id": sv.id,
                         "sequence": idx + 1,
                     }
                 }
@@ -635,12 +610,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     allocation_with_metadata["metadata"]["extract_job_id"] = extract_job_id
 
                 sv_item = Schedule(
-                    tenant_id=sv.tenant_id,
-                    name=f"{sv.name} - {allocation['professional']} - Dia {allocation['day']}",
-                    period_start_at=sv.period_start_at,
-                    period_end_at=sv.period_end_at,
+                    tenant_id=job.tenant_id,
+                    name=f"{schedule_name} - {allocation['professional']} - Dia {allocation['day']}",
+                    period_start_at=schedule_period_start_at,
+                    period_end_at=schedule_period_end_at,
                     status=ScheduleStatus.DRAFT,
-                    version_number=sv.version_number,
+                    version_number=schedule_version_number,
                     job_id=job.id,
                     result_data=allocation_with_metadata,
                     generated_at=now,
@@ -659,11 +634,30 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             else:
                 logger.warning(f"[GENERATE_SCHEDULE] Nenhum registro individual para gravar! individual_allocations tinha {len(individual_allocations)} itens")
 
+            # Se modo from_extract, atualizar também o registro mestre (sv)
+            if sv is not None:
+                result_data_master: dict[str, Any] = {
+                    "allocation_mode": "greedy",
+                    "days": days,
+                    "total_cost": total_cost,
+                    "per_day": per_day,
+                    "mode": mode,
+                    "fragmented": True,
+                    "allocation_count": len(individual_allocations),
+                }
+                if extract_job_id is not None:
+                    result_data_master["extract_job_id"] = extract_job_id
+
+                sv.result_data = result_data_master
+                sv.generated_at = now
+                sv.updated_at = now
+                sv.status = ScheduleStatus.DRAFT
+                session.add(sv)
+
             job.status = JobStatus.COMPLETED
             job.completed_at = utc_now()
             job.updated_at = job.completed_at
             job.result_data = {
-                "schedule_id": sv.id,
                 "total_cost": total_cost,
                 "allocation_count": len(individual_allocations),
                 "fragmented_records_count": len(schedule_records),
@@ -671,7 +665,8 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             job.error_message = None
             session.add(job)
 
-            logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: 1 registro mestre + {len(schedule_records)} registros individuais")
+            has_master = sv is not None
+            logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: {len(schedule_records)} registros individuais" + (" + 1 registro mestre" if has_master else " (sem registro mestre)"))
             commit_start_time = utc_now()
             session.commit()
             commit_duration = (utc_now() - commit_start_time).total_seconds()
@@ -683,14 +678,13 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 saved_count = session.exec(
                     select(Schedule)
                     .where(Schedule.job_id == job.id)
-                    .where(Schedule.id != sv.id)
                 ).all()
-                logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros individuais encontrados no banco")
+                logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros encontrados no banco")
             
             session.refresh(job)
             total_duration = (utc_now() - job_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Job {job_id} CONCLUÍDO com sucesso em {total_duration:.2f} segundos")
-            return {"ok": True, "job_id": job.id, "schedule_id": sv.id}
+            return {"ok": True, "job_id": job.id}
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = _safe_error_message(e)

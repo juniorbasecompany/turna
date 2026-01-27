@@ -206,7 +206,7 @@ export interface ScheduleGenerateFromDemandsRequest {
 
 export interface ScheduleGenerateFromDemandsResponse {
     job_id: number
-    schedule_id: number
+    schedule_id: number | null  // null quando modo from_demands (registros criados pelo worker)
 }
 
 export interface GoogleTokenRequest {

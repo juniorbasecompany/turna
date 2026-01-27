@@ -81,7 +81,7 @@ class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
 
 class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
     job_id: int
-    schedule_id: int
+    schedule_id: Optional[int]  # None quando modo from_demands (registros criados pelo worker)
 
 
 def _to_minutes(h: int | float) -> int:
@@ -572,43 +572,24 @@ async def generate_schedule_from_demands(
             detail=f"allocation_mode inválido: {body.allocation_mode}. Use 'greedy' ou 'cp-sat'",
         )
 
-    # Criar Schedule
-    sv = Schedule(
-        tenant_id=member.tenant_id,
-        name=body.name,
-        period_start_at=body.period_start_at,
-        period_end_at=body.period_end_at,
-        status=ScheduleStatus.DRAFT,
-        version_number=body.version_number,
-        result_data=None,
-    )
-    session.add(sv)
-    session.commit()
-    session.refresh(sv)
-
-    # Criar Job
+    # Criar Job (sem criar registro mestre de Schedule - apenas registros fragmentados serão criados pelo worker)
     job = Job(
         tenant_id=member.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
-            "schedule_id": sv.id,
             "mode": "from_demands",
+            "name": body.name,
             "period_start_at": body.period_start_at.isoformat(),
             "period_end_at": body.period_end_at.isoformat(),
             "allocation_mode": body.allocation_mode,
             "pros_by_sequence": body.pros_by_sequence,
+            "version_number": body.version_number,
         },
     )
     session.add(job)
     session.commit()
     session.refresh(job)
-
-    # Atualizar vínculo Schedule -> Job
-    sv.job_id = job.id
-    sv.updated_at = utc_now()
-    session.add(sv)
-    session.commit()
 
     # Enfileirar job no Arq
     redis_dsn = WorkerSettings.redis_dsn()
@@ -621,7 +602,7 @@ async def generate_schedule_from_demands(
             detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
         ) from e
 
-    return ScheduleGenerateFromDemandsResponse(job_id=job.id, schedule_id=sv.id)
+    return ScheduleGenerateFromDemandsResponse(job_id=job.id, schedule_id=None)
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse, tags=["Schedule"])
