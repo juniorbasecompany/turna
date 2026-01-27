@@ -12,7 +12,7 @@ interface FilterPanelProps {
  * Componente wrapper para painéis de filtros.
  * 
  * Encapsula a estrutura padrão de filtros:
- * - Container branco com borda
+ * - Container branco com borda azul à esquerda (indica busca/filtro)
  * - Espaçamento consistente
  * - Suporte a validação de filtros
  * 
@@ -26,7 +26,7 @@ interface FilterPanelProps {
  */
 export function FilterPanel({ children, validationErrors, className = '' }: FilterPanelProps) {
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 ${className}`}>
+    <div className={`bg-white rounded-lg border border-gray-200 border-l-4 border-l-blue-500 p-4 sm:p-6 mb-4 sm:mb-6 ${className}`}>
       <div className="space-y-4">
         {children}
       </div>

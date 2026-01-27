@@ -1424,6 +1424,7 @@ export default function FilesPage() {
                     title="Arquivo"
                     editTitle="Editar arquivo"
                     isEditing={showEditArea}
+                    noPadding
                 >
                     {loadingJson ? (
                         <div className="flex justify-center items-center py-12">
