@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 import traceback
@@ -1272,6 +1273,99 @@ def update_job(
             status_code=500,
             detail=f"Erro ao atualizar job: {str(e)}",
         ) from e
+
+
+@router.get("/job/{job_id}/stream", tags=["Job"])
+async def stream_job_status(
+    job_id: int,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Stream SSE (Server-Sent Events) para aguardar conclusão de um job.
+    
+    O cliente abre esta conexão e recebe um evento quando o job terminar
+    (status COMPLETED ou FAILED). A conexão fecha automaticamente após
+    enviar o evento de conclusão.
+    
+    Eventos enviados:
+    - event: status, data: {"status": "PENDING"|"RUNNING"|"COMPLETED"|"FAILED", "result_data": ...}
+    
+    Uso no frontend:
+    ```javascript
+    const eventSource = new EventSource(`/api/job/${jobId}/stream`);
+    eventSource.addEventListener('status', (e) => {
+        const data = JSON.parse(e.data);
+        if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+            eventSource.close();
+            // Recarregar dados...
+        }
+    });
+    ```
+    """
+    import json
+    
+    # Validar acesso ao job
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    async def event_generator():
+        """Gerador de eventos SSE que aguarda conclusão do job."""
+        # Backoff progressivo: começa em 1s, aumenta até máximo de 5s
+        min_interval = 1.0
+        max_interval = 5.0
+        check_interval = min_interval
+        # Timeout máximo (5 minutos)
+        max_wait_seconds = 300
+        elapsed = 0.0
+        check_count = 0
+        
+        while elapsed < max_wait_seconds:
+            # Buscar status atualizado do job (nova sessão para evitar cache)
+            from app.db.session import get_session_context
+            with get_session_context() as fresh_session:
+                current_job = fresh_session.get(Job, job_id)
+                if not current_job:
+                    # Job foi deletado
+                    yield f"event: error\ndata: {json.dumps({'error': 'Job não encontrado'})}\n\n"
+                    return
+                
+                status = current_job.status.value
+                result_data = current_job.result_data
+                
+                # Enviar evento de status
+                event_data = {"status": status, "result_data": result_data}
+                yield f"event: status\ndata: {json.dumps(event_data)}\n\n"
+                
+                # Se job terminou, encerrar stream
+                if current_job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                    return
+            
+            # Aguardar antes de próxima verificação
+            await asyncio.sleep(check_interval)
+            elapsed += check_interval
+            check_count += 1
+            
+            # Backoff progressivo: aumenta intervalo a cada 3 verificações
+            # 1s (checks 1-3) → 2s (checks 4-6) → 3s (checks 7-9) → 4s (checks 10-12) → 5s (checks 13+)
+            if check_count % 3 == 0 and check_interval < max_interval:
+                check_interval = min(check_interval + 1.0, max_interval)
+        
+        # Timeout - enviar evento de timeout
+        yield f"event: timeout\ndata: {json.dumps({'error': 'Timeout aguardando job'})}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Desabilita buffering no nginx
+        },
+    )
 
 
 @router.post("/job/{job_id}/cancel", response_model=JobResponse, tags=["Job"])

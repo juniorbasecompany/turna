@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from sqlmodel import create_engine, SQLModel, Session
 from typing import Generator
 
@@ -22,6 +23,13 @@ engine = create_engine(DATABASE_URL, echo=False)
 
 def get_session() -> Generator[Session, None, None]:
     """Dependency do FastAPI para obter sessão do banco."""
+    with Session(engine) as session:
+        yield session
+
+
+@contextmanager
+def get_session_context() -> Generator[Session, None, None]:
+    """Context manager para obter sessão do banco (uso fora de FastAPI Depends)."""
     with Session(engine) as session:
         yield session
 

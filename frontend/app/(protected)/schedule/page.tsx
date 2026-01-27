@@ -27,7 +27,7 @@ import {
     ScheduleGenerateFromDemandsRequest,
     ScheduleGenerateFromDemandsResponse,
 } from '@/types/api'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type ScheduleFormData = {
     name: string
@@ -48,6 +48,9 @@ export default function SchedulePage() {
     const [generating, setGenerating] = useState(false)
     const [periodStartFlash, setPeriodStartFlash] = useState(false)
     const [periodEndFlash, setPeriodEndFlash] = useState(false)
+
+    // Ref para AbortController do SSE (permite cancelar ao sair da página)
+    const sseAbortControllerRef = useRef<AbortController | null>(null)
 
     // Filtros usando hook reutilizável
     const statusFilters = useEntityFilters<string>({
@@ -233,6 +236,16 @@ export default function SchedulePage() {
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
     }
 
+    // Cleanup: cancelar SSE ao desmontar componente
+    useEffect(() => {
+        return () => {
+            if (sseAbortControllerRef.current) {
+                sseAbortControllerRef.current.abort()
+                sseAbortControllerRef.current = null
+            }
+        }
+    }, [])
+
     // Função para disparar flash nos campos de período
     const triggerPeriodFlash = (isStartMissing: boolean, isEndMissing: boolean) => {
         setPeriodStartFlash(isStartMissing)
@@ -243,6 +256,100 @@ export default function SchedulePage() {
             setPeriodEndFlash(false)
         }, 1000)
     }
+
+    // Função para aguardar conclusão do job via SSE
+    const waitForJobCompletion = useCallback(async (jobId: number): Promise<void> => {
+        // Cancelar SSE anterior se existir
+        if (sseAbortControllerRef.current) {
+            sseAbortControllerRef.current.abort()
+        }
+
+        // Criar novo AbortController
+        const abortController = new AbortController()
+        sseAbortControllerRef.current = abortController
+
+        return new Promise((resolve, reject) => {
+            // Usar fetch com streaming para receber SSE (suporta cookies)
+            fetch(`/api/job/${jobId}/stream`, {
+                credentials: 'include',
+                signal: abortController.signal,
+            })
+                .then(async (response) => {
+                    if (!response.ok) {
+                        throw new Error(`Erro ao conectar com SSE: ${response.status}`)
+                    }
+
+                    const reader = response.body?.getReader()
+                    if (!reader) {
+                        throw new Error('Stream não disponível')
+                    }
+
+                    const decoder = new TextDecoder()
+                    let buffer = ''
+
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read()
+                            if (done) break
+
+                            buffer += decoder.decode(value, { stream: true })
+
+                            // Parser SSE robusto: eventos são separados por \n\n
+                            // Procurar por eventos completos no buffer
+                            let eventEnd: number
+                            while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
+                                const eventBlock = buffer.slice(0, eventEnd)
+                                buffer = buffer.slice(eventEnd + 2)
+
+                                // Processar linhas do evento
+                                let eventType = 'message'
+                                let eventData = ''
+
+                                for (const line of eventBlock.split('\n')) {
+                                    if (line.startsWith('event: ')) {
+                                        eventType = line.slice(7).trim()
+                                    } else if (line.startsWith('data: ')) {
+                                        eventData = line.slice(6)
+                                    }
+                                }
+
+                                // Processar evento baseado no tipo
+                                if (eventType === 'error' || eventType === 'timeout') {
+                                    reject(new Error('Erro ou timeout aguardando job'))
+                                    return
+                                }
+
+                                if (eventType === 'status' && eventData) {
+                                    try {
+                                        const data = JSON.parse(eventData)
+                                        if (data.status === 'COMPLETED') {
+                                            resolve()
+                                            return
+                                        }
+                                        if (data.status === 'FAILED') {
+                                            reject(new Error(data.result_data?.error || 'Job falhou'))
+                                            return
+                                        }
+                                    } catch {
+                                        // Ignorar dados que não são JSON válido
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        // Sempre liberar o reader
+                        reader.releaseLock()
+                    }
+                })
+                .catch((err) => {
+                    // Ignorar erro de abort (usuário saiu da página)
+                    if (err.name === 'AbortError') {
+                        return
+                    }
+                    reject(err)
+                })
+        })
+    }, [])
 
     // Handler para gerar escala (mesma ação do painel de demandas)
     const handleGenerateSchedule = async () => {
@@ -285,7 +392,8 @@ export default function SchedulePage() {
                 version_number: 1,
             }
 
-            await protectedFetch<ScheduleGenerateFromDemandsResponse>(
+            // Envia requisição para criar o job
+            const response = await protectedFetch<ScheduleGenerateFromDemandsResponse>(
                 '/api/schedule/generate-from-demands',
                 {
                     method: 'POST',
@@ -296,7 +404,12 @@ export default function SchedulePage() {
                 }
             )
 
-            // Recarregar a lista de escalas após gerar
+            // Aguarda conclusão do job via SSE
+            if (response.job_id) {
+                await waitForJobCompletion(response.job_id)
+            }
+
+            // Recarregar a lista de escalas após job terminar
             loadItems()
         } catch (err) {
             let message = 'Erro ao gerar escala'
