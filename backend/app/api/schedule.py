@@ -43,7 +43,8 @@ class SchedulePublishResponse(PydanticBaseModel):
 class ScheduleResponse(PydanticBaseModel):
     id: int
     tenant_id: int
-    hospital_id: int
+    demand_id: int  # FK para Demand (relação 1:1)
+    hospital_id: int  # Obtido via demand.hospital_id
     hospital_name: str
     hospital_color: Optional[str]  # Cor do hospital em formato hexadecimal (#RRGGBB)
     name: str
@@ -68,7 +69,7 @@ class ScheduleListResponse(PydanticBaseModel):
 
 
 class ScheduleCreateRequest(PydanticBaseModel):
-    hospital_id: int
+    demand_id: int  # FK para Demand (relação 1:1)
     name: str
     period_start_at: datetime
     period_end_at: datetime
@@ -76,8 +77,8 @@ class ScheduleCreateRequest(PydanticBaseModel):
 
 
 class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
-    hospital_id: int
-    name: str
+    hospital_id: Optional[int] = None  # Usado apenas como filtro de demandas
+    name: Optional[str] = None  # Se não informado, será gerado automaticamente
     period_start_at: datetime
     period_end_at: datetime
     allocation_mode: str = "greedy"  # "greedy" | "cp-sat"
@@ -92,16 +93,28 @@ class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
 
 def _build_schedule_response(schedule: Schedule, session: Session) -> ScheduleResponse:
     """
-    Constrói um ScheduleResponse incluindo dados do hospital (nome e cor).
+    Constrói um ScheduleResponse incluindo dados do hospital (via Demand).
+    
+    Hospital é obtido via demand.hospital_id (JOIN).
     """
-    hospital = session.get(Hospital, schedule.hospital_id)
+    # Buscar Demand para obter hospital_id
+    demand = session.get(Demand, schedule.demand_id)
+    if not demand:
+        raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não encontrada")
+    
+    if not demand.hospital_id:
+        raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não possui hospital_id")
+    
+    # Buscar Hospital via Demand
+    hospital = session.get(Hospital, demand.hospital_id)
     if not hospital:
-        raise HTTPException(status_code=500, detail=f"Hospital {schedule.hospital_id} não encontrado")
+        raise HTTPException(status_code=500, detail=f"Hospital {demand.hospital_id} não encontrado")
 
     return ScheduleResponse(
         id=schedule.id,
         tenant_id=schedule.tenant_id,
-        hospital_id=schedule.hospital_id,
+        demand_id=schedule.demand_id,
+        hospital_id=demand.hospital_id,
         hospital_name=hospital.name,
         hospital_color=hospital.color,
         name=schedule.name,
@@ -506,8 +519,19 @@ def list_schedules(
 
     items = session.exec(query).all()
 
-    # Buscar hospitais das escalas para incluir hospital_name e hospital_color
-    hospital_ids = {item.hospital_id for item in items}
+    # Buscar Demands das escalas para obter hospital_id
+    demand_ids = {item.demand_id for item in items}
+    demand_dict = {}
+    if demand_ids:
+        demand_query = select(Demand).where(
+            Demand.tenant_id == member.tenant_id,
+            Demand.id.in_(demand_ids),
+        )
+        demand_list = session.exec(demand_query).all()
+        demand_dict = {d.id: d for d in demand_list}
+
+    # Buscar hospitais via Demands para incluir hospital_name e hospital_color
+    hospital_ids = {d.hospital_id for d in demand_dict.values() if d.hospital_id}
     hospital_dict = {}
     if hospital_ids:
         hospital_query = select(Hospital).where(
@@ -517,16 +541,22 @@ def list_schedules(
         hospital_list = session.exec(hospital_query).all()
         hospital_dict = {h.id: h for h in hospital_list}
 
-    # Construir resposta com hospital_id, hospital_name e hospital_color
+    # Construir resposta com demand_id, hospital_id, hospital_name e hospital_color
     schedule_responses = []
     for item in items:
-        hospital = hospital_dict.get(item.hospital_id)
+        demand = demand_dict.get(item.demand_id)
+        if not demand:
+            raise HTTPException(status_code=500, detail=f"Demand {item.demand_id} não encontrada")
+        if not demand.hospital_id:
+            raise HTTPException(status_code=500, detail=f"Demand {item.demand_id} não possui hospital_id")
+        hospital = hospital_dict.get(demand.hospital_id)
         if not hospital:
-            raise HTTPException(status_code=500, detail=f"Hospital {item.hospital_id} não encontrado")
+            raise HTTPException(status_code=500, detail=f"Hospital {demand.hospital_id} não encontrado")
         schedule_response = ScheduleResponse(
             id=item.id,
             tenant_id=item.tenant_id,
-            hospital_id=item.hospital_id,
+            demand_id=item.demand_id,
+            hospital_id=demand.hospital_id,
             hospital_name=hospital.name,
             hospital_color=hospital.color,
             name=item.name,
@@ -556,18 +586,17 @@ async def generate_schedule_from_demands(
     session: Session = Depends(get_session),
 ):
     """
-    Gera escala a partir de demandas da tabela demand (campo source).
+    Gera escalas a partir de demandas da tabela demand.
 
     Lê demandas do banco de dados no período informado e cria um job assíncrono
-    para gerar a escala usando o solver (greedy ou cp-sat).
-    """
-    # Validar hospital
-    hospital = session.get(Hospital, body.hospital_id)
-    if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital não encontrado")
-    if hospital.tenant_id != member.tenant_id:
-        raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+    para gerar as escalas usando o solver (greedy ou cp-sat).
 
+    Cada Demand gera exatamente uma Schedule (relação 1:1 via demand_id FK).
+    O hospital_id informado no body é usado apenas como filtro para selecionar
+    as demandas. Hospital da Schedule é obtido via demand.hospital_id.
+
+    Se name não for informado, será gerado automaticamente.
+    """
     # Validar período
     if body.period_end_at <= body.period_start_at:
         raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
@@ -581,15 +610,65 @@ async def generate_schedule_from_demands(
 
     tenant_tz = ZoneInfo(tenant.timezone)
 
-    # Validar que há demandas no período (query rápida)
+    # filter_hospital_id: usado apenas para filtrar demandas (opcional)
+    # Cada Schedule terá o hospital_id da sua própria demanda
+    filter_hospital_id = body.hospital_id
+
+    # Validar hospital do filtro (se informado)
+    if filter_hospital_id:
+        filter_hospital = session.get(Hospital, filter_hospital_id)
+        if not filter_hospital:
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if filter_hospital.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+
+    # Contar demandas no período (aplicando filtro de hospital se informado)
     # As datas já estão em UTC (timestamptz), então a comparação direta funciona
-    demands_count = session.exec(
+    demands_query = select(func.count(Demand.id)).where(
+        Demand.tenant_id == member.tenant_id,
+        Demand.start_time >= body.period_start_at,
+        Demand.start_time < body.period_end_at,
+    )
+    if filter_hospital_id:
+        demands_query = demands_query.where(Demand.hospital_id == filter_hospital_id)
+
+    demands_count = session.exec(demands_query).one()
+
+    # Verificar se todas as demandas têm hospital_id (obrigatório para o Schedule)
+    demands_without_hospital = session.exec(
         select(func.count(Demand.id)).where(
             Demand.tenant_id == member.tenant_id,
             Demand.start_time >= body.period_start_at,
             Demand.start_time < body.period_end_at,
+            Demand.hospital_id.is_(None),
         )
     ).one()
+
+    if demands_without_hospital > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Existem {demands_without_hospital} demanda(s) no período sem hospital associado. "
+                   "Todas as demandas precisam ter hospital definido para gerar a escala."
+        )
+
+    # Buscar primeira demanda para obter informações do hospital (para nome da escala)
+    first_demand_query = (
+        select(Demand)
+        .where(
+            Demand.tenant_id == member.tenant_id,
+            Demand.start_time >= body.period_start_at,
+            Demand.start_time < body.period_end_at,
+        )
+        .order_by(Demand.start_time.asc())
+    )
+    if filter_hospital_id:
+        first_demand_query = first_demand_query.where(Demand.hospital_id == filter_hospital_id)
+    first_demand_query = first_demand_query.limit(1)
+
+    first_demand = session.exec(first_demand_query).first()
+    hospital: Optional[Hospital] = None
+    if first_demand and first_demand.hospital_id:
+        hospital = session.get(Hospital, first_demand.hospital_id)
 
     # Se não encontrou, buscar informações para ajudar no debug
     if demands_count == 0:
@@ -651,15 +730,24 @@ async def generate_schedule_from_demands(
             detail=f"allocation_mode inválido: {body.allocation_mode}. Use 'greedy' ou 'cp-sat'",
         )
 
+    # Gerar nome automático se não informado
+    schedule_name = body.name
+    if not schedule_name:
+        hospital_name = hospital.name if hospital else "Geral"
+        start_local = body.period_start_at.astimezone(tenant_tz)
+        end_local = body.period_end_at.astimezone(tenant_tz)
+        schedule_name = f"{hospital_name} - {start_local.strftime('%d/%m/%Y')} a {end_local.strftime('%d/%m/%Y')}"
+
     # Criar Job (sem criar registro mestre de Schedule - apenas registros fragmentados serão criados pelo worker)
+    # Nota: cada Schedule terá o hospital_id da sua própria demanda (definido no worker)
     job = Job(
         tenant_id=member.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
             "mode": "from_demands",
-            "hospital_id": body.hospital_id,
-            "name": body.name,
+            "filter_hospital_id": filter_hospital_id,  # Hospital usado apenas para filtro (opcional)
+            "name": schedule_name,
             "period_start_at": body.period_start_at.isoformat(),
             "period_end_at": body.period_end_at.isoformat(),
             "allocation_mode": body.allocation_mode,
@@ -710,14 +798,28 @@ def create_schedule(
 ):
     """
     Cria uma Schedule manualmente (sem job de geração).
-    Útil para criar escalas vazias ou importar de outras fontes.
+    
+    Cada Schedule é vinculada a exatamente uma Demand (relação 1:1).
+    Hospital é obtido via demand.hospital_id.
     """
-    # Validar hospital
-    hospital = session.get(Hospital, body.hospital_id)
-    if not hospital:
-        raise HTTPException(status_code=404, detail="Hospital não encontrado")
-    if hospital.tenant_id != member.tenant_id:
-        raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+    # Validar Demand
+    demand = session.get(Demand, body.demand_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Demanda não pertence ao tenant atual")
+    if not demand.hospital_id:
+        raise HTTPException(status_code=400, detail="Demanda não possui hospital associado")
+    
+    # Verificar se já existe Schedule para esta Demand (relação 1:1)
+    existing_schedule = session.exec(
+        select(Schedule).where(Schedule.demand_id == body.demand_id)
+    ).first()
+    if existing_schedule:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Já existe uma escala para esta demanda (schedule_id={existing_schedule.id})"
+        )
 
     # Validar período
     if body.period_end_at <= body.period_start_at:
@@ -727,7 +829,7 @@ def create_schedule(
 
     sv = Schedule(
         tenant_id=member.tenant_id,
-        hospital_id=body.hospital_id,
+        demand_id=body.demand_id,
         name=body.name,
         period_start_at=body.period_start_at,
         period_end_at=body.period_end_at,

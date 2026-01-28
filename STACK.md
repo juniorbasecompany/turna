@@ -78,9 +78,13 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 - **Hospital**: hospital por tenant (com prompt customizável para extração IA)
 - **File**: metadados de arquivos no S3/MinIO
 - **Demand**: demandas cirúrgicas extraídas ou criadas manualmente
-- **Schedule**: escalas geradas (DRAFT, PUBLISHED, ARCHIVED)
+- **Schedule**: escalas geradas a partir de Demand (relação 1:1 via demand_id FK, DRAFT, PUBLISHED, ARCHIVED)
 - **Job**: jobs assíncronos (Arq)
 - **AuditLog**: log de auditoria de eventos
+
+### Relações importantes
+- **Demand → Schedule (1:1)**: cada Demand gera exatamente uma Schedule (FK `schedule.demand_id` UNIQUE, ON DELETE CASCADE)
+- Hospital da Schedule é obtido via `demand.hospital_id` (JOIN)
 
 ## Formatos
 - **Entrada**: PDF, JPEG, PNG, XLSX, XLS, CSV

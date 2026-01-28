@@ -142,7 +142,8 @@ export interface FileListResponse {
 export interface ScheduleResponse {
     id: number
     tenant_id: number
-    hospital_id: number
+    demand_id: number  // FK para Demand (relação 1:1)
+    hospital_id: number  // Obtido via demand.hospital_id
     hospital_name: string
     hospital_color: string | null  // Cor do hospital em formato hexadecimal (#RRGGBB)
     name: string
@@ -184,7 +185,7 @@ export interface ScheduleGenerateResponse {
 }
 
 export interface ScheduleCreateRequest {
-    hospital_id: number
+    demand_id: number  // FK para Demand (relação 1:1)
     name: string
     period_start_at: string
     period_end_at: string
@@ -200,8 +201,8 @@ export interface ScheduleUpdateRequest {
 }
 
 export interface ScheduleGenerateFromDemandsRequest {
-    hospital_id: number
-    name: string
+    hospital_id?: number | null  // Usado apenas como filtro de demandas
+    name?: string | null  // Se não informado, será gerado automaticamente
     period_start_at: string
     period_end_at: string
     allocation_mode?: string

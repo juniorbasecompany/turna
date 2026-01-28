@@ -4,7 +4,7 @@ import logging
 import os
 import tempfile
 from datetime import timedelta
-from typing import Any
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
@@ -235,9 +235,11 @@ def _extract_individual_allocations(
                     "end": float(demand.get("end", 0)),
                     "is_pediatric": bool(demand.get("is_pediatric", False)),
                     "source": demand.get("source", {}),
+                    "demand_id": demand.get("demand_id"),  # ID do registro Demand (FK para Schedule)
+                    "hospital_id": demand.get("hospital_id"),  # hospital_id da demanda (para referência)
                 }
                 allocations.append(allocation)
-                logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['professional']} - Dia {allocation['day']} - {allocation['id']}")
+                logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['professional']} - Dia {allocation['day']} - {allocation['id']} - Demand {allocation['demand_id']}")
 
     logger.info(f"[EXTRACT_ALLOCATIONS] Total de alocações extraídas: {len(allocations)}")
     return allocations
@@ -303,6 +305,7 @@ def _demands_from_database(
     tenant_id: int,
     period_start_at,
     period_end_at,
+    filter_hospital_id: Optional[int] = None,
 ) -> tuple[list[dict], int]:
     """
     Lê demandas do banco de dados (tabela demand) e converte para o formato esperado pelos solvers:
@@ -311,11 +314,12 @@ def _demands_from_database(
       - is_pediatric: bool (default False)
 
     Filtra por tenant_id e período (start_time dentro do intervalo).
+    Opcionalmente filtra por hospital_id (filter_hospital_id).
     Usa o timezone da clínica para calcular dias e horas relativas.
     """
     from datetime import datetime
 
-    logger.debug(f"[_demands_from_database] Iniciando - tenant_id={tenant_id}, period_start_at={period_start_at}, period_end_at={period_end_at}")
+    logger.debug(f"[_demands_from_database] Iniciando - tenant_id={tenant_id}, period_start_at={period_start_at}, period_end_at={period_end_at}, filter_hospital_id={filter_hospital_id}")
 
     # Buscar timezone do tenant
     tenant = session.get(Tenant, tenant_id)
@@ -341,6 +345,7 @@ def _demands_from_database(
 
     # Buscar demandas do banco no período
     # Filtra por tenant_id (segurança multi-tenant) e start_time dentro do intervalo
+    # Opcionalmente filtra por hospital_id (filter_hospital_id)
     # As datas de comparação já estão em UTC (timestamptz), então a comparação direta funciona
     query = (
         select(Demand)
@@ -349,8 +354,10 @@ def _demands_from_database(
             Demand.start_time >= period_start_at,
             Demand.start_time < period_end_at,
         )
-        .order_by(Demand.start_time)
     )
+    if filter_hospital_id is not None:
+        query = query.where(Demand.hospital_id == filter_hospital_id)
+    query = query.order_by(Demand.start_time)
     demands_db = session.exec(query).all()
 
     if not demands_db:
@@ -403,6 +410,8 @@ def _demands_from_database(
                 "end": float(end_h),
                 "is_pediatric": bool(d.is_pediatric),
                 "source": d.source,  # Preservar source original
+                "demand_id": d.id,  # ID do registro Demand (FK para Schedule)
+                "hospital_id": d.hospital_id,  # hospital_id da demanda (para referência)
             }
         )
 
@@ -465,18 +474,13 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             schedule_version_number = 1
             extract_job_id = None
 
-            # hospital_id é obrigatório para criar Schedule
-            schedule_hospital_id = None
-
             # Carregar demandas conforme o modo
             if mode == "from_demands":
                 logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco (sem registro mestre)")
                 from datetime import datetime
 
                 # Obter dados do input_data (não há registro mestre no modo from_demands)
-                schedule_hospital_id = input_data.get("hospital_id")
-                if not schedule_hospital_id:
-                    raise RuntimeError("hospital_id é obrigatório no modo 'from_demands'")
+                # Cada Schedule usa o demand_id da sua alocação (relação 1:1)
                 schedule_name = input_data.get("name") or f"Escala Job {job_id}"
                 schedule_version_number = int(input_data.get("version_number") or 1)
 
@@ -499,7 +503,10 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 schedule_period_start_at = period_start_at
                 schedule_period_end_at = period_end_at
 
-                logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}")
+                # Obter filtro de hospital (opcional)
+                filter_hospital_id = input_data.get("filter_hospital_id")
+
+                logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}, filter_hospital_id={filter_hospital_id}")
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Tempo decorrido até leitura de demandas: {elapsed_seconds:.2f}s")
                 demands, days = _demands_from_database(
@@ -507,6 +514,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     tenant_id=job.tenant_id,
                     period_start_at=period_start_at,
                     period_end_at=period_end_at,
+                    filter_hospital_id=filter_hospital_id,
                 )
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
@@ -530,7 +538,6 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 if sv.tenant_id != job.tenant_id:
                     raise RuntimeError("Acesso negado (tenant mismatch)")
 
-                schedule_hospital_id = sv.hospital_id
                 schedule_name = sv.name
                 schedule_period_start_at = sv.period_start_at
                 schedule_period_end_at = sv.period_end_at
@@ -629,9 +636,15 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 if extract_job_id is not None:
                     allocation_with_metadata["metadata"]["extract_job_id"] = extract_job_id
 
+                # demand_id do Schedule vem da alocação (cada Demand gera exatamente uma Schedule)
+                allocation_demand_id = allocation.get("demand_id")
+                if not allocation_demand_id:
+                    logger.warning(f"[GENERATE_SCHEDULE] Alocação {idx + 1} sem demand_id, pulando")
+                    continue
+                
                 sv_item = Schedule(
                     tenant_id=job.tenant_id,
-                    hospital_id=schedule_hospital_id,
+                    demand_id=allocation_demand_id,
                     name=f"{schedule_name} - {allocation['professional']} - Dia {allocation['day']}",
                     period_start_at=schedule_period_start_at,
                     period_end_at=schedule_period_end_at,

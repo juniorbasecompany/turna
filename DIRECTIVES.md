@@ -63,6 +63,15 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Dependencies**: usar `get_current_member()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
 
+### Relação Demand → Schedule (1:1)
+
+- **Cada Demand gera exatamente uma Schedule** (relação 1:1 garantida pelo banco via UNIQUE constraint).
+- **FK `schedule.demand_id`**: NOT NULL, UNIQUE, ON DELETE CASCADE.
+- **Hospital da Schedule**: obtido via `demand.hospital_id` (JOIN), não há `hospital_id` direto na tabela Schedule.
+- **Integridade**: ao excluir uma Demand, a Schedule correspondente é excluída automaticamente (CASCADE).
+- **Criação manual**: ao criar Schedule manualmente, deve-se especificar `demand_id` (não `hospital_id`).
+- **Geração automática**: o worker cria uma Schedule para cada Demand processada, usando `demand_id`.
+
 ### Separação Account (privado) vs member (público)
 
 **Princípio fundamental**:

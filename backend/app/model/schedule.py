@@ -17,18 +17,25 @@ class ScheduleStatus(str, enum.Enum):
 
 class Schedule(BaseModel, table=True):
     """
-    Escala gerada.
+    Escala gerada a partir de uma Demand (relação 1:1).
 
     Observações:
+      - Cada Demand gera exatamente uma Schedule (FK demand_id UNIQUE)
+      - Hospital é obtido via demand.hospital_id (JOIN)
       - `period_start_at` / `period_end_at` representam intervalo meio-aberto [start, end)
       - `generated_at` e `published_at` seguem diretiva `_at` com timestamptz
-      - `hospital_id` é obrigatório; cada escala pertence a um hospital
+      - ON DELETE CASCADE: ao excluir Demand, Schedule é excluída automaticamente
     """
 
     __tablename__ = "schedule"
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
-    hospital_id: int = Field(foreign_key="hospital.id", index=True, nullable=False)
+    demand_id: int = Field(
+        foreign_key="demand.id",
+        index=True,
+        nullable=False,
+        sa_column_kwargs={"unique": True},  # Garante relação 1:1
+    )
 
     name: str = Field(default="Schedule")
     period_start_at: datetime = Field(

@@ -91,9 +91,11 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
 - [x] Criar `app/model/file.py`:
   - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
 - [x] Criar `app/model/schedule.py`:
-  - [x] Modelo `Schedule` (id, tenant_id, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
+  - [x] Modelo `Schedule` (id, tenant_id, demand_id FK NOT NULL UNIQUE, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
   - [x] Enum para `status`: `DRAFT`, `PUBLISHED`, `ARCHIVED`
   - [x] **Nota**: `result_data` guarda resultado da geração (alocação) como JSON
+  - [x] **Relação 1:1 com Demand**: cada Demand gera exatamente uma Schedule (FK `demand_id` UNIQUE, ON DELETE CASCADE)
+  - [x] **Hospital via Demand**: hospital é obtido via `demand.hospital_id` (JOIN), não há `hospital_id` direto na tabela
 
 **Evolução futura (quando necessário):**
 - [ ] Criar `app/model/schedule.py` (quando precisar de múltiplas versões por schedule)
@@ -303,13 +305,13 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Função `generate_schedule_job(ctx, job_id)`
   - [x] Lógica (MVP):
     1. Buscar `Job` e marcar `RUNNING` + `started_at`
-    2. Buscar `Schedule` do banco (validar tenant)
-    3. Buscar job de extração (`extract_job_id`) e ler demandas do `result_data`
-    4. Buscar profissionais (`pros_by_sequence` no input; mock no script)
-    5. Chamar solver greedy (código de `strategy/`)
-    6. Salvar resultado no `Schedule.result_data` e `generated_at`
-    7. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`
+    2. Buscar demandas do período (modo `from_demands`) ou de job de extração (modo `from_extract`)
+    3. Buscar profissionais (`pros_by_sequence` no input; mock no script)
+    4. Chamar solver greedy (código de `strategy/`)
+    5. Criar uma Schedule para cada Demand (relação 1:1 via `demand_id` FK)
+    6. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`
   - [x] PDF + S3 + `pdf_file_id` (Etapa 7) (via endpoint `POST /schedule/{id}/publish`)
+  - [x] **Relação Demand→Schedule**: cada alocação usa `demand_id` da demanda correspondente
 - [x] Criar endpoint `POST /schedule/generate`:
   - [x] Receber `extract_job_id`, `period_start_at`, `period_end_at`, `allocation_mode`, `pros_by_sequence` (opcional)
   - [x] Criar `Schedule` (DRAFT) e vincular `job_id`
@@ -332,11 +334,13 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 ### 5.2 Endpoints de Schedule
 - [x] Criar `app/api/schedule.py`:
-  - [x] `GET /schedule/list` (listar Schedules - filtrado por tenant)
-  - [x] `POST /schedule` (criar Schedule - filtrado por tenant)
+  - [x] `GET /schedule/list` (listar Schedules - filtrado por tenant, hospital via JOIN com Demand)
+  - [x] `POST /schedule` (criar Schedule - requer `demand_id`, relação 1:1 com Demand)
   - [x] `GET /schedule/{id}` (detalhes - validar tenant)
   - [x] `POST /schedule/{id}/publish` (publicar versão - validar tenant)
   - [x] `GET /schedule/{id}/pdf` (download PDF - validar tenant)
+  - [x] `POST /schedule/generate-from-demands` (gerar escalas a partir de demandas - cada Demand gera uma Schedule)
+  - [x] `DELETE /schedule/{id}` (excluir Schedule - apenas DRAFT)
   - [x] Retornar URL presignada do S3
 
 ### 5.3 Endpoint de Job

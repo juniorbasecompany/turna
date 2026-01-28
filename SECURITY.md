@@ -196,13 +196,13 @@ Endpoints que acessam recursos do tenant (validam `get_current_member()`):
 - `PUT /demand/{demand_id}`: Atualiza demanda
 - `DELETE /demand/{demand_id}`: Exclui demanda
 
-**Schedule**:
-- `POST /schedule`: Cria schedule manual
-- `GET /schedule/list`: Lista schedules do tenant
+**Schedule** (cada Schedule é vinculada a uma Demand via `demand_id` FK):
+- `POST /schedule`: Cria schedule manual (requer `demand_id`, relação 1:1 com Demand)
+- `GET /schedule/list`: Lista schedules do tenant (hospital obtido via JOIN com Demand)
 - `GET /schedule/{schedule_id}`: Detalhes do schedule
 - `POST /schedule/{schedule_id}/publish`: Publica schedule e gera PDF
 - `GET /schedule/{schedule_id}/pdf`: Download do PDF
-- `POST /schedule/generate-from-demands`: Gera escala a partir de demandas
+- `POST /schedule/generate-from-demands`: Gera escalas a partir de demandas (cada Demand gera uma Schedule)
 - `DELETE /schedule/{schedule_id}`: Exclui schedule
 
 **Job**:

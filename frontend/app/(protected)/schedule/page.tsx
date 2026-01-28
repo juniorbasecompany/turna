@@ -6,8 +6,8 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons, FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
 import type { FilterOption } from '@/components/filter'
+import { FilterButtons, FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormInput, FormSelect } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -21,6 +21,8 @@ import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
+    DemandListResponse,
+    DemandResponse,
     HospitalListResponse,
     HospitalResponse,
     ScheduleCreateRequest,
@@ -32,7 +34,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type ScheduleFormData = {
-    hospital_id: number | null
+    demand_id: number | null  // FK para Demand (relação 1:1)
     name: string
     period_start_at: Date | null
     period_end_at: Date | null
@@ -46,10 +48,14 @@ export default function SchedulePage() {
     // Constantes para filtros
     const ALL_STATUS_FILTERS: string[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED']
 
-    // Estados auxiliares - Hospitais
+    // Estados auxiliares - Hospitais (para filtro)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
+
+    // Estados auxiliares - Demandas (para formulário de criação)
+    const [demands, setDemands] = useState<DemandResponse[]>([])
+    const [loadingDemands, setLoadingDemands] = useState(true)
 
     // Estados auxiliares
     const [filterName, setFilterName] = useState('')
@@ -73,7 +79,7 @@ export default function SchedulePage() {
 
     // Configuração inicial
     const initialFormData: ScheduleFormData = {
-        hospital_id: null,
+        demand_id: null,
         name: '',
         period_start_at: null,
         period_end_at: null,
@@ -84,7 +90,7 @@ export default function SchedulePage() {
     // Mapeamentos
     const mapEntityToFormData = (schedule: ScheduleResponse): ScheduleFormData => {
         return {
-            hospital_id: schedule.hospital_id,
+            demand_id: schedule.demand_id,
             name: schedule.name,
             period_start_at: schedule.period_start_at ? new Date(schedule.period_start_at) : null,
             period_end_at: schedule.period_end_at ? new Date(schedule.period_end_at) : null,
@@ -98,7 +104,7 @@ export default function SchedulePage() {
         const endIso = formData.period_end_at?.toISOString()
 
         return {
-            hospital_id: formData.hospital_id!,
+            demand_id: formData.demand_id!,
             name: formData.name.trim(),
             period_start_at: startIso!,
             period_end_at: endIso!,
@@ -121,8 +127,8 @@ export default function SchedulePage() {
 
     // Validação
     const validateFormData = (formData: ScheduleFormData): string | null => {
-        if (!formData.hospital_id) {
-            return 'Hospital é obrigatório'
+        if (!formData.demand_id) {
+            return 'Demanda é obrigatória'
         }
 
         if (!formData.name.trim()) {
@@ -147,7 +153,7 @@ export default function SchedulePage() {
     // isEmptyCheck
     const isEmptyCheck = (formData: ScheduleFormData): boolean => {
         return (
-            formData.hospital_id === null &&
+            formData.demand_id === null &&
             formData.name.trim() === '' &&
             formData.period_start_at === null &&
             formData.period_end_at === null
@@ -233,7 +239,7 @@ export default function SchedulePage() {
         listEnabled: !!settings,
     })
 
-    // Carregar hospitais para o seletor
+    // Carregar hospitais para o filtro
     useEffect(() => {
         const loadHospitals = async () => {
             try {
@@ -250,6 +256,21 @@ export default function SchedulePage() {
             }
         }
         loadHospitals()
+    }, [])
+
+    // Carregar demandas para o formulário de criação
+    useEffect(() => {
+        const loadDemands = async () => {
+            try {
+                const response = await protectedFetch<DemandListResponse>('/api/demand/list?limit=100')
+                setDemands(response.items || [])
+            } catch (err) {
+                console.error('Erro ao carregar demandas:', err)
+            } finally {
+                setLoadingDemands(false)
+            }
+        }
+        loadDemands()
     }, [])
 
     // Validar intervalo de datas
@@ -392,12 +413,6 @@ export default function SchedulePage() {
 
     // Handler para gerar escala (mesma ação do painel de demandas)
     const handleGenerateSchedule = async () => {
-        // Hospital é obrigatório
-        if (!filterHospitalId) {
-            setError('Selecione um hospital')
-            return
-        }
-
         // Apenas período inicial é obrigatório
         if (!filterStartDate) {
             triggerPeriodFlash(true, false)
@@ -426,16 +441,9 @@ export default function SchedulePage() {
             const effectiveEndDate = filterEndDate || new Date(filterStartDate.getTime() + 10 * 365 * 24 * 60 * 60 * 1000)
             const periodEndAt = localDateToUtcEndExclusive(effectiveEndDate, settings)
 
-            // Criar nome padrão baseado no período
-            const selectedHospital = hospitals.find(h => h.id === filterHospitalId)
-            const hospitalName = selectedHospital?.name || 'Hospital'
-            const name = filterEndDate
-                ? `${hospitalName} - ${filterStartDate.toLocaleDateString('pt-BR')} a ${filterEndDate.toLocaleDateString('pt-BR')}`
-                : `${hospitalName} - a partir de ${filterStartDate.toLocaleDateString('pt-BR')}`
-
+            // Hospital e nome são opcionais - backend extrai das demandas se não informados
             const request: ScheduleGenerateFromDemandsRequest = {
-                hospital_id: filterHospitalId,
-                name,
+                hospital_id: filterHospitalId || undefined,
                 period_start_at: periodStartAt,
                 period_end_at: periodEndAt,
                 allocation_mode: 'greedy',
