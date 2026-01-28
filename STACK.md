@@ -85,6 +85,7 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 ### Relações importantes
 - **Demand → Schedule (1:1)**: cada Demand gera exatamente uma Schedule (FK `schedule.demand_id` UNIQUE, ON DELETE CASCADE)
 - Hospital da Schedule é obtido via `demand.hospital_id` (JOIN)
+- **Profissionais (escala)**: carregados da tabela `member` do tenant (`member.attribute`); members ACTIVE com attribute válido (sequence, can_peds, vacation)
 
 ## Formatos
 - **Entrada**: PDF, JPEG, PNG, XLSX, XLS, CSV

@@ -306,7 +306,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
   - [x] Lógica (MVP):
     1. Buscar `Job` e marcar `RUNNING` + `started_at`
     2. Buscar demandas do período (modo `from_demands`) ou de job de extração (modo `from_extract`)
-    3. Buscar profissionais (`pros_by_sequence` no input; mock no script)
+    3. Buscar profissionais: `pros_by_sequence` no input (opcional) ou tabela `member` do tenant (`member.attribute`); members ACTIVE com attribute válido (sequence, can_peds, vacation)
     4. Chamar solver greedy (código de `strategy/`)
     5. Criar uma Schedule para cada Demand (relação 1:1 via `demand_id` FK)
     6. Atualizar Job status (`COMPLETED`/`FAILED`) e `result_data`

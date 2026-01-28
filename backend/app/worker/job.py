@@ -14,6 +14,7 @@ from app.model.base import utc_now
 from app.model.demand import Demand
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
+from app.model.member import Member, MemberStatus
 from app.model.schedule import ScheduleStatus, Schedule
 from app.model.tenant import Tenant
 from app.storage.client import S3Client
@@ -120,19 +121,77 @@ def _safe_error_message(e: Exception, max_len: int = 500) -> str:
     return msg[:max_len]
 
 
-def _load_pros_from_repo_test() -> list[dict]:
+def _validate_pro_attribute(attribute: dict) -> bool:
     """
-    Fallback de DEV: usa `test/profissionais.json` (mesmo formato do `app.py`).
-    Em produção, o ideal é ter modelo/tabela de profissionais.
+    Valida se o attribute do member tem estrutura mínima para uso como profissional na escala.
+    Exige: sequence (numérico), can_peds (bool), vacation (lista).
     """
-    from pathlib import Path
-    import json
+    if not attribute or not isinstance(attribute, dict):
+        return False
+    seq = attribute.get("sequence")
+    if seq is None or not isinstance(seq, (int, float)):
+        return False
+    can_peds = attribute.get("can_peds")
+    if not isinstance(can_peds, bool):
+        return False
+    vac = attribute.get("vacation")
+    if not isinstance(vac, list):
+        return False
+    for v in vac:
+        if not isinstance(v, (list, tuple)) or len(v) != 2:
+            return False
+    return True
 
-    project_root = Path(__file__).resolve().parents[2]
-    path = project_root / "test" / "profissionais.json"
-    pros_json = json.loads(path.read_text(encoding="utf-8"))
-    pros = [{**p, "vacation": [tuple(v) for v in p.get("vacation", [])]} for p in pros_json]
-    return sorted(pros, key=lambda p: p.get("sequence", 0))
+
+def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]:
+    """
+    Carrega profissionais da tabela member para o tenant.
+
+    Retorna lista no formato esperado pelo solver:
+    - id: identificador (string), fallback member.name
+    - name: nome (string)
+    - sequence: ordem de prioridade (int)
+    - can_peds: se pode atender pediatria (bool)
+    - vacation: lista de tuplas [dia_inicio, dia_fim]
+
+    Filtra por tenant_id, status ACTIVE e attribute válido.
+    """
+    logger.info(f"[LOAD_PROFESSIONALS] Carregando profissionais do tenant_id={tenant_id}")
+    rows = session.exec(
+        select(Member)
+        .where(
+            Member.tenant_id == tenant_id,
+            Member.status == MemberStatus.ACTIVE,
+        )
+    ).all()
+
+    pros: list[dict] = []
+    skipped = 0
+    for m in rows:
+        attr = m.attribute or {}
+        if not _validate_pro_attribute(attr):
+            skipped += 1
+            logger.warning(
+                f"[LOAD_PROFESSIONALS] Member id={m.id} name={m.name!r} ignorado: attribute inválido"
+            )
+            continue
+        pro_id = str(attr.get("id") or "").strip() or (m.name or str(m.id))
+        name = (m.name or pro_id).strip()
+        vacation_raw = attr.get("vacation", [])
+        vacation = [tuple(int(x) for x in v) for v in vacation_raw]
+        pros.append({
+            "id": pro_id,
+            "name": name,
+            "sequence": int(attr.get("sequence", 0)),
+            "can_peds": bool(attr.get("can_peds", False)),
+            "vacation": vacation,
+        })
+
+    pros.sort(key=lambda p: p["sequence"])
+    logger.info(
+        f"[LOAD_PROFESSIONALS] {len(pros)} profissionais carregados, {skipped} ignorados"
+    )
+    return pros
 
 
 def _extract_individual_allocations(
@@ -459,12 +518,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if allocation_mode != "greedy":
                 raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
 
-            # Profissionais: payload > fallback dev
+            # Profissionais: payload explícito > tabela member do tenant
             pros_by_sequence = input_data.get("pros_by_sequence")
             if pros_by_sequence is None:
-                pros_by_sequence = _load_pros_from_repo_test()
+                pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id)
             if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
-                raise RuntimeError("pros_by_sequence ausente/ inválido")
+                raise RuntimeError("Nenhum profissional encontrado para o tenant")
 
             # Variáveis para armazenar dados do schedule (modo from_demands não tem registro mestre)
             sv = None
@@ -641,7 +700,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 if not allocation_demand_id:
                     logger.warning(f"[GENERATE_SCHEDULE] Alocação {idx + 1} sem demand_id, pulando")
                     continue
-                
+
                 sv_item = Schedule(
                     tenant_id=job.tenant_id,
                     demand_id=allocation_demand_id,

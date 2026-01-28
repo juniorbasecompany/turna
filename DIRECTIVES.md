@@ -71,6 +71,7 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Integridade**: ao excluir uma Demand, a Schedule correspondente é excluída automaticamente (CASCADE).
 - **Criação manual**: ao criar Schedule manualmente, deve-se especificar `demand_id` (não `hospital_id`).
 - **Geração automática**: o worker cria uma Schedule para cada Demand processada, usando `demand_id`.
+- **Profissionais para escala**: o worker carrega profissionais da tabela `member` do tenant (`member.attribute`). Apenas members ACTIVE; attribute exige `sequence` (numérico), `can_peds` (bool), `vacation` (lista de pares). Ordenação por `sequence`.
 
 ### Separação Account (privado) vs member (público)
 
