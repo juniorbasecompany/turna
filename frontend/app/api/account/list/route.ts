@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { backendFetch, requireToken } from '@/lib/backend-fetch'
+import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/account/list
  *
- * Lista todos os accounts do tenant atual.
+ * Lista todos os account list do tenant atual.
  */
 export async function GET(request: NextRequest) {
     const auth = requireToken(request)

@@ -5,13 +5,13 @@ Diagnóstico de inviabilidade (regras hard).
 from strategy.core import overlap, is_available
 
 
-def diagnose_infeasibility(demands, pros) -> None:
+def diagnose_infeasibility(demand_list, pros) -> None:
     print()
     print("Diagnóstico rápido (regras hard):")
 
     print("- Elegibilidade por demanda:")
     any_empty = False
-    for d in demands:
+    for d in demand_list:
         eligible = []
         for p in pros:
             if d["is_pediatric"] and not p["can_peds"]:
@@ -35,7 +35,7 @@ def diagnose_infeasibility(demands, pros) -> None:
 
     # Checagem por janelas (segmentos) para identificar gargalos por simultaneidade
     points = {0, 24}
-    for d in demands:
+    for d in demand_list:
         points.add(d["start"])
         points.add(d["end"])
     for p in pros:
@@ -51,7 +51,7 @@ def diagnose_infeasibility(demands, pros) -> None:
         if s == e:
             continue
 
-        active = [d for d in demands if overlap(d["start"], d["end"], s, e)]
+        active = [d for d in demand_list if overlap(d["start"], d["end"], s, e)]
         if not active:
             continue
 

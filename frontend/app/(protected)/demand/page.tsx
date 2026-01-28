@@ -166,7 +166,7 @@ export default function DemandPage() {
 
     // useEntityPage
     const {
-        items: demands,
+        items: demandList,
         loading,
         error,
         setError,
@@ -252,7 +252,7 @@ export default function DemandPage() {
 
     // Filtrar demandas por hospital, procedimento e período (filtro no frontend)
     const filteredDemands = useMemo(() => {
-        let filtered = demands
+        let filtered = demandList
 
         // Filtro por hospital
         if (filterHospitalId !== null) {
@@ -283,7 +283,7 @@ export default function DemandPage() {
         }
 
         return filtered
-    }, [demands, filterHospitalId, filterProcedure, filterStartDate, filterEndDate])
+    }, [demandList, filterHospitalId, filterProcedure, filterStartDate, filterEndDate])
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {

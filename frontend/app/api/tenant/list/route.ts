@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { backendFetch, requireToken } from '@/lib/backend-fetch'
+import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/tenant/list

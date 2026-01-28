@@ -127,7 +127,7 @@ def update_resource(
 
 ### Endpoints de Autenticação
 Endpoints em `/auth/*` não validam tenant_id porque:
-- Criam/validam Accounts (sem tenant_id)
+- Criam/validam Account list (sem tenant_id)
 - Gerenciam members (que já têm tenant_id)
 - Emitem JWT com tenant_id
 - **Convites**: `POST /tenant/{tenant_id}/invite` cria member PENDING com `account_id=NULL` e `email` preenchido (não cria Account)

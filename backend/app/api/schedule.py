@@ -76,6 +76,14 @@ class ScheduleCreateRequest(PydanticBaseModel):
     version_number: int = 1
 
 
+class ScheduleUpdateRequest(PydanticBaseModel):
+    name: str
+    period_start_at: datetime
+    period_end_at: datetime
+    version_number: int = 1
+    status: Optional[str] = None  # DRAFT | ARCHIVED (PUBLISHED só via /publish)
+
+
 class ScheduleGenerateFromDemandsRequest(PydanticBaseModel):
     hospital_id: Optional[int] = None  # Usado apenas como filtro de demandas
     name: Optional[str] = None  # Se não informado, será gerado automaticamente
@@ -94,17 +102,17 @@ class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
 def _build_schedule_response(schedule: Schedule, session: Session) -> ScheduleResponse:
     """
     Constrói um ScheduleResponse incluindo dados do hospital (via Demand).
-    
+
     Hospital é obtido via demand.hospital_id (JOIN).
     """
     # Buscar Demand para obter hospital_id
     demand = session.get(Demand, schedule.demand_id)
     if not demand:
         raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não encontrada")
-    
+
     if not demand.hospital_id:
         raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não possui hospital_id")
-    
+
     # Buscar Hospital via Demand
     hospital = session.get(Hospital, demand.hospital_id)
     if not hospital:
@@ -157,10 +165,10 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
             continue
 
         day = result_data.get("day")
-        professional_id = result_data.get("professional_id")
-        professional = result_data.get("professional")
+        member_id = result_data.get("member_id")
+        member = result_data.get("member")
 
-        if not day or not professional_id:
+        if not day or not member_id:
             continue
 
         day_num = int(day)
@@ -176,11 +184,11 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
             }
 
         # Adicionar profissional a pros_for_day (se ainda não foi adicionado)
-        pro_key = (day_num, professional_id)
+        pro_key = (day_num, member_id)
         if pro_key not in pros_seen:
             pros_seen[pro_key] = {
-                "id": professional_id,
-                "name": professional,
+                "id": member_id,
+                "name": member,
                 "can_peds": False,  # Não temos essa info nos fragmentos
                 "vacation": [],
             }
@@ -195,11 +203,11 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
             "is_pediatric": result_data.get("is_pediatric", False),
             "source": result_data.get("source", {}),
         }
-        by_day[day_num]["assigned_demands_by_pro"][professional_id].append(demand_data)
+        by_day[day_num]["assigned_demands_by_pro"][member_id].append(demand_data)
 
         # Adicionar a demands_day também
         by_day[day_num]["demands_day"].append(demand_data)
-        by_day[day_num]["assigned_pids"].append(professional_id)
+        by_day[day_num]["assigned_pids"].append(member_id)
 
     # Converter defaultdict para dict normal e ordenar por dia
     result = []
@@ -798,7 +806,7 @@ def create_schedule(
 ):
     """
     Cria uma Schedule manualmente (sem job de geração).
-    
+
     Cada Schedule é vinculada a exatamente uma Demand (relação 1:1).
     Hospital é obtido via demand.hospital_id.
     """
@@ -810,7 +818,7 @@ def create_schedule(
         raise HTTPException(status_code=403, detail="Demanda não pertence ao tenant atual")
     if not demand.hospital_id:
         raise HTTPException(status_code=400, detail="Demanda não possui hospital associado")
-    
+
     # Verificar se já existe Schedule para esta Demand (relação 1:1)
     existing_schedule = session.exec(
         select(Schedule).where(Schedule.demand_id == body.demand_id)
@@ -836,6 +844,62 @@ def create_schedule(
         status=ScheduleStatus.DRAFT,
         version_number=body.version_number,
     )
+    session.add(sv)
+    session.commit()
+    session.refresh(sv)
+
+    return _build_schedule_response(sv, session)
+
+
+@router.put("/{schedule_id}", response_model=ScheduleResponse, tags=["Schedule"])
+def update_schedule(
+    schedule_id: int,
+    body: ScheduleUpdateRequest,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Atualiza uma Schedule (nome, período, versão e opcionalmente status).
+
+    Apenas escalas DRAFT podem ter nome/período/versão alterados.
+    Status pode ser alterado para ARCHIVED (escala publicada pode ser arquivada).
+    """
+    sv = session.get(Schedule, schedule_id)
+    if not sv:
+        raise HTTPException(status_code=404, detail="Schedule não encontrado")
+    if sv.tenant_id != member.tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Validar período
+    if body.period_end_at <= body.period_start_at:
+        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
+    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
+
+    # Atualizar campos permitidos quando DRAFT
+    if sv.status == ScheduleStatus.DRAFT:
+        sv.name = body.name
+        sv.period_start_at = body.period_start_at
+        sv.period_end_at = body.period_end_at
+        sv.version_number = body.version_number
+
+    # Status: permitir apenas transição para ARCHIVED (escala publicada pode ser arquivada)
+    if body.status is not None:
+        try:
+            new_status = ScheduleStatus(body.status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="status inválido")
+        if new_status == ScheduleStatus.ARCHIVED and sv.status == ScheduleStatus.PUBLISHED:
+            sv.status = ScheduleStatus.ARCHIVED
+        elif new_status == ScheduleStatus.DRAFT and sv.status == ScheduleStatus.DRAFT:
+            pass  # já é DRAFT
+        elif new_status != sv.status:
+            raise HTTPException(
+                status_code=400,
+                detail="Alteração de status permitida apenas para ARCHIVED (escala publicada)"
+            )
+
+    sv.updated_at = utc_now()
     session.add(sv)
     session.commit()
     session.refresh(sv)

@@ -8,7 +8,6 @@ import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterInput, FilterPanel } from '@/components/filter'
 import { FormInput, FormSelect } from '@/components/form'
-import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
@@ -42,7 +41,7 @@ export default function TenantPage() {
     }
 
     const {
-        items: tenants,
+        items: tenantList,
         loading,
         error,
         setError,
@@ -124,11 +123,11 @@ export default function TenantPage() {
     // Filtrar tenants por nome
     const filteredTenants = useMemo(() => {
         if (!filterName.trim()) {
-            return tenants
+            return tenantList
         }
         const filterLower = filterName.toLowerCase().trim()
-        return tenants.filter((tenant) => tenant.name.toLowerCase().includes(filterLower))
-    }, [tenants, filterName])
+        return tenantList.filter((tenant) => tenant.name.toLowerCase().includes(filterLower))
+    }, [tenantList, filterName])
 
     return (
         <>

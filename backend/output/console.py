@@ -18,11 +18,11 @@ def fmt_time_range(start: int, end: int, is_pediatric: bool) -> str:
     return yellow(txt) if is_pediatric else txt
 
 
-def print_demands_overview(demands: list[dict], days: int) -> None:
+def print_demands_overview(demand_list: list[dict], days: int) -> None:
     print("Demandas")
     for day in range(1, days + 1):
         print(f"Dia {day}")
-        for d in demands:
+        for d in demand_list:
             if d["day"] != day:
                 continue
             did_txt = yellow(d["id"]) if d["is_pediatric"] else d["id"]
@@ -31,7 +31,7 @@ def print_demands_overview(demands: list[dict], days: int) -> None:
             print(f"{did_txt} - {time_txt}{ped_tag}")
 
 
-def print_professionals_overview(pros_by_sequence: list[dict]) -> None:
+def print_member_list_overview(pros_by_sequence: list[dict]) -> None:
     print()
     print("Profissionais")
     for p in pros_by_sequence:

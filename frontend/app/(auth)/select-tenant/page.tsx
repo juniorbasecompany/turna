@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
 // Função utilitária para decidir navegação baseada em ACTIVE e PENDING
-function decideNavigation(tenants: TenantOption[], invites: InviteOption[]): 'dashboard' | 'create-tenant' | 'select' {
-    const activeCount = tenants.length
+function decideNavigation(tenantList: TenantOption[], invites: InviteOption[]): 'dashboard' | 'create-tenant' | 'select' {
+    const activeCount = tenantList.length
     const pendingCount = invites.length
 
     if (activeCount === 1 && pendingCount === 0) {
@@ -26,7 +26,7 @@ export default function SelectTenantPage() {
     const [creating, setCreating] = useState(false)
     const [processingInvite, setProcessingInvite] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
-    const [tenants, setTenants] = useState<TenantOption[]>([])
+    const [tenantList, setTenantList] = useState<TenantOption[]>([])
     const [invites, setInvites] = useState<InviteOption[]>([])
     // Carregar lista de tenants
     const loadTenants = useCallback(async () => {
@@ -44,7 +44,7 @@ export default function SelectTenantPage() {
 
                 if (response.ok) {
                     const data: TenantListResponse = await response.json()
-                    setTenants(data.tenants || [])
+                    setTenantList(data.tenants || [])
                     setInvites(data.invites || [])
                     // Atualizar sessionStorage com os dados mais recentes
                     const loginResponseStr = sessionStorage.getItem('login_response')
@@ -72,7 +72,7 @@ export default function SelectTenantPage() {
                 try {
                     const loginResponse = JSON.parse(loginResponseStr)
                     if (loginResponse.tenants && Array.isArray(loginResponse.tenants)) {
-                        setTenants(loginResponse.tenants)
+                        setTenantList(loginResponse.tenants)
                         // Carregar invites se disponíveis
                         if (loginResponse.invites && Array.isArray(loginResponse.invites)) {
                             setInvites(loginResponse.invites)
@@ -111,7 +111,7 @@ export default function SelectTenantPage() {
             }
 
             // Verificação de segurança: não permitir seleção se não há tenants
-            if (tenants.length === 0) {
+            if (tenantList.length === 0) {
                 setError('Nenhuma clínica disponível para seleção')
                 return
             }
@@ -189,7 +189,7 @@ export default function SelectTenantPage() {
                 setSelecting(false)
             }
         },
-        [selecting, router, tenants]
+        [selecting, router, tenantList]
     )
 
     // Handler para criar tenant automaticamente
@@ -266,8 +266,8 @@ export default function SelectTenantPage() {
                 let tenantToUse: TenantOption | null = null
 
                 // Priorizar usar um tenant ativo se disponível (mais seguro)
-                if (tenants.length > 0) {
-                    tenantToUse = tenants[0]
+                if (tenantList.length > 0) {
+                    tenantToUse = tenantList[0]
                 } else {
                     // Se não há tenant ativo, usar o tenant do próprio invite
                     // Isso permite aceitar o primeiro convite mesmo sem tenant ativo
@@ -384,7 +384,7 @@ export default function SelectTenantPage() {
                 setProcessingInvite(null)
             }
         },
-        [processingInvite, selecting, tenants, router]
+        [processingInvite, selecting, tenantList, router]
     )
 
     // Handler para rejeitar convite
@@ -402,7 +402,7 @@ export default function SelectTenantPage() {
                 const idToken = sessionStorage.getItem('login_id_token')
 
                 // Se não há tenant ativo, precisamos obter token via id_token para rejeitar
-                if (tenants.length === 0) {
+                if (tenantList.length === 0) {
                     if (!idToken) {
                         sessionStorage.removeItem('login_response')
                         router.push('/login')
@@ -430,7 +430,7 @@ export default function SelectTenantPage() {
                     }
                 } else {
                     // Se há tenant ativo, usar o primeiro para obter token
-                    const firstTenant = tenants[0]
+                    const firstTenant = tenantList[0]
 
                     // 1. Entrar no primeiro tenant ativo para obter token
                     let selectResponse: Response
@@ -501,7 +501,7 @@ export default function SelectTenantPage() {
                 setProcessingInvite(null)
             }
         },
-        [processingInvite, selecting, tenants, router, loadTenants]
+        [processingInvite, selecting, tenantList, router, loadTenants]
     )
 
     // Aplicar decisão de navegação após carregar tenants/invites
@@ -511,17 +511,17 @@ export default function SelectTenantPage() {
             return
         }
 
-        const navigation = decideNavigation(tenants, invites)
+        const navigation = decideNavigation(tenantList, invites)
 
-        if (navigation === 'dashboard' && tenants.length === 1) {
+        if (navigation === 'dashboard' && tenantList.length === 1) {
             // Entrar direto no dashboard do único tenant
-            handleSelectTenant(tenants[0].tenant_id)
+            handleSelectTenant(tenantList[0].tenant_id)
         } else if (navigation === 'create-tenant') {
             // Criar clínica automaticamente
             handleCreateTenant()
         }
         // Caso contrário, mostrar tela de seleção (não fazer nada)
-    }, [loading, selecting, creating, processingInvite, tenants, invites, handleSelectTenant, handleCreateTenant])
+    }, [loading, selecting, creating, processingInvite, tenantList, invites, handleSelectTenant, handleCreateTenant])
 
     // Handler para logout
     const handleLogout = useCallback(async () => {
@@ -561,7 +561,7 @@ export default function SelectTenantPage() {
         )
     }
 
-    if (error && tenants.length === 0 && invites.length === 0) {
+    if (error && tenantList.length === 0 && invites.length === 0) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="max-w-md w-full space-y-8 p-8">
@@ -602,13 +602,13 @@ export default function SelectTenantPage() {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {tenants.length > 0 && (
+                        {tenantList.length > 0 && (
                             <div>
                                 <h3 className="text-sm font-medium text-gray-700 mb-2">
                                     Suas Clínicas
                                 </h3>
                                 <div className="space-y-2">
-                                    {tenants.map((tenant) => (
+                                    {tenantList.map((tenant) => (
                                         <button
                                             key={tenant.tenant_id}
                                             onClick={() => handleSelectTenant(tenant.tenant_id)}
@@ -668,7 +668,7 @@ export default function SelectTenantPage() {
                             </div>
                         )}
 
-                        {tenants.length === 0 && (
+                        {tenantList.length === 0 && (
                             <div>
                                 <button
                                     onClick={handleCreateTenant}
@@ -687,7 +687,7 @@ export default function SelectTenantPage() {
                             </div>
                         )}
 
-                        {tenants.length === 0 && invites.length === 0 && !loading && !creating && (
+                        {tenantList.length === 0 && invites.length === 0 && !loading && !creating && (
                             <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
                                 <p className="text-sm text-gray-600">
                                     Nenhuma clínica disponível.

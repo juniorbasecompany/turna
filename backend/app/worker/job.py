@@ -211,8 +211,8 @@ def _extract_individual_allocations(
     Returns:
         Lista de dicts, cada um representando uma alocação individual:
         {
-            "professional": str,      # nome do profissional
-            "professional_id": str,  # ID do profissional
+            "member": str,            # nome do profissional
+            "member_id": str,         # ID do profissional
             "id": str,               # ID da demanda
             "day": int,              # dia (1..N)
             "start": float,          # hora início
@@ -257,25 +257,25 @@ def _extract_individual_allocations(
                 pro_id_to_name[pro_id] = pro_name
 
         # Iterar sobre alocações por profissional
-        for pro_id_raw, demands in assigned_demands_by_pro.items():
+        for pro_id_raw, demand_list in assigned_demands_by_pro.items():
             # Normalizar pro_id para string (pode vir como int ou outro tipo)
             pro_id = str(pro_id_raw).strip() if pro_id_raw is not None else ""
             if not pro_id:
                 logger.debug(f"[EXTRACT_ALLOCATIONS] pro_id_raw inválido: {pro_id_raw} (tipo: {type(pro_id_raw)})")
                 continue
 
-            if not isinstance(demands, list):
-                logger.warning(f"[EXTRACT_ALLOCATIONS] Demands não é lista para pro_id={pro_id}, tipo={type(demands)}, valor={demands}")
+            if not isinstance(demand_list, list):
+                logger.warning(f"[EXTRACT_ALLOCATIONS] Demand list não é lista para pro_id={pro_id}, tipo={type(demand_list)}, valor={demand_list}")
                 continue
 
             # Buscar nome do profissional (tentar com pro_id como string e também como tipo original)
-            professional_name = pro_id_to_name.get(pro_id)
-            if professional_name is None:
+            member_name = pro_id_to_name.get(pro_id)
+            if member_name is None:
                 # Tentar buscar com o valor original também
-                professional_name = pro_id_to_name.get(str(pro_id_raw), pro_id)
-            logger.debug(f"[EXTRACT_ALLOCATIONS] Profissional {pro_id} ({professional_name}): {len(demands)} demandas")
+                member_name = pro_id_to_name.get(str(pro_id_raw), pro_id)
+            logger.debug(f"[EXTRACT_ALLOCATIONS] Profissional {pro_id} ({member_name}): {len(demand_list)} demandas")
 
-            for demand in demands:
+            for demand in demand_list:
                 if not isinstance(demand, dict):
                     continue
 
@@ -286,8 +286,8 @@ def _extract_individual_allocations(
                     continue
 
                 allocation = {
-                    "professional": professional_name,
-                    "professional_id": pro_id,
+                    "member": member_name,
+                    "member_id": pro_id,
                     "id": str(demand_id),
                     "day": int(day_number),
                     "start": float(demand.get("start", 0)),
@@ -298,7 +298,7 @@ def _extract_individual_allocations(
                     "hospital_id": demand.get("hospital_id"),  # hospital_id da demanda (para referência)
                 }
                 allocations.append(allocation)
-                logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['professional']} - Dia {allocation['day']} - {allocation['id']} - Demand {allocation['demand_id']}")
+                logger.debug(f"[EXTRACT_ALLOCATIONS] Alocação criada: {allocation['member']} - Dia {allocation['day']} - {allocation['id']} - Demand {allocation['demand_id']}")
 
     logger.info(f"[EXTRACT_ALLOCATIONS] Total de alocações extraídas: {len(allocations)}")
     return allocations
@@ -315,7 +315,7 @@ def _demands_from_extract_result(result_data: dict, *, period_start_at, period_e
 
     demands_raw = (result_data or {}).get("demands") or []
     if not isinstance(demands_raw, list):
-        raise RuntimeError("result_data.demands inválido")
+        raise RuntimeError("result_data.demand list inválido")
 
     # Assume timestamps com offset/Z (diretiva).
     start_date = period_start_at.date()
@@ -568,7 +568,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 logger.info(f"[GENERATE_SCHEDULE] Chamando _demands_from_database com período: {period_start_at} até {period_end_at}, filter_hospital_id={filter_hospital_id}")
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Tempo decorrido até leitura de demandas: {elapsed_seconds:.2f}s")
-                demands, days = _demands_from_database(
+                demand_list, days = _demands_from_database(
                     session,
                     tenant_id=job.tenant_id,
                     period_start_at=period_start_at,
@@ -576,7 +576,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     filter_hospital_id=filter_hospital_id,
                 )
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
-                logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demands)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
+                logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demand_list)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
             else:
                 # Modo original: ler de job de extração (requer schedule_id)
                 schedule_id_raw = input_data.get("schedule_id")
@@ -619,19 +619,19 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 if extract_job.status != JobStatus.COMPLETED or not isinstance(extract_job.result_data, dict):
                     raise RuntimeError("Job de extração não está COMPLETED (ou result_data ausente)")
 
-                demands, days = _demands_from_extract_result(
+                demand_list, days = _demands_from_extract_result(
                     extract_job.result_data,
                     period_start_at=sv.period_start_at,
                     period_end_at=sv.period_end_at,
                 )
 
-            if not demands:
+            if not demand_list:
                 raise RuntimeError("Nenhuma demanda dentro do período informado")
 
-            logger.info(f"[GENERATE_SCHEDULE] Iniciando solver greedy: {len(demands)} demandas, {days} dias, {len(pros_by_sequence)} profissionais")
+            logger.info(f"[GENERATE_SCHEDULE] Iniciando solver greedy: {len(demand_list)} demandas, {days} dias, {len(pros_by_sequence)} profissionais")
             solve_start_time = utc_now()
             per_day, total_cost = solve_greedy(
-                demands=demands,
+                demands=demand_list,
                 pros_by_sequence=pros_by_sequence,
                 days=days,
                 unassigned_penalty=1000,
@@ -704,7 +704,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 sv_item = Schedule(
                     tenant_id=job.tenant_id,
                     demand_id=allocation_demand_id,
-                    name=f"{schedule_name} - {allocation['professional']} - Dia {allocation['day']}",
+                    name=f"{schedule_name} - {allocation['member']} - Dia {allocation['day']}",
                     period_start_at=schedule_period_start_at,
                     period_end_at=schedule_period_end_at,
                     status=ScheduleStatus.DRAFT,

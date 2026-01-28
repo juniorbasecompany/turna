@@ -75,9 +75,9 @@ def save_account(account: List[Dict]) -> None:
 
 def find_account_by_email(email: str) -> Optional[Dict]:
     """Busca uma conta pelo email"""
-    accounts = load_account()
+    account_list = load_account()
     email_lower = email.lower()
-    for account in accounts:
+    for account in account_list:
         if account.get("email", "").lower() == email_lower:
             return account
     return None
@@ -225,9 +225,9 @@ def auth_google_register(body: dict):
             "auth_provider": "google"
         }
 
-        accounts = load_account()
-        accounts.append(new_account)
-        save_account(accounts)
+        account_list = load_account()
+        account_list.append(new_account)
+        save_account(account_list)
 
     # Verifica permissões de admin (se necessário)
     if ADMIN_EMAILS and email not in ADMIN_EMAILS:

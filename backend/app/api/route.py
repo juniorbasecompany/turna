@@ -271,7 +271,7 @@ def list_accounts(
     offset: int = Query(0, ge=0, description="Offset para paginação"),
 ):
     """
-    Lista accounts do tenant atual (via Member ACTIVE) com paginação.
+    Lista account list do tenant atual (via Member ACTIVE) com paginação.
     """
     try:
         # Query base para buscar (LEFT JOIN para incluir members sem Account)
@@ -291,7 +291,7 @@ def list_accounts(
         )
         total = session.exec(count_query).one()
 
-        # Buscar accounts com paginação
+        # Buscar account list com paginação
         # Filtrar apenas members com Account (não mostrar convites pendentes sem Account)
         members = session.exec(
             base_query
@@ -301,11 +301,11 @@ def list_accounts(
             .offset(offset)
         ).all()
 
-        accounts = []
+        account_list = []
         for member_obj, account in members:
             # Account não pode ser None aqui devido ao filtro acima
             if account:
-                accounts.append(AccountResponse(
+                account_list.append(AccountResponse(
                     id=account.id,
                     email=account.email,
                     name=account.name,
@@ -317,16 +317,16 @@ def list_accounts(
                 ))
 
         return AccountListResponse(
-            items=accounts,
+            items=account_list,
             total=total,
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro ao listar accounts: {e}", exc_info=True)
+        logger.error(f"Erro ao listar account list: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Erro ao listar accounts: {str(e)}",
+            detail=f"Erro ao listar account list: {str(e)}",
         ) from e
 
 
@@ -1308,14 +1308,14 @@ async def stream_job_status(
 ):
     """
     Stream SSE (Server-Sent Events) para aguardar conclusão de um job.
-    
+
     O cliente abre esta conexão e recebe um evento quando o job terminar
     (status COMPLETED ou FAILED). A conexão fecha automaticamente após
     enviar o evento de conclusão.
-    
+
     Eventos enviados:
     - event: status, data: {"status": "PENDING"|"RUNNING"|"COMPLETED"|"FAILED", "result_data": ...}
-    
+
     Uso no frontend:
     ```javascript
     const eventSource = new EventSource(`/api/job/${jobId}/stream`);
@@ -1329,14 +1329,14 @@ async def stream_job_status(
     ```
     """
     import json
-    
+
     # Validar acesso ao job
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
     if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    
+
     async def event_generator():
         """Gerador de eventos SSE que aguarda conclusão do job."""
         # Backoff progressivo: começa em 1s, aumenta até máximo de 5s
@@ -1347,7 +1347,7 @@ async def stream_job_status(
         max_wait_seconds = 300
         elapsed = 0.0
         check_count = 0
-        
+
         while elapsed < max_wait_seconds:
             # Buscar status atualizado do job (nova sessão para evitar cache)
             from app.db.session import get_session_context
@@ -1357,31 +1357,31 @@ async def stream_job_status(
                     # Job foi deletado
                     yield f"event: error\ndata: {json.dumps({'error': 'Job não encontrado'})}\n\n"
                     return
-                
+
                 status = current_job.status.value
                 result_data = current_job.result_data
-                
+
                 # Enviar evento de status
                 event_data = {"status": status, "result_data": result_data}
                 yield f"event: status\ndata: {json.dumps(event_data)}\n\n"
-                
+
                 # Se job terminou, encerrar stream
                 if current_job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
                     return
-            
+
             # Aguardar antes de próxima verificação
             await asyncio.sleep(check_interval)
             elapsed += check_interval
             check_count += 1
-            
+
             # Backoff progressivo: aumenta intervalo a cada 3 verificações
             # 1s (checks 1-3) → 2s (checks 4-6) → 3s (checks 7-9) → 4s (checks 10-12) → 5s (checks 13+)
             if check_count % 3 == 0 and check_interval < max_interval:
                 check_interval = min(check_interval + 1.0, max_interval)
-        
+
         # Timeout - enviar evento de timeout
         yield f"event: timeout\ndata: {json.dumps({'error': 'Timeout aguardando job'})}\n\n"
-    
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",

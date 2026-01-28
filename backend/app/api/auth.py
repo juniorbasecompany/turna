@@ -185,9 +185,9 @@ def get_account_members(session: Session, *, account_id: int, email: str | None 
         account_id: ID do Account
         email: Email do Account (opcional, usado para buscar invites pendentes sem Account)
     """
-    tenants = _list_active_tenants_for_account(session, account_id=account_id)
+    tenant_list = _list_active_tenants_for_account(session, account_id=account_id)
     invites = _list_pending_invites_for_account(session, account_id=account_id, email=email)
-    return tenants, invites
+    return tenant_list, invites
 
 
 def get_active_tenant_for_account(session: Session, *, account_id: int) -> int | None:
@@ -197,9 +197,9 @@ def get_active_tenant_for_account(session: Session, *, account_id: int) -> int |
       - 1 ACTIVE: tenant_id
       - >1 ACTIVE: None (exige seleção)
     """
-    tenants = _list_active_tenants_for_account(session, account_id=account_id)
-    if len(tenants) == 1:
-        return tenants[0].tenant_id
+    tenant_list = _list_active_tenants_for_account(session, account_id=account_id)
+    if len(tenant_list) == 1:
+        return tenant_list[0].tenant_id
     return None
 
 
@@ -276,22 +276,22 @@ def auth_google(
     if pending_members:
         session.commit()
 
-    tenants, invites = get_account_members(session, account_id=account.id)
+    tenant_list, invites = get_account_members(session, account_id=account.id)
 
     # Se não há tenants ACTIVE nem invites PENDING, exige seleção (permite criar clínica)
-    if len(tenants) == 0 and len(invites) == 0:
+    if len(tenant_list) == 0 and len(invites) == 0:
         return AuthResponse(requires_tenant_selection=True, tenants=[], invites=[])
 
     # Se não há tenants ACTIVE mas há invites, exige seleção
-    if len(tenants) == 0:
+    if len(tenant_list) == 0:
         return AuthResponse(requires_tenant_selection=True, tenants=[], invites=invites)
 
     # Se há múltiplos tenants ACTIVE ou convites PENDING, exige seleção
-    if len(tenants) > 1 or len(invites) > 0:
-        return AuthResponse(requires_tenant_selection=True, tenants=tenants, invites=invites)
+    if len(tenant_list) > 1 or len(invites) > 0:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenant_list, invites=invites)
 
     # Único tenant ativo e sem convites -> emite token direto.
-    only = tenants[0]
+    only = tenant_list[0]
     member = _get_active_member(session, account_id=account.id, tenant_id=only.tenant_id)
     if not member:
         raise HTTPException(status_code=403, detail="Member ACTIVE não encontrado para o tenant selecionado")
@@ -489,13 +489,13 @@ def auth_dev_token(
         token = _issue_token_for_member(account=account, member=member)
         return AuthResponse(access_token=token)
 
-    tenants, invites = get_account_members(session, account_id=account.id, email=account.email)
-    if not tenants:
+    tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
+    if not tenant_list:
         raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (member ACTIVE ausente)")
-    if len(tenants) > 1:
-        return AuthResponse(requires_tenant_selection=True, tenants=tenants)
+    if len(tenant_list) > 1:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenant_list)
 
-    only = tenants[0]
+    only = tenant_list[0]
     member = _get_active_member(session, account_id=account.id, tenant_id=only.tenant_id)
     if not member:
         raise HTTPException(status_code=403, detail="Member ACTIVE não encontrado para o tenant selecionado")
@@ -509,8 +509,8 @@ def list_my_tenants(
     session: Session = Depends(get_session),
 ):
     """Lista tenants ACTIVE disponíveis e convites PENDING para a conta autenticada."""
-    tenants, invites = get_account_members(session, account_id=account.id, email=account.email)
-    return TenantListResponse(tenants=tenants, invites=invites)
+    tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
+    return TenantListResponse(tenants=tenant_list, invites=invites)
 
 
 @router.get("/invites", response_model=list[InviteOption], tags=["Auth"])
@@ -754,8 +754,8 @@ def auth_google_create_tenant(
     if pending_members:
         session.commit()
 
-    tenants, invites = get_account_members(session, account_id=account.id, email=email)
-    if len(tenants) > 0:
+    tenant_list, invites = get_account_members(session, account_id=account.id, email=email)
+    if len(tenant_list) > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account já possui tenants ACTIVE. Use o endpoint de seleção de tenant."

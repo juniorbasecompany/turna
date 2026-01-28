@@ -13,7 +13,7 @@ from strategy.core import overlap
 from output.console import (
     print_day_result,
     print_demands_overview,
-    print_professionals_overview,
+    print_member_list_overview,
     print_total_cost,
 )
 from strategy.greedy.solve import solve_greedy
@@ -166,7 +166,7 @@ def main(allocation_mode: str = "greedy") -> None:
         {**p, "vacation": [tuple(v) for v in p["vacation"]]} for p in pros_json
     ]
 
-    demands = build_demands_from_by_day(DEMANDS_BY_DAY)
+    demand_list = build_demands_from_by_day(DEMANDS_BY_DAY)
 
     days = max(DEMANDS_BY_DAY.keys(), default=0)
 
@@ -187,12 +187,12 @@ def main(allocation_mode: str = "greedy") -> None:
     PED_PRO_ON_NON_PED_PENALTY = 1
 
     pros_by_sequence = sorted(pros, key=lambda p: p["sequence"])
-    print_demands_overview(demands, days)
-    print_professionals_overview(pros_by_sequence)
+    print_demands_overview(demand_list, days)
+    print_member_list_overview(pros_by_sequence)
 
     if ALLOCATION_MODE == "greedy":
         per_day, total_cost = solve_greedy(
-            demands=demands,
+            demands=demand_list,
             pros_by_sequence=pros_by_sequence,
             days=days,
             unassigned_penalty=UNASSIGNED_PENALTY,
@@ -204,7 +204,7 @@ def main(allocation_mode: str = "greedy") -> None:
         from strategy.cd_sat.solve import solve_cp_sat
 
         per_day, total_cost = solve_cp_sat(
-            demands=demands,
+            demands=demand_list,
             pros=pros,
             pros_by_sequence=pros_by_sequence,
             days=days,

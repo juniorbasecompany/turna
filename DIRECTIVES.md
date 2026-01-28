@@ -103,7 +103,7 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - Permite editar `member.email` e `member.name` livremente.
 - Checkbox "Enviar convite" funciona tanto para member novo quanto existente.
 
-**Painel de Accounts** (futuro):
+**Painel de Account list** (futuro):
 - Atualmente mostra `account.name`, mas terá regras de acesso restritas no futuro.
 - `Account.name` é privado - apenas o próprio usuário deve ver.
 

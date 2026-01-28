@@ -1,6 +1,6 @@
+import { backendFetch, requireToken } from '@/lib/backend-fetch'
 import { TenantListResponse } from '@/types/api'
 import { NextRequest, NextResponse } from 'next/server'
-import { backendFetch, requireToken } from '@/lib/backend-fetch'
 
 /**
  * Handler Next.js para listar tenants disponíveis

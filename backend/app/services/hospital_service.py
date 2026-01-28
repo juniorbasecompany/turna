@@ -33,7 +33,7 @@ Regras:
   - skills (lista; se não houver, [])
   - priority ("Urgente" | "Emergência" | null)  # extrair de notes quando houver "Prioridade: ..."
   - complexity (string ou null)  # se existir como complexidade do caso (Baixa/Média/Alta)
-  - professionals (lista; se não houver, [])
+  - members (lista; se não houver, [])
   - notes (string ou null)
   - source (objeto livre; inclua page e qualquer raw útil)
 - Não invente dados que não estejam no documento.

@@ -212,8 +212,8 @@ def validate_and_normalize_result(obj: dict) -> dict:
         del meta["timezone"]
     out["meta"] = meta
 
-    # demands
-    demands = []
+    # demand list
+    demand_list = []
     for d in as_list(obj.get("demands")):
         if not isinstance(d, dict):
             continue
@@ -247,7 +247,7 @@ def validate_and_normalize_result(obj: dict) -> dict:
             "complexity": normalize_str(d.get("complexity")),
             "skills": skills,
             "priority": priority,
-            "professionals": as_list(d.get("professionals")),
+            "members": as_list(d.get("members")),
             "notes": notes,
             "source": d.get("source") if isinstance(d.get("source"), dict) else {},
         }
@@ -265,9 +265,9 @@ def validate_and_normalize_result(obj: dict) -> dict:
         dd["start_time"] = iso_start
         dd["end_time"] = iso_end
 
-        demands.append(dd)
+        demand_list.append(dd)
 
-    out["demands"] = demands
+    out["demands"] = demand_list
 
     # Normaliza date_reference: prioriza cabeçalho (meta.period), fallback para primeira demanda
     date_ref: Optional[str] = None
@@ -279,8 +279,8 @@ def validate_and_normalize_result(obj: dict) -> dict:
         date_ref = f"{yyyy:04d}-{mm:02d}-{dd:02d}"
 
     # 2) Fallback: primeira demanda válida
-    if not date_ref and demands:
-        for d in demands:
+    if not date_ref and demand_list:
+        for d in demand_list:
             st = d.get("start_time")
             if isinstance(st, str) and ISO_DT_TZ_RE.match(st):
                 date_ref = st[:10]  # YYYY-MM-DD

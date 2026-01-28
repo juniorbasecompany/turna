@@ -218,7 +218,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Header implementado com nome do tenant e menu do usuário
 
 **Futuro:**
-- Painel de Accounts terá regras de acesso restritas (apenas o próprio usuário vê seus dados)
+- Painel de Account list terá regras de acesso restritas (apenas o próprio usuário vê seus dados)
 
 ### 2.6 Member Independente de Account (Painel)
 
@@ -363,7 +363,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 ### 5.5 Endpoints de Account
 - [x] Endpoints implementados em `app/api/route.py`:
   - [x] `POST /account` (criar account - apenas admin)
-  - [x] `GET /account/list` (listar accounts - apenas admin)
+  - [x] `GET /account/list` (listar account list - apenas admin)
   - [x] `PUT /account/{account_id}` (atualizar account - apenas admin)
   - [x] `DELETE /account/{account_id}` (excluir account - apenas admin)
 
@@ -423,7 +423,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [ ] Revisar `strategy/cd_sat/solve.py`:
   - [ ] Mesma adaptação acima (CP-SAT ainda não integrado no worker, apenas greedy)
 - [ ] Criar `app/services/schedule_service.py`:
-  - [ ] Função `generate_schedule(demands, professionals, allocation_mode) -> dict` (atualmente chamado diretamente no worker)
+  - [ ] Função `generate_schedule(demand_list, member_list, allocation_mode) -> dict` (atualmente chamado diretamente no worker)
 
 ### 6.2 Adaptação de Geração de PDF
 - [x] Revisar `output/day.py`:
@@ -905,7 +905,7 @@ Antes de considerar completo, verificar:
       - skills (lista; se não houver, [])
       - priority ("Urgente" | "Emergência" | null)  # extrair de notes quando houver "Prioridade: ..."
       - complexity (string ou null)  # se existir como complexidade do caso (Baixa/Média/Alta)
-      - professionals (lista; se não houver, [])
+      - member list (lista; se não houver, [])
       - notes (string ou null)
       - source (objeto livre; inclua page e qualquer raw útil)
     - Não invente dados que não estejam no documento.

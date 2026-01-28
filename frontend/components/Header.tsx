@@ -1,7 +1,7 @@
 'use client'
 
 import { useDrawer } from '@/app/(protected)/layout'
-import { AccountResponse, MeResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
+import { MeResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { LoadingSpinner } from './LoadingSpinner'
@@ -221,7 +221,7 @@ export function Header() {
 
             if (tenantListRes.ok) {
                 const tenantListData: TenantListResponse = await tenantListRes.json()
-                const tenantsCount = (tenantListData.tenants || []).length
+                const tenantListCount = (tenantListData.tenants || []).length
                 const invitesCount = (tenantListData.invites || []).length
 
                 const hasMultipleTenants = tenantsCount > 1
