@@ -6,8 +6,8 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterButtons, FilterPanel } from '@/components/filter'
 import type { FilterOption } from '@/components/filter'
+import { FilterButtons, FilterPanel } from '@/components/filter'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
@@ -36,10 +36,9 @@ type MemberFormData = {
 export default function MemberPage() {
     const { settings } = useTenantSettings()
 
-    // Estados auxiliares (não gerenciados por useEntityPage)
+    // Estados auxiliares para funcionalidade de convite
     const [emailMessage, setEmailMessage] = useState<string | null>(null)
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
-    const [jsonError, setJsonError] = useState<string | null>(null)
     const [sendInvite, setSendInvite] = useState(false)
 
     // Constantes para filtros
@@ -57,10 +56,10 @@ export default function MemberPage() {
         initialFilters: new Set(ALL_ROLE_FILTERS),
     })
 
-    // Configuração inicial
+    // Configuração inicial (status PENDING para novo convite)
     const initialFormData: MemberFormData = {
         role: 'account',
-        status: 'ACTIVE',
+        status: 'PENDING',
         name: '',
         email: '',
         attribute: {},
@@ -204,7 +203,7 @@ export default function MemberPage() {
         pagination,
         total,
         paginationHandlers,
-        handleSave: baseHandleSave,
+        handleSave,
         handleDeleteSelected,
         loadItems,
         actionBarErrorProps,
@@ -218,11 +217,19 @@ export default function MemberPage() {
         mapFormDataToUpdateRequest,
         validateFormData,
         additionalListParams,
-        onSaveSuccess: () => {
-            // Resetar estados específicos após salvar
+        onOpenCreate: () => {
             setSendInvite(false)
             setEmailMessage(null)
-            setJsonError(null)
+        },
+        onAfterSave: async (savedMember, isCreate) => {
+            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
+            if (sendInvite) {
+                await sendInviteEmail(savedMember)
+            }
+        },
+        onSaveSuccess: () => {
+            setSendInvite(false)
+            setEmailMessage(null)
         },
     })
 
@@ -257,97 +264,7 @@ export default function MemberPage() {
         return filteredMembers.slice(start, end)
     }, [filteredMembers, needsFrontendFilter, pagination])
 
-    // Validar attribute (objeto JSON)
-    const validateAttribute = (attribute: unknown): { valid: boolean; error?: string; parsed?: Record<string, unknown> } => {
-        if (attribute === null || attribute === undefined) {
-            return { valid: false, error: 'Atributos não podem estar vazios' }
-        }
-
-        if (typeof attribute !== 'object') {
-            return { valid: false, error: 'Atributos devem ser um objeto' }
-        }
-
-        if (Array.isArray(attribute)) {
-            return { valid: false, error: 'Atributos devem ser um objeto, não um array' }
-        }
-
-        return { valid: true, parsed: attribute as Record<string, unknown> }
-    }
-
-    // Wrappers customizados para funcionalidades específicas
-    const handleCreateClickCustom = () => {
-        handleCreateClick()
-        setFormData({
-            ...formData,
-            status: 'PENDING',  // Status padrão para criação
-        })
-        setSendInvite(false)
-        setEmailMessage(null)
-        setJsonError(null)
-    }
-
-    const handleEditClickCustom = (member: MemberResponse) => {
-        handleEditClick(member)
-        setEmailMessage(null)
-        setJsonError(null)
-    }
-
-    const handleCancelCustom = () => {
-        handleCancel()
-        setSendInvite(false)
-        setEmailMessage(null)
-        setJsonError(null)
-    }
-
-    // Handler customizado para criação com suporte a sendInvite
-    const handleCreate = async () => {
-        // Validar attribute antes de salvar
-        const attributeValidation = validateAttribute(formData.attribute)
-        if (!attributeValidation.valid) {
-            setError(attributeValidation.error || 'Atributos inválidos')
-            setJsonError(attributeValidation.error || 'Atributos inválidos')
-            return
-        }
-
-        try {
-            setError(null)
-            setEmailMessage(null)
-            setJsonError(null)
-
-            // Usar handleSave do useEntityPage, mas precisamos customizar
-            // Como não podemos customizar handleSave facilmente, vamos fazer manualmente
-            const createData: MemberCreateRequest = {
-                email: formData.email.trim(),
-                name: formData.name.trim() || null,
-                role: formData.role,
-                status: formData.status,
-                attribute: attributeValidation.parsed || {},
-            }
-
-            const savedMember = await protectedFetch<MemberResponse>(`/api/member`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(createData),
-            })
-
-            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
-            if (sendInvite && savedMember) {
-                await sendInviteEmail(savedMember)
-            }
-
-            // Recarregar lista e limpar formulário
-            await loadItems()
-            handleCancelCustom()
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao criar member'
-            setError(message)
-            setEmailMessage(null)
-            console.error('Erro ao criar member:', err)
-        }
-    }
-
+    // Função para enviar convite por e-mail
     const sendInviteEmail = async (member: MemberResponse) => {
         try {
             await protectedFetch(`/api/member/${member.id}/invite`, {
@@ -363,126 +280,6 @@ export default function MemberPage() {
             const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
             setEmailMessage(`E-mail de convite não foi enviado para ${member.member_name || member.member_email}. ${errorMsg}`)
             setEmailMessageType('error')
-        }
-    }
-
-    // Handler customizado para edição com suporte a sendInvite
-    const handleSave = async () => {
-        if (!editingMember) {
-            // Se não está editando, usar handleCreate
-            await handleCreate()
-            return
-        }
-
-        // Validar attribute antes de salvar
-        const attributeValidation = validateAttribute(formData.attribute)
-        if (!attributeValidation.valid) {
-            setError(attributeValidation.error || 'Atributos inválidos')
-            setJsonError(attributeValidation.error || 'Atributos inválidos')
-            return
-        }
-
-        try {
-            setError(null)
-            setEmailMessage(null)
-            setJsonError(null)
-
-            // Usar handleSave do useEntityPage, mas precisamos customizar
-            // Como não podemos customizar handleSave facilmente, vamos fazer manualmente
-            const updateData: MemberUpdateRequest = {
-                role: formData.role,
-                status: formData.status,
-                name: formData.name.trim() || null,
-                email: formData.email.trim() || null,
-                attribute: attributeValidation.parsed || {},
-            }
-
-            const savedMember = await protectedFetch<MemberResponse>(`/api/member/${editingMember.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updateData),
-            })
-
-            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
-            if (sendInvite && savedMember) {
-                await sendInviteEmail(savedMember)
-            }
-
-            // Recarregar lista e limpar formulário
-            await loadItems()
-            handleCancelCustom()
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao salvar member'
-            setError(message)
-            setEmailMessage(null)
-            console.error('Erro ao salvar member:', err)
-        }
-    }
-
-    // Handler customizado para exclusão (mantém lógica de Promise.allSettled)
-    const handleDeleteSelectedCustom = async () => {
-        if (selectedMembers.size === 0) return
-
-        try {
-            setError(null)
-
-            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
-            const idsForAction = getSelectedMemberIdsForAction()
-            let idsToDelete: number[]
-
-            if (idsForAction === null) {
-                // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
-                const params = new URLSearchParams()
-                params.set('limit', '10000')
-                params.set('offset', '0')
-
-                if (additionalListParams) {
-                    Object.entries(additionalListParams).forEach(([key, value]) => {
-                        if (value !== null && value !== undefined) {
-                            params.set(key, String(value))
-                        }
-                    })
-                }
-
-                const response = await protectedFetch<{ items: MemberResponse[]; total: number }>(
-                    `/api/member/list?${params.toString()}`
-                )
-                idsToDelete = response.items.map((item) => item.id)
-            } else {
-                idsToDelete = idsForAction
-            }
-
-            if (idsToDelete.length === 0) {
-                setError('Nenhum item para excluir')
-                return
-            }
-
-            const deletePromises = idsToDelete.map(async (memberId) => {
-                try {
-                    await protectedFetch(`/api/member/${memberId}`, {
-                        method: 'DELETE',
-                    })
-                    return { success: true, memberId }
-                } catch (err) {
-                    return { success: false, memberId, error: err }
-                }
-            })
-
-            const results = await Promise.allSettled(deletePromises)
-            const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success))
-
-            if (failed.length > 0) {
-                throw new Error(`${failed.length} associação(ões) não puderam ser removidas`)
-            }
-
-            // Recarregar lista (useEntityPage já limpa seleção)
-            await loadItems()
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao remover associados'
-            setError(message)
-            console.error('Erro ao remover associados:', err)
         }
     }
 
@@ -520,16 +317,6 @@ export default function MemberPage() {
         }
     }
 
-    const handleAttributeChange = (value: unknown) => {
-        setFormData({ ...formData, attribute: value })
-        const validation = validateAttribute(value)
-        if (validation.valid) {
-            setJsonError(null)
-        } else {
-            setJsonError(validation.error || 'Atributos inválidos')
-        }
-    }
-
     // Handlers para filtros (usando hooks reutilizáveis)
     // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
 
@@ -546,34 +333,18 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
-    // Botões do ActionBar usando hook reutilizável
-    const actionBarButtons = useActionBarButtons({
+    // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
+    // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
+    const actionBarButtonsWithInvite = useActionBarButtons({
         isEditing,
         selectedCount: selectedMembersCount,
-        hasChanges: hasChanges() || sendInvite, // Customização: incluir sendInvite
+        hasChanges: hasChanges() || sendInvite,
         submitting,
         deleting,
-        onCancel: handleCancelCustom,
-        onDelete: handleDeleteSelectedCustom,
+        onCancel: handleCancel,
+        onDelete: handleDeleteSelected,
         onSave: handleSave,
-        saveLabel: submitting
-            ? (editingMember ? 'Salvando...' : 'Criando...')
-            : (editingMember ? 'Salvar' : 'Criar'),
     })
-
-    // Props de erro do ActionBar (customizado para incluir emailMessage)
-    const actionBarErrorPropsCustom = useMemo(() => {
-        const baseProps = actionBarErrorProps
-        // Se houver emailMessage, usar ele em vez de error
-        if (emailMessage) {
-            return {
-                ...baseProps,
-                message: emailMessage,
-                messageType: emailMessageType,
-            }
-        }
-        return baseProps
-    }, [actionBarErrorProps, emailMessage, emailMessageType])
 
     return (
         <>
@@ -646,19 +417,39 @@ export default function MemberPage() {
                             </select>
                         </FormField>
                     </FormFieldGrid>
-                    <FormField
-                        label="Atributos (JSON)"
-                        required
-                        error={jsonError || undefined}
-                    >
+                    <FormField label="Atributos (JSON)" required>
                         <JsonEditor
                             id="attribute"
-                            value={formData.attribute}
-                            on_change={handleAttributeChange}
+                            value={
+                                typeof formData.attribute === 'object' && formData.attribute !== null
+                                    ? JSON.stringify(formData.attribute, null, 2)
+                                    : typeof formData.attribute === 'string'
+                                        ? formData.attribute
+                                        : '{}'
+                            }
+                            on_change={(value: string) => {
+                                try {
+                                    const parsed = JSON.parse(value)
+                                    setFormData({ ...formData, attribute: parsed })
+                                } catch {
+                                    // Se não for JSON válido, manter como string (será validado em validateFormData)
+                                    setFormData({ ...formData, attribute: value })
+                                }
+                            }}
                             is_disabled={submitting}
                             height={400}
                         />
                     </FormField>
+                    {emailMessage && (
+                        <div
+                            className={`p-3 rounded-md ${emailMessageType === 'success'
+                                    ? 'bg-green-50 text-green-800 border border-green-200'
+                                    : 'bg-red-50 text-red-800 border border-red-200'
+                                }`}
+                        >
+                            <p className="text-sm">{emailMessage}</p>
+                        </div>
+                    )}
                 </div>
             </EditForm>
 
@@ -673,7 +464,7 @@ export default function MemberPage() {
                     <CreateCard
                         label="Convidar novo membro"
                         subtitle="Clique para adicionar"
-                        onClick={handleCreateClickCustom}
+                        onClick={handleCreateClick}
                     />
                 }
                 filterContent={
@@ -714,7 +505,7 @@ export default function MemberPage() {
                                         e.stopPropagation()
                                         toggleMemberSelection(member.id)
                                     }}
-                                    onEdit={() => handleEditClickCustom(member)}
+                                    onEdit={() => handleEditClick(member)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar associação"
@@ -795,10 +586,10 @@ export default function MemberPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorPropsCustom.error}
-                message={actionBarErrorPropsCustom.message}
-                messageType={actionBarErrorPropsCustom.messageType}
-                buttons={actionBarButtons}
+                error={actionBarErrorProps.error}
+                message={actionBarErrorProps.message}
+                messageType={actionBarErrorProps.messageType}
+                buttons={actionBarButtonsWithInvite}
             />
         </>
     )

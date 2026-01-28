@@ -6,7 +6,7 @@ Todos os comandos abaixo são executados a partir da **raiz do repositório**, e
 ## Ativação rápida
 Para iniciar infra + backend (Docker) e frontend (Next.js):
   ```
-  docker compose up -d; cd frontend; npm run dev
+  cd backend; docker compose up -d; cd ../frontend; npm run dev
   ```
 
 ## Atualizar o banco de dados - Alembic

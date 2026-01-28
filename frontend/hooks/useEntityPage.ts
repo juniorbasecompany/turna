@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react'
 import { protectedFetch } from '@/lib/api'
-import { usePagination } from './usePagination'
-import { useEntitySelection } from './useEntitySelection'
+import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { useCallback, useState } from 'react'
+import { useActionBarButtons } from './useActionBarButtons'
 import { useEntityForm } from './useEntityForm'
 import { useEntityList } from './useEntityList'
-import { useActionBarButtons } from './useActionBarButtons'
-import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { useEntitySelection } from './useEntitySelection'
+import { usePagination } from './usePagination'
 
 interface UseEntityPageOptions<TFormData, TEntity extends { id: number }, TCreateRequest, TUpdateRequest> {
     // Configuração básica
@@ -25,6 +25,12 @@ interface UseEntityPageOptions<TFormData, TEntity extends { id: number }, TCreat
     // Callbacks opcionais
     onSaveSuccess?: () => void
     onDeleteSuccess?: () => void
+    /** Callback chamado após salvar com sucesso, recebe a entidade salva e se foi criação ou edição */
+    onAfterSave?: (savedEntity: TEntity, isCreate: boolean) => void | Promise<void>
+    /** Campos aplicados sobre initialFormData ao abrir criação */
+    formDataOnCreate?: Partial<TFormData>
+    /** Callback chamado após abrir formulário de criação */
+    onOpenCreate?: () => void
     additionalListParams?: Record<string, string | number | boolean | null>
     listEnabled?: boolean
 
@@ -109,6 +115,9 @@ export function useEntityPage<
         validateFormData,
         onSaveSuccess,
         onDeleteSuccess,
+        onAfterSave,
+        formDataOnCreate,
+        onOpenCreate,
         additionalListParams,
         listEnabled = true,
         saveLabel,
@@ -127,6 +136,8 @@ export function useEntityPage<
     const form = useEntityForm<TFormData, TEntity>({
         initialFormData,
         isEmptyCheck,
+        formDataOnCreate,
+        onOpenCreate,
     })
 
     // Sobrescrever handleEditClick para mapear corretamente
@@ -169,10 +180,13 @@ export function useEntityPage<
             setSubmitting(true)
             setError(null)
 
+            let savedEntity: TEntity
+            const isCreate = !form.editingItem
+
             if (form.editingItem) {
                 // Editar
                 const updateData = mapFormDataToUpdateRequest(form.formData)
-                await protectedFetch(`${endpoint}/${form.editingItem.id}`, {
+                savedEntity = await protectedFetch<TEntity>(`${endpoint}/${form.editingItem.id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -182,7 +196,7 @@ export function useEntityPage<
             } else {
                 // Criar
                 const createData = mapFormDataToCreateRequest(form.formData)
-                await protectedFetch(endpoint, {
+                savedEntity = await protectedFetch<TEntity>(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -194,6 +208,11 @@ export function useEntityPage<
             // Recarregar lista e limpar formulário
             await loadItems()
             form.resetForm()
+
+            // Chamar onAfterSave se fornecido (permite ações pós-salvar como enviar convite)
+            if (onAfterSave) {
+                await onAfterSave(savedEntity, isCreate)
+            }
 
             if (onSaveSuccess) {
                 onSaveSuccess()
@@ -213,6 +232,7 @@ export function useEntityPage<
         endpoint,
         entityName,
         loadItems,
+        onAfterSave,
         onSaveSuccess,
         setError,
     ])
@@ -254,10 +274,10 @@ export function useEntityPage<
                     const response = await protectedFetch<{ items: TEntity[]; total: number }>(
                         `${endpoint}/list?${params.toString()}`
                     )
-                    
+
                     const batchIds = response.items.map((item) => item.id)
                     idsToDelete.push(...batchIds)
-                    
+
                     // Verificar se há mais páginas
                     offset += BATCH_SIZE
                     hasMore = offset < response.total

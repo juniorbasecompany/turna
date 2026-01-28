@@ -1,9 +1,13 @@
-import { useState, useCallback } from 'react'
 import { hasFormChanges } from '@/lib/entityUtils'
+import { useCallback, useState } from 'react'
 
 interface UseEntityFormOptions<TFormData, TEntity extends { id: number }> {
     initialFormData: TFormData
     isEmptyCheck?: (data: TFormData) => boolean
+    /** Campos aplicados sobre initialFormData ao abrir o formulário de criação */
+    formDataOnCreate?: Partial<TFormData>
+    /** Callback chamado após reset/override ao abrir criação */
+    onOpenCreate?: () => void
 }
 
 interface UseEntityFormReturn<TFormData, TEntity extends { id: number }> {
@@ -26,7 +30,7 @@ interface UseEntityFormReturn<TFormData, TEntity extends { id: number }> {
 export function useEntityForm<TFormData extends Record<string, unknown>, TEntity extends { id: number }>(
     options: UseEntityFormOptions<TFormData, TEntity>
 ): UseEntityFormReturn<TFormData, TEntity> {
-    const { initialFormData, isEmptyCheck } = options
+    const { initialFormData, isEmptyCheck, formDataOnCreate, onOpenCreate } = options
 
     const [formData, setFormData] = useState<TFormData>(initialFormData)
     const [originalFormData, setOriginalFormData] = useState<TFormData>(initialFormData)
@@ -43,11 +47,15 @@ export function useEntityForm<TFormData extends Record<string, unknown>, TEntity
     }, [editingItem, formData, originalFormData, isEmptyCheck])
 
     const handleCreateClick = useCallback(() => {
-        setFormData(initialFormData)
-        setOriginalFormData(initialFormData)
+        const createFormData = formDataOnCreate
+            ? { ...initialFormData, ...formDataOnCreate } as TFormData
+            : initialFormData
+        setFormData(createFormData)
+        setOriginalFormData(createFormData)
         setEditingItem(null)
         setShowEditArea(true)
-    }, [initialFormData])
+        onOpenCreate?.()
+    }, [initialFormData, formDataOnCreate, onOpenCreate])
 
     const handleEditClick = useCallback(
         (item: TEntity) => {

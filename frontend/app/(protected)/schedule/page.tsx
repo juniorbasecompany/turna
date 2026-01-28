@@ -21,8 +21,6 @@ import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
-    DemandListResponse,
-    DemandResponse,
     HospitalListResponse,
     HospitalResponse,
     ScheduleCreateRequest,
@@ -53,9 +51,6 @@ export default function SchedulePage() {
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
 
-    // Estados auxiliares - Demandas (para formulário de criação)
-    const [demands, setDemands] = useState<DemandResponse[]>([])
-    const [loadingDemands, setLoadingDemands] = useState(true)
 
     // Estados auxiliares
     const [filterName, setFilterName] = useState('')
@@ -127,9 +122,8 @@ export default function SchedulePage() {
 
     // Validação
     const validateFormData = (formData: ScheduleFormData): string | null => {
-        if (!formData.demand_id) {
-            return 'Demanda é obrigatória'
-        }
+        // demand_id é definido automaticamente na criação (pelo worker) e não é editável
+        // Não validamos demand_id aqui pois na edição já vem preenchido
 
         if (!formData.name.trim()) {
             return 'Nome é obrigatório'
@@ -150,10 +144,9 @@ export default function SchedulePage() {
         return null
     }
 
-    // isEmptyCheck
+    // isEmptyCheck (demand_id não é considerado pois é definido automaticamente)
     const isEmptyCheck = (formData: ScheduleFormData): boolean => {
         return (
-            formData.demand_id === null &&
             formData.name.trim() === '' &&
             formData.period_start_at === null &&
             formData.period_end_at === null
@@ -258,20 +251,6 @@ export default function SchedulePage() {
         loadHospitals()
     }, [])
 
-    // Carregar demandas para o formulário de criação
-    useEffect(() => {
-        const loadDemands = async () => {
-            try {
-                const response = await protectedFetch<DemandListResponse>('/api/demand/list?limit=100')
-                setDemands(response.items || [])
-            } catch (err) {
-                console.error('Erro ao carregar demandas:', err)
-            } finally {
-                setLoadingDemands(false)
-            }
-        }
-        loadDemands()
-    }, [])
 
     // Validar intervalo de datas
     useEffect(() => {
@@ -599,16 +578,14 @@ export default function SchedulePage() {
             {/* Área de edição */}
             <EditForm title="Escala" isEditing={isEditing}>
                 <div className="space-y-4">
-                    <FormSelect
-                        label="Hospital"
-                        value={formData.hospital_id}
-                        onChange={(value) => setFormData({ ...formData, hospital_id: value })}
-                        options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
-                        id="hospital_id"
-                        required
-                        disabled={submitting}
-                        loading={loadingHospitals}
-                    />
+                    {/* Demanda (somente leitura - relação 1:1 não editável) */}
+                    {editingSchedule && (
+                        <FormField label="Demanda">
+                            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-700">
+                                {editingSchedule.hospital_name} - Demanda #{editingSchedule.demand_id}
+                            </div>
+                        </FormField>
+                    )}
 
                     <FormInput
                         label="Nome"
