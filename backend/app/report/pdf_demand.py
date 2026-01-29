@@ -82,8 +82,32 @@ def demands_to_day_schedules(
         Event,
         Interval,
         Row,
-        _pick_color_from_text,
+        _hex_to_rgb,
     )
+
+    def _color_rgb_for_demand(d, title: str, hospital_color_by_id: dict) -> tuple[float, float, float] | None:
+        """Cor do quadro: hospital.color se existir; se estiver sem cor, retorna None (quadro sem cor)."""
+        hid = getattr(d, "hospital_id", None)
+        if hid and hid in hospital_color_by_id and hospital_color_by_id[hid]:
+            try:
+                return _hex_to_rgb(hospital_color_by_id[hid])
+            except (ValueError, TypeError):
+                pass
+        return None
+
+    def _color_rgb_for_hospital_row(
+        hid: int,
+        hospital_dict: dict,
+        hospital_color_by_id: dict,
+        hex_to_rgb,
+    ) -> tuple[float, float, float] | None:
+        """Cor única da linha (relatório por hospital): hospital.color se existir; sem cor retorna None."""
+        if hid in hospital_color_by_id and hospital_color_by_id[hid]:
+            try:
+                return hex_to_rgb(hospital_color_by_id[hid])
+            except (ValueError, TypeError):
+                pass
+        return None
 
     if group_by == "member":
         # Relatório de escalas: agrupar por dia e member_id (uma linha por profissional)
@@ -101,6 +125,12 @@ def demands_to_day_schedules(
         if member_ids:
             for m in session.exec(select(Member).where(Member.id.in_(member_ids))).all():
                 member_dict[m.id] = (m.name or "").strip() or f"Member {m.id}"
+
+        hospital_ids_member = {d.hospital_id for d in demands if getattr(d, "hospital_id", None)}
+        hospital_color_by_id: dict[int, Optional[str]] = {}
+        if hospital_ids_member:
+            for h in session.exec(select(Hospital).where(Hospital.id.in_(hospital_ids_member))).all():
+                hospital_color_by_id[h.id] = h.color if getattr(h, "color", None) else None
 
         schedules = []
         days_sorted = sorted({day for (day, _) in by_day_member})
@@ -133,7 +163,7 @@ def demands_to_day_schedules(
                             interval=Interval(start_min, end_min),
                             title=title,
                             subtitle=d.room.strip() if d.room else None,
-                            color_rgb=_pick_color_from_text(title),
+                            color_rgb=_color_rgb_for_demand(d, title, hospital_color_by_id),
                         )
                     )
                 events.sort(key=lambda e: (e.interval.start_min, e.interval.end_min))
@@ -167,10 +197,12 @@ def demands_to_day_schedules(
         by_day_hospital[(day_key, hid)].append(d)
 
     hospital_ids = {hid for (_, hid) in by_day_hospital if hid}
-    hospital_dict = {}
+    hospital_dict: dict[int, str] = {}
+    hospital_color_by_id = {}
     if hospital_ids:
         for h in session.exec(select(Hospital).where(Hospital.id.in_(hospital_ids))).all():
-            hospital_dict[h.id] = h.name
+            hospital_dict[h.id] = h.name or f"Hospital {h.id}"
+            hospital_color_by_id[h.id] = h.color if getattr(h, "color", None) else None
 
     schedules = []
     days_sorted = sorted({day for (day, _) in by_day_hospital})
@@ -181,6 +213,8 @@ def demands_to_day_schedules(
         hospitals_this_day = sorted({hid for (day, hid) in by_day_hospital if day == day_str and hid})
         for hid in hospitals_this_day:
             demands_row = by_day_hospital.get((day_str, hid), [])
+            # Uma linha = um hospital: todos os quadros da linha usam a mesma cor (hospital.color; sem cor = None)
+            row_color_rgb = _color_rgb_for_hospital_row(hid, hospital_dict, hospital_color_by_id, _hex_to_rgb)
             events = []
             for d in demands_row:
                 st_local = d.start_time.astimezone(tz)
@@ -199,7 +233,7 @@ def demands_to_day_schedules(
                         interval=Interval(start_min, end_min),
                         title=title,
                         subtitle=d.room.strip() if d.room else None,
-                        color_rgb=_pick_color_from_text(title),
+                        color_rgb=row_color_rgb,
                     )
                 )
             events.sort(key=lambda e: (e.interval.start_min, e.interval.end_min))

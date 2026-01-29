@@ -491,16 +491,21 @@ def _render_pdf_to_canvas(
             xe = x_at(ev.interval.end_min)
             if xe <= xs:
                 continue
-            r, g, b = ev.color_rgb or (0.2, 0.5, 0.9)
-            c.setFillColorRGB(r, g, b)
-            c.setStrokeColor(colors.white)
-            c.setLineWidth(1)
+            has_color = ev.color_rgb is not None
+            if has_color:
+                r, g, b = ev.color_rgb
+                c.setFillColorRGB(r, g, b)
+            else:
+                # Sem cor: quadro sem preenchimento (fundo branco)
+                c.setFillColor(colors.white)
+            c.setStrokeColor(colors.black)
+            c.setLineWidth(0.25)
             c.rect(xs, y0 + 2, xe - xs, row_h - 4, stroke=1, fill=1)
 
-            # Texto dentro (2 linhas)
+            # Texto dentro (2 linhas): sempre preto
             pad_x = 4
             max_w = max(10, (xe - xs) - 2 * pad_x)
-            c.setFillColor(colors.white)
+            c.setFillColor(colors.black)
             c.setFont("Helvetica-Bold", 7.5)
             lines = _wrap_text(pdfmetrics, ev.title, "Helvetica-Bold", 7.5, max_w)
             if lines:
@@ -513,7 +518,7 @@ def _render_pdf_to_canvas(
 
             # Horário (canto direito)
             c.setFont("Helvetica", 6.5)
-            c.setFillColor(colors.white)
+            c.setFillColor(colors.black)
             c.drawRightString(
                 xe - 3,
                 y0 + 4,

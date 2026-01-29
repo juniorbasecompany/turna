@@ -269,7 +269,7 @@ def _reconstruct_per_day_from_fragments(fragments: list[Demand]) -> list[dict]:
             }
             by_day[day_num]["pros_for_day"].append(pros_seen[pro_key])
 
-        # Adicionar demanda a assigned_demands_by_pro
+        # Adicionar demanda a assigned_demands_by_pro (hospital_id para cor no PDF)
         demand_data = {
             "id": result_data.get("id"),
             "day": day_num,
@@ -277,6 +277,7 @@ def _reconstruct_per_day_from_fragments(fragments: list[Demand]) -> list[dict]:
             "end": result_data.get("end"),
             "is_pediatric": result_data.get("is_pediatric", False),
             "source": result_data.get("source", {}),
+            "hospital_id": fragment.hospital_id,
         }
         by_day[day_num]["assigned_demands_by_pro"][member_id].append(demand_data)
 
@@ -309,7 +310,7 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
         session: Session do banco (necessário apenas se precisar buscar registros fragmentados)
     """
     try:
-        from output.day import DaySchedule, Event, Interval, Row, Vacation, _pick_color_from_text
+        from output.day import DaySchedule, Event, Interval, Row, Vacation, _hex_to_rgb
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
 
@@ -333,6 +334,35 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
             status_code=400,
             detail="Demand não possui schedule_result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
         )
+
+    # Mapa hospital_id -> cor (hex) para pintar quadros pelo hospital
+    hospital_color_by_id: dict[int, Optional[str]] = {}
+    if session is not None:
+        hospital_ids_in_result: set[int] = set()
+        for item in per_day:
+            if not isinstance(item, dict):
+                continue
+            for d in (item.get("assigned_demands_by_pro") or {}).values():
+                if isinstance(d, list):
+                    for x in d:
+                        if isinstance(x, dict) and x.get("hospital_id") is not None:
+                            hospital_ids_in_result.add(int(x["hospital_id"]))
+            for x in item.get("demands_day") or []:
+                if isinstance(x, dict) and x.get("hospital_id") is not None:
+                    hospital_ids_in_result.add(int(x["hospital_id"]))
+        if hospital_ids_in_result:
+            for h in session.exec(select(Hospital).where(Hospital.id.in_(hospital_ids_in_result))).all():
+                hospital_color_by_id[h.id] = h.color if getattr(h, "color", None) else None
+
+    def _color_rgb_for_demand_dict(d: dict, title: str) -> Optional[tuple[float, float, float]]:
+        """Cor do quadro: hospital.color se existir; se estiver sem cor, retorna None (quadro sem cor)."""
+        hid = d.get("hospital_id")
+        if hid is not None and hid in hospital_color_by_id and hospital_color_by_id[hid]:
+            try:
+                return _hex_to_rgb(hospital_color_by_id[hid])
+            except (ValueError, TypeError):
+                pass
+        return None
 
     # Gera um DaySchedule por item de per_day.
     schedules: list[DaySchedule] = []
@@ -397,13 +427,13 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
                         interval=Interval(_to_minutes(d["start"]), _to_minutes(d["end"])),
                         title=title,
                         subtitle=None,
-                        color_rgb=_pick_color_from_text(title),
+                        color_rgb=_color_rgb_for_demand_dict(d, title),
                     )
                 )
             evs.sort(key=lambda e: (e.interval.start_min, e.interval.end_min, e.title))
             rows.append(Row(name=pid, events=evs, vacations=vacs))
 
-        # Linha extra para demandas descobertas (sem alocação).
+        # Linha extra para demandas descobertas (sem alocação); cor = hospital ou marrom.
         uncovered: list[Event] = []
         for d, ap in zip(demands_day, assigned_pids, strict=True):
             if ap is not None:
@@ -415,12 +445,13 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
                 continue
             if d.get("is_pediatric"):
                 title += " (PED)"
+            rgb = _color_rgb_for_demand_dict(d, title)
             uncovered.append(
                 Event(
                     interval=Interval(_to_minutes(d["start"]), _to_minutes(d["end"])),
                     title=title,
                     subtitle="DESC",
-                    color_rgb=(0.55, 0.14, 0.10),
+                    color_rgb=rgb,
                 )
             )
         uncovered.sort(key=lambda e: (e.interval.start_min, e.interval.end_min, e.title))
