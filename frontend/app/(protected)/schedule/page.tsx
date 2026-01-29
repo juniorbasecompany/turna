@@ -237,7 +237,6 @@ export default function SchedulePage() {
         editingItem: editingSchedule,
         isEditing,
         hasChanges,
-        handleCreateClick,
         handleEditClick,
         handleCancel,
         selectedItems: selectedSchedules,
@@ -511,7 +510,6 @@ export default function SchedulePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
     }, [additionalListParams])
 
-    // Botões do ActionBar (com botão fixo "Calcular escala")
     const baseActionBarButtons = useActionBarButtons({
         isEditing,
         selectedCount: selectedSchedulesCount,
@@ -525,18 +523,10 @@ export default function SchedulePage() {
 
     const { downloadReport, reportLoading, reportError } = useReportDownload('/api/schedule/report', additionalListParams ?? undefined, reportFiltersForSchedule.length ? reportFiltersForSchedule : undefined)
 
-    // Botão "Calcular" (oculto no modo edição) + botões do hook
+    // Botão "Relatório" (oculto no modo edição) + botões do hook
     const actionBarButtons = useMemo(() => {
-        // Ocultar botão no modo edição
         if (isEditing) {
             return baseActionBarButtons
-        }
-        const generateButton = {
-            label: generating ? 'Calculando...' : 'Calcular',
-            onClick: handleGenerateSchedule,
-            variant: 'primary' as const,
-            disabled: generating,
-            loading: generating,
         }
         const reportButton = {
             label: reportLoading ? 'Gerando...' : 'Relatório',
@@ -545,8 +535,8 @@ export default function SchedulePage() {
             disabled: reportLoading,
             loading: reportLoading,
         }
-        return [...baseActionBarButtons, generateButton, reportButton]
-    }, [baseActionBarButtons, generating, isEditing, handleGenerateSchedule, downloadReport, reportLoading])
+        return [...baseActionBarButtons, reportButton]
+    }, [baseActionBarButtons, isEditing, downloadReport, reportLoading])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -670,11 +660,14 @@ export default function SchedulePage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    <CreateCard
-                        label="Criar uma escala"
-                        subtitle="Clique para adicionar uma nova escala"
-                        onClick={handleCreateClick}
-                    />
+                    !isEditing ? (
+                        <CreateCard
+                            label={generating ? 'Calculando...' : 'Calcular a escala'}
+                            subtitle="Clique para calcular a escala conforme o período"
+                            onClick={handleGenerateSchedule}
+                            disabled={generating}
+                        />
+                    ) : undefined
                 }
                 filterContent={
                     !isEditing ? (
