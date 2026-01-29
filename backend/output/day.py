@@ -302,9 +302,57 @@ def render_pdf_bytes(schedule: DaySchedule) -> bytes:
     return buf.getvalue()
 
 
-def render_multi_day_pdf_bytes(schedules: list[DaySchedule]) -> bytes:
+def _draw_report_header_on_canvas(
+    c,
+    page_w: float,
+    page_h: float,
+    report_title: str,
+    filters: list[tuple[str, str]] | None,
+    margin: float,
+    colors,
+) -> float:
+    """
+    Desenha cabeçalho do relatório (Turna + título + filtros) no topo da página em landscape.
+    Retorna o y (coordenada ReportLab, origem embaixo) onde o conteúdo (grade) pode começar.
+    """
+    y = page_h - margin
+    # Barra Turna
+    bar_h = 28
+    c.setFillColor(colors.HexColor("#111827"))
+    c.rect(0, y - bar_h, page_w, bar_h, fill=1, stroke=0)
+    c.setFillColor(colors.whitesmoke)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(margin, y - bar_h + 8, "Turna")
+    y -= bar_h + 10
+    # Título do relatório
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(margin, y - 14, report_title)
+    y -= 20
+    # Filtros (compacto)
+    if filters:
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#374151"))
+        for label, value in filters[:8]:  # limite para caber na primeira página
+            line = f"{label}: {value}"
+            if len(line) > 100:
+                line = line[:97] + "..."
+            c.drawString(margin, y - 12, line)
+            y -= 14
+        y -= 6
+    return y
+
+
+def render_multi_day_pdf_bytes(
+    schedules: list[DaySchedule],
+    *,
+    report_title: str | None = None,
+    filters: list[tuple[str, str]] | None = None,
+) -> bytes:
     """
     Renderiza múltiplos `DaySchedule` no mesmo PDF (uma sequência de páginas) e retorna bytes.
+    Todas as páginas em landscape. Se report_title e filters forem passados, o título e filtros
+    são desenhados no topo da primeira página e a grade do primeiro dia começa logo abaixo.
     """
     if not schedules:
         raise ValueError("schedules vazio")
@@ -319,16 +367,36 @@ def render_multi_day_pdf_bytes(schedules: list[DaySchedule]) -> bytes:
     buf = io.BytesIO()
     c = Canvas(buf, pagesize=(page_w, page_h))
 
+    first_page_header = report_title is not None and (report_title or filters)
+    content_top_y: float | None = None
+    if first_page_header and (report_title or filters):
+        content_top_y = _draw_report_header_on_canvas(
+            c, page_w, page_h, report_title or "", filters or [], 18, colors
+        )
+
     for i, schedule in enumerate(schedules):
-        _render_pdf_to_canvas(c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics)
+        top_y = content_top_y if (i == 0 and content_top_y is not None) else None
+        _render_pdf_to_canvas(
+            c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics, content_top_y=top_y
+        )
         if i != len(schedules) - 1:
             c.showPage()
+        content_top_y = None  # só na primeira página
 
     c.save()
     return buf.getvalue()
 
 
-def _render_pdf_to_canvas(c, schedule: DaySchedule, *, page_w: float, page_h: float, colors, pdfmetrics) -> None:
+def _render_pdf_to_canvas(
+    c,
+    schedule: DaySchedule,
+    *,
+    page_w: float,
+    page_h: float,
+    colors,
+    pdfmetrics,
+    content_top_y: float | None = None,
+) -> None:
     margin = 18
     header_h = 42
     row_h = 22
@@ -344,13 +412,19 @@ def _render_pdf_to_canvas(c, schedule: DaySchedule, *, page_w: float, page_h: fl
     day_end = schedule.day_end_min
     day_span = max(1, day_end - day_start)
 
+    # Topo da área de desenho: abaixo do header do relatório (1ª página) ou topo da página.
+    # Após showPage() (continuação do mesmo dia), usar topo completo da nova página.
+    current_top_y: list[float] = [
+        content_top_y if content_top_y is not None else page_h - margin
+    ]
+
     def x_at(minute: int) -> float:
         minute = max(day_start, min(day_end, minute))
         frac = (minute - day_start) / day_span
         return grid_x0 + frac * grid_w
 
     def draw_header() -> float:
-        y_top = page_h - margin
+        y_top = current_top_y[0]
         c.setFillColor(colors.black)
         c.setFont("Helvetica-Bold", 14)
         c.drawString(margin, y_top - 16, schedule.title)
@@ -446,12 +520,13 @@ def _render_pdf_to_canvas(c, schedule: DaySchedule, *, page_w: float, page_h: fl
                 f"{_fmt_minutes(ev.interval.start_min)}-{_fmt_minutes(ev.interval.end_min)}",
             )
 
-    # Paginação simples
+    # Paginação simples: ao mudar de página, próximo cabeçalho usa topo completo
     y = draw_header()
     idx = 1
     for row in schedule.rows:
         if y - row_h < margin + 6:
             c.showPage()
+            current_top_y[0] = page_h - margin
             y = draw_header()
         draw_row(y, idx, row)
         y -= row_h

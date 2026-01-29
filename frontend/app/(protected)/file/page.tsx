@@ -596,7 +596,11 @@ export default function FilesPage() {
 
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
-    // Filtro de hospital
+    // Títulos dos filtros: definidos uma vez, usados no painel e no cabeçalho do relatório
+    const FILTER_HOSPITAL_LABEL = 'Hospital'
+    const FILTER_START_DATE_LABEL = 'Cadastrados desde'
+    const FILTER_END_DATE_LABEL = 'Cadastrados até'
+
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
@@ -643,6 +647,30 @@ export default function FilesPage() {
             hospital_id: filterHospitalId || null,
         }
     }, [filterStartDate, filterEndDate, filterHospitalId, settings])
+
+    const reportFilters = useMemo((): { label: string; value: string }[] => {
+        const list: { label: string; value: string }[] = []
+        if (filterHospitalId != null) {
+            const hospital = hospitalList.find((h) => h.id === filterHospitalId)
+            list.push({
+                label: FILTER_HOSPITAL_LABEL,
+                value: hospital?.name ?? String(filterHospitalId),
+            })
+        }
+        if (filterStartDate) {
+            list.push({
+                label: FILTER_START_DATE_LABEL,
+                value: filterStartDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        if (filterEndDate) {
+            list.push({
+                label: FILTER_END_DATE_LABEL,
+                value: filterEndDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        return list
+    }, [filterHospitalId, filterStartDate, filterEndDate, hospitalList])
 
     // useEntityPage
     const {
@@ -1319,7 +1347,11 @@ export default function FilesPage() {
 
     // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/file/report', additionalListParams ?? undefined)
+    const { downloadReport, reportLoading, reportError } = useReportDownload(
+        '/api/file/report',
+        additionalListParams ?? undefined,
+        reportFilters
+    )
 
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
     const actionBarButtons = useActionBarButtons({
@@ -1383,7 +1415,7 @@ export default function FilesPage() {
                     {/* Primeira linha: Hospital e Datas */}
                     <FormFieldGrid cols={1} smCols={3} gap={4}>
                         <FilterSelect
-                            label="Hospital"
+                            label={FILTER_HOSPITAL_LABEL}
                             value={filterHospitalId}
                             onChange={handleHospitalChange}
                             options={hospitalList.map((h) => ({ value: h.id, label: h.name }))}
@@ -1398,7 +1430,7 @@ export default function FilesPage() {
                             name="filter_start_date"
                         />
                         <TenantDateTimePicker
-                            label="Cadastrados até"
+                            label={FILTER_END_DATE_LABEL}
                             value={filterEndDate}
                             onChange={handleEndDateChange}
                             id="filter_end_date"

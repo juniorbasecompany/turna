@@ -42,7 +42,10 @@ export default function MemberPage() {
     const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
     const [sendInvite, setSendInvite] = useState(false)
 
-    // Constantes para filtros
+    // Títulos dos filtros: definidos uma vez, usados no painel e no cabeçalho do relatório
+    const SITUATION_FILTER_LABEL = 'Situação'
+    const ROLE_FILTER_LABEL = 'Função'
+
     const ALL_STATUS_FILTERS: string[] = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']
     const ALL_ROLE_FILTERS: string[] = ['account', 'admin']
 
@@ -138,45 +141,21 @@ export default function MemberPage() {
         )
     }
 
-    // Calcular additionalListParams reativo baseado nos filtros
+    // Calcular additionalListParams reativo baseado nos filtros (backend aceita lista)
     const additionalListParams = useMemo(() => {
         const params: Record<string, string | number | boolean | null> = {}
 
-        // Status: passar apenas se exatamente 1 estiver selecionado
-        if (statusFilters.selectedFilters.size === 1) {
-            const status = Array.from(statusFilters.selectedFilters)[0]
-            params.status = status
+        const statusList = Array.from(statusFilters.selectedFilters)
+        if (statusList.length < ALL_STATUS_FILTERS.length) {
+            params.status_list = statusList.join(',')
         }
 
-        // Role: passar apenas se exatamente 1 estiver selecionado
-        if (roleFilters.selectedFilters.size === 1) {
-            const role = Array.from(roleFilters.selectedFilters)[0]
-            params.role = role
+        const roleList = Array.from(roleFilters.selectedFilters)
+        if (roleList.length < ALL_ROLE_FILTERS.length) {
+            params.role_list = roleList.join(',')
         }
 
         return params
-    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
-
-    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
-    const needsFrontendFilter = useMemo(() => {
-        const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
-        const allRoleSelected = roleFilters.selectedFilters.size === ALL_ROLE_FILTERS.length
-
-        // Se todos estão selecionados, não precisa filtrar
-        if (allStatusSelected && allRoleSelected) {
-            return false
-        }
-
-        // Se apenas 1 de cada está selecionado, backend filtra (não precisa filtrar no frontend)
-        const singleStatusSelected = statusFilters.selectedFilters.size === 1
-        const singleRoleSelected = roleFilters.selectedFilters.size === 1
-
-        if (singleStatusSelected && singleRoleSelected) {
-            return false
-        }
-
-        // Se múltiplos estão selecionados, precisa filtrar no frontend
-        return true
     }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
 
     // useEntityPage
@@ -239,31 +218,8 @@ export default function MemberPage() {
         paginationHandlers.onFirst()
     }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
 
-    // Filtrar no frontend quando múltiplos valores estão selecionados (backend não suporta múltiplos)
-    const filteredMembers = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return members
-        }
-
-        // Filtrar no frontend
-        return members.filter((member) => {
-            const statusMatch = statusFilters.selectedFilters.has(member.status)
-            const roleMatch = roleFilters.selectedFilters.has(member.role)
-            return statusMatch && roleMatch
-        })
-    }, [members, statusFilters.selectedFilters, roleFilters.selectedFilters, needsFrontendFilter])
-
-    // Aplicar paginação no frontend quando há filtro no frontend
-    const paginatedMembers = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return filteredMembers  // Backend já paginou
-        }
-
-        // Paginar no frontend
-        const start = pagination.offset
-        const end = start + pagination.limit
-        return filteredMembers.slice(start, end)
-    }, [filteredMembers, needsFrontendFilter, pagination])
+    const filteredMembers = members
+    const paginatedMembers = members
 
     // Função para enviar convite por e-mail
     const sendInviteEmail = async (member: MemberResponse) => {
@@ -318,6 +274,25 @@ export default function MemberPage() {
         }
     }
 
+    const reportFilters = useMemo((): { label: string; value: string }[] => {
+        const list: { label: string; value: string }[] = []
+        const statusList = Array.from(statusFilters.selectedFilters)
+        if (statusList.length > 0 && statusList.length < ALL_STATUS_FILTERS.length) {
+            list.push({
+                label: SITUATION_FILTER_LABEL,
+                value: statusList.map(getStatusLabel).join(', '),
+            })
+        }
+        const roleList = Array.from(roleFilters.selectedFilters)
+        if (roleList.length > 0 && roleList.length < ALL_ROLE_FILTERS.length) {
+            list.push({
+                label: ROLE_FILTER_LABEL,
+                value: roleList.map(getRoleLabel).join(', '),
+            })
+        }
+        return list
+    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+
     // Handlers para filtros (usando hooks reutilizáveis)
     // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
 
@@ -334,7 +309,11 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/member/report', additionalListParams ?? undefined)
+    const { downloadReport, reportLoading, reportError } = useReportDownload(
+        '/api/member/report',
+        additionalListParams ?? undefined,
+        reportFilters
+    )
 
     // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
     // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
@@ -481,7 +460,7 @@ export default function MemberPage() {
                                 onToggleAll={statusFilters.toggleAll}
                             />
                             <FilterButtons
-                                title="Função"
+                                title={ROLE_FILTER_LABEL}
                                 options={roleOptions}
                                 selectedValues={roleFilters.selectedFilters}
                                 onToggle={roleFilters.toggleFilter}
@@ -571,16 +550,16 @@ export default function MemberPage() {
                 selection={{
                     selectedCount: selectedMembersCount,
                     totalCount: filteredMembers.length,
-                    grandTotal: needsFrontendFilter ? filteredMembers.length : total,
+                    grandTotal: total,
                     selectAllMode: selectAllMembersMode,
                     onToggleAll: () => toggleAllMembers(filteredMembers.map((m) => m.id)),
                 }}
                 pagination={
-                    (needsFrontendFilter ? filteredMembers.length : total) > 0 ? (
+                    total > 0 ? (
                         <Pagination
                             offset={pagination.offset}
                             limit={pagination.limit}
-                            total={needsFrontendFilter ? filteredMembers.length : total}
+                            total={total}
                             onFirst={paginationHandlers.onFirst}
                             onPrevious={paginationHandlers.onPrevious}
                             onNext={paginationHandlers.onNext}

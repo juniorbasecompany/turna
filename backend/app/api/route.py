@@ -32,6 +32,7 @@ from app.model.job import Job, JobStatus, JobType
 from app.model.demand import ScheduleStatus
 from app.model.hospital import Hospital
 from app.model.demand import Demand
+from app.services.demand_query import get_demand_list_queries
 from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
@@ -42,7 +43,10 @@ from app.report.pdf_list import (
     render_file_list_pdf,
 )
 from app.report.pdf_demand import build_demand_day_schedules
-from app.report.pdf_layout import format_filters_text, build_report_cover_only, merge_pdf_with_cover
+from app.report.pdf_layout import (
+    parse_filters_from_frontend,
+    query_params_to_filter_parts,
+)
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
@@ -623,6 +627,21 @@ def create_tenant(
     return tenant
 
 
+def _tenant_list_queries(session: Session, name: Optional[str] = None):
+    """Query e count_query para listagem/relatório de tenants (mesmo canal de dados, sem paginação)."""
+    query = select(Tenant)
+    count_query = select(func.count(Tenant.id))
+    if name and name.strip():
+        term = f"%{name.strip()}%"
+        query = query.where(Tenant.name.ilike(term))
+        count_query = count_query.where(Tenant.name.ilike(term))
+    query = query.order_by(Tenant.name)
+    return query, count_query
+
+
+TENANT_REPORT_PARAM_LABELS = {"name": "Nome"}
+
+
 @router.get("/tenant/list", response_model=TenantListResponse, tags=["Tenant"])
 def list_tenants(
     member: Member = Depends(require_role("admin")),
@@ -636,16 +655,9 @@ def list_tenants(
     """
     try:
         logger.info(f"Listando tenants, limit={limit}, offset={offset}, name={name}")
-        query = select(Tenant)
-        count_query = select(func.count(Tenant.id))
-        if name and name.strip():
-            term = f"%{name.strip()}%"
-            query = query.where(Tenant.name.ilike(term))
-            count_query = count_query.where(Tenant.name.ilike(term))
+        query, count_query = _tenant_list_queries(session, name=name)
         total = session.exec(count_query).one()
-
-        # Aplicar ordenação e paginação
-        items = session.exec(query.order_by(Tenant.name).limit(limit).offset(offset)).all()
+        items = session.exec(query.limit(limit).offset(offset)).all()
 
         response_items = []
         for t in items:
@@ -679,17 +691,17 @@ def report_tenant_pdf(
     member: Member = Depends(require_role("admin")),
     session: Session = Depends(get_session),
     name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
+    filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
 ):
-    """Relatório PDF: lista de clínicas (nome e slug), respeitando filtros do painel."""
+    """Relatório PDF: lista de clínicas (nome e slug). Mesmo canal de dados da listagem, sem paginação."""
     try:
-        query = select(Tenant).order_by(Tenant.name)
-        if name and name.strip():
-            query = query.where(Tenant.name.ilike(f"%{name.strip()}%"))
+        query, _ = _tenant_list_queries(session, name=name)
         tenants = session.exec(query).all()
         rows = [(t.name, t.slug) for t in tenants]
-        filters_parts = [("Nome", name)] if name and name.strip() else []
-        filters_text = format_filters_text(filters_parts)
-        pdf_bytes = render_tenant_list_pdf(rows, filters_text=filters_text)
+        filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
+            {"name": name}, TENANT_REPORT_PARAM_LABELS
+        )
+        pdf_bytes = render_tenant_list_pdf(rows, filters=filters_parts)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -986,6 +998,83 @@ def invite_to_tenant(
 class MemberRemoveResponse(PydanticBaseModel):
     member_id: int
     status: str
+
+
+def _resolve_member_filters(
+    *,
+    status: Optional[str],
+    status_list: Optional[str],
+    role: Optional[str],
+    role_list: Optional[str],
+) -> tuple[list[MemberStatus] | None, list[MemberRole] | None, list[tuple[str, str]]]:
+    """
+    Normaliza filtros de member (status/role), aceitando lista separada por vírgula.
+    Retorna enums normalizados e partes para exibição no relatório.
+    Parâmetro presente mas vazio (ex: status_list='') significa "nenhum selecionado" → lista vazia (zero resultados).
+    """
+    filters_parts: list[tuple[str, str]] = []
+    status_values: list[MemberStatus] | None = None
+    role_values: list[MemberRole] | None = None
+
+    if status_list is not None:
+        raw = [s.strip().upper() for s in status_list.split(",") if s.strip()]
+        if not raw:
+            status_values = []
+        else:
+            invalid = [s for s in raw if s not in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"status_list inválido: {', '.join(invalid)}")
+            status_values = [MemberStatus[s] for s in raw]
+            filters_parts.append(("Situação", ", ".join(raw)))
+    elif status:
+        status_upper = status.strip().upper()
+        if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+            status_values = [MemberStatus[status_upper]]
+            filters_parts.append(("Situação", status_upper))
+
+    if role_list is not None:
+        raw = [r.strip().lower() for r in role_list.split(",") if r.strip()]
+        if not raw:
+            role_values = []
+        else:
+            invalid = [r for r in raw if r not in {"admin", "account"}]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"role_list inválido: {', '.join(invalid)}")
+            role_values = [MemberRole[r.upper()] for r in raw]
+            filters_parts.append(("Função", ", ".join(raw)))
+    elif role:
+        role_lower = role.strip().lower()
+        if role_lower in {"admin", "account"}:
+            role_values = [MemberRole[role_lower.upper()]]
+            filters_parts.append(("Função", role_lower))
+
+    return status_values, role_values, filters_parts
+
+
+def _member_list_queries(
+    session: Session,
+    tenant_id: int,
+    status_values: list[MemberStatus] | None,
+    role_values: list[MemberRole] | None,
+):
+    """Query e count_query para listagem/relatório de members (mesmo canal de dados, sem paginação)."""
+    query = (
+        select(Member, Account)
+        .outerjoin(Account, Member.account_id == Account.id)
+        .where(Member.tenant_id == tenant_id)
+    )
+    count_query = select(func.count(Member.id)).where(Member.tenant_id == tenant_id)
+    if status_values is not None:
+        query = query.where(Member.status.in_(status_values))
+        count_query = count_query.where(Member.status.in_(status_values))
+    if role_values is not None:
+        query = query.where(Member.role.in_(role_values))
+        count_query = count_query.where(Member.role.in_(role_values))
+    query = query.order_by(Member.created_at.desc())
+    return query, count_query
+
+
+MEMBER_REPORT_PARAM_LABELS = {"status": "Situação", "status_list": "Situação", "role": "Função", "role_list": "Função"}
 
 
 @router.post(
@@ -1723,6 +1812,33 @@ async def upload_file(
         )
 
 
+def _file_list_queries(
+    session: Session,
+    tenant_id: int,
+    start_at: Optional[datetime] = None,
+    end_at: Optional[datetime] = None,
+    hospital_id: Optional[int] = None,
+):
+    """Query e count_query para listagem/relatório de arquivos (mesmo canal de dados, sem paginação)."""
+    query = select(File).where(File.tenant_id == tenant_id)
+    count_query = select(func.count(File.id)).where(File.tenant_id == tenant_id)
+    if start_at is not None:
+        query = query.where(File.created_at >= start_at)
+        count_query = count_query.where(File.created_at >= start_at)
+    if end_at is not None:
+        query = query.where(File.created_at <= end_at)
+        count_query = count_query.where(File.created_at <= end_at)
+    if hospital_id is not None:
+        query = query.where(File.hospital_id == hospital_id)
+        count_query = count_query.where(File.hospital_id == hospital_id)
+    query = query.order_by(File.created_at.desc())
+    return query, count_query
+
+
+FILE_REPORT_PARAM_LABELS = {"start_at": "Desde", "end_at": "Até", "hospital_id": "Hospital"}
+DEMAND_REPORT_PARAM_LABELS = {"start_at": "Desde", "end_at": "Até", "hospital_id": "Hospital", "procedure": "Procedimento"}
+
+
 @router.get("/file/list", response_model=FileListResponse, tags=["File"])
 def list_files(
     start_at: Optional[datetime] = Query(None, description="Filtrar por created_at >= start_at (timestamptz em ISO 8601)"),
@@ -1741,51 +1857,24 @@ def list_files(
     Ordena por created_at decrescente.
     Retorna hospital_id e hospital_name para cada arquivo.
     """
-    # Validar hospital_id se fornecido
     if hospital_id is not None:
         hospital = session.get(Hospital, hospital_id)
         if not hospital:
             raise HTTPException(status_code=404, detail="Hospital não encontrado")
         if hospital.tenant_id != member.tenant_id:
             raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+    if start_at is not None and start_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
+    if end_at is not None and end_at.tzinfo is None:
+        raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
+    if start_at is not None and end_at is not None and start_at > end_at:
+        raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
 
-    # Query base - sempre filtrar por tenant_id
-    query = select(File).where(File.tenant_id == member.tenant_id)
-
-    # Aplicar filtros de período (created_at)
-    if start_at is not None:
-        if start_at.tzinfo is None:
-            raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
-        query = query.where(File.created_at >= start_at)
-
-    if end_at is not None:
-        if end_at.tzinfo is None:
-            raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
-        query = query.where(File.created_at <= end_at)
-
-    # Aplicar filtro por hospital_id se fornecido
-    if hospital_id is not None:
-        query = query.where(File.hospital_id == hospital_id)
-
-    # Validar intervalo
-    if start_at is not None and end_at is not None:
-        if start_at > end_at:
-            raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
-
-    # Contar total antes de aplicar paginação
-    count_query = select(func.count(File.id)).where(File.tenant_id == member.tenant_id)
-    if start_at is not None:
-        count_query = count_query.where(File.created_at >= start_at)
-    if end_at is not None:
-        count_query = count_query.where(File.created_at <= end_at)
-    if hospital_id is not None:
-        count_query = count_query.where(File.hospital_id == hospital_id)
+    query, count_query = _file_list_queries(
+        session, member.tenant_id, start_at=start_at, end_at=end_at, hospital_id=hospital_id
+    )
     total = session.exec(count_query).one()
-
-    # Aplicar ordenação e paginação (created_at decrescente)
-    query = query.order_by(File.created_at.desc()).limit(limit).offset(offset)
-
-    items = session.exec(query).all()
+    items = session.exec(query.limit(limit).offset(offset)).all()
 
     # Buscar todos os jobs EXTRACT_DEMAND COMPLETED do tenant para verificar quais arquivos podem ser deletados
     completed_jobs_query = select(Job).where(
@@ -1878,7 +1967,7 @@ def report_file_pdf(
     end_at: Optional[datetime] = Query(None, description="Filtrar por created_at <= (timestamptz ISO 8601)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id"),
 ):
-    """Relatório PDF: lista de arquivos (hospital, nome do arquivo, data de cadastro), respeitando filtros do painel."""
+    """Relatório PDF: lista de arquivos (hospital, nome, data). Mesmo canal de dados da listagem, sem paginação."""
     try:
         if hospital_id is not None:
             hospital = session.get(Hospital, hospital_id)
@@ -1886,18 +1975,16 @@ def report_file_pdf(
                 raise HTTPException(status_code=404, detail="Hospital não encontrado")
             if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
-        query = select(File).where(File.tenant_id == member.tenant_id)
-        if start_at is not None:
-            if start_at.tzinfo is None:
-                raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito")
-            query = query.where(File.created_at >= start_at)
-        if end_at is not None:
-            if end_at.tzinfo is None:
-                raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito")
-            query = query.where(File.created_at <= end_at)
-        if hospital_id is not None:
-            query = query.where(File.hospital_id == hospital_id)
-        query = query.order_by(File.created_at.desc())
+        if start_at is not None and start_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito")
+        if end_at is not None and end_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito")
+        if start_at is not None and end_at is not None and start_at > end_at:
+            raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
+
+        query, _ = _file_list_queries(
+            session, member.tenant_id, start_at=start_at, end_at=end_at, hospital_id=hospital_id
+        )
         files = session.exec(query).all()
         hospital_ids = {f.hospital_id for f in files}
         hospital_dict = {}
@@ -1915,16 +2002,14 @@ def report_file_pdf(
             name = hospital_name.name if hospital_name else f"Hospital {f.hospital_id}"
             created = f.created_at.strftime("%d/%m/%Y %H:%M") if f.created_at else "-"
             rows.append((name, f.filename, created))
-        filters_parts = []
-        if start_at:
-            filters_parts.append(("Desde", start_at.strftime("%d/%m/%Y %H:%M")))
-        if end_at:
-            filters_parts.append(("Até", end_at.strftime("%d/%m/%Y %H:%M")))
-        if hospital_id is not None:
-            h = session.get(Hospital, hospital_id)
-            filters_parts.append(("Hospital", h.name if h else str(hospital_id)))
-        filters_text = format_filters_text(filters_parts)
-        pdf_bytes = render_file_list_pdf(rows, filters_text=filters_text)
+        params = {"start_at": start_at, "end_at": end_at, "hospital_id": hospital_id}
+        formatters = {
+            "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
+        }
+        filters_parts = query_params_to_filter_parts(params, FILE_REPORT_PARAM_LABELS, formatters=formatters)
+        pdf_bytes = render_file_list_pdf(rows, filters=filters_parts)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -2358,6 +2443,21 @@ def create_hospital(
         ) from e
 
 
+def _hospital_list_queries(session: Session, tenant_id: int, name: Optional[str] = None):
+    """Query e count_query para listagem/relatório de hospitais (mesmo canal de dados, sem paginação)."""
+    query = select(Hospital).where(Hospital.tenant_id == tenant_id)
+    count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == tenant_id)
+    if name and name.strip():
+        term = f"%{name.strip()}%"
+        query = query.where(Hospital.name.ilike(term))
+        count_query = count_query.where(Hospital.name.ilike(term))
+    query = query.order_by(Hospital.name)
+    return query, count_query
+
+
+HOSPITAL_REPORT_PARAM_LABELS = {"name": "Nome"}
+
+
 @router.get("/hospital/list", response_model=HospitalListResponse, tags=["Hospital"])
 def list_hospital(
     member: Member = Depends(get_current_member),
@@ -2370,12 +2470,7 @@ def list_hospital(
     Lista todos os hospitais do tenant atual com paginação e filtro opcional por nome.
     """
     try:
-        query = select(Hospital).where(Hospital.tenant_id == member.tenant_id)
-        count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == member.tenant_id)
-        if name and name.strip():
-            term = f"%{name.strip()}%"
-            query = query.where(Hospital.name.ilike(term))
-            count_query = count_query.where(Hospital.name.ilike(term))
+        query, count_query = _hospital_list_queries(session, member.tenant_id, name=name)
         total = session.exec(count_query).one()
 
         if total == 0:
@@ -2384,7 +2479,7 @@ def list_hospital(
                 total=0,
             )
 
-        items = session.exec(query.order_by(Hospital.name).limit(limit).offset(offset)).all()
+        items = session.exec(query.limit(limit).offset(offset)).all()
 
         # Validar e converter itens
         response_items = []
@@ -2416,16 +2511,14 @@ def report_hospital_pdf(
     session: Session = Depends(get_session),
     name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
 ):
-    """Relatório PDF: lista de hospitais (nome), respeitando filtros do painel."""
+    """Relatório PDF: lista de hospitais (nome). Mesmo canal de dados da listagem, sem paginação."""
     try:
-        query = select(Hospital).where(Hospital.tenant_id == member.tenant_id).order_by(Hospital.name)
-        if name and name.strip():
-            query = query.where(Hospital.name.ilike(f"%{name.strip()}%"))
+        query, _ = _hospital_list_queries(session, member.tenant_id, name=name)
         hospitals = session.exec(query).all()
         rows = [(h.name,) for h in hospitals]
-        filters_parts = [("Nome", name)] if name and name.strip() else []
-        filters_text = format_filters_text(filters_parts)
-        pdf_bytes = render_hospital_list_pdf(rows, filters_text=filters_text)
+        params = {"name": name}
+        filters_parts = query_params_to_filter_parts(params, HOSPITAL_REPORT_PARAM_LABELS)
+        pdf_bytes = render_hospital_list_pdf(rows, filters=filters_parts)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -2620,6 +2713,7 @@ def delete_hospital(
 class DemandCreate(PydanticBaseModel):
     hospital_id: int | None = None
     job_id: int | None = None
+    member_id: int | None = None
     room: str | None = None
     start_time: datetime
     end_time: datetime
@@ -2667,6 +2761,7 @@ class DemandCreate(PydanticBaseModel):
 class DemandUpdate(PydanticBaseModel):
     hospital_id: int | None = None
     job_id: int | None = None
+    member_id: int | None = None
     room: str | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
@@ -2709,6 +2804,7 @@ class DemandResponse(PydanticBaseModel):
     tenant_id: int
     hospital_id: int | None
     job_id: int | None
+    member_id: int | None
     room: str | None
     start_time: datetime
     end_time: datetime
@@ -2761,10 +2857,19 @@ def create_demand(
             if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
 
+        # Validar member_id se fornecido (member atribuído à demanda)
+        if body.member_id is not None:
+            member_row = session.get(Member, body.member_id)
+            if not member_row:
+                raise HTTPException(status_code=404, detail="Member não encontrado")
+            if member_row.tenant_id != member.tenant_id:
+                raise HTTPException(status_code=403, detail="Member não pertence ao tenant atual")
+
         demand = Demand(
             tenant_id=member.tenant_id,
             hospital_id=body.hospital_id,
             job_id=body.job_id,
+            member_id=body.member_id,
             room=body.room,
             start_time=body.start_time,
             end_time=body.end_time,
@@ -2800,6 +2905,7 @@ def list_demands(
     job_id: Optional[int] = Query(None, description="Filtrar por job_id"),
     start_at: Optional[datetime] = Query(None, description="Filtrar por start_time >= start_at (timestamptz em ISO 8601)"),
     end_at: Optional[datetime] = Query(None, description="Filtrar por end_time <= end_at (timestamptz em ISO 8601)"),
+    procedure: Optional[str] = Query(None, description="Filtrar por procedimento (contém)"),
     is_pediatric: Optional[bool] = Query(None, description="Filtrar por is_pediatric"),
     priority: Optional[str] = Query(None, description="Filtrar por priority (Urgente, Emergência)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
@@ -2815,69 +2921,40 @@ def list_demands(
     try:
         logger.info(f"Listando demandas para tenant_id={member.tenant_id}")
 
-        # Query base - sempre filtrar por tenant_id
-        query = select(Demand).where(Demand.tenant_id == member.tenant_id)
-
-        # Aplicar filtros
         if hospital_id is not None:
             hospital = session.get(Hospital, hospital_id)
             if not hospital:
                 raise HTTPException(status_code=404, detail="Hospital não encontrado")
             if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
-            query = query.where(Demand.hospital_id == hospital_id)
-
         if job_id is not None:
             job = session.get(Job, job_id)
             if not job:
                 raise HTTPException(status_code=404, detail="Job não encontrado")
             if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
-            query = query.where(Demand.job_id == job_id)
+        if start_at is not None and start_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
+        if end_at is not None and end_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
+        if start_at is not None and end_at is not None and start_at > end_at:
+            raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
+        if priority is not None and priority not in {"Urgente", "Emergência"}:
+            raise HTTPException(status_code=400, detail="priority inválido (esperado: Urgente, Emergência)")
 
-        if start_at is not None:
-            if start_at.tzinfo is None:
-                raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
-            query = query.where(Demand.start_time >= start_at)
-
-        if end_at is not None:
-            if end_at.tzinfo is None:
-                raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito (timestamptz)")
-            query = query.where(Demand.end_time <= end_at)
-
-        if is_pediatric is not None:
-            query = query.where(Demand.is_pediatric == is_pediatric)
-
-        if priority is not None:
-            if priority not in {"Urgente", "Emergência"}:
-                raise HTTPException(status_code=400, detail="priority inválido (esperado: Urgente, Emergência)")
-            query = query.where(Demand.priority == priority)
-
-        # Validar intervalo
-        if start_at is not None and end_at is not None:
-            if start_at > end_at:
-                raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
-
-        # Contar total antes de aplicar paginação
-        count_query = select(func.count(Demand.id)).where(Demand.tenant_id == member.tenant_id)
-        if hospital_id is not None:
-            count_query = count_query.where(Demand.hospital_id == hospital_id)
-        if job_id is not None:
-            count_query = count_query.where(Demand.job_id == job_id)
-        if start_at is not None:
-            count_query = count_query.where(Demand.start_time >= start_at)
-        if end_at is not None:
-            count_query = count_query.where(Demand.end_time <= end_at)
-        if is_pediatric is not None:
-            count_query = count_query.where(Demand.is_pediatric == is_pediatric)
-        if priority is not None:
-            count_query = count_query.where(Demand.priority == priority)
+        query, count_query = get_demand_list_queries(
+            session,
+            member.tenant_id,
+            hospital_id=hospital_id,
+            job_id=job_id,
+            start_at=start_at,
+            end_at=end_at,
+            procedure=procedure,
+            is_pediatric=is_pediatric,
+            priority=priority,
+        )
         total = session.exec(count_query).one()
-
-        # Aplicar ordenação e paginação (start_time crescente)
-        query = query.order_by(Demand.start_time.asc()).limit(limit).offset(offset)
-
-        items = session.exec(query).all()
+        items = session.exec(query.limit(limit).offset(offset)).all()
 
         return DemandListResponse(
             items=[DemandResponse.model_validate(item) for item in items],
@@ -2898,6 +2975,8 @@ def report_demand_pdf(
     start_at: Optional[datetime] = Query(None, description="Filtrar por start_time >= (timestamptz ISO 8601)"),
     end_at: Optional[datetime] = Query(None, description="Filtrar por start_time <= (timestamptz ISO 8601)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id"),
+    procedure: Optional[str] = Query(None, description="Filtrar por procedimento (contém)"),
+    filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
@@ -2916,23 +2995,28 @@ def report_demand_pdf(
             if hospital.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
         schedules = build_demand_day_schedules(
-            session, member.tenant_id, start_time_from=start_at, start_time_to=end_at, hospital_id=hospital_id
+            session,
+            member.tenant_id,
+            start_at=start_at,
+            end_at=end_at,
+            hospital_id=hospital_id,
+            procedure=procedure,
         )
         if not schedules:
             raise HTTPException(status_code=400, detail="Nenhuma demanda no período selecionado")
         from output.day import render_multi_day_pdf_bytes
-        content_bytes = render_multi_day_pdf_bytes(schedules)
-        filters_parts = []
-        if start_at:
-            filters_parts.append(("Desde", start_at.strftime("%d/%m/%Y %H:%M")))
-        if end_at:
-            filters_parts.append(("Até", end_at.strftime("%d/%m/%Y %H:%M")))
-        if hospital_id is not None:
-            h = session.get(Hospital, hospital_id)
-            filters_parts.append(("Hospital", h.name if h else str(hospital_id)))
-        filters_text = format_filters_text(filters_parts)
-        cover_bytes = build_report_cover_only("Relatório de demandas", filters_text)
-        pdf_bytes = merge_pdf_with_cover(cover_bytes, content_bytes)
+        filters_parts = parse_filters_from_frontend(filters)
+        if not filters_parts:
+            params = {"start_at": start_at, "end_at": end_at, "hospital_id": hospital_id, "procedure": procedure}
+            formatters = {
+                "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+                "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+                "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
+            }
+            filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
+        pdf_bytes = render_multi_day_pdf_bytes(
+            schedules, report_title="Relatório de demandas", filters=filters_parts
+        )
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -3016,6 +3100,14 @@ def update_demand(
             if job.tenant_id != member.tenant_id:
                 raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
 
+        # Validar member_id se fornecido (member atribuído à demanda)
+        if body.member_id is not None:
+            member_row = session.get(Member, body.member_id)
+            if not member_row:
+                raise HTTPException(status_code=404, detail="Member não encontrado")
+            if member_row.tenant_id != member.tenant_id:
+                raise HTTPException(status_code=403, detail="Member não pertence ao tenant atual")
+
         # Validar end_time > start_time se ambos forem atualizados
         start_time = body.start_time if body.start_time is not None else demand.start_time
         end_time = body.end_time if body.end_time is not None else demand.end_time
@@ -3027,6 +3119,12 @@ def update_demand(
             demand.hospital_id = body.hospital_id
         if body.job_id is not None:
             demand.job_id = body.job_id
+        if "member_id" in body.model_dump(exclude_unset=True):
+            # Permite definir ou limpar (null) o member atribuído à demanda
+            if body.member_id is not None:
+                demand.member_id = body.member_id
+            else:
+                demand.member_id = None
         if body.room is not None:
             demand.room = body.room
         if body.start_time is not None:
@@ -3330,51 +3428,26 @@ def list_members(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     status: Optional[str] = Query(default=None, description="Filtrar por status (PENDING, ACTIVE, REJECTED, REMOVED)"),
+    status_list: Optional[str] = Query(default=None, description="Filtrar por lista de status (separado por vírgula)"),
     role: Optional[str] = Query(default=None, description="Filtrar por role (admin, account)"),
+    role_list: Optional[str] = Query(default=None, description="Filtrar por lista de roles (separado por vírgula)"),
 ):
     """
     Lista members do tenant atual (apenas admin).
     Sempre filtra por tenant_id do JWT (via member).
     """
     try:
-        # Query base: members do tenant com LEFT JOIN em Account (para incluir members sem Account)
-        query = (
-            select(Member, Account)
-            .outerjoin(Account, Member.account_id == Account.id)
-            .where(Member.tenant_id == member.tenant_id)
+        status_values, role_values, _ = _resolve_member_filters(
+            status=status,
+            status_list=status_list,
+            role=role,
+            role_list=role_list,
         )
-
-        # Aplicar filtros
-        if status:
-            status_upper = status.strip().upper()
-            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
-                query = query.where(Member.status == MemberStatus[status_upper])
-        if role:
-            role_lower = role.strip().lower()
-            if role_lower in {"admin", "account"}:
-                query = query.where(Member.role == MemberRole[role_lower.upper()])
-
-        # Contar total (sem JOIN, apenas contar members)
-        count_query = (
-            select(func.count(Member.id))
-            .where(Member.tenant_id == member.tenant_id)
+        query, count_query = _member_list_queries(
+            session, member.tenant_id, status_values=status_values, role_values=role_values
         )
-        if status:
-            status_upper = status.strip().upper()
-            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
-                count_query = count_query.where(Member.status == MemberStatus[status_upper])
-        if role:
-            role_lower = role.strip().lower()
-            if role_lower in {"admin", "account"}:
-                count_query = count_query.where(Member.role == MemberRole[role_lower.upper()])
-
         total = session.exec(count_query).one()
-
-        # Aplicar paginação e ordenação
-        query = query.order_by(Member.created_at.desc()).limit(limit).offset(offset)
-
-        # Executar query
-        results = session.exec(query).all()
+        results = session.exec(query.limit(limit).offset(offset)).all()
 
         # Montar resposta
         items = []
@@ -3411,37 +3484,33 @@ def report_member_pdf(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
     status: Optional[str] = Query(None, description="Filtrar por status (PENDING, ACTIVE, REJECTED, REMOVED)"),
+    status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     role: Optional[str] = Query(None, description="Filtrar por role (admin, account)"),
+    role_list: Optional[str] = Query(None, description="Filtrar por lista de roles (separado por vírgula)"),
+    filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
 ):
-    """Relatório PDF: lista de associados (nome, email, situação), respeitando filtros do painel."""
+    """Relatório PDF: lista de associados (nome, email, situação). Mesmo canal de dados da listagem, sem paginação."""
     try:
-        query = (
-            select(Member, Account)
-            .outerjoin(Account, Member.account_id == Account.id)
-            .where(Member.tenant_id == member.tenant_id)
+        status_values, role_values, _ = _resolve_member_filters(
+            status=status,
+            status_list=status_list,
+            role=role,
+            role_list=role_list,
         )
-        if status:
-            status_upper = status.strip().upper()
-            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
-                query = query.where(Member.status == MemberStatus[status_upper])
-        if role:
-            role_lower = role.strip().lower()
-            if role_lower in {"admin", "account"}:
-                query = query.where(Member.role == MemberRole[role_lower.upper()])
-        query = query.order_by(Member.created_at.desc())
+        query, _ = _member_list_queries(
+            session, member.tenant_id, status_values=status_values, role_values=role_values
+        )
         results = session.exec(query).all()
         rows = []
         for member_obj, account in results:
             name = (member_obj.name or "").strip() or "(sem nome)"
             email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
             rows.append((name, email, member_obj.status.value))
-        filters_parts = []
-        if status and status.strip():
-            filters_parts.append(("Situação", status.strip()))
-        if role and role.strip():
-            filters_parts.append(("Função", role.strip()))
-        filters_text = format_filters_text(filters_parts)
-        pdf_bytes = render_member_list_pdf(rows, filters_text=filters_text)
+        filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
+            {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
+            MEMBER_REPORT_PARAM_LABELS,
+        )
+        pdf_bytes = render_member_list_pdf(rows, filters=filters_parts)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

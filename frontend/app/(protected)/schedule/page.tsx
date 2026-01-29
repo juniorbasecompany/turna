@@ -154,43 +154,75 @@ export default function SchedulePage() {
         )
     }
 
-    // Calcular additionalListParams reativo (apenas filtros suportados pela API)
+    const FILTER_NAME_LABEL = 'Nome'
+    const FILTER_START_LABEL = 'Desde'
+    const FILTER_END_LABEL = 'Até'
+    const FILTER_STATUS_LABEL = 'Situação'
+
     const additionalListParams = useMemo(() => {
         if (!settings) return undefined
         const params: Record<string, string | number | boolean | null> = {
-            // Usar data/hora diretamente (ISO string) para filtro de período
             period_start_at: filterStartDate ? filterStartDate.toISOString() : null,
             period_end_at: filterEndDate ? filterEndDate.toISOString() : null,
         }
 
-        // Status: passar apenas se exatamente 1 estiver selecionado
-        if (statusFilters.selectedFilters.size === 1) {
-            const status = Array.from(statusFilters.selectedFilters)[0]
-            params.status = status
+        const statusList = Array.from(statusFilters.selectedFilters)
+        if (statusList.length < ALL_STATUS_FILTERS.length) {
+            params.status_list = statusList.join(',')
+        }
+
+        if (filterName.trim()) {
+            params.name = filterName.trim()
+        }
+
+        if (filterHospitalId != null) {
+            params.hospital_id = filterHospitalId
         }
 
         return params
-    }, [filterStartDate, filterEndDate, statusFilters.selectedFilters, settings])
+    }, [filterStartDate, filterEndDate, statusFilters.selectedFilters, filterName, filterHospitalId, settings])
 
-    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados)
-    const needsFrontendFilter = useMemo(() => {
-        const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
-
-        // Se todos estão selecionados, não precisa filtrar
-        if (allStatusSelected) {
-            return false
+    // reportFilters: definido depois de getStatusLabel (usado no useMemo)
+    const reportFiltersForSchedule = useMemo((): { label: string; value: string }[] => {
+        const getStatusLabel = (s: string) => {
+            switch (s) {
+                case 'DRAFT': return 'Rascunho'
+                case 'PUBLISHED': return 'Publicada'
+                case 'ARCHIVED': return 'Arquivada'
+                default: return s
+            }
         }
-
-        // Se apenas 1 está selecionado, backend filtra (não precisa filtrar no frontend)
-        const singleStatusSelected = statusFilters.selectedFilters.size === 1
-
-        if (singleStatusSelected) {
-            return false
+        const list: { label: string; value: string }[] = []
+        if (filterName.trim()) {
+            list.push({ label: FILTER_NAME_LABEL, value: filterName.trim() })
         }
-
-        // Se múltiplos estão selecionados, precisa filtrar no frontend
-        return true
-    }, [statusFilters.selectedFilters])
+        if (filterStartDate) {
+            list.push({
+                label: FILTER_START_LABEL,
+                value: filterStartDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        if (filterEndDate) {
+            list.push({
+                label: FILTER_END_LABEL,
+                value: filterEndDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        const statusList = Array.from(statusFilters.selectedFilters)
+        if (statusList.length > 0 && statusList.length < ALL_STATUS_FILTERS.length) {
+            list.push({
+                label: FILTER_STATUS_LABEL,
+                value: statusList.map(getStatusLabel).join(', '),
+            })
+        }
+        if (filterHospitalId != null) {
+            const hospital = hospitals.find((h) => h.id === filterHospitalId)
+            if (hospital) {
+                list.push({ label: 'Hospital', value: hospital.name })
+            }
+        }
+        return list
+    }, [filterName, filterStartDate, filterEndDate, statusFilters.selectedFilters, filterHospitalId, hospitals])
 
     // useEntityPage
     const {
@@ -469,47 +501,15 @@ export default function SchedulePage() {
         }
     }
 
-    // Filtrar schedules por nome e status (filtro no frontend quando necessário)
-    const filteredSchedules = useMemo(() => {
-        let filtered = schedules
-
-        // Filtro por nome (sempre no frontend, pois não é suportado pela API)
-        if (filterName.trim()) {
-            const filterLower = filterName.toLowerCase().trim()
-            filtered = filtered.filter((schedule) => schedule.name.toLowerCase().includes(filterLower))
-        }
-
-        // Filtro por status (no frontend apenas quando múltiplos estão selecionados)
-        if (needsFrontendFilter) {
-            filtered = filtered.filter((schedule) => statusFilters.selectedFilters.has(schedule.status))
-        }
-
-        return filtered
-    }, [schedules, filterName, statusFilters.selectedFilters, needsFrontendFilter])
-
-    // Aplicar paginação no frontend quando há filtro no frontend
-    const paginatedSchedules = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return filteredSchedules  // Backend já paginou
-        }
-        // Paginar no frontend
-        const start = pagination.offset
-        const end = start + pagination.limit
-        return filteredSchedules.slice(start, end)
-    }, [filteredSchedules, needsFrontendFilter, pagination.offset, pagination.limit])
-
-    // Ajustar total para refletir filtro de status
-    const displayTotal = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return total  // Usar total do backend
-        }
-        return filteredSchedules.length  // Total após filtro no frontend
-    }, [filteredSchedules, needsFrontendFilter, total])
+    const filteredSchedules = schedules
+    const paginatedSchedules = schedules
+    const displayTotal = total
 
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [statusFilters.selectedFilters])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
+    }, [additionalListParams])
 
     // Botões do ActionBar (com botão fixo "Calcular escala")
     const baseActionBarButtons = useActionBarButtons({
@@ -523,7 +523,7 @@ export default function SchedulePage() {
         onSave: handleSave,
     })
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/schedule/report', additionalListParams ?? undefined)
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/schedule/report', additionalListParams ?? undefined, reportFiltersForSchedule.length ? reportFiltersForSchedule : undefined)
 
     // Botão "Calcular" (oculto no modo edição) + botões do hook
     const actionBarButtons = useMemo(() => {
@@ -688,7 +688,7 @@ export default function SchedulePage() {
                                     disabled={loadingHospitals}
                                 />
                                 <FilterInput
-                                    label="Nome"
+                                    label={FILTER_NAME_LABEL}
                                     value={filterName}
                                     onChange={setFilterName}
                                 />
@@ -706,7 +706,7 @@ export default function SchedulePage() {
                                 />
                             </FormFieldGrid>
                             <FilterButtons
-                                title="Situação"
+                                title={FILTER_STATUS_LABEL}
                                 options={statusOptions}
                                 selectedValues={statusFilters.selectedFilters}
                                 onToggle={statusFilters.toggleFilter}
@@ -716,7 +716,7 @@ export default function SchedulePage() {
                     ) : undefined
                 }
             >
-                {(needsFrontendFilter ? paginatedSchedules : filteredSchedules).map((schedule) => {
+                {paginatedSchedules.map((schedule) => {
                     const isSelected = selectedSchedules.has(schedule.id)
                     return (
                         <EntityCard

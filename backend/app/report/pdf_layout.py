@@ -1,12 +1,90 @@
 """
 Layout reutilizável para relatórios PDF: cabeçalho "Turna", título do relatório,
-seção "Filtros utilizados" e conteúdo (tabela). Todas as páginas de relatório
+seção de filtros (quando aplicada) e conteúdo (tabela). Todas as páginas de relatório
 usam este layout para manter padrão visual único.
 """
 
 from __future__ import annotations
 
 import io
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
+
+# Parâmetros de paginação que não devem aparecer na seção "Filtros aplicados"
+PAGINATION_PARAM_NAMES = frozenset({"limit", "offset"})
+
+
+def parse_filters_from_frontend(filters_json: str | None) -> list[tuple[str, str]] | None:
+    """
+    Parseia o param 'filters' enviado pelo painel (JSON array de {label, value}).
+    Fonte única de verdade: o título e o valor exibidos no painel vão para o relatório.
+    Retorna None se filters_json for None, vazio ou inválido.
+    """
+    if not filters_json or not filters_json.strip():
+        return None
+    import json
+    try:
+        raw = json.loads(filters_json)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(raw, list):
+        return None
+    result: list[tuple[str, str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        value = item.get("value")
+        if label is None or value is None:
+            continue
+        label_str = str(label).strip()
+        value_str = str(value).strip()
+        if label_str and value_str:
+            result.append((label_str, value_str))
+    return result if result else None
+
+
+def query_params_to_filter_parts(
+    params: Mapping[str, Any],
+    param_labels: dict[str, str],
+    exclude: Iterable[str] | None = None,
+    formatters: dict[str, Callable[[Any], str]] | None = None,
+) -> list[tuple[str, str]]:
+    """
+    Constrói a lista (label, valor) para a seção "Filtros aplicados" do PDF
+    a partir dos query params da requisição.
+
+    Assim, ao adicionar um novo filtro no endpoint de listagem, basta incluir
+    o mesmo param no relatório e uma entrada em param_labels (e em formatters
+    se precisar formatar, ex: hospital_id -> nome do hospital).
+
+    Args:
+        params: mapeamento nome_do_param -> valor (ex: request.query_params ou dict)
+        param_labels: nome_do_param -> label de exibição (ex: {"name": "Nome", "status_list": "Situação"})
+        exclude: nomes de params a ignorar (default: limit, offset)
+        formatters: nome_do_param -> função valor -> str para formatar (ex: datas, IDs -> nome)
+    """
+    exclude_set = set(exclude) if exclude is not None else set(PAGINATION_PARAM_NAMES)
+    formatters = formatters or {}
+    result: list[tuple[str, str]] = []
+    for key, label in param_labels.items():
+        if key in exclude_set:
+            continue
+        value = params.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if key in formatters:
+            try:
+                display = formatters[key](value)
+            except Exception:
+                display = str(value)
+        else:
+            display = str(value).strip()
+        if display:
+            result.append((label, display))
+    return result
 
 
 def _ensure_reportlab():
@@ -25,23 +103,159 @@ def _ensure_reportlab():
 REPORT_HEADER_TITLE = "Turna"
 
 
+def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
+    if not filters:
+        return []
+    normalized: list[tuple[str, str]] = []
+    for label, value in filters:
+        if value is None:
+            continue
+        txt = str(value).strip()
+        if not txt:
+            continue
+        normalized.append((label, txt))
+    return normalized
+
+
+def _build_header_elements(doc, styles):
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+
+    header_style = ParagraphStyle(
+        name="ReportHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        textColor=colors.whitesmoke,
+    )
+    header_table = Table(
+        [[Paragraph(REPORT_HEADER_TITLE, header_style)]],
+        colWidths=[doc.width],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#111827")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    return [header_table]
+
+
+def _build_title_elements(report_title: str, styles):
+    from reportlab.platypus import Paragraph, Spacer
+    from reportlab.lib.styles import ParagraphStyle
+
+    title_style = ParagraphStyle(
+        name="ReportTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=14,
+        textColor="#111827",
+        spaceBefore=8,
+        spaceAfter=6,
+    )
+    return [Paragraph(report_title, title_style), Spacer(1, 6)]
+
+
+def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import ParagraphStyle
+
+    label_style = ParagraphStyle(
+        name="FiltersLabel",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor="#111827",
+    )
+    value_style = ParagraphStyle(
+        name="FiltersValue",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=10,
+        textColor="#111827",
+    )
+    data = [[Paragraph(label, label_style), Paragraph(value, value_style)] for label, value in filters]
+    table = Table(data, colWidths=[doc.width * 0.25, doc.width * 0.75])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F4F6")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111827")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E5E7EB")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return [table, Spacer(1, 10)]
+
+
+def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles):
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+
+    header_style = ParagraphStyle(
+        name="TableHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor=colors.whitesmoke,
+    )
+    cell_style = ParagraphStyle(
+        name="TableCell",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        textColor=colors.HexColor("#111827"),
+    )
+    data = [[Paragraph(h, header_style) for h in headers]]
+    for row in rows:
+        data.append([Paragraph(str(cell), cell_style) for cell in row])
+    table = Table(data, colWidths=[None] * len(headers))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor("#111827")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E7EB")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return [table]
+
+
 def build_report_pdf(
     report_title: str,
-    filters_text: str,
+    filters: list[tuple[str, str]] | None = None,
     headers: list[str] | None = None,
     rows: list[list[str]] | None = None,
 ) -> bytes:
     """
     Gera PDF com layout padrão: cabeçalho Turna, título do relatório,
-    "Filtros utilizados: ..." e opcionalmente uma tabela (headers + rows).
-
-    Se headers/rows forem None ou vazios, apenas o cabeçalho, título e filtros são exibidos.
+    seção de filtros (quando existir) e opcionalmente uma tabela (headers + rows).
     """
     _ensure_reportlab()
-    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import cm
 
     buf = io.BytesIO()
@@ -56,63 +270,27 @@ def build_report_pdf(
     styles = getSampleStyleSheet()
     elements = []
 
-    # Cabeçalho fixo: Turna
-    header_style = ParagraphStyle(
-        name="ReportHeader",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=18,
-        spaceAfter=6,
-    )
-    elements.append(Paragraph(REPORT_HEADER_TITLE, header_style))
-    elements.append(Paragraph("<br/>", styles["Normal"]))
+    elements.extend(_build_header_elements(doc, styles))
+    elements.append(Spacer(1, 10))
+    elements.extend(_build_title_elements(report_title, styles))
 
-    # Título do relatório
-    elements.append(Paragraph(report_title, styles["Title"]))
-    elements.append(Paragraph("<br/>", styles["Normal"]))
+    normalized_filters = _normalize_filters(filters)
+    if normalized_filters:
+        elements.extend(_build_filters_elements(normalized_filters, doc, styles))
 
-    # Filtros utilizados
-    filters_label = "Filtros utilizados: "
-    filters_display = filters_text.strip() if filters_text else "Nenhum"
-    elements.append(Paragraph(filters_label + filters_display, styles["Normal"]))
-    elements.append(Paragraph("<br/>", styles["Normal"]))
-
-    # Tabela (conteúdo) se fornecida
     if headers and rows is not None:
-        data = [headers] + rows
-        col_count = len(headers)
-        table = Table(data, colWidths=[None] * col_count)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4472C4")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 10),
-                    ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                    ("TOPPADDING", (0, 0), (-1, 0), 8),
-                    ("BACKGROUND", (0, 1), (-1, -1), colors.white),
-                    ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
-                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                    ("FONTSIZE", (0, 1), (-1, -1), 9),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
-                ]
-            )
-        )
-        elements.append(table)
+        elements.extend(_build_table_elements(headers, rows, doc, styles))
 
     doc.build(elements)
     return buf.getvalue()
 
 
-def build_report_cover_only(report_title: str, filters_text: str) -> bytes:
+def build_report_cover_only(report_title: str, filters: list[tuple[str, str]] | None = None) -> bytes:
     """
     Gera apenas a página de capa (Turna + título + filtros), sem tabela.
     Usado para relatórios multi-página (demandas, escala) que já têm conteúdo gerado por outro módulo.
     """
-    return build_report_pdf(report_title=report_title, filters_text=filters_text, headers=None, rows=None)
+    return build_report_pdf(report_title=report_title, filters=filters, headers=None, rows=None)
 
 
 def format_filters_text(parts: list[tuple[str, str]]) -> str:

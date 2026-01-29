@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { backendFetch, requireToken } from '@/lib/backend-fetch'
+import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/member/list
@@ -13,15 +13,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const params: Record<string, string> = {}
+    searchParams.forEach((value, key) => {
+        params[key] = value
+    })
 
     const result = await backendFetch('/member/list', {
         token: auth.token,
-        params: {
-            status: searchParams.get('status'),
-            role: searchParams.get('role'),
-            limit: searchParams.get('limit'),
-            offset: searchParams.get('offset'),
-        },
+        params,
     })
 
     if (!result.ok) {

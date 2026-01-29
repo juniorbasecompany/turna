@@ -29,6 +29,8 @@ type HospitalFormData = {
     color: string | null
 }
 
+const FILTER_NAME_LABEL = 'Nome'
+
 export default function HospitalPage() {
     const { settings } = useTenantSettings()
     const [filterName, setFilterName] = useState('')
@@ -38,8 +40,17 @@ export default function HospitalPage() {
         return { name: filterName.trim() }
     }, [filterName])
 
+    const reportFilters = useMemo((): { label: string; value: string }[] => {
+        if (!filterName.trim()) return []
+        return [{ label: FILTER_NAME_LABEL, value: filterName.trim() }]
+    }, [filterName])
+
     const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/hospital/report', listAndReportParams)
+    const { downloadReport, reportLoading, reportError } = useReportDownload(
+        '/api/hospital/report',
+        listAndReportParams,
+        reportFilters
+    )
 
     const {
         items: hospitals,
@@ -156,7 +167,7 @@ export default function HospitalPage() {
                     !isEditing ? (
                         <FilterPanel>
                             <FilterInput
-                                label="Nome"
+                                label={FILTER_NAME_LABEL}
                                 value={filterName}
                                 onChange={setFilterName}
                             />

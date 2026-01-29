@@ -12,8 +12,15 @@ export async function GET(request: NextRequest) {
         return auth.error
     }
 
+    const { searchParams } = new URL(request.url)
+    const params: Record<string, string> = {}
+    searchParams.forEach((value, key) => {
+        params[key] = value
+    })
+
     const result = await backendFetch('/tenant/list', {
         token: auth.token,
+        params,
     })
 
     if (!result.ok) {

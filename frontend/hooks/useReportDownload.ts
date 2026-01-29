@@ -1,30 +1,45 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react';
 
 export type ReportParams = Record<string, string | number | boolean | null | undefined>
 
+/** Lista de filtros para o cabeçalho do relatório: mesmo título e valor exibidos no painel. */
+export type ReportFilterItem = { label: string; value: string }
+
 /**
- * Monta query string a partir dos parâmetros do relatório (mesmos filtros do painel).
+ * Monta query string: params (para a API filtrar os dados) e opcionalmente filters (JSON)
+ * para o cabeçalho do PDF (título e valor como no painel, sem duplicar labels no backend).
  */
-function buildReportQueryString(params: ReportParams | undefined): string {
-    if (!params || Object.keys(params).length === 0) return ''
+function buildReportQueryString(
+    params: ReportParams | undefined,
+    reportFilters: ReportFilterItem[] | undefined
+): string {
     const search = new URLSearchParams()
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-            search.append(key, String(value))
-        }
-    })
+    if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== null && value !== undefined) {
+                search.append(key, String(value))
+            }
+        })
+    }
+    if (reportFilters && reportFilters.length > 0) {
+        search.append('filters', JSON.stringify(reportFilters))
+    }
     const qs = search.toString()
     return qs ? `?${qs}` : ''
 }
 
 /**
  * Hook para baixar/abrir relatório PDF no ActionBar.
- * Usa os mesmos parâmetros de filtro do painel para o relatório respeitar os filtros.
  *
  * @param apiPath - Caminho da API do relatório (ex: '/api/tenant/report')
  * @param params - Parâmetros de filtro (mesmo objeto usado na listagem do painel)
+ * @param reportFilters - Lista { label, value } para o cabeçalho do PDF; use os mesmos títulos e valores exibidos no painel (fonte única de verdade)
  */
-export function useReportDownload(apiPath: string, params?: ReportParams) {
+export function useReportDownload(
+    apiPath: string,
+    params?: ReportParams,
+    reportFilters?: ReportFilterItem[]
+) {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -32,7 +47,7 @@ export function useReportDownload(apiPath: string, params?: ReportParams) {
         setLoading(true)
         setError(null)
         try {
-            const queryString = buildReportQueryString(params)
+            const queryString = buildReportQueryString(params, reportFilters)
             const url = `${apiPath}${queryString}`
             const response = await fetch(url, { credentials: 'include' })
             if (!response.ok) {
@@ -49,7 +64,7 @@ export function useReportDownload(apiPath: string, params?: ReportParams) {
         } finally {
             setLoading(false)
         }
-    }, [apiPath, params])
+    }, [apiPath, params, reportFilters])
 
     return { downloadReport, reportLoading: loading, reportError: error }
 }

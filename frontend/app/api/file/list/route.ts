@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { backendFetch, requireToken } from '@/lib/backend-fetch'
+import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/file/list
@@ -13,16 +13,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const params: Record<string, string> = {}
+    searchParams.forEach((value, key) => {
+        params[key] = value
+    })
 
     const result = await backendFetch('/file/list', {
         token: auth.token,
-        params: {
-            start_at: searchParams.get('start_at'),
-            end_at: searchParams.get('end_at'),
-            hospital_id: searchParams.get('hospital_id'),
-            limit: searchParams.get('limit') || '19',
-            offset: searchParams.get('offset') || '0',
-        },
+        params,
     })
 
     if (!result.ok) {

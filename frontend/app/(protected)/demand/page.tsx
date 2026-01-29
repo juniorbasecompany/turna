@@ -54,18 +54,49 @@ export default function DemandPage() {
     const [filterProcedure, setFilterProcedure] = useState('')
     const [skillsInput, setSkillsInput] = useState('')
 
-    // Filtros de período usando TenantDateTimePicker (Date objects com hora)
     const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
-    // Filtros enviados à listagem e ao relatório (mesmo padrão)
+    const FILTER_HOSPITAL_LABEL = 'Hospital'
+    const FILTER_PROCEDURE_LABEL = 'Procedimento'
+    const FILTER_START_LABEL = 'Desde'
+    const FILTER_END_LABEL = 'Até'
+
     const additionalListParams = useMemo(() => {
         const params: Record<string, string | number | null> = {}
         if (filterStartDate) params.start_at = filterStartDate.toISOString()
         if (filterEndDate) params.end_at = filterEndDate.toISOString()
         if (filterHospitalId !== null) params.hospital_id = filterHospitalId
+        if (filterProcedure.trim()) params.procedure = filterProcedure.trim()
         return Object.keys(params).length ? params : undefined
-    }, [filterStartDate, filterEndDate, filterHospitalId])
+    }, [filterStartDate, filterEndDate, filterHospitalId, filterProcedure])
+
+    const reportFilters = useMemo((): { label: string; value: string }[] => {
+        const list: { label: string; value: string }[] = []
+        if (filterHospitalId != null) {
+            const hospital = hospitals.find((h) => h.id === filterHospitalId)
+            list.push({
+                label: FILTER_HOSPITAL_LABEL,
+                value: hospital?.name ?? String(filterHospitalId),
+            })
+        }
+        if (filterProcedure.trim()) {
+            list.push({ label: FILTER_PROCEDURE_LABEL, value: filterProcedure.trim() })
+        }
+        if (filterStartDate) {
+            list.push({
+                label: FILTER_START_LABEL,
+                value: filterStartDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        if (filterEndDate) {
+            list.push({
+                label: FILTER_END_LABEL,
+                value: filterEndDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+            })
+        }
+        return list
+    }, [filterHospitalId, filterProcedure, filterStartDate, filterEndDate, hospitals])
 
     // Configuração inicial
     const initialFormData: DemandFormData = {
@@ -265,13 +296,8 @@ export default function DemandPage() {
         setSkillsInput('')
     }
 
-    // Listagem já filtrada pelo backend (start_at, end_at, hospital_id via additionalListParams).
-    // Aplicar apenas filtro por procedimento no frontend (busca textual).
-    const filteredDemands = useMemo(() => {
-        if (!filterProcedure.trim()) return demandList
-        const filterLower = filterProcedure.toLowerCase().trim()
-        return demandList.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
-    }, [demandList, filterProcedure])
+    // Listagem já filtrada pelo backend via additionalListParams
+    const filteredDemands = demandList
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {
@@ -283,7 +309,11 @@ export default function DemandPage() {
         setFormData({ ...formData, skills: skillsArray })
     }
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/demand/report', additionalListParams ?? undefined)
+    const { downloadReport, reportLoading, reportError } = useReportDownload(
+        '/api/demand/report',
+        additionalListParams ?? undefined,
+        reportFilters
+    )
 
     // Botões do ActionBar customizados (para usar handleCancelCustom)
     const actionBarButtons = useActionBarButtons({
@@ -448,7 +478,7 @@ export default function DemandPage() {
                                     disabled={loadingHospitals}
                                 />
                                 <FilterInput
-                                    label="Procedimento"
+                                    label={FILTER_PROCEDURE_LABEL}
                                     value={filterProcedure}
                                     onChange={setFilterProcedure}
                                 />

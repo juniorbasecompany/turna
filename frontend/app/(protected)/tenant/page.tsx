@@ -29,14 +29,21 @@ type TenantFormData = {
     currency: string
 }
 
+// Label do filtro: definido uma vez, usado no painel e no cabeçalho do relatório
+const FILTER_NAME_LABEL = 'Nome'
+
 export default function TenantPage() {
     const { settings } = useTenantSettings()
     const [filterName, setFilterName] = useState('')
 
-    // Filtros enviados à listagem e ao relatório (mesmo padrão)
     const listAndReportParams = useMemo(() => {
         if (!filterName.trim()) return undefined
         return { name: filterName.trim() }
+    }, [filterName])
+
+    const reportFilters = useMemo((): { label: string; value: string }[] => {
+        if (!filterName.trim()) return []
+        return [{ label: FILTER_NAME_LABEL, value: filterName.trim() }]
     }, [filterName])
 
     const initialFormData: TenantFormData = {
@@ -219,9 +226,9 @@ export default function TenantPage() {
                 filterContent={
                     !isEditing ? (
                         <FilterPanel>
-                            <FilterInput
-                                label="Nome"
-                                value={filterName}
+                        <FilterInput
+                            label={FILTER_NAME_LABEL}
+                            value={filterName}
                                 onChange={setFilterName}
                             />
                         </FilterPanel>

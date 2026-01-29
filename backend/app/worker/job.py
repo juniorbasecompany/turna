@@ -147,7 +147,7 @@ def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]
     Carrega profissionais da tabela member para o tenant.
 
     Retorna lista no formato esperado pelo solver:
-    - id: identificador (string), fallback member.name
+    - id: identificador = str(member.id) para lookup e gravação de demand.member_id
     - name: nome (string)
     - sequence: ordem de prioridade (int)
     - can_peds: se pode atender pediatria (bool)
@@ -174,7 +174,8 @@ def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]
                 f"[LOAD_PROFESSIONALS] Member id={m.id} name={m.name!r} ignorado: attribute inválido"
             )
             continue
-        pro_id = str(attr.get("id") or "").strip() or (m.name or str(m.id))
+        # id = PK do member (string) para o solver; garante lookup member_db_id e gravação em demand.member_id
+        pro_id = str(m.id)
         name = (m.name or pro_id).strip()
         vacation_raw = attr.get("vacation", [])
         vacation = [tuple(int(x) for x in v) for v in vacation_raw]
@@ -184,6 +185,7 @@ def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]
             "sequence": int(attr.get("sequence", 0)),
             "can_peds": bool(attr.get("can_peds", False)),
             "vacation": vacation,
+            "member_db_id": m.id,  # PK member para gravar em demand.member_id ao calcular escala
         })
 
     pros.sort(key=lambda p: p["sequence"])
@@ -222,13 +224,17 @@ def _extract_individual_allocations(
     """
     allocations = []
 
-    # Criar mapa profissional_id -> nome completo (busca em pros_by_sequence primeiro)
+    # Criar mapa profissional_id -> nome completo e member_db_id (busca em pros_by_sequence primeiro)
     pro_id_to_name: dict[str, str] = {}
+    pro_id_to_member_db_id: dict[str, int] = {}
     for pro in pros_by_sequence:
         pro_id = str(pro.get("id") or "").strip()
         pro_name = str(pro.get("name") or pro_id).strip()
         if pro_id:
             pro_id_to_name[pro_id] = pro_name
+        member_db_id = pro.get("member_db_id")
+        if member_db_id is not None and isinstance(member_db_id, int):
+            pro_id_to_member_db_id[pro_id] = member_db_id
 
     for day_item in per_day:
         if not isinstance(day_item, dict):
@@ -284,9 +290,12 @@ def _extract_individual_allocations(
                     logger.debug(f"[EXTRACT_ALLOCATIONS] Demanda sem ID, pulando: {demand}")
                     continue
 
+                member_db_id = pro_id_to_member_db_id.get(pro_id)
                 allocation = {
                     "member": member_name,
-                    "member_id": pro_id,
+                    # member_id no JSON = PK do member (int) quando temos member_db_id; evita gravar nome
+                    "member_id": member_db_id if member_db_id is not None else pro_id,
+                    "member_db_id": member_db_id,  # PK member para demand.member_id
                     "id": str(demand_id),
                     "day": int(day_number),
                     "start": float(demand.get("start", 0)),
@@ -517,10 +526,14 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if allocation_mode != "greedy":
                 raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
 
-            # Profissionais: payload explícito > tabela member do tenant
-            pros_by_sequence = input_data.get("pros_by_sequence")
-            if pros_by_sequence is None:
+            # Profissionais: no modo from_demands sempre carregar da tabela member (para ter member_db_id e gravar demand.member_id)
+            # No modo from_extract usa payload se enviado, senão carrega da tabela
+            if mode == "from_demands":
                 pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id)
+            else:
+                pros_by_sequence = input_data.get("pros_by_sequence")
+                if pros_by_sequence is None:
+                    pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id)
             if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
                 raise RuntimeError("Nenhum profissional encontrado para o tenant")
 
@@ -691,14 +704,21 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                     logger.warning(f"[GENERATE_SCHEDULE] Demand {allocation_demand_id} não encontrada ou tenant mismatch, pulando")
                     continue
 
+                member_db_id = allocation.get("member_db_id")
                 demand_row.schedule_status = ScheduleStatus.DRAFT
                 demand_row.schedule_name = f"{schedule_name} - {allocation['member']} - Dia {allocation['day']}"
                 demand_row.schedule_version_number = schedule_version_number
                 demand_row.schedule_result_data = allocation_with_metadata
                 demand_row.generated_at = now
                 demand_row.job_id = job.id
+                demand_row.member_id = member_db_id  # member atribuído no cálculo da escala
                 demand_row.updated_at = now
                 session.add(demand_row)
+                if member_db_id is None:
+                    logger.warning(
+                        f"[GENERATE_SCHEDULE] demand_id={allocation_demand_id} sem member_db_id na alocação "
+                        f"(pro_id na alocação: {allocation.get('member_id')!r})"
+                    )
                 updated_demand_count += 1
 
             create_records_duration = (utc_now() - create_records_start_time).total_seconds()

@@ -8,7 +8,11 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
-from app.report.pdf_layout import format_filters_text, build_report_cover_only, merge_pdf_with_cover
+from app.report.pdf_demand import demands_to_day_schedules
+from app.report.pdf_layout import (
+    parse_filters_from_frontend,
+    query_params_to_filter_parts,
+)
 from pydantic import BaseModel as PydanticBaseModel
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
@@ -32,6 +36,87 @@ from app.worker.worker_settings import WorkerSettings
 
 
 router = APIRouter(prefix="/schedule", tags=["Schedule"])
+
+
+def _resolve_schedule_status_filters(
+    status: Optional[str], status_list: Optional[str]
+) -> tuple[list[ScheduleStatus] | None, list[tuple[str, str]]]:
+    """
+    Normaliza filtros de status para Schedule, aceitando lista separada por vírgula.
+    """
+    filters_parts: list[tuple[str, str]] = []
+    values: list[ScheduleStatus] | None = None
+
+    if status_list:
+        raw = [s.strip().upper() for s in status_list.split(",") if s.strip()]
+        invalid = [s for s in raw if s not in {"DRAFT", "PUBLISHED", "ARCHIVED"}]
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"status_list inválido: {', '.join(invalid)}")
+        values = [ScheduleStatus[s] for s in raw]
+        filters_parts.append(("Status", ", ".join(raw)))
+    elif status:
+        status_upper = status.strip().upper()
+        try:
+            values = [ScheduleStatus(status_upper)]
+            filters_parts.append(("Status", status_upper))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+
+    return values, filters_parts
+
+
+SCHEDULE_REPORT_PARAM_LABELS = {
+    "start_time_from": "Desde",
+    "start_time_to": "Até",
+    "name": "Nome",
+    "status": "Status",
+    "status_list": "Status",
+    "hospital_id": "Hospital",
+}
+
+
+def _schedule_list_queries(
+    session: Session,
+    tenant_id: int,
+    status_values: list[ScheduleStatus] | None,
+    start_time_from: Optional[datetime],
+    start_time_to: Optional[datetime],
+    name: Optional[str],
+    hospital_id: Optional[int] = None,
+):
+    """
+    Query e count_query para listagem/relatório de escalas (mesmo canal de dados).
+    schedule_status considerado igual no painel (card) e no relatório (quadro); dia vem de demand.start_time.
+    """
+    query = (
+        select(Demand)
+        .where(Demand.tenant_id == tenant_id)
+        .where(Demand.schedule_status.is_not(None))
+    )
+    count_query = (
+        select(func.count(Demand.id))
+        .where(Demand.tenant_id == tenant_id)
+        .where(Demand.schedule_status.is_not(None))
+    )
+
+    if status_values:
+        query = query.where(Demand.schedule_status.in_(status_values))
+        count_query = count_query.where(Demand.schedule_status.in_(status_values))
+    if start_time_from is not None:
+        query = query.where(Demand.start_time >= start_time_from)
+        count_query = count_query.where(Demand.start_time >= start_time_from)
+    if start_time_to is not None:
+        query = query.where(Demand.start_time < start_time_to)
+        count_query = count_query.where(Demand.start_time < start_time_to)
+    if name and name.strip():
+        term = f"%{name.strip()}%"
+        query = query.where(Demand.schedule_name.ilike(term))
+        count_query = count_query.where(Demand.schedule_name.ilike(term))
+    if hospital_id is not None:
+        query = query.where(Demand.hospital_id == hospital_id)
+        count_query = count_query.where(Demand.hospital_id == hospital_id)
+
+    return query, count_query
 
 
 class SchedulePublishResponse(PydanticBaseModel):
@@ -463,6 +548,10 @@ def report_schedule_pdf(
     period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from"),
     period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to"),
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
+    status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
+    filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
@@ -477,56 +566,52 @@ def report_schedule_pdf(
         raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
     if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
         raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
+    if hospital_id is not None:
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital or hospital.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=400, detail="hospital_id inválido ou não pertence ao tenant")
 
-    status_enum = None
-    if status:
-        try:
-            status_enum = ScheduleStatus(status.upper())
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+    status_values, _ = _resolve_schedule_status_filters(status, status_list)
 
-    query = (
-        select(Demand)
-        .where(Demand.tenant_id == member.tenant_id)
-        .where(Demand.schedule_status.is_not(None))
-        .where(Demand.schedule_result_data.is_not(None))
+    # Mesmo critério do painel (schedule_status); dia e quadrinhos vêm de demand.start_time/end_time
+    query, _ = _schedule_list_queries(
+        session,
+        member.tenant_id,
+        status_values=status_values,
+        start_time_from=start_time_from,
+        start_time_to=start_time_to,
+        name=name,
+        hospital_id=hospital_id,
     )
-    if start_time_from is not None:
-        query = query.where(Demand.start_time >= start_time_from)
-    if start_time_to is not None:
-        query = query.where(Demand.start_time < start_time_to)
-    if status_enum is not None:
-        query = query.where(Demand.schedule_status == status_enum)
-    query = query.order_by(Demand.start_time)
-    demands = session.exec(query).all()
-
-    all_schedules: list = []
-    for demand in demands:
-        try:
-            day_schedules = _day_schedules_from_result(demand=demand, session=session)
-            all_schedules.extend(day_schedules)
-        except HTTPException:
-            continue
-        except Exception:
-            continue
+    demands = session.exec(query.order_by(Demand.start_time)).all()
+    all_schedules = demands_to_day_schedules(
+        demands, session, member.tenant_id, title_prefix="Escalas", group_by="member"
+    )
     if not all_schedules:
-        raise HTTPException(status_code=400, detail="Nenhuma escala com dados no período selecionado")
+        raise HTTPException(status_code=400, detail="Nenhuma escala no período selecionado")
 
     try:
         from output.day import render_multi_day_pdf_bytes
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
-    content_bytes = render_multi_day_pdf_bytes(all_schedules)
-    filters_parts = []
-    if start_time_from:
-        filters_parts.append(("Desde", start_time_from.strftime("%d/%m/%Y %H:%M")))
-    if start_time_to:
-        filters_parts.append(("Até", start_time_to.strftime("%d/%m/%Y %H:%M")))
-    if status and status.strip():
-        filters_parts.append(("Status", status.strip()))
-    filters_text = format_filters_text(filters_parts)
-    cover_bytes = build_report_cover_only("Relatório de escalas", filters_text)
-    pdf_bytes = merge_pdf_with_cover(cover_bytes, content_bytes)
+    filters_parts = parse_filters_from_frontend(filters)
+    if not filters_parts:
+        params = {
+            "start_time_from": start_time_from,
+            "start_time_to": start_time_to,
+            "name": name,
+            "status": status,
+            "status_list": status_list,
+            "hospital_id": hospital_id,
+        }
+        formatters = {
+            "start_time_from": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            "start_time_to": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+        }
+        filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
+    pdf_bytes = render_multi_day_pdf_bytes(
+        all_schedules, report_title="Relatório de escalas", filters=filters_parts
+    )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -537,10 +622,13 @@ def report_schedule_pdf(
 @router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])
 def list_schedules(
     status: Optional[str] = Query(None, description="Filtrar por schedule_status (DRAFT, PUBLISHED, ARCHIVED)"),
+    status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     start_time_from: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
     start_time_to: Optional[datetime] = Query(None, description="Filtrar demandas com start_time < (timestamptz ISO 8601)"),
     period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from (compatibilidade)"),
     period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to (compatibilidade)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
     member: Member = Depends(get_current_member),
@@ -554,39 +642,31 @@ def list_schedules(
     if start_time_to is None and period_end_at is not None:
         start_time_to = period_end_at
 
-    status_enum = None
-    if status:
-        try:
-            status_enum = ScheduleStatus(status.upper())
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+    status_values, _ = _resolve_schedule_status_filters(status, status_list)
     if start_time_from is not None and start_time_from.tzinfo is None:
         raise HTTPException(status_code=400, detail="start_time_from deve ter timezone explícito")
     if start_time_to is not None and start_time_to.tzinfo is None:
         raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
     if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
         raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
+    if hospital_id is not None:
+        hospital = session.get(Hospital, hospital_id)
+        if not hospital or hospital.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=400, detail="hospital_id inválido ou não pertence ao tenant")
 
-    query = select(Demand).where(Demand.tenant_id == member.tenant_id)
-    query = query.where(Demand.schedule_status.is_not(None))
-    if status_enum:
-        query = query.where(Demand.schedule_status == status_enum)
-    if start_time_from is not None:
-        query = query.where(Demand.start_time >= start_time_from)
-    if start_time_to is not None:
-        query = query.where(Demand.start_time < start_time_to)
-
-    count_query = select(func.count(Demand.id)).where(Demand.tenant_id == member.tenant_id).where(Demand.schedule_status.is_not(None))
-    if status_enum:
-        count_query = count_query.where(Demand.schedule_status == status_enum)
-    if start_time_from is not None:
-        count_query = count_query.where(Demand.start_time >= start_time_from)
-    if start_time_to is not None:
-        count_query = count_query.where(Demand.start_time < start_time_to)
+    query, count_query = _schedule_list_queries(
+        session,
+        member.tenant_id,
+        status_values=status_values,
+        start_time_from=start_time_from,
+        start_time_to=start_time_to,
+        name=name,
+        hospital_id=hospital_id,
+    )
     total = session.exec(count_query).one()
-
-    query = query.order_by(Demand.created_at.desc()).limit(limit).offset(offset)
-    items = session.exec(query).all()
+    items = session.exec(
+        query.order_by(Demand.created_at.desc()).limit(limit).offset(offset)
+    ).all()
 
     schedule_responses = []
     for demand in items:

@@ -23,6 +23,8 @@ class Demand(BaseModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", index=True, nullable=False)
     hospital_id: Optional[int] = Field(foreign_key="hospital.id", index=True, nullable=True)
     job_id: Optional[int] = Field(foreign_key="job.id", index=True, nullable=True)
+    # Member atribuído à demanda no momento do cálculo da escala (gravação ao gerar escala)
+    member_id: Optional[int] = Field(default=None, foreign_key="member.id", index=True, nullable=True)
 
     # Campos principais (demanda)
     room: Optional[str] = Field(default=None, nullable=True)
