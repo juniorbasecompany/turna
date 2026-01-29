@@ -14,6 +14,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
@@ -32,7 +33,13 @@ export default function HospitalPage() {
     const { settings } = useTenantSettings()
     const [filterName, setFilterName] = useState('')
 
+    const listAndReportParams = useMemo(() => {
+        if (!filterName.trim()) return undefined
+        return { name: filterName.trim() }
+    }, [filterName])
+
     const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/hospital/report', listAndReportParams)
 
     const {
         items: hospitals,
@@ -89,16 +96,10 @@ export default function HospitalPage() {
             }
             return null
         },
+        additionalListParams: listAndReportParams,
     })
 
-    // Filtrar hospitais por nome
-    const filteredHospitals = useMemo(() => {
-        if (!filterName.trim()) {
-            return hospitals
-        }
-        const filterLower = filterName.toLowerCase().trim()
-        return hospitals.filter((hospital) => hospital.name.toLowerCase().includes(filterLower))
-    }, [hospitals, filterName])
+    const filteredHospitals = hospitals
 
     return (
         <>
@@ -250,10 +251,19 @@ export default function HospitalPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={actionBarButtons}
+                buttons={[
+                    ...actionBarButtons,
+                    {
+                        label: reportLoading ? 'Gerando...' : 'Relatório',
+                        onClick: downloadReport,
+                        variant: 'primary' as const,
+                        disabled: reportLoading,
+                        loading: reportLoading,
+                    },
+                ]}
             />
         </>
     )

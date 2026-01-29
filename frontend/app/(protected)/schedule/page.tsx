@@ -17,6 +17,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
@@ -522,6 +523,8 @@ export default function SchedulePage() {
         onSave: handleSave,
     })
 
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/schedule/report', additionalListParams ?? undefined)
+
     // Botão "Calcular" (oculto no modo edição) + botões do hook
     const actionBarButtons = useMemo(() => {
         // Ocultar botão no modo edição
@@ -535,8 +538,15 @@ export default function SchedulePage() {
             disabled: generating,
             loading: generating,
         }
-        return [...baseActionBarButtons, generateButton]
-    }, [baseActionBarButtons, generating, isEditing, handleGenerateSchedule])
+        const reportButton = {
+            label: reportLoading ? 'Gerando...' : 'Relatório',
+            onClick: downloadReport,
+            variant: 'primary' as const,
+            disabled: reportLoading,
+            loading: reportLoading,
+        }
+        return [...baseActionBarButtons, generateButton, reportButton]
+    }, [baseActionBarButtons, generating, isEditing, handleGenerateSchedule, downloadReport, reportLoading])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -883,7 +893,7 @@ export default function SchedulePage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
                 buttons={actionBarButtons}

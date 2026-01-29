@@ -12,6 +12,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     TenantCreateRequest,
@@ -31,6 +32,12 @@ type TenantFormData = {
 export default function TenantPage() {
     const { settings } = useTenantSettings()
     const [filterName, setFilterName] = useState('')
+
+    // Filtros enviados à listagem e ao relatório (mesmo padrão)
+    const listAndReportParams = useMemo(() => {
+        if (!filterName.trim()) return undefined
+        return { name: filterName.trim() }
+    }, [filterName])
 
     const initialFormData: TenantFormData = {
         name: '',
@@ -115,19 +122,15 @@ export default function TenantPage() {
             window.dispatchEvent(new CustomEvent('tenant-list-updated'))
         },
         onDeleteSuccess: () => {
-            // Notificar Header para atualizar lista de tenants
             window.dispatchEvent(new CustomEvent('tenant-list-updated'))
         },
+        additionalListParams: listAndReportParams,
     })
 
-    // Filtrar tenants por nome
-    const filteredTenants = useMemo(() => {
-        if (!filterName.trim()) {
-            return tenantList
-        }
-        const filterLower = filterName.toLowerCase().trim()
-        return tenantList.filter((tenant) => tenant.name.toLowerCase().includes(filterLower))
-    }, [tenantList, filterName])
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/tenant/report', listAndReportParams)
+
+    // Listagem já vem filtrada pelo backend quando listAndReportParams tem name
+    const filteredTenants = tenantList
 
     return (
         <>
@@ -303,10 +306,19 @@ export default function TenantPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={actionBarButtons}
+                buttons={[
+                    ...actionBarButtons,
+                    {
+                        label: reportLoading ? 'Gerando...' : 'Relatório',
+                        onClick: downloadReport,
+                        variant: 'primary' as const,
+                        disabled: reportLoading,
+                        loading: reportLoading,
+                    },
+                ]}
             />
         </>
     )

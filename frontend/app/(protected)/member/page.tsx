@@ -16,6 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { protectedFetch } from '@/lib/api'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
@@ -333,6 +334,8 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/member/report', additionalListParams ?? undefined)
+
     // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
     // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
     const actionBarButtonsWithInvite = useActionBarButtons({
@@ -443,8 +446,8 @@ export default function MemberPage() {
                     {emailMessage && (
                         <div
                             className={`p-3 rounded-md ${emailMessageType === 'success'
-                                    ? 'bg-green-50 text-green-800 border border-green-200'
-                                    : 'bg-red-50 text-red-800 border border-red-200'
+                                ? 'bg-green-50 text-green-800 border border-green-200'
+                                : 'bg-red-50 text-red-800 border border-red-200'
                                 }`}
                         >
                             <p className="text-sm">{emailMessage}</p>
@@ -586,10 +589,19 @@ export default function MemberPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={actionBarButtonsWithInvite}
+                buttons={[
+                    ...actionBarButtonsWithInvite,
+                    {
+                        label: reportLoading ? 'Gerando...' : 'Relatório',
+                        onClick: downloadReport,
+                        variant: 'primary' as const,
+                        disabled: reportLoading,
+                        loading: reportLoading,
+                    },
+                ]}
             />
         </>
     )

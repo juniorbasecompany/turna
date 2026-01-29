@@ -7,7 +7,8 @@ from collections import defaultdict
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
+from app.report.pdf_layout import format_filters_text, build_report_cover_only, merge_pdf_with_cover
 from pydantic import BaseModel as PydanticBaseModel
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
@@ -453,6 +454,84 @@ def download_schedule_pdf(
 
     presigned_url = StorageService().get_file_presigned_url(file_model.s3_key, expiration=3600)
     return RedirectResponse(url=presigned_url, status_code=302)
+
+
+@router.get("/report", tags=["Schedule"])
+def report_schedule_pdf(
+    start_time_from: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
+    start_time_to: Optional[datetime] = Query(None, description="Filtrar demandas com start_time < (timestamptz ISO 8601)"),
+    period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from"),
+    period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to"),
+    status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """Relatório PDF: todas as escalas no período (formato escala_dia1), um dia por página, respeitando filtros do painel."""
+    if start_time_from is None and period_start_at is not None:
+        start_time_from = period_start_at
+    if start_time_to is None and period_end_at is not None:
+        start_time_to = period_end_at
+    if start_time_from is not None and start_time_from.tzinfo is None:
+        raise HTTPException(status_code=400, detail="start_time_from deve ter timezone explícito")
+    if start_time_to is not None and start_time_to.tzinfo is None:
+        raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
+    if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
+        raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
+
+    status_enum = None
+    if status:
+        try:
+            status_enum = ScheduleStatus(status.upper())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+
+    query = (
+        select(Demand)
+        .where(Demand.tenant_id == member.tenant_id)
+        .where(Demand.schedule_status.is_not(None))
+        .where(Demand.schedule_result_data.is_not(None))
+    )
+    if start_time_from is not None:
+        query = query.where(Demand.start_time >= start_time_from)
+    if start_time_to is not None:
+        query = query.where(Demand.start_time < start_time_to)
+    if status_enum is not None:
+        query = query.where(Demand.schedule_status == status_enum)
+    query = query.order_by(Demand.start_time)
+    demands = session.exec(query).all()
+
+    all_schedules: list = []
+    for demand in demands:
+        try:
+            day_schedules = _day_schedules_from_result(demand=demand, session=session)
+            all_schedules.extend(day_schedules)
+        except HTTPException:
+            continue
+        except Exception:
+            continue
+    if not all_schedules:
+        raise HTTPException(status_code=400, detail="Nenhuma escala com dados no período selecionado")
+
+    try:
+        from output.day import render_multi_day_pdf_bytes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
+    content_bytes = render_multi_day_pdf_bytes(all_schedules)
+    filters_parts = []
+    if start_time_from:
+        filters_parts.append(("Desde", start_time_from.strftime("%d/%m/%Y %H:%M")))
+    if start_time_to:
+        filters_parts.append(("Até", start_time_to.strftime("%d/%m/%Y %H:%M")))
+    if status and status.strip():
+        filters_parts.append(("Status", status.strip()))
+    filters_text = format_filters_text(filters_parts)
+    cover_bytes = build_report_cover_only("Relatório de escalas", filters_text)
+    pdf_bytes = merge_pdf_with_cover(cover_bytes, content_bytes)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="relatorio-escalas.pdf"'},
+    )
 
 
 @router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])

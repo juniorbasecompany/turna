@@ -16,6 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { protectedFetch } from '@/lib/api'
 import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
@@ -1318,6 +1319,8 @@ export default function FilesPage() {
 
     // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
 
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/file/report', additionalListParams ?? undefined)
+
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
     const actionBarButtons = useActionBarButtons({
         isEditing: false, // Não usado quando showEditArea é fornecido
@@ -1744,10 +1747,19 @@ export default function FilesPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={actionBarButtons}
+                buttons={[
+                    ...actionBarButtons,
+                    {
+                        label: reportLoading ? 'Gerando...' : 'Relatório',
+                        onClick: downloadReport,
+                        variant: 'primary' as const,
+                        disabled: reportLoading,
+                        loading: reportLoading,
+                    },
+                ]}
             />
         </div>
     )

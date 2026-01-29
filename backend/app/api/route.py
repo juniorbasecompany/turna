@@ -35,6 +35,14 @@ from app.model.demand import Demand
 from app.services.hospital_service import create_default_hospital_for_tenant
 from app.worker.worker_settings import WorkerSettings
 from app.model.base import utc_now
+from app.report.pdf_list import (
+    render_tenant_list_pdf,
+    render_member_list_pdf,
+    render_hospital_list_pdf,
+    render_file_list_pdf,
+)
+from app.report.pdf_demand import build_demand_day_schedules
+from app.report.pdf_layout import format_filters_text, build_report_cover_only, merge_pdf_with_cover
 
 
 router = APIRouter()  # Sem tag padrão - cada endpoint define sua própria tag
@@ -621,16 +629,19 @@ def list_tenants(
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
+    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
 ):
     """
-    Lista todos os tenants (apenas admin) com paginação.
+    Lista todos os tenants (apenas admin) com paginação e filtro opcional por nome.
     """
     try:
-        logger.info(f"Listando tenants, limit={limit}, offset={offset}")
+        logger.info(f"Listando tenants, limit={limit}, offset={offset}, name={name}")
         query = select(Tenant)
-
-        # Contar total antes de aplicar paginação
         count_query = select(func.count(Tenant.id))
+        if name and name.strip():
+            term = f"%{name.strip()}%"
+            query = query.where(Tenant.name.ilike(term))
+            count_query = count_query.where(Tenant.name.ilike(term))
         total = session.exec(count_query).one()
 
         # Aplicar ordenação e paginação
@@ -661,6 +672,32 @@ def list_tenants(
             status_code=500,
             detail=f"Erro ao listar tenants: {str(e)}",
         ) from e
+
+
+@router.get("/tenant/report", tags=["Tenant"])
+def report_tenant_pdf(
+    member: Member = Depends(require_role("admin")),
+    session: Session = Depends(get_session),
+    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
+):
+    """Relatório PDF: lista de clínicas (nome e slug), respeitando filtros do painel."""
+    try:
+        query = select(Tenant).order_by(Tenant.name)
+        if name and name.strip():
+            query = query.where(Tenant.name.ilike(f"%{name.strip()}%"))
+        tenants = session.exec(query).all()
+        rows = [(t.name, t.slug) for t in tenants]
+        filters_parts = [("Nome", name)] if name and name.strip() else []
+        filters_text = format_filters_text(filters_parts)
+        pdf_bytes = render_tenant_list_pdf(rows, filters_text=filters_text)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-clinicas.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de clínicas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
 
 
 @router.get("/tenant/me", response_model=TenantResponse, tags=["Tenant"])
@@ -1833,6 +1870,73 @@ def list_files(
     )
 
 
+@router.get("/file/report", tags=["File"])
+def report_file_pdf(
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+    start_at: Optional[datetime] = Query(None, description="Filtrar por created_at >= (timestamptz ISO 8601)"),
+    end_at: Optional[datetime] = Query(None, description="Filtrar por created_at <= (timestamptz ISO 8601)"),
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id"),
+):
+    """Relatório PDF: lista de arquivos (hospital, nome do arquivo, data de cadastro), respeitando filtros do painel."""
+    try:
+        if hospital_id is not None:
+            hospital = session.get(Hospital, hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != member.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+        query = select(File).where(File.tenant_id == member.tenant_id)
+        if start_at is not None:
+            if start_at.tzinfo is None:
+                raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito")
+            query = query.where(File.created_at >= start_at)
+        if end_at is not None:
+            if end_at.tzinfo is None:
+                raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito")
+            query = query.where(File.created_at <= end_at)
+        if hospital_id is not None:
+            query = query.where(File.hospital_id == hospital_id)
+        query = query.order_by(File.created_at.desc())
+        files = session.exec(query).all()
+        hospital_ids = {f.hospital_id for f in files}
+        hospital_dict = {}
+        if hospital_ids:
+            for h in session.exec(
+                select(Hospital).where(
+                    Hospital.tenant_id == member.tenant_id,
+                    Hospital.id.in_(hospital_ids),
+                )
+            ).all():
+                hospital_dict[h.id] = h
+        rows = []
+        for f in files:
+            hospital_name = hospital_dict.get(f.hospital_id)
+            name = hospital_name.name if hospital_name else f"Hospital {f.hospital_id}"
+            created = f.created_at.strftime("%d/%m/%Y %H:%M") if f.created_at else "-"
+            rows.append((name, f.filename, created))
+        filters_parts = []
+        if start_at:
+            filters_parts.append(("Desde", start_at.strftime("%d/%m/%Y %H:%M")))
+        if end_at:
+            filters_parts.append(("Até", end_at.strftime("%d/%m/%Y %H:%M")))
+        if hospital_id is not None:
+            h = session.get(Hospital, hospital_id)
+            filters_parts.append(("Hospital", h.name if h else str(hospital_id)))
+        filters_text = format_filters_text(filters_parts)
+        pdf_bytes = render_file_list_pdf(rows, filters_text=filters_text)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-arquivos.pdf"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de arquivos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+
+
 @router.get("/file/{file_id}", response_model=FileDownloadResponse, tags=["File"])
 def get_file(
     file_id: int,
@@ -2260,25 +2364,26 @@ def list_hospital(
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
+    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
 ):
     """
-    Lista todos os hospitais do tenant atual com paginação.
+    Lista todos os hospitais do tenant atual com paginação e filtro opcional por nome.
     """
     try:
         query = select(Hospital).where(Hospital.tenant_id == member.tenant_id)
-
-        # Contar total antes de aplicar paginação
         count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == member.tenant_id)
+        if name and name.strip():
+            term = f"%{name.strip()}%"
+            query = query.where(Hospital.name.ilike(term))
+            count_query = count_query.where(Hospital.name.ilike(term))
         total = session.exec(count_query).one()
 
-        # Se não há itens, retornar lista vazia diretamente
         if total == 0:
             return HospitalListResponse(
                 items=[],
                 total=0,
             )
 
-        # Aplicar ordenação e paginação
         items = session.exec(query.order_by(Hospital.name).limit(limit).offset(offset)).all()
 
         # Validar e converter itens
@@ -2303,6 +2408,32 @@ def list_hospital(
             status_code=500,
             detail=f"Erro ao listar hospitais: {str(e)}",
         ) from e
+
+
+@router.get("/hospital/report", tags=["Hospital"])
+def report_hospital_pdf(
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
+):
+    """Relatório PDF: lista de hospitais (nome), respeitando filtros do painel."""
+    try:
+        query = select(Hospital).where(Hospital.tenant_id == member.tenant_id).order_by(Hospital.name)
+        if name and name.strip():
+            query = query.where(Hospital.name.ilike(f"%{name.strip()}%"))
+        hospitals = session.exec(query).all()
+        rows = [(h.name,) for h in hospitals]
+        filters_parts = [("Nome", name)] if name and name.strip() else []
+        filters_text = format_filters_text(filters_parts)
+        pdf_bytes = render_hospital_list_pdf(rows, filters_text=filters_text)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-hospitais.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de hospitais: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
 
 
 @router.get("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
@@ -2760,6 +2891,58 @@ def list_demands(
             status_code=500,
             detail=f"Erro ao listar demandas: {str(e)}",
         ) from e
+
+
+@router.get("/demand/report", tags=["Demand"])
+def report_demand_pdf(
+    start_at: Optional[datetime] = Query(None, description="Filtrar por start_time >= (timestamptz ISO 8601)"),
+    end_at: Optional[datetime] = Query(None, description="Filtrar por start_time <= (timestamptz ISO 8601)"),
+    hospital_id: Optional[int] = Query(None, description="Filtrar por hospital_id"),
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """Relatório PDF: grade de demandas por hospital e horário, um dia por página, respeitando filtros do painel."""
+    try:
+        if start_at is not None and start_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito")
+        if end_at is not None and end_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="end_at deve ter timezone explícito")
+        if start_at is not None and end_at is not None and start_at > end_at:
+            raise HTTPException(status_code=400, detail="start_at deve ser menor ou igual a end_at")
+        if hospital_id is not None:
+            hospital = session.get(Hospital, hospital_id)
+            if not hospital:
+                raise HTTPException(status_code=404, detail="Hospital não encontrado")
+            if hospital.tenant_id != member.tenant_id:
+                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+        schedules = build_demand_day_schedules(
+            session, member.tenant_id, start_time_from=start_at, start_time_to=end_at, hospital_id=hospital_id
+        )
+        if not schedules:
+            raise HTTPException(status_code=400, detail="Nenhuma demanda no período selecionado")
+        from output.day import render_multi_day_pdf_bytes
+        content_bytes = render_multi_day_pdf_bytes(schedules)
+        filters_parts = []
+        if start_at:
+            filters_parts.append(("Desde", start_at.strftime("%d/%m/%Y %H:%M")))
+        if end_at:
+            filters_parts.append(("Até", end_at.strftime("%d/%m/%Y %H:%M")))
+        if hospital_id is not None:
+            h = session.get(Hospital, hospital_id)
+            filters_parts.append(("Hospital", h.name if h else str(hospital_id)))
+        filters_text = format_filters_text(filters_parts)
+        cover_bytes = build_report_cover_only("Relatório de demandas", filters_text)
+        pdf_bytes = merge_pdf_with_cover(cover_bytes, content_bytes)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-demandas.pdf"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de demandas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
 
 
 @router.get("/demand/{demand_id}", response_model=DemandResponse, tags=["Demand"])
@@ -3221,6 +3404,52 @@ def list_members(
             status_code=500,
             detail=f"Erro ao listar members: {str(e)}",
         ) from e
+
+
+@router.get("/member/report", tags=["Member"])
+def report_member_pdf(
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+    status: Optional[str] = Query(None, description="Filtrar por status (PENDING, ACTIVE, REJECTED, REMOVED)"),
+    role: Optional[str] = Query(None, description="Filtrar por role (admin, account)"),
+):
+    """Relatório PDF: lista de associados (nome, email, situação), respeitando filtros do painel."""
+    try:
+        query = (
+            select(Member, Account)
+            .outerjoin(Account, Member.account_id == Account.id)
+            .where(Member.tenant_id == member.tenant_id)
+        )
+        if status:
+            status_upper = status.strip().upper()
+            if status_upper in {"PENDING", "ACTIVE", "REJECTED", "REMOVED"}:
+                query = query.where(Member.status == MemberStatus[status_upper])
+        if role:
+            role_lower = role.strip().lower()
+            if role_lower in {"admin", "account"}:
+                query = query.where(Member.role == MemberRole[role_lower.upper()])
+        query = query.order_by(Member.created_at.desc())
+        results = session.exec(query).all()
+        rows = []
+        for member_obj, account in results:
+            name = (member_obj.name or "").strip() or "(sem nome)"
+            email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
+            rows.append((name, email, member_obj.status.value))
+        filters_parts = []
+        if status and status.strip():
+            filters_parts.append(("Situação", status.strip()))
+        if role and role.strip():
+            filters_parts.append(("Função", role.strip()))
+        filters_text = format_filters_text(filters_parts)
+        pdf_bytes = render_member_list_pdf(rows, filters_text=filters_text)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-associados.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de associados: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
 
 
 @router.get("/member/{member_id}", response_model=MemberResponse, tags=["Member"])

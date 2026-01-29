@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
  * Resultado de uma chamada ao backend.
  * Pode ser uma resposta de sucesso ou erro.
  */
-export type BackendResult<T> = 
+export type BackendResult<T> =
     | { ok: true; data: T; response: Response }
     | { ok: false; error: NextResponse }
 
@@ -39,27 +39,27 @@ function isConnectionError(error: unknown): boolean {
 
 /**
  * Fetch centralizado para chamadas ao backend.
- * 
+ *
  * Trata automaticamente:
  * - Erros de conexão (503 - Servidor indisponível)
  * - Parsing de JSON
  * - Headers de autenticação
- * 
+ *
  * @param endpoint - Endpoint do backend (ex: '/auth/google', '/hospital/list')
  * @param options - Opções da requisição
  * @returns BackendResult com dados ou erro
- * 
+ *
  * @example
  * ```typescript
  * const result = await backendFetch<AuthResponse>('/auth/google', {
  *     method: 'POST',
  *     body: { id_token: token },
  * })
- * 
+ *
  * if (!result.ok) {
  *     return result.error // NextResponse já formatado
  * }
- * 
+ *
  * const data = result.data // Tipado como AuthResponse
  * ```
  */
@@ -144,6 +144,52 @@ export async function backendFetch<T>(
 }
 
 /**
+ * Faz fetch ao backend e retorna a resposta bruta (para PDF/binário).
+ * Usado pelas rotas de relatório que repassam o stream do backend.
+ */
+export async function backendFetchPdf(
+    endpoint: string,
+    token: string,
+    params?: Record<string, string | number | boolean | null | undefined>
+): Promise<NextResponse> {
+    let url = `${API_URL}${endpoint}`
+    if (params) {
+        const searchParams = new URLSearchParams()
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== null && value !== undefined) {
+                searchParams.append(key, String(value))
+            }
+        })
+        const qs = searchParams.toString()
+        if (qs) url += `?${qs}`
+    }
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) {
+        const text = await response.text()
+        let detail = 'Erro ao gerar relatório'
+        try {
+            const data = JSON.parse(text)
+            detail = (data as { detail?: string }).detail ?? detail
+        } catch {
+            // ignore
+        }
+        return NextResponse.json({ detail }, { status: response.status })
+    }
+    const contentType = response.headers.get('Content-Type') || 'application/pdf'
+    const contentDisposition = response.headers.get('Content-Disposition') || 'attachment; filename="relatorio.pdf"'
+    return new NextResponse(response.body, {
+        status: 200,
+        headers: {
+            'Content-Type': contentType,
+            'Content-Disposition': contentDisposition,
+        },
+    })
+}
+
+/**
  * Helper para criar resposta de erro padronizada.
  */
 export function errorResponse(message: string, status: number = 400): NextResponse {
@@ -154,8 +200,7 @@ export function errorResponse(message: string, status: number = 400): NextRespon
  * Helper para verificar token de autenticação.
  * Retorna o token se existir, ou uma resposta 401 se não existir.
  */
-export function requireToken(request: { cookies: { get: (name: string) => { value: string } | undefined } }): 
-    { ok: true; token: string } | { ok: false; error: NextResponse } {
+export function requireToken(request: { cookies: { get: (name: string) => { value: string } | undefined } }): { ok: true; token: string } | { ok: false; error: NextResponse } {
     const token = request.cookies.get('access_token')?.value
     if (!token) {
         return {
@@ -176,7 +221,7 @@ export function successWithCookie<T>(
     options: { maxAge?: number } = {}
 ): NextResponse {
     const response = NextResponse.json(data)
-    
+
     response.cookies.set(cookieName, cookieValue, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',

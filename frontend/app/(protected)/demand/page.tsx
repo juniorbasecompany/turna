@@ -15,6 +15,7 @@ import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { useReportDownload } from '@/hooks/useReportDownload'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
@@ -54,9 +55,17 @@ export default function DemandPage() {
     const [skillsInput, setSkillsInput] = useState('')
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
-    // "Desde" inicia com a data/hora atual, "Até" inicia vazio
     const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
+
+    // Filtros enviados à listagem e ao relatório (mesmo padrão)
+    const additionalListParams = useMemo(() => {
+        const params: Record<string, string | number | null> = {}
+        if (filterStartDate) params.start_at = filterStartDate.toISOString()
+        if (filterEndDate) params.end_at = filterEndDate.toISOString()
+        if (filterHospitalId !== null) params.hospital_id = filterHospitalId
+        return Object.keys(params).length ? params : undefined
+    }, [filterStartDate, filterEndDate, filterHospitalId])
 
     // Configuração inicial
     const initialFormData: DemandFormData = {
@@ -200,6 +209,7 @@ export default function DemandPage() {
         mapFormDataToCreateRequest,
         mapFormDataToUpdateRequest,
         validateFormData,
+        additionalListParams,
     })
 
     // Carregar lista de hospitais (mantido separado)
@@ -221,6 +231,11 @@ export default function DemandPage() {
     useEffect(() => {
         loadHospitals()
     }, [])
+
+    useEffect(() => {
+        paginationHandlers.onFirst()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
+    }, [additionalListParams])
 
     // Validar intervalo de datas
     useEffect(() => {
@@ -250,40 +265,13 @@ export default function DemandPage() {
         setSkillsInput('')
     }
 
-    // Filtrar demandas por hospital, procedimento e período (filtro no frontend)
+    // Listagem já filtrada pelo backend (start_at, end_at, hospital_id via additionalListParams).
+    // Aplicar apenas filtro por procedimento no frontend (busca textual).
     const filteredDemands = useMemo(() => {
-        let filtered = demandList
-
-        // Filtro por hospital
-        if (filterHospitalId !== null) {
-            filtered = filtered.filter((demand) => demand.hospital_id === filterHospitalId)
-        }
-
-        // Filtro por procedimento
-        if (filterProcedure.trim()) {
-            const filterLower = filterProcedure.toLowerCase().trim()
-            filtered = filtered.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
-        }
-
-        // Filtro por período: start_time >= "Desde" e start_time <= "Até"
-        if (filterStartDate) {
-            filtered = filtered.filter((demand) => {
-                if (!demand.start_time) return false
-                const demandStart = new Date(demand.start_time)
-                return demandStart >= filterStartDate
-            })
-        }
-
-        if (filterEndDate) {
-            filtered = filtered.filter((demand) => {
-                if (!demand.start_time) return false
-                const demandStart = new Date(demand.start_time)
-                return demandStart <= filterEndDate
-            })
-        }
-
-        return filtered
-    }, [demandList, filterHospitalId, filterProcedure, filterStartDate, filterEndDate])
+        if (!filterProcedure.trim()) return demandList
+        const filterLower = filterProcedure.toLowerCase().trim()
+        return demandList.filter((demand) => demand.procedure.toLowerCase().includes(filterLower))
+    }, [demandList, filterProcedure])
 
     // Atualizar skills a partir do input
     const updateSkills = (input: string) => {
@@ -294,6 +282,8 @@ export default function DemandPage() {
             .filter((s) => s.length > 0)
         setFormData({ ...formData, skills: skillsArray })
     }
+
+    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/demand/report', additionalListParams ?? undefined)
 
     // Botões do ActionBar customizados (para usar handleCancelCustom)
     const actionBarButtons = useActionBarButtons({
@@ -634,10 +624,19 @@ export default function DemandPage() {
                         />
                     ) : undefined
                 }
-                error={actionBarErrorProps.error}
+                error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={actionBarButtons}
+                buttons={[
+                    ...actionBarButtons,
+                    {
+                        label: reportLoading ? 'Gerando...' : 'Relatório',
+                        onClick: downloadReport,
+                        variant: 'primary' as const,
+                        disabled: reportLoading,
+                        loading: reportLoading,
+                    },
+                ]}
             />
         </>
     )
