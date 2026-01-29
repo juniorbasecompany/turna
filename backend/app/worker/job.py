@@ -11,11 +11,10 @@ from sqlmodel import Session, select
 
 from app.db.session import engine
 from app.model.base import utc_now
-from app.model.demand import Demand
+from app.model.demand import Demand, ScheduleStatus
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member, MemberStatus
-from app.model.schedule import ScheduleStatus, Schedule
 from app.model.tenant import Tenant
 from app.storage.client import S3Client
 
@@ -480,11 +479,11 @@ def _demands_from_database(
 
 async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
     """
-    Gera escala e grava em Schedule.result_data.
+    Gera escala e atualiza Demand (schedule_status, schedule_result_data, etc.).
 
     Suporta dois modos:
-    - "from_extract": Lê demandas de um Job de extração (EXTRACT_DEMAND) - modo original
-    - "from_demands": Lê demandas diretamente da tabela demand - novo modo
+    - "from_demands": Lê demandas da tabela demand; atualiza cada Demand com resultado da alocação.
+    - "from_extract": Lê demandas de Job de extração; não persiste em Demand (sem demand_id); apenas job.result_data mínimo.
 
     MVP: usa solver greedy.
     """
@@ -525,8 +524,6 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
                 raise RuntimeError("Nenhum profissional encontrado para o tenant")
 
-            # Variáveis para armazenar dados do schedule (modo from_demands não tem registro mestre)
-            sv = None
             schedule_name = None
             schedule_period_start_at = None
             schedule_period_end_at = None
@@ -578,29 +575,20 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demand_list)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
             else:
-                # Modo original: ler de job de extração (requer schedule_id)
-                schedule_id_raw = input_data.get("schedule_id")
-                logger.debug(f"[GENERATE_SCHEDULE] schedule_id_raw: {schedule_id_raw} (tipo: {type(schedule_id_raw)})")
-
-                if schedule_id_raw is None:
-                    raise RuntimeError("schedule_id ausente no input_data para modo 'from_extract'")
-
-                try:
-                    schedule_id = int(schedule_id_raw)
-                    logger.debug(f"[GENERATE_SCHEDULE] schedule_id convertido: {schedule_id}")
-                except (ValueError, TypeError) as e:
-                    raise RuntimeError(f"schedule_id inválido: {schedule_id_raw}") from e
-
-                sv = session.get(Schedule, schedule_id)
-                if not sv:
-                    raise RuntimeError(f"Schedule não encontrado (id={schedule_id})")
-                if sv.tenant_id != job.tenant_id:
-                    raise RuntimeError("Acesso negado (tenant mismatch)")
-
-                schedule_name = sv.name
-                schedule_period_start_at = sv.period_start_at
-                schedule_period_end_at = sv.period_end_at
-                schedule_version_number = sv.version_number
+                # Modo from_extract: ler de job de extração (período em input_data)
+                from datetime import datetime
+                period_start_at = input_data.get("period_start_at")
+                period_end_at = input_data.get("period_end_at")
+                if not period_start_at or not period_end_at:
+                    raise RuntimeError("period_start_at e period_end_at são obrigatórios no modo 'from_extract' (em input_data)")
+                if isinstance(period_start_at, str):
+                    period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
+                if isinstance(period_end_at, str):
+                    period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
+                schedule_period_start_at = period_start_at
+                schedule_period_end_at = period_end_at
+                schedule_name = input_data.get("name") or f"Escala Job {job_id}"
+                schedule_version_number = int(input_data.get("version_number") or 1)
 
                 extract_job_id_raw = input_data.get("extract_job_id")
                 if extract_job_id_raw is None:
@@ -621,8 +609,8 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
 
                 demand_list, days = _demands_from_extract_result(
                     extract_job.result_data,
-                    period_start_at=sv.period_start_at,
-                    period_end_at=sv.period_end_at,
+                    period_start_at=schedule_period_start_at,
+                    period_end_at=schedule_period_end_at,
                 )
 
             if not demand_list:
@@ -673,14 +661,12 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if len(individual_allocations) == 0:
                 logger.warning(f"[GENERATE_SCHEDULE] Nenhuma alocação individual extraída! Total de demandas alocadas era {total_assigned}")
 
-            # Criar registros individuais para cada alocação
-            logger.info(f"[GENERATE_SCHEDULE] Iniciando criação de {len(individual_allocations)} registros individuais de schedule")
-            schedule_records = []
+            # Atualizar Demand com resultado da alocação (apenas quando allocation tem demand_id, ex.: from_demands)
+            updated_demand_count = 0
             create_records_start_time = utc_now()
             for idx, allocation in enumerate(individual_allocations):
                 if (idx + 1) % 100 == 0:
-                    logger.debug(f"[GENERATE_SCHEDULE] Criando registro {idx + 1}/{len(individual_allocations)}")
-                # Adicionar metadados à alocação individual
+                    logger.debug(f"[GENERATE_SCHEDULE] Atualizando demanda {idx + 1}/{len(individual_allocations)}")
                 allocation_with_metadata = {
                     **allocation,
                     "metadata": {
@@ -695,88 +681,44 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 if extract_job_id is not None:
                     allocation_with_metadata["metadata"]["extract_job_id"] = extract_job_id
 
-                # demand_id do Schedule vem da alocação (cada Demand gera exatamente uma Schedule)
                 allocation_demand_id = allocation.get("demand_id")
                 if not allocation_demand_id:
                     logger.warning(f"[GENERATE_SCHEDULE] Alocação {idx + 1} sem demand_id, pulando")
                     continue
 
-                sv_item = Schedule(
-                    tenant_id=job.tenant_id,
-                    demand_id=allocation_demand_id,
-                    name=f"{schedule_name} - {allocation['member']} - Dia {allocation['day']}",
-                    period_start_at=schedule_period_start_at,
-                    period_end_at=schedule_period_end_at,
-                    status=ScheduleStatus.DRAFT,
-                    version_number=schedule_version_number,
-                    job_id=job.id,
-                    result_data=allocation_with_metadata,
-                    generated_at=now,
-                    updated_at=now,
-                )
-                schedule_records.append(sv_item)
+                demand_row = session.get(Demand, allocation_demand_id)
+                if not demand_row or demand_row.tenant_id != job.tenant_id:
+                    logger.warning(f"[GENERATE_SCHEDULE] Demand {allocation_demand_id} não encontrada ou tenant mismatch, pulando")
+                    continue
+
+                demand_row.schedule_status = ScheduleStatus.DRAFT
+                demand_row.schedule_name = f"{schedule_name} - {allocation['member']} - Dia {allocation['day']}"
+                demand_row.schedule_version_number = schedule_version_number
+                demand_row.schedule_result_data = allocation_with_metadata
+                demand_row.generated_at = now
+                demand_row.job_id = job.id
+                demand_row.updated_at = now
+                session.add(demand_row)
+                updated_demand_count += 1
 
             create_records_duration = (utc_now() - create_records_start_time).total_seconds()
-            logger.info(f"[GENERATE_SCHEDULE] Criação de {len(schedule_records)} registros concluída em {create_records_duration:.2f} segundos")
+            logger.info(f"[GENERATE_SCHEDULE] Atualização de {updated_demand_count} demandas concluída em {create_records_duration:.2f} segundos")
 
-            # Gravar todos os registros em lote
-            if schedule_records:
-                logger.info(f"[GENERATE_SCHEDULE] Preparando para gravar {len(schedule_records)} registros individuais de schedule")
-                session.add_all(schedule_records)
-                logger.info(f"[GENERATE_SCHEDULE] {len(schedule_records)} registros individuais adicionados à sessão")
-            else:
-                logger.warning(f"[GENERATE_SCHEDULE] Nenhum registro individual para gravar! individual_allocations tinha {len(individual_allocations)} itens")
-
-            # Se modo from_extract, atualizar também o registro mestre (sv)
-            if sv is not None:
-                result_data_master: dict[str, Any] = {
-                    "allocation_mode": "greedy",
-                    "days": days,
-                    "total_cost": total_cost,
-                    "per_day": per_day,
-                    "mode": mode,
-                    "fragmented": True,
-                    "allocation_count": len(individual_allocations),
-                }
-                if extract_job_id is not None:
-                    result_data_master["extract_job_id"] = extract_job_id
-
-                sv.result_data = result_data_master
-                sv.generated_at = now
-                sv.updated_at = now
-                sv.status = ScheduleStatus.DRAFT
-                session.add(sv)
-
-            # Verificar se foi cancelado antes de marcar como COMPLETED
             if _was_cancelled(session, job):
                 logger.warning(f"[GENERATE_SCHEDULE] Job {job.id} foi cancelado durante execução")
                 return {"ok": False, "error": "job_cancelled", "job_id": job.id}
             job.status = JobStatus.COMPLETED
             job.completed_at = utc_now()
             job.updated_at = job.completed_at
-            job.result_data = {
-                "total_cost": total_cost,
-                "allocation_count": len(individual_allocations),
-                "fragmented_records_count": len(schedule_records),
-            }
+            job.result_data = {"allocation_count": len(individual_allocations)}
             job.error_message = None
             session.add(job)
 
-            has_master = sv is not None
-            logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: {len(schedule_records)} registros individuais" + (" + 1 registro mestre" if has_master else " (sem registro mestre)"))
+            logger.info(f"[GENERATE_SCHEDULE] Fazendo commit: {updated_demand_count} demandas atualizadas")
             commit_start_time = utc_now()
             session.commit()
             commit_duration = (utc_now() - commit_start_time).total_seconds()
             logger.info(f"[GENERATE_SCHEDULE] Commit concluído em {commit_duration:.2f} segundos")
-
-            # Verificar se os registros foram realmente salvos
-            if schedule_records:
-                from sqlmodel import select
-                saved_count = session.exec(
-                    select(Schedule)
-                    .where(Schedule.job_id == job.id)
-                ).all()
-                logger.info(f"[GENERATE_SCHEDULE] Verificação pós-commit: {len(saved_count)} registros encontrados no banco")
 
             session.refresh(job)
             total_duration = (utc_now() - job_start_time).total_seconds()

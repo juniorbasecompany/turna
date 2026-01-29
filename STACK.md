@@ -77,14 +77,13 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 - **Member**: vínculo Account↔Tenant com role e status
 - **Hospital**: hospital por tenant (com prompt customizável para extração IA)
 - **File**: metadados de arquivos no S3/MinIO
-- **Demand**: demandas cirúrgicas extraídas ou criadas manualmente
-- **Schedule**: escalas geradas a partir de Demand (relação 1:1 via demand_id FK, DRAFT, PUBLISHED, ARCHIVED)
+- **Demand**: demandas cirúrgicas extraídas ou criadas manualmente; concentra também o estado da escala (status, result_data, pdf_file_id, generated_at, published_at, etc.). A tabela Schedule será removida (ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`).
 - **Job**: jobs assíncronos (Arq)
 - **AuditLog**: log de auditoria de eventos
 
 ### Relações importantes
-- **Demand → Schedule (1:1)**: cada Demand gera exatamente uma Schedule (FK `schedule.demand_id` UNIQUE, ON DELETE CASCADE)
-- Hospital da Schedule é obtido via `demand.hospital_id` (JOIN)
+- **Demand**: uma única tabela para demanda + estado da escala; não há `period_start_at`/`period_end_at` na Demand (`start_time`/`end_time` são início e fim da cirurgia); período da geração fica em `job.input_data` quando necessário.
+- **Job.result_data**: para GENERATE_SCHEDULE não se persiste payload pesado após o cálculo; apenas mínimo para UI ou só marcar COMPLETED.
 - **Profissionais (escala)**: carregados da tabela `member` do tenant (`member.attribute`); members ACTIVE com attribute válido (sequence, can_peds, vacation)
 
 ## Formatos
@@ -93,7 +92,7 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 
 ## Princípios de arquitetura (Fase 1)
 1. **Requests HTTP nunca rodam solver/IA**: sempre criam **Job** e retornam `job_id`.
-2. **Schedule**: cada geração cria uma versão imutável; publicação é um passo separado.
+2. **Escala (Demand)**: o estado da escala (status, result_data, PDF) fica na Demand; publicação é um passo separado.
 3. **Multi-tenant por `tenant_id`** em todas as tabelas (enforcement na camada de repositório/serviço no MVP).
 4. **Storage fora do banco**: arquivos sempre em object storage; banco guarda apenas metadados/URLs.
 5. **Separação Account (privado) vs Member (público)**: dados de autenticação separados de dados da clínica.

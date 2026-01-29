@@ -103,38 +103,44 @@ class StorageService:
 
         return file_model
 
-    def upload_schedule_pdf(
-        self, session: Session, tenant_id: int, schedule_id: int, pdf_bytes: bytes
+    def upload_demand_pdf(
+        self, session: Session, tenant_id: int, demand_id: int, pdf_bytes: bytes
     ) -> File:
         """
-        Faz upload de PDF de escala e cria registro File.
+        Faz upload de PDF de escala da Demand e cria registro File.
 
         Args:
             session: Sessão do banco
             tenant_id: ID do tenant
-            schedule_id: ID da escala
+            demand_id: ID da demanda (escala)
             pdf_bytes: Bytes do PDF
 
         Returns:
             Modelo File criado
         """
-        filename = f"schedule_{schedule_id}.pdf"
+        from app.model.demand import Demand
+        demand = session.get(Demand, demand_id)
+        if not demand:
+            raise ValueError(f"Demand {demand_id} não encontrada")
+        if demand.tenant_id != tenant_id:
+            raise ValueError("Demand não pertence ao tenant")
+        if not demand.hospital_id:
+            raise ValueError("Demand não possui hospital_id (obrigatório para File)")
+
+        filename = f"demand_{demand_id}.pdf"
         content_type = "application/pdf"
         file_size = len(pdf_bytes)
-
-        # Gerar chave S3
         s3_key = self._generate_s3_key(tenant_id, "schedule", filename)
 
-        # Upload para S3
         import io
         file_obj = io.BytesIO(pdf_bytes)
         s3_url = self.client.upload_fileobj(
             file_obj, s3_key, content_type=content_type
         )
 
-        # Criar registro no banco
         file_model = File(
             tenant_id=tenant_id,
+            hospital_id=demand.hospital_id,
             filename=filename,
             content_type=content_type,
             s3_key=s3_key,
@@ -158,6 +164,15 @@ class StorageService:
             raise Exception(f"Erro ao salvar arquivo no banco: {db_error}") from db_error
 
         return file_model
+
+    def upload_schedule_pdf(
+        self, session: Session, tenant_id: int, schedule_id: int, pdf_bytes: bytes
+    ) -> File:
+        """
+        Alias para upload_demand_pdf (schedule_id = demand_id).
+        Mantido para compatibilidade durante a refatoração.
+        """
+        return self.upload_demand_pdf(session, tenant_id, schedule_id, pdf_bytes)
 
     def get_file_presigned_url(self, s3_key: str, expiration: int = 3600) -> str:
         """

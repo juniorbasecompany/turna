@@ -18,7 +18,7 @@ Este documento descreve os padrões de segurança implementados no sistema, com 
 
 ### Endpoints que Acessam Recursos do Tenant
 
-Todos os endpoints que acessam recursos (Job, File, Schedule, etc.) devem seguir este padrão:
+Todos os endpoints que acessam recursos (Job, File, Demand, etc.) devem seguir este padrão:
 
 ```python
 @router.get("/resource/{resource_id}")
@@ -189,21 +189,15 @@ Endpoints que acessam recursos do tenant (validam `get_current_member()`):
 - `GET /file/{file_id}/thumbnail`: Thumbnail do arquivo
 - `DELETE /file/{file_id}`: Exclui arquivo
 
-**Demand**:
+**Demand** (refatoração: Demand concentra demanda + estado da escala; tabela Schedule será removida — ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`):
 - `POST /demand`: Cria demanda
-- `GET /demand/list`: Lista demandas do tenant
-- `GET /demand/{demand_id}`: Detalhes da demanda
+- `GET /demand/list`: Lista demandas do tenant (filtros ex.: schedule_status para “escalas”)
+- `GET /demand/{demand_id}`: Detalhes da demanda (inclui campos de escala quando existirem)
 - `PUT /demand/{demand_id}`: Atualiza demanda
 - `DELETE /demand/{demand_id}`: Exclui demanda
-
-**Schedule** (cada Schedule é vinculada a uma Demand via `demand_id` FK):
-- `POST /schedule`: Cria schedule manual (requer `demand_id`, relação 1:1 com Demand)
-- `GET /schedule/list`: Lista schedules do tenant (hospital obtido via JOIN com Demand)
-- `GET /schedule/{schedule_id}`: Detalhes do schedule
-- `POST /schedule/{schedule_id}/publish`: Publica schedule e gera PDF
-- `GET /schedule/{schedule_id}/pdf`: Download do PDF
-- `POST /schedule/generate-from-demands`: Gera escalas a partir de demandas (cada Demand gera uma Schedule)
-- `DELETE /schedule/{schedule_id}`: Exclui schedule
+- `POST /demand/{demand_id}/publish`: Publica escala da demanda e gera PDF (refatoração: antes era Schedule)
+- `GET /demand/{demand_id}/pdf`: Download do PDF da escala (refatoração: antes era Schedule)
+- Geração em lote: endpoint de geração cria Job; worker atualiza Demand(s) com resultado (sem tabela Schedule)
 
 **Job**:
 - `POST /job/ping`: Cria job PING (teste)

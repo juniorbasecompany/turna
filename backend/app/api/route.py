@@ -29,7 +29,7 @@ from app.model.account import Account
 from app.storage.service import StorageService
 from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
-from app.model.schedule import Schedule, ScheduleStatus
+from app.model.demand import ScheduleStatus
 from app.model.hospital import Hospital
 from app.model.demand import Demand
 from app.services.hospital_service import create_default_hospital_for_tenant
@@ -1602,7 +1602,7 @@ class ScheduleGenerateRequest(PydanticBaseModel):
 
 class ScheduleGenerateResponse(PydanticBaseModel):
     job_id: int
-    schedule_id: int
+    schedule_id: Optional[int] = None  # legado; após refatoração worker atualiza Demand(s)
 
 
 @router.post("/file/upload", response_model=FileUploadResponse, status_code=201, tags=["File"])
@@ -2028,7 +2028,7 @@ async def schedule_generate(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    # Validar período (intervalo meio-aberto [start, end))
+    """Gera escala a partir de job de extração (modo from_extract). Cria apenas Job; worker não persiste em Demand (sem demand_id)."""
     if body.period_end_at <= body.period_start_at:
         raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
     if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
@@ -2044,26 +2044,17 @@ async def schedule_generate(
     if not extract_job.result_data:
         raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
 
-    sv = Schedule(
-                    tenant_id=member.tenant_id,
-        name=body.name,
-        period_start_at=body.period_start_at,
-        period_end_at=body.period_end_at,
-        status=ScheduleStatus.DRAFT,
-        version_number=1,
-        result_data=None,
-    )
-    session.add(sv)
-    session.commit()
-    session.refresh(sv)
-
     job = Job(
-                    tenant_id=member.tenant_id,
+        tenant_id=member.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,
         status=JobStatus.PENDING,
         input_data={
-            "schedule_id": sv.id,
+            "mode": "from_extract",
             "extract_job_id": body.extract_job_id,
+            "period_start_at": body.period_start_at.isoformat(),
+            "period_end_at": body.period_end_at.isoformat(),
+            "name": body.name,
+            "version_number": 1,
             "allocation_mode": body.allocation_mode,
             "pros_by_sequence": body.pros_by_sequence,
         },
@@ -2071,12 +2062,6 @@ async def schedule_generate(
     session.add(job)
     session.commit()
     session.refresh(job)
-
-    # Atualiza vínculo Schedule -> Job (útil para rastreabilidade)
-    sv.job_id = job.id
-    sv.updated_at = utc_now()
-    session.add(sv)
-    session.commit()
 
     redis_dsn = WorkerSettings.redis_dsn()
     try:
@@ -2088,7 +2073,7 @@ async def schedule_generate(
             detail=f"Redis indisponível (REDIS_URL={redis_dsn}): {str(e)}",
         ) from e
 
-    return ScheduleGenerateResponse(job_id=job.id, schedule_id=sv.id)
+    return ScheduleGenerateResponse(job_id=job.id, schedule_id=None)
 
 
 # ============================================================================

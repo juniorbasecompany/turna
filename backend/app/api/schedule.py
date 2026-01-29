@@ -24,7 +24,7 @@ from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
 from app.model.hospital import Hospital
-from app.model.schedule import ScheduleStatus, Schedule
+from app.model.demand import Demand, ScheduleStatus
 from app.model.tenant import Tenant
 from app.storage.service import StorageService
 from app.worker.worker_settings import WorkerSettings
@@ -41,21 +41,22 @@ class SchedulePublishResponse(PydanticBaseModel):
 
 
 class ScheduleResponse(PydanticBaseModel):
-    id: int
+    """Resposta de escala: id é demand_id (Demand concentra demanda + escala)."""
+    id: int  # demand_id (mesmo que demand_id para compatibilidade)
     tenant_id: int
-    demand_id: int  # FK para Demand (relação 1:1)
-    hospital_id: int  # Obtido via demand.hospital_id
+    demand_id: int
+    hospital_id: int
     hospital_name: str
-    hospital_color: Optional[str]  # Cor do hospital em formato hexadecimal (#RRGGBB)
-    name: str
-    period_start_at: datetime
-    period_end_at: datetime
-    status: str
-    version_number: int
-    job_id: Optional[int]
-    pdf_file_id: Optional[int]
-    generated_at: Optional[datetime]
-    published_at: Optional[datetime]
+    hospital_color: Optional[str]
+    name: Optional[str] = None  # schedule_name
+    period_start_at: Optional[datetime] = None  # não persistido; pode usar start_time para exibição
+    period_end_at: Optional[datetime] = None
+    status: Optional[str] = None  # schedule_status
+    version_number: int = 1
+    job_id: Optional[int] = None
+    pdf_file_id: Optional[int] = None
+    generated_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -69,17 +70,15 @@ class ScheduleListResponse(PydanticBaseModel):
 
 
 class ScheduleCreateRequest(PydanticBaseModel):
-    demand_id: int  # FK para Demand (relação 1:1)
+    """Inicia escala para uma demanda (atualiza Demand com schedule_status DRAFT)."""
+    demand_id: int
     name: str
-    period_start_at: datetime
-    period_end_at: datetime
     version_number: int = 1
 
 
 class ScheduleUpdateRequest(PydanticBaseModel):
+    """Atualiza campos de escala na Demand."""
     name: str
-    period_start_at: datetime
-    period_end_at: datetime
     version_number: int = 1
     status: Optional[str] = None  # DRAFT | ARCHIVED (PUBLISHED só via /publish)
 
@@ -99,43 +98,33 @@ class ScheduleGenerateFromDemandsResponse(PydanticBaseModel):
     schedule_id: Optional[int]  # None quando modo from_demands (registros criados pelo worker)
 
 
-def _build_schedule_response(schedule: Schedule, session: Session) -> ScheduleResponse:
+def _build_schedule_response(demand: Demand, session: Session) -> ScheduleResponse:
     """
-    Constrói um ScheduleResponse incluindo dados do hospital (via Demand).
-
-    Hospital é obtido via demand.hospital_id (JOIN).
+    Constrói um ScheduleResponse a partir de Demand (id = demand_id).
     """
-    # Buscar Demand para obter hospital_id
-    demand = session.get(Demand, schedule.demand_id)
-    if not demand:
-        raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não encontrada")
-
     if not demand.hospital_id:
-        raise HTTPException(status_code=500, detail=f"Demand {schedule.demand_id} não possui hospital_id")
-
-    # Buscar Hospital via Demand
+        raise HTTPException(status_code=500, detail=f"Demand {demand.id} não possui hospital_id")
     hospital = session.get(Hospital, demand.hospital_id)
     if not hospital:
         raise HTTPException(status_code=500, detail=f"Hospital {demand.hospital_id} não encontrado")
-
     return ScheduleResponse(
-        id=schedule.id,
-        tenant_id=schedule.tenant_id,
-        demand_id=schedule.demand_id,
+        id=demand.id,
+        tenant_id=demand.tenant_id,
+        demand_id=demand.id,
         hospital_id=demand.hospital_id,
         hospital_name=hospital.name,
         hospital_color=hospital.color,
-        name=schedule.name,
-        period_start_at=schedule.period_start_at,
-        period_end_at=schedule.period_end_at,
-        status=schedule.status.value,
-        version_number=schedule.version_number,
-        job_id=schedule.job_id,
-        pdf_file_id=schedule.pdf_file_id,
-        generated_at=schedule.generated_at,
-        published_at=schedule.published_at,
-        created_at=schedule.created_at,
-        updated_at=schedule.updated_at,
+        name=demand.schedule_name,
+        period_start_at=demand.start_time,
+        period_end_at=demand.end_time,
+        status=demand.schedule_status.value if demand.schedule_status else None,
+        version_number=demand.schedule_version_number,
+        job_id=demand.job_id,
+        pdf_file_id=demand.pdf_file_id,
+        generated_at=demand.generated_at,
+        published_at=demand.published_at,
+        created_at=demand.created_at,
+        updated_at=demand.updated_at,
     )
 
 
@@ -143,12 +132,12 @@ def _to_minutes(h: int | float) -> int:
     return int(round(float(h) * 60))
 
 
-def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]:
+def _reconstruct_per_day_from_fragments(fragments: list[Demand]) -> list[dict]:
     """
-    Reconstrói a estrutura per_day a partir de registros fragmentados.
+    Reconstrói a estrutura per_day a partir de Demand com schedule_result_data.
 
     Args:
-        fragments: Lista de Schedule com alocações individuais em result_data
+        fragments: Lista de Demand com alocações individuais em schedule_result_data
 
     Returns:
         Lista de dicts no formato per_day (compatível com formato original do solver)
@@ -160,7 +149,7 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
     pros_seen: dict[tuple[int, str], dict] = {}
 
     for fragment in fragments:
-        result_data = fragment.result_data or {}
+        result_data = fragment.schedule_result_data or {}
         if not isinstance(result_data, dict):
             continue
 
@@ -221,16 +210,16 @@ def _reconstruct_per_day_from_fragments(fragments: list[Schedule]) -> list[dict]
     return result
 
 
-def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = None) -> list:
+def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = None) -> list:
     """
-    Converte `Schedule.result_data` (formato do solver) para uma lista de DaySchedule.
+    Converte schedule_result_data da Demand (formato do solver) para uma lista de DaySchedule.
 
     Suporta dois formatos:
     1. Estrutura completa com `per_day` (formato original)
-    2. Registro fragmentado - busca registros relacionados pelo job_id e reconstrói estrutura
+    2. Registro fragmentado - busca Demand relacionados pelo job_id e reconstrói estrutura
 
     Args:
-        sv: Schedule a ser processado
+        demand: Demand com escala a ser processada
         session: Session do banco (necessário apenas se precisar buscar registros fragmentados)
     """
     try:
@@ -238,28 +227,25 @@ def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = Non
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
 
-    result_data = sv.result_data or {}
+    result_data = demand.schedule_result_data or {}
     per_day = result_data.get("per_day") or []
 
-    # Se não tem per_day, pode ser um registro fragmentado - tentar reconstruir
-    if (not isinstance(per_day, list) or not per_day) and session is not None and sv.job_id is not None:
-        # Buscar registros relacionados pelo job_id
+    # Se não tem per_day, pode ser fragmentado - buscar Demand pelo job_id e reconstruir
+    if (not isinstance(per_day, list) or not per_day) and session is not None and demand.job_id is not None:
         from sqlmodel import select
         related_records = session.exec(
-            select(Schedule)
-            .where(Schedule.job_id == sv.job_id)
-            .where(Schedule.tenant_id == sv.tenant_id)
-            .where(Schedule.id != sv.id)  # Excluir o próprio registro
+            select(Demand)
+            .where(Demand.job_id == demand.job_id)
+            .where(Demand.tenant_id == demand.tenant_id)
+            .where(Demand.id != demand.id)
         ).all()
-
         if related_records:
-            # Reconstruir estrutura per_day a partir dos registros fragmentados
             per_day = _reconstruct_per_day_from_fragments(related_records)
 
     if not isinstance(per_day, list) or not per_day:
         raise HTTPException(
             status_code=400,
-            detail="Schedule não possui result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
+            detail="Demand não possui schedule_result_data.per_day e não foi possível reconstruir a partir de registros fragmentados"
         )
 
     # Gera um DaySchedule por item de per_day.
@@ -369,9 +355,9 @@ def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = Non
                 name = "Descobertas" if i == 0 else f"Descobertas {i + 1}"
                 rows.append(Row(name=name, events=lane, vacations=[]))
 
-        # Título com data (quando possível) usando o timezone do próprio período.
-        day_date = (sv.period_start_at + timedelta(days=day_number - 1)).date()
-        title = f"{sv.name} - {day_date.isoformat()}"
+        # Título com data (quando possível)
+        day_date = (demand.start_time + timedelta(days=day_number - 1)).date() if demand.start_time else None
+        title = f"{(demand.schedule_name or 'Escala')} - {(day_date or day_number)}"
 
         schedules.append(
             DaySchedule(
@@ -384,7 +370,7 @@ def _day_schedules_from_result(*, sv: Schedule, session: Optional[Session] = Non
 
     schedules.sort(key=lambda s: s.title)
     if not schedules:
-        raise HTTPException(status_code=400, detail="Schedule não possui dias válidos para PDF")
+        raise HTTPException(status_code=400, detail="Demand não possui dias válidos para PDF")
     return schedules
 
 
@@ -394,53 +380,53 @@ def publish_schedule(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    sv = session.get(Schedule, schedule_id)
-    if not sv:
-        raise HTTPException(status_code=404, detail="Schedule não encontrado")
-    if sv.tenant_id != member.tenant_id:
+    """Publica escala da Demand (schedule_id = demand_id)."""
+    demand = session.get(Demand, schedule_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
     storage_service = StorageService()
 
-    # Idempotência: se já existe PDF, apenas retorna URL.
-    if sv.pdf_file_id is not None and sv.status == ScheduleStatus.PUBLISHED:
-        file_model = session.get(File, sv.pdf_file_id)
+    if demand.pdf_file_id is not None and demand.schedule_status == ScheduleStatus.PUBLISHED:
+        file_model = session.get(File, demand.pdf_file_id)
         if not file_model:
             raise HTTPException(status_code=500, detail="pdf_file_id aponta para um File inexistente")
         presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
         return SchedulePublishResponse(
-            schedule_id=sv.id,
-            status=str(sv.status),
+            schedule_id=demand.id,
+            status=str(demand.schedule_status),
             pdf_file_id=file_model.id,
             presigned_url=presigned_url,
         )
 
-    schedules = _day_schedules_from_result(sv=sv, session=session)
+    schedules = _day_schedules_from_result(demand=demand, session=session)
     try:
         from output.day import render_multi_day_pdf_bytes
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
 
     pdf_bytes = render_multi_day_pdf_bytes(schedules)
-    file_model = storage_service.upload_schedule_pdf(
+    file_model = storage_service.upload_demand_pdf(
         session=session,
         tenant_id=member.tenant_id,
-        schedule_id=sv.id,
+        demand_id=demand.id,
         pdf_bytes=pdf_bytes,
     )
 
-    sv.pdf_file_id = file_model.id
-    sv.status = ScheduleStatus.PUBLISHED
-    sv.published_at = utc_now()
-    sv.updated_at = utc_now()
-    session.add(sv)
+    demand.pdf_file_id = file_model.id
+    demand.schedule_status = ScheduleStatus.PUBLISHED
+    demand.published_at = utc_now()
+    demand.updated_at = utc_now()
+    session.add(demand)
     session.commit()
-    session.refresh(sv)
+    session.refresh(demand)
 
     presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
     return SchedulePublishResponse(
-        schedule_id=sv.id,
-        status=str(sv.status),
+        schedule_id=demand.id,
+        status=str(demand.schedule_status),
         pdf_file_id=file_model.id,
         presigned_url=presigned_url,
     )
@@ -452,15 +438,16 @@ def download_schedule_pdf(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    sv = session.get(Schedule, schedule_id)
-    if not sv:
-        raise HTTPException(status_code=404, detail="Schedule não encontrado")
-    if sv.tenant_id != member.tenant_id:
+    """Download do PDF da escala (schedule_id = demand_id)."""
+    demand = session.get(Demand, schedule_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    if not sv.pdf_file_id:
-        raise HTTPException(status_code=404, detail="PDF não encontrado (schedule ainda não publicada)")
+    if not demand.pdf_file_id:
+        raise HTTPException(status_code=404, detail="PDF não encontrado (escala ainda não publicada)")
 
-    file_model = session.get(File, sv.pdf_file_id)
+    file_model = session.get(File, demand.pdf_file_id)
     if not file_model:
         raise HTTPException(status_code=500, detail="pdf_file_id aponta para um File inexistente")
 
@@ -470,121 +457,65 @@ def download_schedule_pdf(
 
 @router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])
 def list_schedules(
-    status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
-    period_start_at: Optional[datetime] = Query(None, description="Filtrar por period_start_at >= period_start_at (timestamptz em ISO 8601)"),
-    period_end_at: Optional[datetime] = Query(None, description="Filtrar por period_end_at <= period_end_at (timestamptz em ISO 8601)"),
+    status: Optional[str] = Query(None, description="Filtrar por schedule_status (DRAFT, PUBLISHED, ARCHIVED)"),
+    start_time_from: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
+    start_time_to: Optional[datetime] = Query(None, description="Filtrar demandas com start_time < (timestamptz ISO 8601)"),
+    period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from (compatibilidade)"),
+    period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to (compatibilidade)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
     """
-    Lista Schedules do tenant atual, com filtros opcionais.
+    Lista Demand com escala (schedule_status não nulo) do tenant atual.
     """
-    # Validar status se fornecido
+    if start_time_from is None and period_start_at is not None:
+        start_time_from = period_start_at
+    if start_time_to is None and period_end_at is not None:
+        start_time_to = period_end_at
+
     status_enum = None
     if status:
         try:
             status_enum = ScheduleStatus(status.upper())
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+    if start_time_from is not None and start_time_from.tzinfo is None:
+        raise HTTPException(status_code=400, detail="start_time_from deve ter timezone explícito")
+    if start_time_to is not None and start_time_to.tzinfo is None:
+        raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
+    if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
+        raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
 
-    # Validar filtros de período
-    if period_start_at is not None:
-        if period_start_at.tzinfo is None:
-            raise HTTPException(status_code=400, detail="period_start_at deve ter timezone explícito (timestamptz)")
-    if period_end_at is not None:
-        if period_end_at.tzinfo is None:
-            raise HTTPException(status_code=400, detail="period_end_at deve ter timezone explícito (timestamptz)")
-    if period_start_at is not None and period_end_at is not None:
-        if period_start_at > period_end_at:
-            raise HTTPException(status_code=400, detail="period_start_at deve ser menor ou igual a period_end_at")
-
-    # Query base
-    query = select(Schedule).where(Schedule.tenant_id == member.tenant_id)
+    query = select(Demand).where(Demand.tenant_id == member.tenant_id)
+    query = query.where(Demand.schedule_status.is_not(None))
     if status_enum:
-        query = query.where(Schedule.status == status_enum)
+        query = query.where(Demand.schedule_status == status_enum)
+    if start_time_from is not None:
+        query = query.where(Demand.start_time >= start_time_from)
+    if start_time_to is not None:
+        query = query.where(Demand.start_time < start_time_to)
 
-    # Filtrar por período: escala aparece se seu período se sobrepõe ao filtro
-    # Uma escala se sobrepõe se: period_start_at (escala) <= period_end_at (filtro) E period_end_at (escala) >= period_start_at (filtro)
-    if period_start_at is not None:
-        query = query.where(Schedule.period_end_at >= period_start_at)
-    if period_end_at is not None:
-        query = query.where(Schedule.period_start_at <= period_end_at)
-
-    # Contar total antes de aplicar paginação
-    count_query = select(func.count(Schedule.id)).where(Schedule.tenant_id == member.tenant_id)
+    count_query = select(func.count(Demand.id)).where(Demand.tenant_id == member.tenant_id).where(Demand.schedule_status.is_not(None))
     if status_enum:
-        count_query = count_query.where(Schedule.status == status_enum)
-    if period_start_at is not None:
-        count_query = count_query.where(Schedule.period_end_at >= period_start_at)
-    if period_end_at is not None:
-        count_query = count_query.where(Schedule.period_start_at <= period_end_at)
+        count_query = count_query.where(Demand.schedule_status == status_enum)
+    if start_time_from is not None:
+        count_query = count_query.where(Demand.start_time >= start_time_from)
+    if start_time_to is not None:
+        count_query = count_query.where(Demand.start_time < start_time_to)
     total = session.exec(count_query).one()
 
-    # Aplicar ordenação e paginação
-    query = query.order_by(Schedule.created_at.desc()).limit(limit).offset(offset)
-
+    query = query.order_by(Demand.created_at.desc()).limit(limit).offset(offset)
     items = session.exec(query).all()
 
-    # Buscar Demands das escalas para obter hospital_id
-    demand_ids = {item.demand_id for item in items}
-    demand_dict = {}
-    if demand_ids:
-        demand_query = select(Demand).where(
-            Demand.tenant_id == member.tenant_id,
-            Demand.id.in_(demand_ids),
-        )
-        demand_list = session.exec(demand_query).all()
-        demand_dict = {d.id: d for d in demand_list}
-
-    # Buscar hospitais via Demands para incluir hospital_name e hospital_color
-    hospital_ids = {d.hospital_id for d in demand_dict.values() if d.hospital_id}
-    hospital_dict = {}
-    if hospital_ids:
-        hospital_query = select(Hospital).where(
-            Hospital.tenant_id == member.tenant_id,
-            Hospital.id.in_(hospital_ids),
-        )
-        hospital_list = session.exec(hospital_query).all()
-        hospital_dict = {h.id: h for h in hospital_list}
-
-    # Construir resposta com demand_id, hospital_id, hospital_name e hospital_color
     schedule_responses = []
-    for item in items:
-        demand = demand_dict.get(item.demand_id)
-        if not demand:
-            raise HTTPException(status_code=500, detail=f"Demand {item.demand_id} não encontrada")
-        if not demand.hospital_id:
-            raise HTTPException(status_code=500, detail=f"Demand {item.demand_id} não possui hospital_id")
-        hospital = hospital_dict.get(demand.hospital_id)
-        if not hospital:
-            raise HTTPException(status_code=500, detail=f"Hospital {demand.hospital_id} não encontrado")
-        schedule_response = ScheduleResponse(
-            id=item.id,
-            tenant_id=item.tenant_id,
-            demand_id=item.demand_id,
-            hospital_id=demand.hospital_id,
-            hospital_name=hospital.name,
-            hospital_color=hospital.color,
-            name=item.name,
-            period_start_at=item.period_start_at,
-            period_end_at=item.period_end_at,
-            status=item.status.value,
-            version_number=item.version_number,
-            job_id=item.job_id,
-            pdf_file_id=item.pdf_file_id,
-            generated_at=item.generated_at,
-            published_at=item.published_at,
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-        )
-        schedule_responses.append(schedule_response)
-
-    return ScheduleListResponse(
-        items=schedule_responses,
-        total=total,
-    )
+    for demand in items:
+        try:
+            schedule_responses.append(_build_schedule_response(demand, session))
+        except HTTPException:
+            raise
+    return ScheduleListResponse(items=schedule_responses, total=total)
 
 
 @router.post("/generate-from-demands", response_model=ScheduleGenerateFromDemandsResponse, status_code=201, tags=["Schedule"])
@@ -787,15 +718,15 @@ def get_schedule(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    """
-    Retorna detalhes de uma Schedule específica.
-    """
-    sv = session.get(Schedule, schedule_id)
-    if not sv:
-        raise HTTPException(status_code=404, detail="Schedule não encontrado")
-    if sv.tenant_id != member.tenant_id:
+    """Retorna detalhes da escala da Demand (schedule_id = demand_id)."""
+    demand = session.get(Demand, schedule_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    return _build_schedule_response(sv, session)
+    if demand.schedule_status is None:
+        raise HTTPException(status_code=404, detail="Demanda não possui escala (schedule_status nulo)")
+    return _build_schedule_response(demand, session)
 
 
 @router.post("", response_model=ScheduleResponse, status_code=201, tags=["Schedule"])
@@ -804,13 +735,7 @@ def create_schedule(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    """
-    Cria uma Schedule manualmente (sem job de geração).
-
-    Cada Schedule é vinculada a exatamente uma Demand (relação 1:1).
-    Hospital é obtido via demand.hospital_id.
-    """
-    # Validar Demand
+    """Inicia escala para uma demanda (atualiza Demand com schedule_status DRAFT)."""
     demand = session.get(Demand, body.demand_id)
     if not demand:
         raise HTTPException(status_code=404, detail="Demanda não encontrada")
@@ -818,37 +743,20 @@ def create_schedule(
         raise HTTPException(status_code=403, detail="Demanda não pertence ao tenant atual")
     if not demand.hospital_id:
         raise HTTPException(status_code=400, detail="Demanda não possui hospital associado")
-
-    # Verificar se já existe Schedule para esta Demand (relação 1:1)
-    existing_schedule = session.exec(
-        select(Schedule).where(Schedule.demand_id == body.demand_id)
-    ).first()
-    if existing_schedule:
+    if demand.schedule_status is not None:
         raise HTTPException(
             status_code=409,
-            detail=f"Já existe uma escala para esta demanda (schedule_id={existing_schedule.id})"
+            detail=f"Já existe escala para esta demanda (schedule_status={demand.schedule_status})"
         )
 
-    # Validar período
-    if body.period_end_at <= body.period_start_at:
-        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
-    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
-        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
-
-    sv = Schedule(
-        tenant_id=member.tenant_id,
-        demand_id=body.demand_id,
-        name=body.name,
-        period_start_at=body.period_start_at,
-        period_end_at=body.period_end_at,
-        status=ScheduleStatus.DRAFT,
-        version_number=body.version_number,
-    )
-    session.add(sv)
+    demand.schedule_status = ScheduleStatus.DRAFT
+    demand.schedule_name = body.name
+    demand.schedule_version_number = body.version_number
+    demand.updated_at = utc_now()
+    session.add(demand)
     session.commit()
-    session.refresh(sv)
-
-    return _build_schedule_response(sv, session)
+    session.refresh(demand)
+    return _build_schedule_response(demand, session)
 
 
 @router.put("/{schedule_id}", response_model=ScheduleResponse, tags=["Schedule"])
@@ -858,53 +766,37 @@ def update_schedule(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    """
-    Atualiza uma Schedule (nome, período, versão e opcionalmente status).
-
-    Apenas escalas DRAFT podem ter nome/período/versão alterados.
-    Status pode ser alterado para ARCHIVED (escala publicada pode ser arquivada).
-    """
-    sv = session.get(Schedule, schedule_id)
-    if not sv:
-        raise HTTPException(status_code=404, detail="Schedule não encontrado")
-    if sv.tenant_id != member.tenant_id:
+    """Atualiza campos de escala na Demand (nome, versão, status ARCHIVED)."""
+    demand = session.get(Demand, schedule_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
+    if demand.schedule_status is None:
+        raise HTTPException(status_code=404, detail="Demanda não possui escala")
 
-    # Validar período
-    if body.period_end_at <= body.period_start_at:
-        raise HTTPException(status_code=400, detail="period_end_at deve ser maior que period_start_at")
-    if body.period_start_at.tzinfo is None or body.period_end_at.tzinfo is None:
-        raise HTTPException(status_code=400, detail="period_start_at/period_end_at devem ter timezone explícito")
+    if demand.schedule_status == ScheduleStatus.DRAFT:
+        demand.schedule_name = body.name
+        demand.schedule_version_number = body.version_number
 
-    # Atualizar campos permitidos quando DRAFT
-    if sv.status == ScheduleStatus.DRAFT:
-        sv.name = body.name
-        sv.period_start_at = body.period_start_at
-        sv.period_end_at = body.period_end_at
-        sv.version_number = body.version_number
-
-    # Status: permitir apenas transição para ARCHIVED (escala publicada pode ser arquivada)
     if body.status is not None:
         try:
             new_status = ScheduleStatus(body.status)
         except ValueError:
             raise HTTPException(status_code=400, detail="status inválido")
-        if new_status == ScheduleStatus.ARCHIVED and sv.status == ScheduleStatus.PUBLISHED:
-            sv.status = ScheduleStatus.ARCHIVED
-        elif new_status == ScheduleStatus.DRAFT and sv.status == ScheduleStatus.DRAFT:
-            pass  # já é DRAFT
-        elif new_status != sv.status:
+        if new_status == ScheduleStatus.ARCHIVED and demand.schedule_status == ScheduleStatus.PUBLISHED:
+            demand.schedule_status = ScheduleStatus.ARCHIVED
+        elif new_status != demand.schedule_status and new_status != ScheduleStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
                 detail="Alteração de status permitida apenas para ARCHIVED (escala publicada)"
             )
 
-    sv.updated_at = utc_now()
-    session.add(sv)
+    demand.updated_at = utc_now()
+    session.add(demand)
     session.commit()
-    session.refresh(sv)
-
-    return _build_schedule_response(sv, session)
+    session.refresh(demand)
+    return _build_schedule_response(demand, session)
 
 
 @router.delete("/{schedule_id}", status_code=204, tags=["Schedule"])
@@ -913,27 +805,30 @@ def delete_schedule(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
 ):
-    """
-    Exclui uma Schedule.
-
-    Apenas escalas em status DRAFT podem ser excluídas.
-    Escalas publicadas devem ser arquivadas em vez de excluídas.
-    """
-    sv = session.get(Schedule, schedule_id)
-    if not sv:
-        raise HTTPException(status_code=404, detail="Schedule não encontrado")
-    if sv.tenant_id != member.tenant_id:
+    """Reseta o estado de escala da Demand (apenas DRAFT). Publicadas devem ser arquivadas."""
+    demand = session.get(Demand, schedule_id)
+    if not demand:
+        raise HTTPException(status_code=404, detail="Demanda não encontrada")
+    if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-
-    # Impedir exclusão de escalas publicadas
-    if sv.status == ScheduleStatus.PUBLISHED:
+    if demand.schedule_status is None:
+        raise HTTPException(status_code=404, detail="Demanda não possui escala")
+    if demand.schedule_status == ScheduleStatus.PUBLISHED:
         raise HTTPException(
             status_code=400,
             detail="Não é possível excluir uma escala publicada. Arquive-a em vez disso."
         )
 
-    session.delete(sv)
+    demand.schedule_status = None
+    demand.schedule_name = None
+    demand.schedule_version_number = 1
+    demand.schedule_result_data = None
+    demand.generated_at = None
+    demand.published_at = None
+    demand.pdf_file_id = None
+    demand.job_id = None
+    demand.updated_at = utc_now()
+    session.add(demand)
     session.commit()
-
     return None
 

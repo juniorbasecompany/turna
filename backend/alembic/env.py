@@ -19,7 +19,7 @@ except Exception:
     pass
 
 # Importa todos os modelos para que o SQLModel os registre
-from app.model import Tenant, Account, Member, Job, File, Schedule, Hospital, Demand
+from app.model import Tenant, Account, Member, Job, File, Hospital, Demand
 
 config = context.config
 fileConfig(config.config_file_name)
