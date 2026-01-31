@@ -77,7 +77,7 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF), com ac
 - **Member**: vínculo Account↔Tenant com role e status
 - **Hospital**: hospital por tenant (com prompt customizável para extração IA)
 - **File**: metadados de arquivos no S3/MinIO
-- **Demand**: demandas cirúrgicas extraídas ou criadas manualmente; concentra também o estado da escala (status, result_data, pdf_file_id, generated_at, published_at, etc.). A tabela Schedule será removida (ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`).
+- **Demand**: demandas cirúrgicas extraídas ou criadas manualmente; inclui também o estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at, etc.). Não há tabela Schedule; tudo fica na Demand.
 - **Job**: jobs assíncronos (Arq)
 - **AuditLog**: log de auditoria de eventos
 

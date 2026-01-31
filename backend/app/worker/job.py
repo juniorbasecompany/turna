@@ -302,7 +302,7 @@ def _extract_individual_allocations(
                     "end": float(demand.get("end", 0)),
                     "is_pediatric": bool(demand.get("is_pediatric", False)),
                     "source": demand.get("source", {}),
-                    "demand_id": demand.get("demand_id"),  # ID do registro Demand (FK para Schedule)
+                    "demand_id": demand.get("demand_id"),  # ID do registro Demand
                     "hospital_id": demand.get("hospital_id"),  # hospital_id da demanda (para referência)
                 }
                 allocations.append(allocation)
@@ -477,7 +477,7 @@ def _demands_from_database(
                 "end": float(end_h),
                 "is_pediatric": bool(d.is_pediatric),
                 "source": d.source,  # Preservar source original
-                "demand_id": d.id,  # ID do registro Demand (FK para Schedule)
+                "demand_id": d.id,  # ID do registro Demand
                 "hospital_id": d.hospital_id,  # hospital_id da demanda (para referência)
             }
         )
@@ -549,7 +549,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 from datetime import datetime
 
                 # Obter dados do input_data (não há registro mestre no modo from_demands)
-                # Cada Schedule usa o demand_id da sua alocação (relação 1:1)
+                # O worker atualiza cada Demand com o resultado da sua alocação.
                 schedule_name = input_data.get("name") or f"Escala Job {job_id}"
                 schedule_version_number = int(input_data.get("version_number") or 1)
 

@@ -720,9 +720,9 @@ async def generate_schedule_from_demands(
     Lê demandas do banco de dados no período informado e cria um job assíncrono
     para gerar as escalas usando o solver (greedy ou cp-sat).
 
-    Cada Demand gera exatamente uma Schedule (relação 1:1 via demand_id FK).
-    O hospital_id informado no body é usado apenas como filtro para selecionar
-    as demandas. Hospital da Schedule é obtido via demand.hospital_id.
+    O worker atualiza cada Demand com o resultado da alocação (schedule_status,
+    schedule_result_data, etc.). O hospital_id informado no body é usado apenas
+    como filtro para selecionar as demandas; cada Demand mantém seu hospital_id.
 
     Se name não for informado, será gerado automaticamente.
     """
@@ -740,7 +740,6 @@ async def generate_schedule_from_demands(
     tenant_tz = ZoneInfo(tenant.timezone)
 
     # filter_hospital_id: usado apenas para filtrar demandas (opcional)
-    # Cada Schedule terá o hospital_id da sua própria demanda
     filter_hospital_id = body.hospital_id
 
     # Validar hospital do filtro (se informado)
@@ -763,7 +762,7 @@ async def generate_schedule_from_demands(
 
     demands_count = session.exec(demands_query).one()
 
-    # Verificar se todas as demandas têm hospital_id (obrigatório para o Schedule)
+    # Verificar se todas as demandas têm hospital_id (obrigatório para a escala)
     demands_without_hospital = session.exec(
         select(func.count(Demand.id)).where(
             Demand.tenant_id == member.tenant_id,
@@ -867,8 +866,7 @@ async def generate_schedule_from_demands(
         end_local = body.period_end_at.astimezone(tenant_tz)
         schedule_name = f"{hospital_name} - {start_local.strftime('%d/%m/%Y')} a {end_local.strftime('%d/%m/%Y')}"
 
-    # Criar Job (sem criar registro mestre de Schedule - apenas registros fragmentados serão criados pelo worker)
-    # Nota: cada Schedule terá o hospital_id da sua própria demanda (definido no worker)
+    # Criar Job; o worker atualiza cada Demand com o resultado da alocação.
     job = Job(
         tenant_id=member.tenant_id,
         job_type=JobType.GENERATE_SCHEDULE,

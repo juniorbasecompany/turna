@@ -189,15 +189,23 @@ Endpoints que acessam recursos do tenant (validam `get_current_member()`):
 - `GET /file/{file_id}/thumbnail`: Thumbnail do arquivo
 - `DELETE /file/{file_id}`: Exclui arquivo
 
-**Demand** (refatoração: Demand concentra demanda + estado da escala; tabela Schedule será removida — ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`):
+**Demand** (demanda + estado da escala; não há tabela Schedule):
 - `POST /demand`: Cria demanda
 - `GET /demand/list`: Lista demandas do tenant (filtros ex.: schedule_status para “escalas”)
 - `GET /demand/{demand_id}`: Detalhes da demanda (inclui campos de escala quando existirem)
 - `PUT /demand/{demand_id}`: Atualiza demanda
 - `DELETE /demand/{demand_id}`: Exclui demanda
-- `POST /demand/{demand_id}/publish`: Publica escala da demanda e gera PDF (refatoração: antes era Schedule)
-- `GET /demand/{demand_id}/pdf`: Download do PDF da escala (refatoração: antes era Schedule)
-- Geração em lote: endpoint de geração cria Job; worker atualiza Demand(s) com resultado (sem tabela Schedule)
+- `POST /demand/{demand_id}/publish`: Publica escala da demanda e gera PDF
+- `GET /demand/{demand_id}/pdf`: Download do PDF da escala
+- Geração em lote: endpoint de geração cria Job; worker atualiza Demand(s) com resultado
+
+**Escala (alias sobre Demand)** — rotas `/schedule/*` mantidas para compatibilidade; id no path = demand_id:
+- `GET /schedule/list`: Lista demandas com filtro de escala (schedule_status, período)
+- `POST /schedule`: Atualiza Demand com estado de escala (DRAFT)
+- `GET /schedule/{id}`: Detalhe da Demand (id = demand_id)
+- `POST /schedule/{id}/publish`: Publicar escala da demanda
+- `GET /schedule/{id}/pdf`: PDF da escala da demanda
+- `DELETE /schedule/{id}`: Resetar estado de escala na Demand (apenas DRAFT)
 
 **Job**:
 - `POST /job/ping`: Cria job PING (teste)

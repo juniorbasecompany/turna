@@ -63,14 +63,14 @@ Este documento concentra **diretivas que devem ser seguidas** durante a constru�
 - **Dependencies**: usar `get_current_member()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - **JWT**: contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints.
 
-### Demand com estado de escala (refatoração: fusão Schedule em Demand)
+### Demand com estado de escala
 
-- **Uma única tabela Demand**: a demanda cirúrgica e o estado da escala (status, result_data, pdf_file_id, generated_at, published_at, etc.) ficam na mesma entidade. A tabela Schedule será removida (ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`).
-- **Demand sem escala**: demandas só extraídas têm campos de escala opcionais (status, result_data, etc.) nulos ou default.
-- **Geração automática**: o worker atualiza cada Demand com o resultado da alocação (schedule_status, schedule_result_data, generated_at, job_id), em vez de criar registros em Schedule.
+- **Uma única tabela Demand**: a demanda cirúrgica e o estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at, etc.) ficam na mesma entidade. Não há tabela Schedule; tudo fica na Demand.
+- **Demand sem escala**: demandas só extraídas têm campos de escala opcionais (schedule_status, schedule_result_data, etc.) nulos ou default.
+- **Geração automática**: o worker atualiza cada Demand com o resultado da alocação (schedule_status, schedule_result_data, generated_at, job_id).
 - **Período**: não há `period_start_at`/`period_end_at` na Demand; `start_time` e `end_time` são início e fim da cirurgia. O período da geração fica em `job.input_data` quando necessário.
 - **Job.result_data**: para GENERATE_SCHEDULE não se persiste payload pesado após o cálculo; apenas mínimo para UI (ex.: allocation_count) ou só marcar COMPLETED.
-- **Profissionais para escala**: o worker carrega profissionais da tabela `member` do tenant (`member.attribute`). Apenas members ACTIVE; attribute exige `sequence` (numérico), `can_peds` (bool), `vacation` (lista de pares). Ordenação por `sequence`.
+- **Profissionais para escala**: o worker carrega profissionais da tabela `member` do tenant (`member.attribute`). Apenas members ACTIVE; attribute exige `sequence` (numérico), `can_peds` (bool), `vacation` (lista de pares). Ordenação por `sequence`. Referir sempre à Demand quando tratar de escala.
 
 ### Separação Account (privado) vs member (público)
 

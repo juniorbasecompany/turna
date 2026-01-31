@@ -2,7 +2,7 @@
 
 Este checklist organiza as tarefas necessárias para aderir completamente à stack definida em `stack.md`, seguindo uma abordagem **incremental** em cada etapa.
 
-**Refatoração planejada**: Fusão da tabela Schedule na tabela Demand (relação 1:1). Ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md` para o checklist detalhado. Após a refatoração: uma única tabela Demand (demanda + estado da escala); sem `period_start_at`/`period_end_at`; `Job.result_data` não persiste payload pesado após o cálculo; tabela schedule vazia — sem migração de dados.
+**Refatoração concluída**: Fusão da tabela Schedule na Demand. Uma única tabela Demand (demanda + estado da escala); sem `period_start_at`/`period_end_at` na Demand; `Job.result_data` não persiste payload pesado após o cálculo. Ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`.
 
 ## Status Geral
 
@@ -10,7 +10,7 @@ Este checklist organiza as tarefas necessárias para aderir completamente à sta
 - **Infraestrutura**: Docker Compose configurado (PostgreSQL na porta 5433, Redis, MinIO)
 - **Dependências**: Bibliotecas instaladas (FastAPI, SQLModel, Arq, psycopg2-binary, etc.)
 - **Endpoint básico**: `/health` funcionando
-- **Modelos**: ✅ Tenant, Account, Member, Job, File, AuditLog, Hospital, Demand criados e migrados. (Refatoração: Schedule será fundida em Demand — ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`.)
+- **Modelos**: ✅ Tenant, Account, Member, Job, File, AuditLog, Hospital, Demand criados e migrados. Demand concentra demanda + estado da escala (sem tabela Schedule).
 - **Autenticação**: ✅ OAuth Google, JWT, Member, convites, multi-tenant isolation
 - **Storage**: ✅ S3/MinIO configurado, upload/download funcionando
 - **Jobs**: ✅ Arq worker, PING, EXTRACT_DEMAND, GENERATE_SCHEDULE implementados
@@ -51,11 +51,11 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
 - [x] Salvar resultado como JSON no `Job.result_data`
 - [x] Endpoint `POST /job/extract` (recebe file_id)
 
-### Etapa 6: Schedule + GenerateSchedule
-- [x] Modelo Schedule
+### Etapa 6: Escala (Demand) + GenerateSchedule
+- [x] Demand com estado de escala (schedule_status, schedule_result_data, etc.)
 - [x] Job `GENERATE_SCHEDULE` (usar código de `strategy/`)
-- [x] Salvar resultado no Schedule
-- [x] Endpoint `POST /schedule/generate`
+- [x] Atualizar Demand com resultado da alocação
+- [x] Endpoint `POST /schedule/generate` (cria Job; worker atualiza Demand)
 
 ### Etapa 7: PDF + Publicação
 - [x] Gerar PDF (adaptar `output/day.py`)
@@ -89,12 +89,10 @@ Cada etapa abaixo entrega algo **visível e funcional** via Swagger (`/docs`) ou
   - [x] Modelo `Job` (id, tenant_id, job_type, status, input_data JSON, result_data JSON, error_message, created_at, updated_at, completed_at)
   - [x] Enum para `job_type`: `PING`, `EXTRACT_DEMAND`, `GENERATE_SCHEDULE`
   - [x] Enum para `status`: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`
-  - [x] **Nota**: `result_data` guarda Demandas como JSON (EXTRACT_DEMAND). Refatoração: para GENERATE_SCHEDULE não persistir payload pesado após o cálculo; apenas mínimo para UI (ex.: allocation_count) ou só marcar COMPLETED.
+  - [x] **Nota**: `result_data` guarda Demandas como JSON (EXTRACT_DEMAND). Para GENERATE_SCHEDULE não se persiste payload pesado após o cálculo; apenas mínimo para UI (ex.: `allocation_count`) ou só marcar COMPLETED.
 - [x] Criar `app/model/file.py`:
   - [x] Modelo `File` (id, tenant_id, filename, content_type, s3_key, s3_url, file_size, uploaded_at, created_at)
-- [x] Criar `app/model/schedule.py` (legado; será removido na refatoração)
-  - [x] Modelo `Schedule` (id, tenant_id, demand_id FK NOT NULL UNIQUE, name, period_start_at, period_end_at, status, version_number, job_id FK nullable, pdf_file_id FK nullable, result_data JSON, generated_at, published_at, created_at)
-  - [x] **Refatoração**: Campos relevantes de Schedule serão migrados para Demand; tabela schedule será removida. Ver `REFACTOR_DEMAND_SCHEDULE_CHECKLIST.md`. Não haverá `period_start_at`/`period_end_at` na Demand.
+- [x] **Refatoração concluída**: tabela `schedule` removida; Demand concentra estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at, etc.). Não há `period_start_at`/`period_end_at` na Demand; `start_time`/`end_time` são início/fim da cirurgia.
 
 **Evolução futura (quando necessário):**
 - [x] Criar `app/model/demand.py` (modelo Demand criado e implementado). Refatoração: Demand passará a concentrar estado da escala (status, result_data, pdf_file_id, etc.).
@@ -250,7 +248,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Criar `app/storage/service.py`:
   - [x] Classe `StorageService` que usa `S3Client`
   - [x] Método `upload_imported_file(session, tenant_id, file, filename) -> File`
-  - [x] Método `upload_schedule_pdf(session, tenant_id, schedule_id, pdf_bytes) -> File`
+  - [x] Método `upload_demand_pdf(session, tenant_id, demand_id, pdf_bytes)` (alias `upload_schedule_pdf` mantido)
   - [x] Método `get_file_presigned_url(s3_key, expiration) -> str`
   - [x] Padrão de S3 keys: `{tenant_id}/{file_type}/{filename}` (com sufixo UUID pra evitar colisão)
 
@@ -330,15 +328,15 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] `PUT /tenant/{tenant_id}` (atualizar tenant - apenas admin)
 - [x] `DELETE /tenant/{tenant_id}` (excluir tenant - apenas admin)
 
-### 5.2 Endpoints de Schedule (refatoração: passarão a ser baseados em Demand)
-- [x] Criar `app/api/schedule.py` (refatoração: lógica migrará para Demand ou alias sobre Demand):
-  - [x] `GET /schedule/list` → refatoração: listar Demand com filtro de escala (ex.: schedule_status)
-  - [x] `POST /schedule` → refatoração: atualizar Demand com estado de escala (DRAFT)
-  - [x] `GET /schedule/{id}` → refatoração: `GET /demand/{id}` (já retorna dados; incluir campos de escala)
-  - [x] `POST /schedule/{id}/publish` → refatoração: `POST /demand/{id}/publish`
-  - [x] `GET /schedule/{id}/pdf` → refatoração: `GET /demand/{id}/pdf`
-  - [x] `POST /schedule/generate-from-demands` → refatoração: worker atualiza Demand(s); sem Schedule
-  - [x] `DELETE /schedule/{id}` → refatoração: regra sobre Demand (ex.: resetar estado de escala)
+### 5.2 Endpoints de escala (baseados em Demand; rotas /schedule/* mantidas como alias)
+- [x] `app/api/schedule.py` opera sobre Demand (id no path = demand_id):
+  - [x] `GET /schedule/list`: listar Demand com filtro de escala (schedule_status, start_time_from/to; alias period_start_at/period_end_at)
+  - [x] `POST /schedule`: atualizar Demand com estado de escala (DRAFT)
+  - [x] `GET /schedule/{id}`: detalhe da Demand (inclui campos de escala)
+  - [x] `POST /schedule/{id}/publish`: publicar escala da Demand e gerar PDF
+  - [x] `GET /schedule/{id}/pdf`: download do PDF da escala
+  - [x] `POST /schedule/generate-from-demands`: worker atualiza Demand(s) com resultado
+  - [x] `DELETE /schedule/{id}`: resetar estado de escala na Demand (apenas DRAFT)
   - [x] Retornar URL presignada do S3
 
 ### 5.3 Endpoint de Job
@@ -429,7 +427,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - [x] Integrar geração de PDF (via endpoint `POST /schedule/{id}/publish`):
   - [x] Gerar PDF em memória (`render_multi_day_pdf_bytes()`)
   - [x] Upload para S3 via StorageService (`upload_schedule_pdf()`)
-  - [x] **Nota**: PDF é gerado no endpoint de publicação, não no job de geração (conforme arquitetura: Schedule imutável, publicação separada)
+  - [x] **Nota**: PDF é gerado no endpoint de publicação, não no job de geração (conforme arquitetura: Demand com estado de escala; publicação separada)
 
 ### 6.3 Manutenção de Compatibilidade
 - [x] Manter `app.py` funcionando (código legado mantido e funcional)
@@ -740,8 +738,6 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 - Ao alterar estrutura, paths ou Docker do backend, manter conformidade com DIRECTIVES, SECURITY e STACK; não quebrar Docker, Alembic, jobs nem `app.py` (legado em `backend/app.py`).
 
 ### Evolução Futura (Quando Necessário)
-- [ ] Promover Demand de JSON para tabela (quando precisar queryar diretamente)
-- [ ] Criar modelo Schedule (quando precisar múltiplas versões por schedule)
 - [ ] Abstração completa de AI Provider (quando precisar plugar outro provedor)
 - [ ] Endpoints mobile específicos (quando criar app React Native)
 
@@ -749,7 +745,7 @@ Ver `DIRECTIVES.md` para decisões e regras completas.
 
 Antes de considerar completo, verificar:
 
-- [x] Modelos SQLModel criados e migrados (Tenant, Account, Member, Job, File, Schedule, AuditLog)
+- [x] Modelos SQLModel criados e migrados (Tenant, Account, Member, Job, File, AuditLog, Hospital, Demand; sem Schedule — Demand concentra estado da escala)
 - [x] Modelo Account sem tenant_id (email único global)
 - [x] Modelo Member implementado (vínculo Account↔Tenant com role e status)
 - [x] Autenticação funcionando com tenant_id no JWT (role do Member)
