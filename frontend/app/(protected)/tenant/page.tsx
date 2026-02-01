@@ -12,7 +12,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportDownload } from '@/hooks/useReportDownload'
+import { useReportLeftButton } from '@/hooks/useReportLeftButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     TenantCreateRequest,
@@ -134,7 +134,11 @@ export default function TenantPage() {
         additionalListParams: listAndReportParams,
     })
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/tenant/report', listAndReportParams)
+    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+        apiPath: '/api/tenant/report',
+        params: listAndReportParams,
+        reportFilters,
+    })
 
     // Listagem já vem filtrada pelo backend quando listAndReportParams tem name
     const filteredTenants = tenantList
@@ -226,9 +230,9 @@ export default function TenantPage() {
                 filterContent={
                     !isEditing ? (
                         <FilterPanel>
-                        <FilterInput
-                            label={FILTER_NAME_LABEL}
-                            value={filterName}
+                            <FilterInput
+                                label={FILTER_NAME_LABEL}
+                                value={filterName}
                                 onChange={setFilterName}
                             />
                         </FilterPanel>
@@ -316,16 +320,8 @@ export default function TenantPage() {
                 error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={[
-                    ...actionBarButtons,
-                    {
-                        label: reportLoading ? 'Gerando...' : 'Relatório',
-                        onClick: downloadReport,
-                        variant: 'primary' as const,
-                        disabled: reportLoading,
-                        loading: reportLoading,
-                    },
-                ]}
+                leftButtons={reportLeftButtons}
+                buttons={actionBarButtons}
             />
         </>
     )

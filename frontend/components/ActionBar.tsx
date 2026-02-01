@@ -4,11 +4,19 @@ import { ReactNode } from 'react'
 import { LoadingSpinner } from './LoadingSpinner'
 import { SelectionCounter, SelectionCounterProps } from './SelectionCounter'
 
-interface ActionBarButton {
+export interface ActionBarButton {
     /**
-     * Texto do botão
+     * Texto do botão (usado quando não há icon)
      */
-    label: string
+    label?: string
+    /**
+     * Ícone do botão (exibe apenas ícone quando fornecido; use title para acessibilidade)
+     */
+    icon?: ReactNode
+    /**
+     * Título/tooltip para botões com ícone (usado em title e aria-label)
+     */
+    title?: string
     /**
      * Função chamada ao clicar
      */
@@ -45,7 +53,11 @@ interface ActionBarProps {
      */
     error?: string | null
     /**
-     * Botões de ação (array de botões)
+     * Botões à esquerda (ex: Relatório) - exibidos antes da messageArea
+     */
+    leftButtons?: ActionBarButton[]
+    /**
+     * Botões de ação à direita (array de botões) - Cancelar, Excluir, Salvar, etc.
      */
     buttons?: ActionBarButton[]
     /**
@@ -89,6 +101,7 @@ export function ActionBar({
     messageType = 'info',
     leftContent,
     error,
+    leftButtons = [],
     buttons = [],
     selection,
     pagination,
@@ -114,20 +127,39 @@ export function ActionBar({
         danger: 'bg-red-200 border-red-300 text-gray-800 hover:bg-red-300',
     }
 
-    // Renderizar botões
-    const renderButtons = () => {
-        if (!buttons || buttons.length === 0) return null
-        return buttons.map((button, index) => (
+    // Renderiza um botão (usado em leftButtons e buttons)
+    const renderButton = (button: ActionBarButton, index: number) => {
+        const isIconOnly = button.icon != null
+        const ariaLabel = button.title ?? button.label
+        return (
             <button
                 key={index}
                 onClick={button.onClick}
                 disabled={button.disabled || button.loading}
+                title={isIconOnly ? button.title ?? button.label : undefined}
+                aria-label={ariaLabel}
                 className={`px-3 sm:px-4 py-2 text-sm font-medium border rounded-md disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center gap-2 ${buttonClasses[button.variant || 'primary']}`}
             >
-                {button.loading ? <LoadingSpinner /> : button.label}
+                {button.loading ? (
+                    <LoadingSpinner />
+                ) : isIconOnly ? (
+                    button.icon
+                ) : (
+                    button.label
+                )}
             </button>
-        ))
+        )
     }
+
+    const leftButtonsRendered =
+        leftButtons?.length ? (
+            <div className="flex items-center gap-2">
+                {leftButtons.map((b, i) => renderButton(b, i))}
+            </div>
+        ) : null
+
+    const buttonsRendered =
+        buttons?.length ? buttons.map((b, i) => renderButton(b, i)) : null
 
     // Determinar qual conteúdo exibir e qual cor usar
     // Prioridade: message > error > leftContent
@@ -150,7 +182,9 @@ export function ActionBar({
     return (
         <div className="fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-gray-200 shadow-lg min-h-20 pb-[env(safe-area-inset-bottom,0px)]">
             <div className="min-h-20 flex flex-wrap items-center gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8 py-2">
-                {/* Conteúdo à esquerda - sem bordas, apenas texto - sempre reserva espaço */}
+                {/* leftButtonArea - botões utilitários (ex: Relatório) */}
+                {leftButtonsRendered}
+                {/* messageArea - mensagem/erro/leftContent */}
                 <div className={`flex-1 min-w-[200px] text-sm ${textColor}`}>
                     {content ? (
                         typeof content === 'string' ? (
@@ -160,11 +194,11 @@ export function ActionBar({
                         )
                     ) : null}
                 </div>
-                {/* Paginação, seleção e botões de ação - alinhados à direita, podem quebrar para linha de baixo */}
+                {/* paginationArea, selectionArea, rightButtonArea */}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {pagination}
                     {selection && <SelectionCounter {...selection} />}
-                    {renderButtons()}
+                    {buttonsRendered}
                 </div>
             </div>
         </div>

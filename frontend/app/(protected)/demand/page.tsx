@@ -15,7 +15,7 @@ import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportDownload } from '@/hooks/useReportDownload'
+import { useReportLeftButton } from '@/hooks/useReportLeftButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
@@ -309,11 +309,11 @@ export default function DemandPage() {
         setFormData({ ...formData, skills: skillsArray })
     }
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload(
-        '/api/demand/report',
-        additionalListParams ?? undefined,
-        reportFilters
-    )
+    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+        apiPath: '/api/demand/report',
+        params: additionalListParams ?? undefined,
+        reportFilters,
+    })
 
     // Botões do ActionBar customizados (para usar handleCancelCustom)
     const actionBarButtons = useActionBarButtons({
@@ -657,16 +657,8 @@ export default function DemandPage() {
                 error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={[
-                    ...actionBarButtons,
-                    {
-                        label: reportLoading ? 'Gerando...' : 'Relatório',
-                        onClick: downloadReport,
-                        variant: 'primary' as const,
-                        disabled: reportLoading,
-                        loading: reportLoading,
-                    },
-                ]}
+                leftButtons={reportLeftButtons}
+                buttons={actionBarButtons}
             />
         </>
     )

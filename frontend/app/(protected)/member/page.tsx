@@ -16,7 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportDownload } from '@/hooks/useReportDownload'
+import { useReportLeftButton } from '@/hooks/useReportLeftButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
@@ -300,11 +300,11 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload(
-        '/api/member/report',
-        additionalListParams ?? undefined,
-        reportFilters
-    )
+    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+        apiPath: '/api/member/report',
+        params: additionalListParams ?? undefined,
+        reportFilters,
+    })
 
     // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
     // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
@@ -562,16 +562,8 @@ export default function MemberPage() {
                 error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={[
-                    ...actionBarButtonsWithInvite,
-                    {
-                        label: reportLoading ? 'Gerando...' : 'Relatório',
-                        onClick: downloadReport,
-                        variant: 'primary' as const,
-                        disabled: reportLoading,
-                        loading: reportLoading,
-                    },
-                ]}
+                leftButtons={reportLeftButtons}
+                buttons={actionBarButtonsWithInvite}
             />
         </>
     )

@@ -17,7 +17,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportDownload } from '@/hooks/useReportDownload'
+import { useReportLeftButton } from '@/hooks/useReportLeftButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
@@ -497,7 +497,7 @@ export default function SchedulePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
     }, [additionalListParams])
 
-    const baseActionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarButtons({
         isEditing,
         selectedCount: selectedSchedulesCount,
         hasChanges: hasChanges(),
@@ -508,22 +508,11 @@ export default function SchedulePage() {
         onSave: handleSave,
     })
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload('/api/schedule/report', additionalListParams ?? undefined, reportFiltersForSchedule.length ? reportFiltersForSchedule : undefined)
-
-    // Botão "Relatório" (oculto no modo edição) + botões do hook
-    const actionBarButtons = useMemo(() => {
-        if (isEditing) {
-            return baseActionBarButtons
-        }
-        const reportButton = {
-            label: reportLoading ? 'Gerando...' : 'Relatório',
-            onClick: downloadReport,
-            variant: 'primary' as const,
-            disabled: reportLoading,
-            loading: reportLoading,
-        }
-        return [...baseActionBarButtons, reportButton]
-    }, [baseActionBarButtons, isEditing, downloadReport, reportLoading])
+    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+        apiPath: '/api/schedule/report',
+        params: additionalListParams ?? undefined,
+        reportFilters: reportFiltersForSchedule.length ? reportFiltersForSchedule : undefined,
+    })
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -874,6 +863,7 @@ export default function SchedulePage() {
                 error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
+                leftButtons={reportLeftButtons}
                 buttons={actionBarButtons}
             />
         </>

@@ -16,7 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarButtons } from '@/hooks/useActionBarButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportDownload } from '@/hooks/useReportDownload'
+import { useReportLeftButton } from '@/hooks/useReportLeftButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
@@ -1328,11 +1328,11 @@ export default function FilesPage() {
 
     // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
 
-    const { downloadReport, reportLoading, reportError } = useReportDownload(
-        '/api/file/report',
-        additionalListParams ?? undefined,
-        reportFilters
-    )
+    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+        apiPath: '/api/file/report',
+        params: additionalListParams ?? undefined,
+        reportFilters,
+    })
 
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
     const actionBarButtons = useActionBarButtons({
@@ -1763,16 +1763,8 @@ export default function FilesPage() {
                 error={reportError ?? actionBarErrorProps.error}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
-                buttons={[
-                    ...actionBarButtons,
-                    {
-                        label: reportLoading ? 'Gerando...' : 'Relatório',
-                        onClick: downloadReport,
-                        variant: 'primary' as const,
-                        disabled: reportLoading,
-                        loading: reportLoading,
-                    },
-                ]}
+                leftButtons={reportLeftButtons}
+                buttons={actionBarButtons}
             />
         </div>
     )
