@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
 
+from app.lib.tenant_format import format_date_for_tenant
 from app.model.demand import Demand
 from app.model.hospital import Hospital
 from app.model.member import Member
@@ -219,8 +220,8 @@ def demands_to_day_schedules(
             if not rows:
                 continue
             try:
-                d = date.fromisoformat(day_str)
-                title = f"{title_prefix} - {d}"
+                day_date = date.fromisoformat(day_str)
+                title = f"{title_prefix} - {format_date_for_tenant(day_date, tenant.locale)}"
             except Exception:
                 title = f"{title_prefix} - {day_str}"
             schedules.append(
@@ -289,8 +290,8 @@ def demands_to_day_schedules(
         if not rows:
             continue
         try:
-            d = date.fromisoformat(day_str)
-            title = f"{title_prefix} - {d}"
+            day_date = date.fromisoformat(day_str)
+            title = f"{title_prefix} - {format_date_for_tenant(day_date, tenant.locale)}"
         except Exception:
             title = f"{title_prefix} - {day_str}"
         schedules.append(

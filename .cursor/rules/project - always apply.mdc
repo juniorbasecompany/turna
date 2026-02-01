@@ -10,3 +10,13 @@ Escreva as mensagens ao usuário em português.
 # Diretivas do Projeto (Fonte da Verdade)
 
 Frontend e backend são projetos independentes no mesmo repositório, comunicando-se exclusivamente via API HTTP; nenhuma camada pode depender, acoplar ou assumir detalhes internos da outra.
+
+# Painéis
+
+Devem ser responsivos.
+
+## Filtros
+
+O campos devem do painel dever ter o sufix 'filter' e o nome da coluna que será filtrada.
+
+Exemplo: 'filter_name' será usado para filtrar a coluna 'name'.

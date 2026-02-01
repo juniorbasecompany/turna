@@ -161,8 +161,8 @@ export default function SchedulePage() {
     const additionalListParams = useMemo(() => {
         if (!settings) return undefined
         const params: Record<string, string | number | boolean | null> = {
-            period_start_at: filterStartDate ? filterStartDate.toISOString() : null,
-            period_end_at: filterEndDate ? filterEndDate.toISOString() : null,
+            filter_start_time: filterStartDate ? filterStartDate.toISOString() : null,
+            filter_end_time: filterEndDate ? filterEndDate.toISOString() : null,
             ...statusFilters.toListParam('status_list'),
         }
         if (filterName.trim()) params.name = filterName.trim()

@@ -101,6 +101,43 @@ def _fmt_minutes(m: int) -> str:
     return f"{h:02d}:{mm:02d}"
 
 
+# Constante para aproximação de arco circular por Bezier (quarter circle)
+_BEZIER_KAPPA = 0.5522847498
+
+
+def _draw_rect_top_rounded(c, x_left: float, y_bot: float, width: float, height: float, radius: float) -> None:
+    """
+    Desenha um retângulo preenchido com apenas os cantos superiores arredondados.
+    Usado na faixa colorida do event para coincidir com o roundRect do contorno.
+    """
+    if width <= 0 or height <= 0:
+        return
+    if radius <= 0 or height < radius or width < 2 * radius:
+        c.rect(x_left, y_bot, width, height, fill=1, stroke=0)
+        return
+    x_right = x_left + width
+    y_top = y_bot + height
+    r = min(radius, width / 2.0, height)
+    k = _BEZIER_KAPPA
+    try:
+        c.saveState()
+        c.moveTo(x_left, y_bot)
+        c.lineTo(x_right, y_bot)
+        c.lineTo(x_right, y_top - r)
+        c.curveTo(x_right, y_top - r + r * k, x_right - r + r * k, y_top, x_right - r, y_top)
+        c.lineTo(x_left + r, y_top)
+        c.curveTo(x_left + r - r * k, y_top, x_left, y_top - r + r * k, x_left, y_top - r)
+        c.closePath()
+        c.fill()
+    except Exception:
+        c.rect(x_left, y_bot, width, height, fill=1, stroke=0)
+    finally:
+        try:
+            c.restoreState()
+        except Exception:
+            pass
+
+
 def _hex_to_rgb(value: str) -> tuple[float, float, float]:
     txt = value.strip().lstrip("#")
     if len(txt) == 3:
@@ -433,8 +470,11 @@ def _render_pdf_to_canvas(
 ) -> None:
     margin = 18
     header_h = 42
-    row_h = 36
-    name_col_w = 210
+    # Altura do event fixa; espaço acima/abaixo do event = event_v_pad
+    event_box_h = 34
+    event_v_pad = 4
+    row_h = event_box_h + 2 * event_v_pad
+    name_col_w = 100
 
     grid_x0 = margin + name_col_w
     grid_x1 = page_w - margin
@@ -466,15 +506,15 @@ def _render_pdf_to_canvas(
         # Linha base do cabeçalho da grade
         y_grid_top = y_top - header_h
         c.setStrokeColor(colors.lightgrey)
-        c.setLineWidth(1)
+        c.setLineWidth(0.25)
         c.line(margin, y_grid_top, page_w - margin, y_grid_top)
 
         # Coluna nomes (separador)
-        c.setStrokeColor(colors.grey)
-        c.setLineWidth(1)
+        c.setStrokeColor(colors.lightgrey)
+        c.setLineWidth(0.25)
         c.line(grid_x0, y_grid_top, grid_x0, margin)
 
-        # Marcas de hora
+        # Marcas de hora; linhas verticais pontilhadas
         c.setFont("Helvetica", 8)
         c.setFillColor(colors.black)
         start_hour = day_start // 60
@@ -483,27 +523,26 @@ def _render_pdf_to_canvas(
             m = h * 60
             x = x_at(m)
             major = (m % 60 == 0)
-            c.setStrokeColor(colors.lightgrey if major else colors.whitesmoke)
-            c.setLineWidth(1 if major else 0.5)
+            c.setStrokeColor(colors.lightgrey)
+            c.setLineWidth(0.25)
             c.line(x, y_grid_top, x, margin)
             if major and (day_start <= m <= day_end):
                 c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}")
+        c.setDash([])
 
         return y_grid_top
 
     def draw_row(y_top: float, idx: int, row: Row) -> None:
         y0 = y_top - row_h
         # Linha horizontal
-        c.setStrokeColor(colors.whitesmoke)
-        c.setLineWidth(1)
+        c.setStrokeColor(colors.lightgrey)
+        c.setLineWidth(0.25)
         c.line(margin, y0, page_w - margin, y0)
 
-        # Nome
+        # Nome (sem numeração; alinhado à esquerda)
         c.setFillColor(colors.black)
-        c.setFont("Helvetica", 9)
-        c.drawRightString(margin + 22, y0 + 6, f"{idx:02d}")
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(margin + 28, y0 + 6, row.name)
+        c.drawString(margin + 2, y0 + event_v_pad + 6, row.name)
 
         # Férias (quadro vazio com borda pontilhada)
         _corner_radius = 3
@@ -513,36 +552,44 @@ def _render_pdf_to_canvas(
             if xe <= xs:
                 continue
             c.setFillColor(colors.white)
-            c.setStrokeColor(colors.black)
-            c.setLineWidth(0.5)
-            c.setDash(2, 2)  # pontilhado
-            c.roundRect(xs, y0 + 1, xe - xs, row_h - 2, _corner_radius, stroke=1, fill=0)
+            c.setStrokeColor(colors.lightgrey)
+            c.setLineWidth(0.25)
+            c.setDash(0, 2)  # pontilhado
+            c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=1, fill=0)
             c.setDash([])  # restaura linha sólida
 
-        # Eventos
+        # Eventos: cor de fundo apenas no topo (procedure); restante transparente
+        _procedure_bar_h = 10  # altura da faixa colorida no topo
         for ev in row.events:
             xs = x_at(ev.interval.start_min)
             xe = x_at(ev.interval.end_min)
             if xe <= xs:
                 continue
             has_color = ev.color_rgb is not None
+            # Faixa colorida só no topo: preenche todo o event com a cor e cobre o resto com branco
+            # Assim encosta nas bordas e os cantos superiores ficam idênticos ao roundRect do event
             if has_color:
                 r, g, b = ev.color_rgb
                 c.setFillColorRGB(r, g, b)
-            else:
-                # Sem cor: quadro sem preenchimento (fundo branco)
+                c.setStrokeColor(colors.white)
+                c.setLineWidth(0)
+                c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=0, fill=1)
                 c.setFillColor(colors.white)
+                y_band_bot = (y0 + event_v_pad + event_box_h) - _procedure_bar_h
+                c.rect(xs, y0 + event_v_pad, xe - xs, event_box_h - _procedure_bar_h, stroke=0, fill=1)
+            # Contorno do event (cinza mais escuro); fundo transparente no restante
+            c.setFillColor(colors.white)
             c.setStrokeColor(colors.black)
             c.setLineWidth(0.25)
-            c.roundRect(xs, y0 + 1, xe - xs, row_h - 2, _corner_radius, stroke=1, fill=1)
+            c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=1, fill=0)
 
             # 4 linhas: procedure (esq), room (dir), start (esq), end (dir)
             # Padding uniforme em todos os lados (2pt)
             pad = 2
             box_left = xs
             box_right = xe
-            box_bot = y0 + 1
-            box_top = y0 + 1 + (row_h - 2)
+            box_bot = y0 + event_v_pad
+            box_top = y0 + event_v_pad + event_box_h
             block_w = max(10, (box_right - box_left) - 2 * pad)
             content_left = box_left + pad
             content_right = box_right - pad

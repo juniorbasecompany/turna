@@ -30,6 +30,7 @@ from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
 from app.model.hospital import Hospital
 from app.model.demand import Demand, ScheduleStatus
+from app.lib.tenant_format import format_date_for_tenant
 from app.model.tenant import Tenant
 from app.storage.service import StorageService
 from app.worker.worker_settings import WorkerSettings
@@ -70,8 +71,8 @@ def _resolve_schedule_status_filters(
 
 
 SCHEDULE_REPORT_PARAM_LABELS = {
-    "start_time_from": "Desde",
-    "start_time_to": "Até",
+    "filter_start_time": "Desde",
+    "filter_end_time": "Até",
     "name": "Nome",
     "status": "Status",
     "status_list": "Status",
@@ -83,14 +84,15 @@ def _schedule_list_queries(
     session: Session,
     tenant_id: int,
     status_values: list[ScheduleStatus] | None,
-    start_time_from: Optional[datetime],
-    start_time_to: Optional[datetime],
+    filter_start_time: Optional[datetime],
+    filter_end_time: Optional[datetime],
     name: Optional[str],
     hospital_id: Optional[int] = None,
 ):
     """
     Query e count_query para listagem/relatório de escalas (mesmo canal de dados).
     schedule_status considerado igual no painel (card) e no relatório (quadro); dia vem de demand.start_time.
+    Filtros: demand.start_time >= filter_start_time, demand.end_time <= filter_end_time.
     """
     query = (
         select(Demand)
@@ -106,12 +108,12 @@ def _schedule_list_queries(
     if status_values is not None:
         query = query.where(Demand.schedule_status.in_(status_values))
         count_query = count_query.where(Demand.schedule_status.in_(status_values))
-    if start_time_from is not None:
-        query = query.where(Demand.start_time >= start_time_from)
-        count_query = count_query.where(Demand.start_time >= start_time_from)
-    if start_time_to is not None:
-        query = query.where(Demand.start_time < start_time_to)
-        count_query = count_query.where(Demand.start_time < start_time_to)
+    if filter_start_time is not None:
+        query = query.where(Demand.start_time >= filter_start_time)
+        count_query = count_query.where(Demand.start_time >= filter_start_time)
+    if filter_end_time is not None:
+        query = query.where(Demand.end_time <= filter_end_time)
+        count_query = count_query.where(Demand.end_time <= filter_end_time)
     if name and name.strip():
         term = f"%{name.strip()}%"
         query = query.where(Demand.schedule_name.ilike(term))
@@ -320,6 +322,10 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
     result_data = demand.schedule_result_data or {}
     per_day = result_data.get("per_day") or []
 
+    # Locale do tenant para formatação de data no título (formato da região)
+    tenant = session.get(Tenant, demand.tenant_id) if session else None
+    tenant_locale = (tenant.locale if tenant else None) or "pt-BR"
+
     # Se não tem per_day, pode ser fragmentado - buscar Demand pelo job_id e reconstruir
     if (not isinstance(per_day, list) or not per_day) and session is not None and demand.job_id is not None:
         from sqlmodel import select
@@ -475,9 +481,10 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
                 name = "Descobertas" if i == 0 else f"Descobertas {i + 1}"
                 rows.append(Row(name=name, events=lane, vacations=[]))
 
-        # Título com data (quando possível)
+        # Título com data no formato da região do tenant
         day_date = (demand.start_time + timedelta(days=day_number - 1)).date() if demand.start_time else None
-        title = f"{(demand.schedule_name or 'Escala')} - {(day_date or day_number)}"
+        date_str = format_date_for_tenant(day_date, tenant_locale) if day_date else str(day_number)
+        title = f"{(demand.schedule_name or 'Escala')} - {date_str}"
 
         schedules.append(
             DaySchedule(
@@ -577,10 +584,8 @@ def download_schedule_pdf(
 
 @router.get("/report", tags=["Schedule"])
 def report_schedule_pdf(
-    start_time_from: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
-    start_time_to: Optional[datetime] = Query(None, description="Filtrar demandas com start_time < (timestamptz ISO 8601)"),
-    period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from"),
-    period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to"),
+    filter_start_time: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
+    filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
@@ -590,16 +595,12 @@ def report_schedule_pdf(
     session: Session = Depends(get_session),
 ):
     """Relatório PDF: todas as escalas no período (formato escala_dia1), um dia por página, respeitando filtros do painel."""
-    if start_time_from is None and period_start_at is not None:
-        start_time_from = period_start_at
-    if start_time_to is None and period_end_at is not None:
-        start_time_to = period_end_at
-    if start_time_from is not None and start_time_from.tzinfo is None:
-        raise HTTPException(status_code=400, detail="start_time_from deve ter timezone explícito")
-    if start_time_to is not None and start_time_to.tzinfo is None:
-        raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
-    if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
-        raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
+    if filter_start_time is not None and filter_start_time.tzinfo is None:
+        raise HTTPException(status_code=400, detail="filter_start_time deve ter timezone explícito")
+    if filter_end_time is not None and filter_end_time.tzinfo is None:
+        raise HTTPException(status_code=400, detail="filter_end_time deve ter timezone explícito")
+    if filter_start_time is not None and filter_end_time is not None and filter_start_time > filter_end_time:
+        raise HTTPException(status_code=400, detail="filter_start_time deve ser menor ou igual a filter_end_time")
     if hospital_id is not None:
         hospital = session.get(Hospital, hospital_id)
         if not hospital or hospital.tenant_id != member.tenant_id:
@@ -612,8 +613,8 @@ def report_schedule_pdf(
         session,
         member.tenant_id,
         status_values=status_values,
-        start_time_from=start_time_from,
-        start_time_to=start_time_to,
+        filter_start_time=filter_start_time,
+        filter_end_time=filter_end_time,
         name=name,
         hospital_id=hospital_id,
     )
@@ -631,16 +632,16 @@ def report_schedule_pdf(
     filters_parts = parse_filters_from_frontend(filters)
     if not filters_parts:
         params = {
-            "start_time_from": start_time_from,
-            "start_time_to": start_time_to,
+            "filter_start_time": filter_start_time,
+            "filter_end_time": filter_end_time,
             "name": name,
             "status": status,
             "status_list": status_list,
             "hospital_id": hospital_id,
         }
         formatters = {
-            "start_time_from": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-            "start_time_to": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            "filter_start_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
         }
         filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
     pdf_bytes = render_multi_day_pdf_bytes(
@@ -657,10 +658,8 @@ def report_schedule_pdf(
 def list_schedules(
     status: Optional[str] = Query(None, description="Filtrar por schedule_status (DRAFT, PUBLISHED, ARCHIVED)"),
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
-    start_time_from: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
-    start_time_to: Optional[datetime] = Query(None, description="Filtrar demandas com start_time < (timestamptz ISO 8601)"),
-    period_start_at: Optional[datetime] = Query(None, description="Alias de start_time_from (compatibilidade)"),
-    period_end_at: Optional[datetime] = Query(None, description="Alias de start_time_to (compatibilidade)"),
+    filter_start_time: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
+    filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
     name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
@@ -670,19 +669,15 @@ def list_schedules(
 ):
     """
     Lista Demand com escala (schedule_status não nulo) do tenant atual.
+    Filtros: demand.start_time >= filter_start_time, demand.end_time <= filter_end_time.
     """
-    if start_time_from is None and period_start_at is not None:
-        start_time_from = period_start_at
-    if start_time_to is None and period_end_at is not None:
-        start_time_to = period_end_at
-
     status_values, _ = _resolve_schedule_status_filters(status, status_list)
-    if start_time_from is not None and start_time_from.tzinfo is None:
-        raise HTTPException(status_code=400, detail="start_time_from deve ter timezone explícito")
-    if start_time_to is not None and start_time_to.tzinfo is None:
-        raise HTTPException(status_code=400, detail="start_time_to deve ter timezone explícito")
-    if start_time_from is not None and start_time_to is not None and start_time_from > start_time_to:
-        raise HTTPException(status_code=400, detail="start_time_from deve ser menor ou igual a start_time_to")
+    if filter_start_time is not None and filter_start_time.tzinfo is None:
+        raise HTTPException(status_code=400, detail="filter_start_time deve ter timezone explícito")
+    if filter_end_time is not None and filter_end_time.tzinfo is None:
+        raise HTTPException(status_code=400, detail="filter_end_time deve ter timezone explícito")
+    if filter_start_time is not None and filter_end_time is not None and filter_start_time > filter_end_time:
+        raise HTTPException(status_code=400, detail="filter_start_time deve ser menor ou igual a filter_end_time")
     if hospital_id is not None:
         hospital = session.get(Hospital, hospital_id)
         if not hospital or hospital.tenant_id != member.tenant_id:
@@ -692,8 +687,8 @@ def list_schedules(
         session,
         member.tenant_id,
         status_values=status_values,
-        start_time_from=start_time_from,
-        start_time_to=start_time_to,
+        filter_start_time=filter_start_time,
+        filter_end_time=filter_end_time,
         name=name,
         hospital_id=hospital_id,
     )

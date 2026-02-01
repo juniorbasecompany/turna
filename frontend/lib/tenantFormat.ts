@@ -123,6 +123,43 @@ export function formatLocalDateOnly(
 }
 
 /**
+ * Formata uma data para exibição no formato da região do tenant.
+ * Reutilizar sempre que uma data for apresentada (títulos, listas, relatórios).
+ *
+ * Aceita string ISO (YYYY-MM-DD ou datetime) ou Date; retorna string no formato do locale
+ * (ex: "01/02/2026" para pt-BR, "02/01/2026" para en-US).
+ *
+ * @param dateOrIso - Data como Date ou string ISO (apenas data ou com hora)
+ * @param settings - Configurações do tenant (locale, timezone)
+ * @returns String formatada apenas com data
+ */
+export function formatDateForDisplay(
+    dateOrIso: Date | string,
+    settings: TenantFormatSettings
+): string {
+    let date: Date
+    if (dateOrIso instanceof Date) {
+        date = dateOrIso
+    } else {
+        const s = String(dateOrIso).trim()
+        if (s.length >= 10) {
+            const y = parseInt(s.slice(0, 4), 10)
+            const m = parseInt(s.slice(5, 7), 10) - 1
+            const d = parseInt(s.slice(8, 10), 10)
+            if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                // Meio-dia UTC para evitar troca de dia ao formatar em outro fuso
+                date = new Date(Date.UTC(y, m, d, 12, 0, 0, 0))
+            } else {
+                date = new Date(s)
+            }
+        } else {
+            date = new Date(s)
+        }
+    }
+    return formatLocalDateOnly(date, settings)
+}
+
+/**
  * Converte uma data local (timezone do tenant) para UTC início do dia (00:00:00).
  *
  * Usa Intl.DateTimeFormat para converter corretamente considerando o timezone do tenant,
