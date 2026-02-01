@@ -44,7 +44,10 @@ from app.report.pdf_list import (
 )
 from app.report.pdf_demand import build_demand_day_schedules
 from app.report.pdf_layout import (
-    build_report_with_schedule_body,
+    COVER_HEIGHT_PT,
+    build_report_cover_only,
+    get_report_cover_total_height,
+    merge_pdf_cover_with_body_first_page,
     parse_filters_from_frontend,
     query_params_to_filter_parts,
 )
@@ -3057,7 +3060,13 @@ def report_demand_pdf(
         )
         if not schedules:
             raise HTTPException(status_code=400, detail="Nenhuma demanda no período selecionado")
+        import os
         from reportlab.lib.pagesizes import A4, landscape
+
+        from output.day import expand_schedule_rows_for_test, render_multi_day_pdf_body_bytes
+
+        if os.environ.get("TURNA_TEST_TRIPLE_SCHEDULE_ROWS") == "1":
+            schedules = expand_schedule_rows_for_test(schedules, factor=3)
         filters_parts = parse_filters_from_frontend(filters)
         if not filters_parts:
             params = {"start_at": start_at, "end_at": end_at, "hospital_id": hospital_id, "procedure": procedure}
@@ -3067,11 +3076,29 @@ def report_demand_pdf(
                 "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
             }
             filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
-        pdf_bytes = build_report_with_schedule_body(
+        cover_bytes = build_report_cover_only(
             report_title="Relatório de demandas",
             filters=filters_parts,
-            schedules=schedules,
             pagesize=landscape(A4),
+        )
+        _, page_h = landscape(A4)
+        try:
+            cover_total_height = get_report_cover_total_height(
+                report_title="Relatório de demandas",
+                filters=filters_parts,
+                pagesize=landscape(A4),
+            )
+        except Exception:
+            cover_total_height = COVER_HEIGHT_PT
+        first_page_content_top_y = page_h - cover_total_height
+        body_bytes = render_multi_day_pdf_body_bytes(
+            schedules,
+            first_page_content_top_y=first_page_content_top_y,
+        )
+        pdf_bytes = merge_pdf_cover_with_body_first_page(
+            cover_bytes,
+            body_bytes,
+            capa_height_pt=cover_total_height,
         )
         return Response(
             content=pdf_bytes,

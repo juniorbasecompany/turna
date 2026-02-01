@@ -321,6 +321,51 @@ def build_report_cover_only(
     )
 
 
+def get_report_cover_total_height(
+    report_title: str,
+    filters: list[tuple[str, str]] | None = None,
+    pagesize=None,
+) -> float:
+    """
+    Calcula a altura total da capa (topMargin + conteúdo) em pontos.
+    Usado para reservar espaço da capa na 1ª página do corpo.
+    """
+    _ensure_reportlab()
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+
+    size = pagesize if pagesize is not None else A4
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=size,
+        rightMargin=1 * cm,
+        leftMargin=1 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
+    )
+    styles = getSampleStyleSheet()
+    elements: list = []
+
+    elements.extend(_build_header_elements(doc, styles))
+    elements.append(Spacer(1, 4))
+    elements.extend(_build_title_elements(report_title, styles, doc))
+
+    normalized_filters = _normalize_filters(filters)
+    if normalized_filters:
+        elements.extend(_build_filters_elements(normalized_filters, doc, styles))
+
+    total_h = 0.0
+    for el in elements:
+        _, h = el.wrap(doc.width, doc.height)
+        total_h += h
+
+    # Somar topMargin, porque o conteúdo começa abaixo da margem superior.
+    return float(total_h + doc.topMargin)
+
+
 def _schedule_doc_template(buf, pagesize, rightMargin, leftMargin, topMargin, bottomMargin):
     """
     Cria SimpleDocTemplate com Frame sem padding lateral (leftPadding/rightPadding = 0)
@@ -409,6 +454,10 @@ def format_filters_text(parts: list[tuple[str, str]]) -> str:
     return " | ".join(f"{label}: {value}" for label, value in parts if value)
 
 
+# Altura de fallback para a capa (em pontos) quando não for possível calcular dinamicamente.
+COVER_HEIGHT_PT = 230
+
+
 def merge_pdf_with_cover(cover_bytes: bytes, content_bytes: bytes) -> bytes:
     """
     Concatena PDF de capa (primeira página) com o PDF de conteúdo.
@@ -424,4 +473,78 @@ def merge_pdf_with_cover(cover_bytes: bytes, content_bytes: bytes) -> bytes:
     out = doc_cover.tobytes()
     doc_cover.close()
     doc_content.close()
+    return out
+
+
+def merge_pdf_cover_with_body_first_page(
+    cover_bytes: bytes,
+    body_bytes: bytes,
+    capa_height_pt: float,
+) -> bytes:
+    """
+    Monta PDF com capa no topo da primeira página e corpo na mesma página logo abaixo.
+    Página 1 = topo com capa (capa_height_pt) + conteúdo da primeira página do corpo;
+    páginas 2, 3, ... = restantes páginas do corpo.
+    Requer que o corpo tenha sido gerado com first_page_content_top_y reservando o topo.
+    Capa: show_pdf_page com clip; fallback rasterizado sem flip para evitar espelhamento.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as e:
+        raise RuntimeError("PyMuPDF (fitz) necessário para mesclar PDFs. Instale com: pip install pymupdf") from e
+    doc_cover = fitz.open(stream=cover_bytes, filetype="pdf")
+    doc_body = fitz.open(stream=body_bytes, filetype="pdf")
+    if len(doc_cover) == 0 or len(doc_body) == 0:
+        doc_cover.close()
+        doc_body.close()
+        return body_bytes if len(doc_body) > 0 else cover_bytes
+    cover_page = doc_cover[0]
+    body_first = doc_body[0]
+    r_cover = cover_page.rect
+    r_body = body_first.rect
+    cover_h = min(float(capa_height_pt), float(r_cover.height))
+
+    def _is_origin_top(page) -> bool:
+        try:
+            words = page.get_text("words") or []
+        except Exception:
+            return False
+        if not words:
+            return False
+        for w in words:
+            txt = (w[4] or "").strip().lower()
+            if txt.startswith("turna") or txt.startswith("relatório"):
+                return float(w[1]) < (page.rect.height / 2.0)
+        return float(words[0][1]) < (page.rect.height / 2.0)
+
+    origin_top = _is_origin_top(cover_page)
+    if origin_top:
+        # Origem no topo (y cresce para baixo): topo = y0 .. y0 + cover_h
+        clip_cover = fitz.Rect(r_cover.x0, r_cover.y0, r_cover.x1, r_cover.y0 + cover_h)
+        rect_top = fitz.Rect(r_body.x0, r_body.y0, r_body.x1, r_body.y0 + cover_h)
+    else:
+        # Origem no fundo (y cresce para cima): topo = y1 - cover_h .. y1
+        clip_cover = fitz.Rect(r_cover.x0, r_cover.y1 - cover_h, r_cover.x1, r_cover.y1)
+        rect_top = fitz.Rect(r_body.x0, r_body.y1 - cover_h, r_body.x1, r_body.y1)
+    # Novo PDF: página 0 = cópia da primeira página do corpo.
+    doc_out = fitz.open()
+    doc_out.insert_pdf(doc_body, from_page=0, to_page=0)
+    out_page = doc_out[0]
+    # Desenhar a capa no topo: pixmap do topo da capa → PIL flip vertical → PNG → insert.
+    # (PDF desenha a 1ª linha da imagem na base do rect; sem flip a capa sairia invertida.)
+    try:
+        out_page.show_pdf_page(
+            rect_top, doc_cover, 0, clip=clip_cover, overlay=True
+        )
+    except Exception:
+        # Fallback: rasterizar a capa sem flip para evitar espelhamento.
+        pix = cover_page.get_pixmap(clip=clip_cover)
+        out_page.insert_image(rect_top, pixmap=pix, overlay=True)
+    # Anexar páginas 1 em diante do corpo.
+    if len(doc_body) > 1:
+        doc_out.insert_pdf(doc_body, from_page=1, to_page=len(doc_body) - 1)
+    out = doc_out.tobytes()
+    doc_out.close()
+    doc_cover.close()
+    doc_body.close()
     return out

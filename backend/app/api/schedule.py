@@ -10,7 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
 from app.report.pdf_demand import demands_to_day_schedules
 from app.report.pdf_layout import (
-    build_report_with_schedule_body,
+    COVER_HEIGHT_PT,
+    build_report_cover_only,
+    get_report_cover_total_height,
+    merge_pdf_cover_with_body_first_page,
     parse_filters_from_frontend,
     query_params_to_filter_parts,
 )
@@ -625,9 +628,15 @@ def report_schedule_pdf(
         if not all_schedules:
             raise HTTPException(status_code=400, detail="Nenhuma escala no período selecionado")
         try:
+            import os
             from reportlab.lib.pagesizes import A4, landscape
+
+            from output.day import expand_schedule_rows_for_test, render_multi_day_pdf_body_bytes
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
+        # Para teste: triplicar linhas por member e forçar quebra de página no mesmo dia.
+        if os.environ.get("TURNA_TEST_TRIPLE_SCHEDULE_ROWS") == "1":
+            all_schedules = expand_schedule_rows_for_test(all_schedules, factor=3)
         filters_parts = parse_filters_from_frontend(filters)
         if not filters_parts:
             params = {
@@ -643,11 +652,29 @@ def report_schedule_pdf(
                 "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
-        pdf_bytes = build_report_with_schedule_body(
+        cover_bytes = build_report_cover_only(
             report_title="Relatório de escalas",
             filters=filters_parts,
-            schedules=all_schedules,
             pagesize=landscape(A4),
+        )
+        _, page_h = landscape(A4)
+        try:
+            cover_total_height = get_report_cover_total_height(
+                report_title="Relatório de escalas",
+                filters=filters_parts,
+                pagesize=landscape(A4),
+            )
+        except Exception:
+            cover_total_height = COVER_HEIGHT_PT
+        first_page_content_top_y = page_h - cover_total_height
+        body_bytes = render_multi_day_pdf_body_bytes(
+            all_schedules,
+            first_page_content_top_y=first_page_content_top_y,
+        )
+        pdf_bytes = merge_pdf_cover_with_body_first_page(
+            cover_bytes,
+            body_bytes,
+            capa_height_pt=cover_total_height,
         )
         return Response(
             content=pdf_bytes,

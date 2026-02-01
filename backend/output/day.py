@@ -379,7 +379,7 @@ _REPORT_BAR_BLUE = "#2563EB"
 # Dimensões do layout da grade (usado em _render e no Flowable)
 _GRID_MARGIN = 0  # margem interna em volta do canvas (grade); reduzida para evitar faixa em branco
 _GRID_HEADER_H = 42
-_GRID_EVENT_BOX_H = 34
+_GRID_EVENT_BOX_H = 64
 _GRID_EVENT_V_PAD = 4
 _GRID_ROW_H = _GRID_EVENT_BOX_H + 2 * _GRID_EVENT_V_PAD
 _GRID_NAME_COL_W = 100
@@ -596,10 +596,16 @@ class DayGridFlowable(_get_flowable_base()):
         canvas.restoreState()
 
 
-def render_multi_day_pdf_body_bytes(schedules: list[DaySchedule]) -> bytes:
+def render_multi_day_pdf_body_bytes(
+    schedules: list[DaySchedule],
+    first_page_content_top_y: float | None = None,
+) -> bytes:
     """
     Renderiza apenas o corpo (grades de dias) no PDF, sem cabeçalho (Turna, título, filtros).
-    Uma página landscape por dia. Usado junto com capa Platypus (build_report_cover_only + merge).
+    Uma página landscape por dia; quebra de página dentro do mesmo dia quando não cabe.
+    Usado junto com capa Platypus (build_report_cover_only + merge_pdf_cover_with_body_first_page).
+    first_page_content_top_y: se informado, reserva o topo da primeira página para a capa
+    (corpo começa logo abaixo na mesma página).
     """
     if not schedules:
         raise ValueError("schedules vazio")
@@ -615,6 +621,8 @@ def render_multi_day_pdf_body_bytes(schedules: list[DaySchedule]) -> bytes:
     c = Canvas(buf, pagesize=(page_w, page_h))
 
     for i, schedule in enumerate(schedules):
+        # Só a primeira página do corpo usa content_top_y (espaço reservado para a capa).
+        content_top_y = first_page_content_top_y if i == 0 else None
         _render_pdf_to_canvas(
             c,
             schedule,
@@ -622,13 +630,38 @@ def render_multi_day_pdf_body_bytes(schedules: list[DaySchedule]) -> bytes:
             page_h=page_h,
             colors=colors,
             pdfmetrics=pdfmetrics,
-            content_top_y=None,
+            content_top_y=content_top_y,
         )
         if i != len(schedules) - 1:
             c.showPage()
 
     c.save()
     return buf.getvalue()
+
+
+def expand_schedule_rows_for_test(
+    schedules: list[DaySchedule],
+    factor: int = 3,
+) -> list[DaySchedule]:
+    """
+    Replica cada linha (member) N vezes no mesmo dia, para forçar quebra de página em testes.
+    Apenas para uso com TURNA_TEST_TRIPLE_SCHEDULE_ROWS=1.
+    """
+    result: list[DaySchedule] = []
+    for s in schedules:
+        new_rows: list[Row] = []
+        for row in s.rows:
+            for _ in range(factor):
+                new_rows.append(row)
+        result.append(
+            DaySchedule(
+                title=s.title,
+                day_start_min=s.day_start_min,
+                day_end_min=s.day_end_min,
+                rows=new_rows,
+            )
+        )
+    return result
 
 
 def render_multi_day_pdf_bytes(
@@ -655,7 +688,11 @@ def _render_pdf_to_canvas(
     pdfmetrics,
     content_top_y: float | None = None,
 ) -> None:
-    margin = 18
+    from reportlab.lib.units import cm
+
+    margin_x = 1 * cm
+    margin_top = 1.5 * cm
+    margin_bottom = 1.5 * cm
     header_h = 42
     # Altura do event fixa; espaço acima/abaixo do event = event_v_pad
     event_box_h = 34
@@ -663,8 +700,8 @@ def _render_pdf_to_canvas(
     row_h = event_box_h + 2 * event_v_pad
     name_col_w = 100
 
-    grid_x0 = margin + name_col_w
-    grid_x1 = page_w - margin
+    grid_x0 = margin_x + name_col_w
+    grid_x1 = page_w - margin_x
     grid_w = grid_x1 - grid_x0
     if grid_w <= 100:
         raise RuntimeError("Página pequena demais para o layout")
@@ -676,7 +713,7 @@ def _render_pdf_to_canvas(
     # Topo da área de desenho: abaixo do header do relatório (1ª página) ou topo da página.
     # Após showPage() (continuação do mesmo dia), usar topo completo da nova página.
     current_top_y: list[float] = [
-        content_top_y if content_top_y is not None else page_h - margin
+        content_top_y if content_top_y is not None else page_h - margin_top
     ]
 
     def x_at(minute: int) -> float:
@@ -691,20 +728,20 @@ def _render_pdf_to_canvas(
 
         # Faixa azul do cabeçalho (mesmo padrão do cabeçalho da tabela nos relatórios)
         c.setFillColor(bar_blue)
-        c.rect(margin, y_grid_top, page_w - 2 * margin, header_h, fill=1, stroke=0)
+        c.rect(margin_x, y_grid_top, page_w - 2 * margin_x, header_h, fill=1, stroke=0)
 
         # Título do dia e marcas de hora em branco
         c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(margin, y_top - 16, schedule.title)
+        c.drawString(margin_x, y_top - 16, schedule.title)
 
         # Linha base do cabeçalho da grade
         c.setStrokeColor(colors.lightgrey)
         c.setLineWidth(0.25)
-        c.line(margin, y_grid_top, page_w - margin, y_grid_top)
+        c.line(margin_x, y_grid_top, page_w - margin_x, y_grid_top)
 
         # Coluna nomes (separador)
-        c.line(grid_x0, y_grid_top, grid_x0, margin)
+        c.line(grid_x0, y_grid_top, grid_x0, margin_bottom)
 
         # Marcas de hora; linhas verticais pontilhadas
         c.setFont("Helvetica", 8)
@@ -717,7 +754,7 @@ def _render_pdf_to_canvas(
             major = (m % 60 == 0)
             c.setStrokeColor(colors.lightgrey)
             c.setLineWidth(0.25)
-            c.line(x, y_grid_top, x, margin)
+            c.line(x, y_grid_top, x, margin_bottom)
             if major and (day_start <= m <= day_end):
                 c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}")
         c.setDash([])
@@ -729,12 +766,12 @@ def _render_pdf_to_canvas(
         # Linha horizontal
         c.setStrokeColor(colors.lightgrey)
         c.setLineWidth(0.25)
-        c.line(margin, y0, page_w - margin, y0)
+        c.line(margin_x, y0, page_w - margin_x, y0)
 
         # Nome (sem numeração; alinhado à esquerda)
         c.setFillColor(colors.black)
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(margin + 2, y0 + event_v_pad + 6, row.name)
+        c.drawString(margin_x + 2, y0 + event_v_pad + 6, row.name)
 
         # Férias (quadro vazio com borda pontilhada)
         _corner_radius = 3
@@ -820,9 +857,9 @@ def _render_pdf_to_canvas(
     y = draw_header()
     idx = 1
     for row in schedule.rows:
-        if y - row_h < margin + 6:
+        if y - row_h < margin_bottom + 6:
             c.showPage()
-            current_top_y[0] = page_h - margin
+            current_top_y[0] = page_h - margin_top
             y = draw_header()
         draw_row(y, idx, row)
         y -= row_h
