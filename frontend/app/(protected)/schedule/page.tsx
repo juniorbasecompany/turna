@@ -62,10 +62,9 @@ export default function SchedulePage() {
     // Ref para AbortController do SSE (permite cancelar ao sair da página)
     const sseAbortControllerRef = useRef<AbortController | null>(null)
 
-    // Filtros usando hook reutilizável
+    // Filtros usando hook reutilizável (retorna array; array vazio = zero resultados)
     const statusFilters = useEntityFilters<string>({
         allFilters: ALL_STATUS_FILTERS,
-        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
@@ -164,23 +163,12 @@ export default function SchedulePage() {
         const params: Record<string, string | number | boolean | null> = {
             period_start_at: filterStartDate ? filterStartDate.toISOString() : null,
             period_end_at: filterEndDate ? filterEndDate.toISOString() : null,
+            ...statusFilters.toListParam('status_list'),
         }
-
-        const statusList = Array.from(statusFilters.selectedFilters)
-        if (statusList.length < ALL_STATUS_FILTERS.length) {
-            params.status_list = statusList.join(',')
-        }
-
-        if (filterName.trim()) {
-            params.name = filterName.trim()
-        }
-
-        if (filterHospitalId != null) {
-            params.hospital_id = filterHospitalId
-        }
-
+        if (filterName.trim()) params.name = filterName.trim()
+        if (filterHospitalId != null) params.hospital_id = filterHospitalId
         return params
-    }, [filterStartDate, filterEndDate, statusFilters.selectedFilters, filterName, filterHospitalId, settings])
+    }, [filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, statusFilters.toListParam, filterName, filterHospitalId, settings])
 
     // reportFilters: definido depois de getStatusLabel (usado no useMemo)
     const reportFiltersForSchedule = useMemo((): { label: string; value: string }[] => {
@@ -208,11 +196,10 @@ export default function SchedulePage() {
                 value: filterEndDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
             })
         }
-        const statusList = Array.from(statusFilters.selectedFilters)
-        if (statusList.length > 0 && statusList.length < ALL_STATUS_FILTERS.length) {
+        if (statusFilters.isFilterActive) {
             list.push({
                 label: FILTER_STATUS_LABEL,
-                value: statusList.map(getStatusLabel).join(', '),
+                value: statusFilters.selectedValues.map(getStatusLabel).join(', '),
             })
         }
         if (filterHospitalId != null) {
@@ -222,7 +209,7 @@ export default function SchedulePage() {
             }
         }
         return list
-    }, [filterName, filterStartDate, filterEndDate, statusFilters.selectedFilters, filterHospitalId, hospitals])
+    }, [filterName, filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, filterHospitalId, hospitals])
 
     // useEntityPage
     const {
@@ -660,14 +647,12 @@ export default function SchedulePage() {
                     return hasButtons ? null : error
                 })()}
                 createCard={
-                    !isEditing ? (
-                        <CreateCard
-                            label={generating ? 'Calculando...' : 'Calcular a escala'}
-                            subtitle="Clique para calcular a escala conforme o período"
-                            onClick={handleGenerateSchedule}
-                            disabled={generating}
-                        />
-                    ) : undefined
+                    <CreateCard
+                        label={generating ? 'Calculando...' : 'Calcular a escala'}
+                        subtitle="Clique para calcular a escala conforme o período"
+                        onClick={handleGenerateSchedule}
+                        disabled={generating}
+                    />
                 }
                 filterContent={
                     !isEditing ? (
@@ -701,7 +686,7 @@ export default function SchedulePage() {
                             <FilterButtons
                                 title={FILTER_STATUS_LABEL}
                                 options={statusOptions}
-                                selectedValues={statusFilters.selectedFilters}
+                                selectedValues={statusFilters.selectedValues}
                                 onToggle={statusFilters.toggleFilter}
                                 onToggleAll={statusFilters.toggleAll}
                             />

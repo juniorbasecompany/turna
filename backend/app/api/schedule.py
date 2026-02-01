@@ -43,17 +43,21 @@ def _resolve_schedule_status_filters(
 ) -> tuple[list[ScheduleStatus] | None, list[tuple[str, str]]]:
     """
     Normaliza filtros de status para Schedule, aceitando lista separada por vírgula.
+    Parâmetro presente mas vazio (ex: status_list='') significa "nenhum selecionado" → lista vazia (zero resultados).
     """
     filters_parts: list[tuple[str, str]] = []
     values: list[ScheduleStatus] | None = None
 
-    if status_list:
+    if status_list is not None:
         raw = [s.strip().upper() for s in status_list.split(",") if s.strip()]
-        invalid = [s for s in raw if s not in {"DRAFT", "PUBLISHED", "ARCHIVED"}]
-        if invalid:
-            raise HTTPException(status_code=400, detail=f"status_list inválido: {', '.join(invalid)}")
-        values = [ScheduleStatus[s] for s in raw]
-        filters_parts.append(("Status", ", ".join(raw)))
+        if not raw:
+            values = []
+        else:
+            invalid = [s for s in raw if s not in {"DRAFT", "PUBLISHED", "ARCHIVED"}]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"status_list inválido: {', '.join(invalid)}")
+            values = [ScheduleStatus[s] for s in raw]
+            filters_parts.append(("Status", ", ".join(raw)))
     elif status:
         status_upper = status.strip().upper()
         try:
@@ -99,7 +103,7 @@ def _schedule_list_queries(
         .where(Demand.schedule_status.is_not(None))
     )
 
-    if status_values:
+    if status_values is not None:
         query = query.where(Demand.schedule_status.in_(status_values))
         count_query = count_query.where(Demand.schedule_status.in_(status_values))
     if start_time_from is not None:

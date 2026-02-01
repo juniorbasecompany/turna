@@ -49,15 +49,13 @@ export default function MemberPage() {
     const ALL_STATUS_FILTERS: string[] = ['PENDING', 'ACTIVE', 'REJECTED', 'REMOVED']
     const ALL_ROLE_FILTERS: string[] = ['account', 'admin']
 
-    // Filtros usando hook reutilizável
+    // Filtros usando hook reutilizável (retorna array; array vazio = zero resultados)
     const statusFilters = useEntityFilters<string>({
         allFilters: ALL_STATUS_FILTERS,
-        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
     const roleFilters = useEntityFilters<string>({
         allFilters: ALL_ROLE_FILTERS,
-        initialFilters: new Set(ALL_ROLE_FILTERS),
     })
 
     // Configuração inicial (status PENDING para novo convite)
@@ -141,22 +139,20 @@ export default function MemberPage() {
         )
     }
 
-    // Calcular additionalListParams reativo baseado nos filtros (backend aceita lista)
-    const additionalListParams = useMemo(() => {
-        const params: Record<string, string | number | boolean | null> = {}
-
-        const statusList = Array.from(statusFilters.selectedFilters)
-        if (statusList.length < ALL_STATUS_FILTERS.length) {
-            params.status_list = statusList.join(',')
-        }
-
-        const roleList = Array.from(roleFilters.selectedFilters)
-        if (roleList.length < ALL_ROLE_FILTERS.length) {
-            params.role_list = roleList.join(',')
-        }
-
-        return params
-    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+    const additionalListParams = useMemo(
+        () => ({
+            ...statusFilters.toListParam('status_list'),
+            ...roleFilters.toListParam('role_list'),
+        }),
+        [
+            statusFilters.selectedValues,
+            statusFilters.isFilterActive,
+            statusFilters.toListParam,
+            roleFilters.selectedValues,
+            roleFilters.isFilterActive,
+            roleFilters.toListParam,
+        ]
+    )
 
     // useEntityPage
     const {
@@ -216,7 +212,7 @@ export default function MemberPage() {
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
+    }, [statusFilters.selectedValues, statusFilters.isFilterActive, roleFilters.selectedValues, roleFilters.isFilterActive])
 
     const filteredMembers = members
     const paginatedMembers = members
@@ -276,25 +272,20 @@ export default function MemberPage() {
 
     const reportFilters = useMemo((): { label: string; value: string }[] => {
         const list: { label: string; value: string }[] = []
-        const statusList = Array.from(statusFilters.selectedFilters)
-        if (statusList.length > 0 && statusList.length < ALL_STATUS_FILTERS.length) {
+        if (statusFilters.isFilterActive) {
             list.push({
                 label: SITUATION_FILTER_LABEL,
-                value: statusList.map(getStatusLabel).join(', '),
+                value: statusFilters.selectedValues.map(getStatusLabel).join(', '),
             })
         }
-        const roleList = Array.from(roleFilters.selectedFilters)
-        if (roleList.length > 0 && roleList.length < ALL_ROLE_FILTERS.length) {
+        if (roleFilters.isFilterActive) {
             list.push({
                 label: ROLE_FILTER_LABEL,
-                value: roleList.map(getRoleLabel).join(', '),
+                value: roleFilters.selectedValues.map(getRoleLabel).join(', '),
             })
         }
         return list
-    }, [statusFilters.selectedFilters, roleFilters.selectedFilters])
-
-    // Handlers para filtros (usando hooks reutilizáveis)
-    // Os hooks já gerenciam o estado, apenas precisamos usar as funções retornadas
+    }, [statusFilters.selectedValues, statusFilters.isFilterActive, roleFilters.selectedValues, roleFilters.isFilterActive])
 
     // Opções para os filtros (ordenadas automaticamente pelo componente)
     const statusOptions: FilterOption<string>[] = [
@@ -455,14 +446,14 @@ export default function MemberPage() {
                             <FilterButtons
                                 title="Situação"
                                 options={statusOptions}
-                                selectedValues={statusFilters.selectedFilters}
+                                selectedValues={statusFilters.selectedValues}
                                 onToggle={statusFilters.toggleFilter}
                                 onToggleAll={statusFilters.toggleAll}
                             />
                             <FilterButtons
                                 title={ROLE_FILTER_LABEL}
                                 options={roleOptions}
-                                selectedValues={roleFilters.selectedFilters}
+                                selectedValues={roleFilters.selectedValues}
                                 onToggle={roleFilters.toggleFilter}
                                 onToggleAll={roleFilters.toggleAll}
                                 allOptionLabel="Todas"

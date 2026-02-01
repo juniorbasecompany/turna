@@ -24,12 +24,11 @@ export interface FilterOption<T = string> {
 interface FilterButtonsProps<T = string> {
     title: string
     options: FilterOption<T>[]
-    selectedValues: Set<T>
+    /** Array de valores selecionados. Usar selectedValues.includes(valor) para filtrar. */
+    selectedValues: T[]
     onToggle: (value: T) => void
-    onToggleAll?: () => void
-    showAllOption?: boolean
+    onToggleAll: () => void
     allOptionLabel?: string
-    disabled?: boolean
 }
 
 export function FilterButtons<T = string>({
@@ -38,9 +37,7 @@ export function FilterButtons<T = string>({
     selectedValues,
     onToggle,
     onToggleAll,
-    showAllOption = true,
     allOptionLabel = 'Todos',
-    disabled = false,
 }: FilterButtonsProps<T>) {
     // Ordenar opções alfabeticamente por label
     const sortedOptions = useMemo(() => {
@@ -49,7 +46,7 @@ export function FilterButtons<T = string>({
 
     // Verificar se todos estão selecionados
     const allSelected = useMemo(() => {
-        return sortedOptions.every((option) => selectedValues.has(option.value))
+        return sortedOptions.every((option) => selectedValues.includes(option.value))
     }, [sortedOptions, selectedValues])
 
     // Componente interno para checkbox customizado
@@ -94,7 +91,6 @@ export function FilterButtons<T = string>({
                         }
                         : undefined
                     }
-                    disabled={disabled}
                     readOnly
                     tabIndex={-1}
                 />
@@ -118,63 +114,30 @@ export function FilterButtons<T = string>({
         )
     }
 
-    // Handler para toggle all
-    const handleToggleAll = () => {
-        if (onToggleAll) {
-            onToggleAll()
-        } else {
-            // Se não há handler customizado, usar lógica padrão
-            if (allSelected) {
-                // Deselecionar todos
-                sortedOptions.forEach((option) => {
-                    if (selectedValues.has(option.value)) {
-                        onToggle(option.value)
-                    }
-                })
-            } else {
-                // Selecionar todos
-                sortedOptions.forEach((option) => {
-                    if (!selectedValues.has(option.value)) {
-                        onToggle(option.value)
-                    }
-                })
-            }
-        }
-    }
-
     return (
         <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
                 {title}
             </label>
             <div className="flex flex-wrap gap-3">
-                {showAllOption && (
-                    <button
-                        type="button"
-                        onClick={handleToggleAll}
-                        disabled={disabled}
-                        className={`
-                            flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors
-                            bg-white border-gray-300 hover:bg-gray-50
-                            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                        `}
-                    >
-                        <CustomCheckbox 
-                            checked={allSelected} 
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                handleToggleAll()
-                            }}
-                        />
-                        <span className={allSelected ? 'text-gray-900' : 'text-gray-700'}>
-                            {allOptionLabel}
-                        </span>
-                    </button>
-                )}
-
+                <button
+                    type="button"
+                    onClick={onToggleAll}
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors bg-white border-gray-300 hover:bg-gray-50 cursor-pointer"
+                >
+                    <CustomCheckbox 
+                        checked={allSelected} 
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onToggleAll()
+                        }}
+                    />
+                    <span className={allSelected ? 'text-gray-900' : 'text-gray-700'}>
+                        {allOptionLabel}
+                    </span>
+                </button>
                 {sortedOptions.map((option, index) => {
-                    const isSelected = selectedValues.has(option.value)
-                    // Usar index como fallback para key quando value é null ou undefined
+                    const isSelected = selectedValues.includes(option.value)
                     const key = option.value !== null && option.value !== undefined
                         ? String(option.value)
                         : `null-${index}`
@@ -183,12 +146,7 @@ export function FilterButtons<T = string>({
                             key={key}
                             type="button"
                             onClick={() => onToggle(option.value)}
-                            disabled={disabled}
-                            className={`
-                                flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors
-                                bg-white border-gray-300 hover:bg-gray-50
-                                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                            `}
+                            className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors bg-white border-gray-300 hover:bg-gray-50 cursor-pointer"
                         >
                             <CustomCheckbox 
                                 checked={isSelected} 

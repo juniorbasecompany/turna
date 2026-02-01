@@ -34,15 +34,13 @@ export default function JobPage() {
     const ALL_JOB_TYPE_FILTERS: string[] = ['PING', 'EXTRACT_DEMAND', 'GENERATE_SCHEDULE', 'GENERATE_THUMBNAIL']
     const ALL_STATUS_FILTERS: string[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED']
 
-    // Filtros usando hook reutilizável
+    // Filtros usando hook reutilizável (retorna array; array vazio = zero resultados)
     const jobTypeFilters = useEntityFilters<string>({
         allFilters: ALL_JOB_TYPE_FILTERS,
-        initialFilters: new Set(ALL_JOB_TYPE_FILTERS),
     })
 
     const statusFilters = useEntityFilters<string>({
         allFilters: ALL_STATUS_FILTERS,
-        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
     // Filtros de período de início (started_at)
@@ -76,53 +74,24 @@ export default function JobPage() {
         return true
     }
 
-    // Calcular additionalListParams reativo (apenas filtros suportados pela API)
     const additionalListParams = useMemo(() => {
-        const params: Record<string, string | number | boolean | null> = {}
-
-        // Job type: passar apenas se exatamente 1 estiver selecionado
-        if (jobTypeFilters.selectedFilters.size === 1) {
-            const jobType = Array.from(jobTypeFilters.selectedFilters)[0]
-            params.job_type = jobType
+        const params: Record<string, string> = {
+            ...jobTypeFilters.toListParam('job_type_list'),
+            ...statusFilters.toListParam('status_list'),
         }
-
-        // Status: passar apenas se exatamente 1 estiver selecionado
-        if (statusFilters.selectedFilters.size === 1) {
-            const status = Array.from(statusFilters.selectedFilters)[0]
-            params.status = status
-        }
-
-        // Nota: filtros de data (started_at) são aplicados no frontend para evitar problemas de timezone
-
+        if (filterStartDate) params.started_at_from = filterStartDate.toISOString()
+        if (filterEndDate) params.started_at_to = filterEndDate.toISOString()
         return Object.keys(params).length > 0 ? params : undefined
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters])
-
-    // Verificar se precisa filtrar no frontend (quando múltiplos valores estão selecionados ou há filtros de data)
-    const needsFrontendFilter = useMemo(() => {
-        // Se há filtros de data, sempre filtra no frontend (para evitar problemas de timezone)
-        if (filterStartDate || filterEndDate) {
-            return true
-        }
-
-        const allJobTypesSelected = jobTypeFilters.selectedFilters.size === ALL_JOB_TYPE_FILTERS.length
-        const allStatusSelected = statusFilters.selectedFilters.size === ALL_STATUS_FILTERS.length
-
-        // Se todos estão selecionados, não precisa filtrar
-        if (allJobTypesSelected && allStatusSelected) {
-            return false
-        }
-
-        // Se apenas 1 de cada está selecionado, backend filtra (não precisa filtrar no frontend)
-        const singleJobTypeSelected = jobTypeFilters.selectedFilters.size === 1
-        const singleStatusSelected = statusFilters.selectedFilters.size === 1
-
-        if (singleJobTypeSelected && singleStatusSelected) {
-            return false
-        }
-
-        // Se múltiplos estão selecionados, precisa filtrar no frontend
-        return true
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, filterStartDate, filterEndDate])
+    }, [
+        jobTypeFilters.selectedValues,
+        jobTypeFilters.isFilterActive,
+        jobTypeFilters.toListParam,
+        statusFilters.selectedValues,
+        statusFilters.isFilterActive,
+        statusFilters.toListParam,
+        filterStartDate,
+        filterEndDate,
+    ])
 
     // Estado para controlar interrupção e exclusão customizada
     const [interrupting, setInterrupting] = useState(false)
@@ -454,67 +423,16 @@ export default function JobPage() {
         }
     }
 
-    // Filtrar jobs no frontend quando necessário
-    const filteredJobs = useMemo(() => {
-        let filtered = jobs
-
-        // Filtro por job type (no frontend apenas quando múltiplos estão selecionados)
-        if (needsFrontendFilter) {
-            if (jobTypeFilters.selectedFilters.size < ALL_JOB_TYPE_FILTERS.length) {
-                filtered = filtered.filter((job) => jobTypeFilters.selectedFilters.has(job.job_type))
-            }
-        }
-
-        // Filtro por status (no frontend apenas quando múltiplos estão selecionados)
-        if (needsFrontendFilter) {
-            if (statusFilters.selectedFilters.size < ALL_STATUS_FILTERS.length) {
-                filtered = filtered.filter((job) => statusFilters.selectedFilters.has(job.status))
-            }
-        }
-
-        // Filtro por período: started_at >= "Desde" e started_at <= "Até"
-        if (filterStartDate) {
-            filtered = filtered.filter((job) => {
-                if (!job.started_at) return false
-                const jobStarted = new Date(job.started_at)
-                return jobStarted >= filterStartDate
-            })
-        }
-
-        if (filterEndDate) {
-            filtered = filtered.filter((job) => {
-                if (!job.started_at) return false
-                const jobStarted = new Date(job.started_at)
-                return jobStarted <= filterEndDate
-            })
-        }
-
-        return filtered
-    }, [jobs, jobTypeFilters.selectedFilters, statusFilters.selectedFilters, needsFrontendFilter, filterStartDate, filterEndDate])
-
-    // Aplicar paginação no frontend quando há filtro no frontend
-    const paginatedJobs = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return filteredJobs // Backend já paginou
-        }
-        // Paginar no frontend
-        const start = pagination.offset
-        const end = start + pagination.limit
-        return filteredJobs.slice(start, end)
-    }, [filteredJobs, needsFrontendFilter, pagination.offset, pagination.limit])
-
-    // Ajustar total para refletir filtros
-    const displayTotal = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return total // Usar total do backend
-        }
-        return filteredJobs.length // Total após filtro no frontend
-    }, [filteredJobs, needsFrontendFilter, total])
+    // Backend aplica todos os filtros; jobs já vêm filtrados
+    const filteredJobs = jobs
+    const paginatedJobs = jobs
+    const displayTotal = total
 
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [jobTypeFilters.selectedFilters, statusFilters.selectedFilters, filterStartDate, filterEndDate])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
+    }, [additionalListParams])
 
     // Função auxiliar para obter cor do status
     const getStatusColor = (status: string) => {
@@ -740,21 +658,21 @@ export default function JobPage() {
                         <FilterButtons
                             title="Tipo"
                             options={jobTypeOptions}
-                            selectedValues={jobTypeFilters.selectedFilters}
+                            selectedValues={jobTypeFilters.selectedValues}
                             onToggle={jobTypeFilters.toggleFilter}
                             onToggleAll={jobTypeFilters.toggleAll}
                         />
                         <FilterButtons
                             title="Situação"
                             options={statusOptions}
-                            selectedValues={statusFilters.selectedFilters}
+                            selectedValues={statusFilters.selectedValues}
                             onToggle={statusFilters.toggleFilter}
                             onToggleAll={statusFilters.toggleAll}
                         />
                     </FilterPanel>
                 }
             >
-                {(needsFrontendFilter ? paginatedJobs : filteredJobs).map((job) => {
+                {paginatedJobs.map((job) => {
                     const isSelected = selectedJobs.has(job.id)
                     return (
                         <EntityCard

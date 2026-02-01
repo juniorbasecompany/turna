@@ -12,16 +12,16 @@ export async function GET(request: NextRequest) {
         return auth.error
     }
 
+    // Passar todos os query params para o backend
     const { searchParams } = new URL(request.url)
+    const params: Record<string, string> = {}
+    searchParams.forEach((value, key) => {
+        params[key] = value
+    })
 
     const result = await backendFetch('/job/list', {
         token: auth.token,
-        params: {
-            job_type: searchParams.get('job_type'),
-            status: searchParams.get('status'),
-            limit: searchParams.get('limit'),
-            offset: searchParams.get('offset'),
-        },
+        params,
     })
 
     if (!result.ok) {

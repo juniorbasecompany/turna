@@ -1286,10 +1286,53 @@ class JobListResponse(PydanticBaseModel):
     total: int
 
 
+def _resolve_job_list_filters(
+    *,
+    job_type: Optional[str],
+    job_type_list: Optional[str],
+    status: Optional[str],
+    status_list: Optional[str],
+) -> tuple[list[JobType] | None, list[JobStatus] | None]:
+    """
+    Normaliza filtros de job (job_type/status vs listas).
+    Parâmetro presente mas vazio (ex: status_list='') significa "nenhum selecionado" → lista vazia (zero resultados).
+    """
+    job_type_values: list[JobType] | None = None
+    status_values: list[JobStatus] | None = None
+
+    if job_type_list is not None:
+        raw = [s.strip().upper() for s in job_type_list.split(",") if s.strip()]
+        if not raw:
+            job_type_values = []
+        else:
+            invalid = [s for s in raw if s not in {"PING", "EXTRACT_DEMAND", "GENERATE_SCHEDULE", "GENERATE_THUMBNAIL"}]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"job_type_list inválido: {', '.join(invalid)}")
+            job_type_values = [JobType[s] for s in raw]
+    elif job_type:
+        job_type_values = [JobType(job_type.strip().upper())]
+
+    if status_list is not None:
+        raw = [s.strip().upper() for s in status_list.split(",") if s.strip()]
+        if not raw:
+            status_values = []
+        else:
+            invalid = [s for s in raw if s not in {"PENDING", "RUNNING", "COMPLETED", "FAILED"}]
+            if invalid:
+                raise HTTPException(status_code=400, detail=f"status_list inválido: {', '.join(invalid)}")
+            status_values = [JobStatus[s] for s in raw]
+    elif status:
+        status_values = [JobStatus(status.strip().upper())]
+
+    return job_type_values, status_values
+
+
 @router.get("/job/list", response_model=JobListResponse, tags=["Job"])
 def list_jobs(
-    job_type: Optional[str] = Query(None, description="Filtrar por tipo (PING, EXTRACT_DEMAND, GENERATE_SCHEDULE)"),
-    status: Optional[str] = Query(None, description="Filtrar por status (PENDING, RUNNING, COMPLETED, FAILED)"),
+    job_type: Optional[str] = Query(None, description="Filtrar por tipo (singular)"),
+    job_type_list: Optional[str] = Query(None, description="Filtrar por lista de tipos (separado por vírgula)"),
+    status: Optional[str] = Query(None, description="Filtrar por status (singular)"),
+    status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     started_at_from: Optional[str] = Query(None, description="Filtrar jobs iniciados a partir desta data (ISO 8601)"),
     started_at_to: Optional[str] = Query(None, description="Filtrar jobs iniciados até esta data (ISO 8601)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
@@ -1300,20 +1343,12 @@ def list_jobs(
     """
     Lista jobs do tenant atual, com filtros opcionais.
     """
-    # Validar filtros se fornecidos
-    job_type_enum = None
-    if job_type:
-        try:
-            job_type_enum = JobType(job_type.upper())
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Job type inválido: {job_type}")
-
-    status_enum = None
-    if status:
-        try:
-            status_enum = JobStatus(status.upper())
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Status inválido: {status}")
+    job_type_values, status_values = _resolve_job_list_filters(
+        job_type=job_type,
+        job_type_list=job_type_list,
+        status=status,
+        status_list=status_list,
+    )
 
     # Parsear datas de filtro
     started_from_dt = None
@@ -1332,10 +1367,10 @@ def list_jobs(
 
     # Query base
     query = select(Job).where(Job.tenant_id == member.tenant_id)
-    if job_type_enum:
-        query = query.where(Job.job_type == job_type_enum)
-    if status_enum:
-        query = query.where(Job.status == status_enum)
+    if job_type_values is not None:
+        query = query.where(Job.job_type.in_(job_type_values))
+    if status_values is not None:
+        query = query.where(Job.status.in_(status_values))
     if started_from_dt:
         query = query.where(Job.started_at >= started_from_dt)  # type: ignore[attr-defined]
     if started_to_dt:
@@ -1343,10 +1378,10 @@ def list_jobs(
 
     # Contar total antes de aplicar paginação
     count_query = select(func.count(Job.id)).where(Job.tenant_id == member.tenant_id)
-    if job_type_enum:
-        count_query = count_query.where(Job.job_type == job_type_enum)
-    if status_enum:
-        count_query = count_query.where(Job.status == status_enum)
+    if job_type_values is not None:
+        count_query = count_query.where(Job.job_type.in_(job_type_values))
+    if status_values is not None:
+        count_query = count_query.where(Job.status.in_(status_values))
     if started_from_dt:
         count_query = count_query.where(Job.started_at >= started_from_dt)  # type: ignore[attr-defined]
     if started_to_dt:

@@ -605,11 +605,10 @@ export default function FilesPage() {
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
     const [loadingHospitalList, setLoadingHospitalList] = useState(true)
 
-    // Filtro de status usando hook reutilizável
+    // Filtro de status usando hook reutilizável (retorna array; array vazio = zero resultados)
     const ALL_STATUS_FILTERS: (JobStatus | null)[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', null]
     const statusFilters = useEntityFilters<JobStatus | null>({
         allFilters: ALL_STATUS_FILTERS,
-        initialFilters: new Set(ALL_STATUS_FILTERS),
     })
 
     // Configuração inicial para useEntityPage (simplificada, pois File não tem formulário tradicional)
@@ -756,42 +755,24 @@ export default function FilesPage() {
     // Resetar offset quando filtros mudarem
     useEffect(() => {
         paginationHandlers.onFirst()
-    }, [statusFilters.selectedFilters])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
+    }, [statusFilters.selectedValues])
 
-    // Verificar se precisa filtrar no frontend
-    const needsFrontendFilter = useMemo(() => {
-        return statusFilters.selectedFilters.size < ALL_STATUS_FILTERS.length
-    }, [statusFilters.selectedFilters])
-
-    // Filtrar no frontend quando statusFilters está ativo
+    // Filtrar por status no frontend (API File não aceita status_list; job_status é derivado)
     const filteredFiles = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return localFiles  // Backend já retornou todos os dados necessários
-        }
+        if (!statusFilters.isFilterActive) return localFiles
         return localFiles.filter((file) => {
             const status = file.job_status === null ? null : (file.job_status as JobStatus)
-            return statusFilters.selectedFilters.has(status)
+            return statusFilters.selectedValues.includes(status)
         })
-    }, [localFiles, statusFilters.selectedFilters, needsFrontendFilter])
+    }, [localFiles, statusFilters])
 
-    // Aplicar paginação no frontend quando há filtro de status
     const paginatedFiles = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return filteredFiles  // Backend já paginou
-        }
-        // Paginar no frontend
-        const start = pagination.offset
-        const end = start + pagination.limit
-        return filteredFiles.slice(start, end)
-    }, [filteredFiles, needsFrontendFilter, pagination.offset, pagination.limit])
+        if (!statusFilters.isFilterActive) return filteredFiles
+        return filteredFiles.slice(pagination.offset, pagination.offset + pagination.limit)
+    }, [filteredFiles, statusFilters.selectedValues, statusFilters.isFilterActive, pagination.offset, pagination.limit])
 
-    // Ajustar total para refletir filtro de status
-    const displayTotal = useMemo(() => {
-        if (!needsFrontendFilter) {
-            return total  // Usar total do backend
-        }
-        return filteredFiles.length  // Total após filtro no frontend
-    }, [filteredFiles, needsFrontendFilter, total])
+    const displayTotal = statusFilters.isFilterActive ? filteredFiles.length : total
 
     // Handlers para mudança de data no TenantDateTimePicker
     const handleStartDateChange = (date: Date | null) => {
@@ -1448,7 +1429,7 @@ export default function FilesPage() {
                             { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
                             { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
                         ]}
-                        selectedValues={statusFilters.selectedFilters}
+                        selectedValues={statusFilters.selectedValues}
                         onToggle={statusFilters.toggleFilter}
                         onToggleAll={statusFilters.toggleAll}
                     />
