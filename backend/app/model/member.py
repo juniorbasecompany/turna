@@ -73,3 +73,15 @@ class Member(BaseModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),
     )
+
+    # Indica se o membro pode atender pediatria
+    can_peds: bool = Field(default=False)
+
+    # Ordem/sequência do membro (ex.: para exibição ou prioridade)
+    sequence: int = Field(default=0)
+
+    # Períodos de férias: lista de pares [início, fim] em ISO datetime
+    vacation: list[list[str]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+    )

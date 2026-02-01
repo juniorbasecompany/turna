@@ -12,6 +12,7 @@ import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
 import { Pagination } from '@/components/Pagination'
+import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
@@ -26,12 +27,25 @@ import {
 } from '@/types/api'
 import { useEffect, useMemo, useState } from 'react'
 
+function parseIsoToDate(iso: string): Date | null {
+    if (!iso?.trim()) return null
+    try {
+        const d = new Date(iso)
+        return isNaN(d.getTime()) ? null : d
+    } catch {
+        return null
+    }
+}
+
 type MemberFormData = {
     role: string
     status: string
     name: string
     email: string
     attribute: unknown  // JSON como objeto para edição
+    can_peds: boolean
+    sequence: number
+    vacation: [string, string][]  // Lista de pares [início, fim] em ISO datetime
 }
 
 export default function MemberPage() {
@@ -65,6 +79,9 @@ export default function MemberPage() {
         name: '',
         email: '',
         attribute: {},
+        can_peds: false,
+        sequence: 0,
+        vacation: [],
     }
 
     // Mapeamentos
@@ -75,6 +92,9 @@ export default function MemberPage() {
             name: member.member_name || '',
             email: member.member_email || '',
             attribute: member.attribute || {},
+            can_peds: member.can_peds ?? false,
+            sequence: member.sequence ?? 0,
+            vacation: member.vacation ?? [],
         }
     }
 
@@ -90,6 +110,12 @@ export default function MemberPage() {
             role: formData.role,
             status: formData.status,
             attribute: attributeValue || null,
+            can_peds: formData.can_peds,
+            sequence: formData.sequence,
+            vacation: (() => {
+                const valid = formData.vacation.filter(([a, b]) => a?.trim() && b?.trim())
+                return valid.length > 0 ? valid : null
+            })(),
         }
     }
 
@@ -105,6 +131,12 @@ export default function MemberPage() {
             name: formData.name.trim() || null,
             email: formData.email.trim() || null,
             attribute: attributeValue,
+            can_peds: formData.can_peds,
+            sequence: formData.sequence,
+            vacation: (() => {
+                const valid = formData.vacation.filter(([a, b]) => a?.trim() && b?.trim())
+                return valid.length > 0 ? valid : null
+            })(),
         }
     }
 
@@ -390,6 +422,83 @@ export default function MemberPage() {
                             </select>
                         </FormField>
                     </FormFieldGrid>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Ordem (sequence)">
+                            <input
+                                id="sequence"
+                                type="number"
+                                min={0}
+                                value={formData.sequence}
+                                onChange={(e) => setFormData({ ...formData, sequence: parseInt(e.target.value, 10) || 0 })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                        <div className="flex items-center pt-8">
+                            <input
+                                type="checkbox"
+                                id="can_peds"
+                                checked={formData.can_peds}
+                                onChange={(e) => setFormData({ ...formData, can_peds: e.target.checked })}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                disabled={submitting}
+                            />
+                            <label htmlFor="can_peds" className="ml-2 block text-sm text-gray-700">
+                                Pode atender pediatria
+                            </label>
+                        </div>
+                    </FormFieldGrid>
+                    <FormField label="Períodos de férias">
+                        <div className="space-y-4">
+                            {formData.vacation.map((pair, index) => (
+                                <div key={index} className="flex flex-wrap items-start gap-4 p-3 border border-gray-200 rounded-md bg-gray-50">
+                                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <TenantDateTimePicker
+                                            id={`vacation_start_${index}`}
+                                            label="Início"
+                                            value={parseIsoToDate(pair[0])}
+                                            onChange={(date) => {
+                                                const newVacation = [...formData.vacation]
+                                                newVacation[index] = [date ? date.toISOString() : '', pair[1] || '']
+                                                setFormData({ ...formData, vacation: newVacation })
+                                            }}
+                                            disabled={submitting}
+                                        />
+                                        <TenantDateTimePicker
+                                            id={`vacation_end_${index}`}
+                                            label="Fim"
+                                            value={parseIsoToDate(pair[1])}
+                                            onChange={(date) => {
+                                                const newVacation = [...formData.vacation]
+                                                newVacation[index] = [pair[0] || '', date ? date.toISOString() : '']
+                                                setFormData({ ...formData, vacation: newVacation })
+                                            }}
+                                            disabled={submitting}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newVacation = formData.vacation.filter((_, i) => i !== index)
+                                            setFormData({ ...formData, vacation: newVacation })
+                                        }}
+                                        className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 mt-8 shrink-0"
+                                        disabled={submitting}
+                                    >
+                                        Remover
+                                    </button>
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, vacation: [...formData.vacation, ['', '']] })}
+                                className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                                disabled={submitting}
+                            >
+                                Adicionar período
+                            </button>
+                        </div>
+                    </FormField>
                     <FormField label="Atributos (JSON)" required>
                         <JsonEditor
                             id="attribute"

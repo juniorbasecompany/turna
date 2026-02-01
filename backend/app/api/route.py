@@ -1070,11 +1070,33 @@ def _member_list_queries(
     if role_values is not None:
         query = query.where(Member.role.in_(role_values))
         count_query = count_query.where(Member.role.in_(role_values))
-    query = query.order_by(Member.created_at.desc())
+    query = query.order_by(Member.sequence, Member.name.asc().nulls_last())
     return query, count_query
 
 
 MEMBER_REPORT_PARAM_LABELS = {"status": "Situação", "status_list": "Situação", "role": "Função", "role_list": "Função"}
+
+
+def _format_member_vacation(vacation: list[list[str]] | None) -> str:
+    """Formata vacation (lista de pares [início, fim] ISO) para string legível no PDF (dd/mm/aaaa – dd/mm/aaaa)."""
+    if not vacation:
+        return "-"
+    parts: list[str] = []
+    for pair in vacation:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        start_s, end_s = str(pair[0])[:10], str(pair[1])[:10]  # YYYY-MM-DD
+        try:
+            # Converte YYYY-MM-DD para dd/mm/aaaa
+            start_parts = start_s.split("-")
+            end_parts = end_s.split("-")
+            if len(start_parts) == 3 and len(end_parts) == 3:
+                start_fmt = f"{start_parts[2]}/{start_parts[1]}/{start_parts[0]}"
+                end_fmt = f"{end_parts[2]}/{end_parts[1]}/{end_parts[0]}"
+                parts.append(f"{start_fmt} – {end_fmt}")
+        except (IndexError, ValueError):
+            parts.append(f"{start_s} – {end_s}")
+    return "; ".join(parts) if parts else "-"
 
 
 @router.post(
@@ -3243,6 +3265,9 @@ class MemberCreate(PydanticBaseModel):
     status: str = "ACTIVE"
     account_id: Optional[int] = None  # Opcional (não usado no painel)
     attribute: Optional[dict] = None  # Atributos customizados (JSON)
+    can_peds: Optional[bool] = None
+    sequence: Optional[int] = None
+    vacation: Optional[list[list[str]]] = None  # Lista de pares [início, fim] em ISO datetime
 
     @field_validator("email")
     @classmethod
@@ -3284,6 +3309,9 @@ class MemberUpdate(PydanticBaseModel):
     name: Optional[str] = None  # Nome público na clínica (member.name)
     email: Optional[str] = None  # Email público na clínica (member.email)
     attribute: Optional[dict] = None  # Atributos customizados (JSON)
+    can_peds: Optional[bool] = None
+    sequence: Optional[int] = None
+    vacation: Optional[list[list[str]]] = None
 
     @field_validator("role")
     @classmethod
@@ -3315,6 +3343,9 @@ class MemberResponse(PydanticBaseModel):
     role: str
     status: str
     attribute: dict  # Atributos customizados (JSON)
+    can_peds: bool = False
+    sequence: int = 0
+    vacation: list[list[str]] = []  # Lista de pares [início, fim] em ISO datetime
     created_at: datetime
     updated_at: datetime
 
@@ -3393,6 +3424,9 @@ def create_member(
             role=MemberRole[body.role.upper()],
             status=MemberStatus[body.status.upper()],
             attribute=body.attribute if body.attribute is not None else {},
+            can_peds=body.can_peds if body.can_peds is not None else False,
+            sequence=body.sequence if body.sequence is not None else 0,
+            vacation=body.vacation if body.vacation is not None else [],
         )
         session.add(member_obj)
         try:
@@ -3437,6 +3471,9 @@ def create_member(
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,
+            can_peds=member_obj.can_peds,
+            sequence=member_obj.sequence,
+            vacation=member_obj.vacation or [],
             created_at=member_obj.created_at,
             updated_at=member_obj.updated_at,
         )
@@ -3495,6 +3532,9 @@ def list_members(
                     role=member_obj.role.value,
                     status=member_obj.status.value,
                     attribute=member_obj.attribute,
+                    can_peds=member_obj.can_peds,
+                    sequence=member_obj.sequence,
+                    vacation=member_obj.vacation or [],
                     created_at=member_obj.created_at,
                     updated_at=member_obj.updated_at,
                 )
@@ -3535,7 +3575,10 @@ def report_member_pdf(
         for member_obj, account in results:
             name = (member_obj.name or "").strip() or "(sem nome)"
             email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
-            rows.append((name, email, member_obj.status.value))
+            can_peds_str = "Sim" if member_obj.can_peds else "Não"
+            sequence_str = str(member_obj.sequence)
+            vacation_str = _format_member_vacation(member_obj.vacation)
+            rows.append((name, email, member_obj.status.value, can_peds_str, sequence_str, vacation_str))
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
             MEMBER_REPORT_PARAM_LABELS,
@@ -3590,6 +3633,9 @@ def get_member(
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,
+            can_peds=member_obj.can_peds,
+            sequence=member_obj.sequence,
+            vacation=member_obj.vacation or [],
             created_at=member_obj.created_at,
             updated_at=member_obj.updated_at,
         )
@@ -3665,6 +3711,12 @@ def update_member(
         if body.attribute is not None:
             # Permitir editar member.attribute
             member_obj.attribute = body.attribute
+        if body.can_peds is not None:
+            member_obj.can_peds = body.can_peds
+        if body.sequence is not None:
+            member_obj.sequence = body.sequence
+        if body.vacation is not None:
+            member_obj.vacation = body.vacation
 
         member_obj.updated_at = utc_now()
         session.add(member_obj)
@@ -3708,6 +3760,9 @@ def update_member(
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,
+            can_peds=member_obj.can_peds,
+            sequence=member_obj.sequence,
+            vacation=member_obj.vacation or [],
             created_at=member_obj.created_at,
             updated_at=member_obj.updated_at,
         )

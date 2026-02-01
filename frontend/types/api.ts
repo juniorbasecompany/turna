@@ -324,6 +324,9 @@ export interface MemberResponse {
     role: string
     status: string
     attribute: Record<string, unknown>
+    can_peds: boolean
+    sequence: number
+    vacation: [string, string][]  // Lista de pares [início, fim] em ISO datetime
     created_at: string
     updated_at: string
 }
@@ -339,6 +342,9 @@ export interface MemberUpdateRequest {
     name?: string | null
     email?: string | null  // Email público editável
     attribute?: Record<string, unknown> | null
+    can_peds?: boolean | null
+    sequence?: number | null
+    vacation?: [string, string][] | null
 }
 
 export interface MemberCreateRequest {
@@ -348,6 +354,9 @@ export interface MemberCreateRequest {
     status: string
     account_id?: number | null  // Opcional (não usado no painel)
     attribute?: Record<string, unknown> | null
+    can_peds?: boolean | null
+    sequence?: number | null
+    vacation?: [string, string][] | null
 }
 
 export interface AccountOption {

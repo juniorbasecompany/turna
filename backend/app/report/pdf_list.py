@@ -22,10 +22,13 @@ def render_tenant_list_pdf(rows: list[tuple[str, str]], filters: list[tuple[str,
     )
 
 
-def render_member_list_pdf(rows: list[tuple[str, str, str]], filters: list[tuple[str, str]] | None = None) -> bytes:
-    """Gera PDF com lista de associados: nome, email e situação."""
-    headers = ["Nome", "E-mail", "Situação"]
-    data = [[str(r[0]), str(r[1]), str(r[2])] for r in rows]
+def render_member_list_pdf(
+    rows: list[tuple[str, str, str, str, str, str]],
+    filters: list[tuple[str, str]] | None = None,
+) -> bytes:
+    """Gera PDF com lista de associados: nome, email, situação, pode pediatria, ordem, férias."""
+    headers = ["Nome", "E-mail", "Situação", "Pode pediatria?", "Ordem", "Férias"]
+    data = [[str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5])] for r in rows]
     return build_report_pdf(
         report_title="Relatório de associados",
         filters=filters,
