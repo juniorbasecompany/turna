@@ -373,69 +373,233 @@ def render_pdf_bytes(schedule: DaySchedule) -> bytes:
     return buf.getvalue()
 
 
-# Cor da barra ao lado de "Turna"
+# Cor da barra do cabeçalho da grade (título do dia + horários)
 _REPORT_BAR_BLUE = "#2563EB"
 
+# Dimensões do layout da grade (usado em _render e no Flowable)
+_GRID_MARGIN = 0  # margem interna em volta do canvas (grade); reduzida para evitar faixa em branco
+_GRID_HEADER_H = 42
+_GRID_EVENT_BOX_H = 34
+_GRID_EVENT_V_PAD = 4
+_GRID_ROW_H = _GRID_EVENT_BOX_H + 2 * _GRID_EVENT_V_PAD
+_GRID_NAME_COL_W = 100
 
-def _draw_report_header_on_canvas(
+
+def get_day_schedule_natural_size(
+    schedule: DaySchedule,
+    box_width: float | None = None,
+) -> tuple[float, float]:
+    """
+    Retorna (largura, altura) natural da grade para um DaySchedule.
+    box_width: se informado, usa como largura (para ocupar 100% da largura disponível no flowable).
+    """
+    from reportlab.lib.pagesizes import A4, landscape
+    if box_width is not None and box_width > 0:
+        width = box_width
+    else:
+        width, _ = landscape(A4)
+    margin = _GRID_MARGIN
+    header_h = _GRID_HEADER_H
+    row_h = _GRID_ROW_H
+    n_rows = len(schedule.rows)
+    height = margin + header_h + n_rows * row_h + margin
+    return (width, height)
+
+
+def _draw_day_schedule_in_rect(
     c,
-    page_w: float,
-    page_h: float,
-    report_title: str,
-    filters: list[tuple[str, str]] | None,
-    margin: float,
+    schedule: DaySchedule,
+    box_w: float,
+    box_h: float,
     colors,
-) -> float:
+    pdfmetrics,
+) -> None:
     """
-    Desenha cabeçalho do relatório (Turna + título + filtros) no topo da página em landscape.
-    Barra azul só à esquerda de "Turna"; título e filtros sem barra.
+    Desenha a grade de um dia no retângulo (0, 0) a (box_w, box_h).
+    Sem paginação (showPage). Usado pelo DayGridFlowable.
     """
-    y = page_h - margin
+    margin = _GRID_MARGIN
+    header_h = _GRID_HEADER_H
+    event_box_h = _GRID_EVENT_BOX_H
+    event_v_pad = _GRID_EVENT_V_PAD
+    row_h = _GRID_ROW_H
+    name_col_w = _GRID_NAME_COL_W
+
+    grid_x0 = margin + name_col_w
+    grid_x1 = box_w - margin
+    grid_w = grid_x1 - grid_x0
+    if grid_w <= 100:
+        return
+
+    day_start = schedule.day_start_min
+    day_end = schedule.day_end_min
+    day_span = max(1, day_end - day_start)
+    y_top = box_h - margin
+
+    def x_at(minute: int) -> float:
+        minute = max(day_start, min(day_end, minute))
+        frac = (minute - day_start) / day_span
+        return grid_x0 + frac * grid_w
+
+    # Cabeçalho da grade (faixa azul + título do dia + marcas de hora)
+    y_grid_top = y_top - header_h
     bar_blue = colors.HexColor(_REPORT_BAR_BLUE)
-    # Turna: barra azul da borda esquerda até "Turna" (texto alinhado à direita)
-    c.setFont("Helvetica-Bold", 16)
-    turna_width = c.stringWidth("Turna", "Helvetica-Bold", 16)
-    gap = 6
-    bar_x_end = page_w - margin - turna_width - gap
-    bar_y = y - 10
-    c.setStrokeColor(bar_blue)
-    c.setLineWidth(2)
-    c.line(margin, bar_y, bar_x_end, bar_y)
-    c.setStrokeColor(colors.black)
+    c.setFillColor(bar_blue)
+    c.rect(margin, y_grid_top, box_w - 2 * margin, header_h, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(margin, y_top - 16, schedule.title)
+    c.setStrokeColor(colors.lightgrey)
     c.setLineWidth(0.25)
-    c.setFillColor(colors.HexColor("#111827"))
-    c.drawRightString(page_w - margin, y - 14, "Turna")
-    y -= 18
-    # Título do relatório: só o texto, sem barra azul
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(margin, y - 14, report_title)
-    y -= 18
-    # Filtros (compacto)
-    if filters:
+    c.line(margin, y_grid_top, box_w - margin, y_grid_top)
+    c.line(grid_x0, y_grid_top, grid_x0, margin)
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.white)
+    start_hour = day_start // 60
+    end_hour = min(23, int(math.ceil(day_end / 60)))
+    for h in range(start_hour, end_hour + 1):
+        m = h * 60
+        x = x_at(m)
+        major = m % 60 == 0
+        c.setStrokeColor(colors.lightgrey)
+        c.line(x, y_grid_top, x, margin)
+        if major and (day_start <= m <= day_end):
+            c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}")
+    c.setDash([])
+
+    # Linhas (nomes + eventos/férias)
+    y = y_grid_top
+    for row in schedule.rows:
+        y -= row_h
+        y0 = y
+        c.setStrokeColor(colors.lightgrey)
+        c.setLineWidth(0.25)
+        c.line(margin, y0, box_w - margin, y0)
+        c.setFillColor(colors.black)
         c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(colors.HexColor("#374151"))
-        for label, value in filters[:8]:
-            line = f"{label}: {value}"
-            if len(line) > 100:
-                line = line[:97] + "..."
-            c.drawString(margin, y - 12, line)
-            y -= 14
-        y -= 6
-    y -= 8
-    return y
+        c.drawString(margin + 2, y0 + event_v_pad + 6, row.name)
+
+        _corner_radius = 3
+        for vac in row.vacations:
+            xs = x_at(vac.interval.start_min)
+            xe = x_at(vac.interval.end_min)
+            if xe <= xs:
+                continue
+            c.setFillColor(colors.white)
+            c.setStrokeColor(colors.lightgrey)
+            c.setLineWidth(0.25)
+            c.setDash(0, 2)
+            c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=1, fill=0)
+            c.setDash([])
+
+        for ev in row.events:
+            xs = x_at(ev.interval.start_min)
+            xe = x_at(ev.interval.end_min)
+            if xe <= xs:
+                continue
+            has_color = ev.color_rgb is not None
+            if has_color:
+                r, g, b = ev.color_rgb
+                c.setFillColorRGB(r, g, b)
+                c.setStrokeColor(colors.white)
+                c.setLineWidth(0)
+                c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=0, fill=1)
+                c.setFillColor(colors.white)
+                _procedure_bar_h = 10
+                c.rect(xs, y0 + event_v_pad, xe - xs, event_box_h - _procedure_bar_h, stroke=0, fill=1)
+            c.setFillColor(colors.white)
+            c.setStrokeColor(colors.black)
+            c.setLineWidth(0.25)
+            c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=1, fill=0)
+
+            pad = 2
+            box_left = xs
+            box_right = xe
+            box_bot = y0 + event_v_pad
+            box_top = y0 + event_v_pad + event_box_h
+            block_w = max(10, (box_right - box_left) - 2 * pad)
+            content_left = box_left + pad
+            content_right = box_right - pad
+            content_top = box_top - pad
+            line_gap = 8
+            y1 = content_top - 6
+            y2 = y1 - line_gap
+            y3 = y2 - line_gap
+            y4 = box_bot + 2
+            c.setFillColor(colors.black)
+
+            proc_size, proc_text = _font_size_to_fit(pdfmetrics, ev.title, "Helvetica", block_w, 7.5, 5.0)
+            if proc_text:
+                c.setFont("Helvetica", proc_size)
+                c.drawString(content_left, y1, proc_text)
+            if ev.subtitle:
+                room_size, room_text = _font_size_to_fit(pdfmetrics, ev.subtitle.strip(), "Helvetica", block_w, 7.5, 5.0)
+                if room_text:
+                    c.setFont("Helvetica", room_size)
+                    c.drawRightString(content_right, y2, room_text)
+            start_str = _fmt_minutes(ev.interval.start_min)
+            end_str = _fmt_minutes(ev.interval.end_min)
+            start_size, start_text = _font_size_to_fit(pdfmetrics, start_str, "Helvetica", block_w, 6.5, 5.0)
+            end_size, end_text = _font_size_to_fit(pdfmetrics, end_str, "Helvetica", block_w, 6.5, 5.0)
+            if start_text:
+                c.setFont("Helvetica", start_size)
+                c.drawString(content_left, y3, start_text)
+            if end_text:
+                c.setFont("Helvetica", end_size)
+                c.drawRightString(content_right, y4, end_text)
 
 
-def render_multi_day_pdf_bytes(
-    schedules: list[DaySchedule],
-    *,
-    report_title: str | None = None,
-    filters: list[tuple[str, str]] | None = None,
-) -> bytes:
+def _get_flowable_base():
+    from reportlab.platypus.flowables import Flowable
+    return Flowable
+
+
+class DayGridFlowable(_get_flowable_base()):
     """
-    Renderiza múltiplos `DaySchedule` no mesmo PDF (uma sequência de páginas) e retorna bytes.
-    Todas as páginas em landscape. Se report_title e filters forem passados, o título e filtros
-    são desenhados no topo da primeira página e a grade do primeiro dia começa logo abaixo.
+    Flowable Platypus que desenha a grade de um dia (Canvas) no espaço alocado.
+    Usa o espaço disponível (availWidth x availHeight) e escala a grade para caber.
+    """
+
+    def __init__(self, schedule: DaySchedule) -> None:
+        super().__init__()
+        self._schedule = schedule
+        self._width: float = 0
+        self._height: float = 0
+
+    def wrap(self, availWidth: float, availHeight: float) -> tuple[float, float]:
+        self._width = availWidth
+        self._height = availHeight
+        return (availWidth, availHeight)
+
+    def draw(self) -> None:
+        from reportlab.lib import colors
+        from reportlab.pdfbase import pdfmetrics
+
+        canvas = self.canv
+        # Usar largura disponível para ocupar 100% da largura; altura natural
+        nat_w, nat_h = get_day_schedule_natural_size(self._schedule, box_width=self._width)
+        if nat_w <= 0 or nat_h <= 0:
+            return
+        # Escala só na vertical se necessário; largura já é self._width
+        scale_x = 1.0
+        scale_y = min(self._height / nat_h, 1.0) if nat_h > 0 else 1.0
+        canvas.saveState()
+        canvas.scale(scale_x, scale_y)
+        _draw_day_schedule_in_rect(
+            canvas,
+            self._schedule,
+            nat_w,
+            nat_h,
+            colors,
+            pdfmetrics,
+        )
+        canvas.restoreState()
+
+
+def render_multi_day_pdf_body_bytes(schedules: list[DaySchedule]) -> bytes:
+    """
+    Renderiza apenas o corpo (grades de dias) no PDF, sem cabeçalho (Turna, título, filtros).
+    Uma página landscape por dia. Usado junto com capa Platypus (build_report_cover_only + merge).
     """
     if not schedules:
         raise ValueError("schedules vazio")
@@ -450,24 +614,35 @@ def render_multi_day_pdf_bytes(
     buf = io.BytesIO()
     c = Canvas(buf, pagesize=(page_w, page_h))
 
-    first_page_header = report_title is not None and (report_title or filters)
-    content_top_y: float | None = None
-    if first_page_header and (report_title or filters):
-        content_top_y = _draw_report_header_on_canvas(
-            c, page_w, page_h, report_title or "", filters or [], 18, colors
-        )
-
     for i, schedule in enumerate(schedules):
-        top_y = content_top_y if (i == 0 and content_top_y is not None) else None
         _render_pdf_to_canvas(
-            c, schedule, page_w=page_w, page_h=page_h, colors=colors, pdfmetrics=pdfmetrics, content_top_y=top_y
+            c,
+            schedule,
+            page_w=page_w,
+            page_h=page_h,
+            colors=colors,
+            pdfmetrics=pdfmetrics,
+            content_top_y=None,
         )
         if i != len(schedules) - 1:
             c.showPage()
-        content_top_y = None  # só na primeira página
 
     c.save()
     return buf.getvalue()
+
+
+def render_multi_day_pdf_bytes(
+    schedules: list[DaySchedule],
+    *,
+    report_title: str | None = None,
+    filters: list[tuple[str, str]] | None = None,
+) -> bytes:
+    """
+    Renderiza múltiplos `DaySchedule` no mesmo PDF (uma sequência de páginas) e retorna bytes.
+    Sem título/filtros: só as grades (body). Com título/filtros: use capa Platypus + body + merge nos chamadores.
+    Mantido para compatibilidade (ex.: publish sem capa).
+    """
+    return render_multi_day_pdf_body_bytes(schedules)
 
 
 def _render_pdf_to_canvas(

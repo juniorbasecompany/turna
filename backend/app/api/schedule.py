@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
 from app.report.pdf_demand import demands_to_day_schedules
 from app.report.pdf_layout import (
+    build_report_with_schedule_body,
     parse_filters_from_frontend,
     query_params_to_filter_parts,
 )
@@ -530,11 +531,11 @@ def publish_schedule(
 
     schedules = _day_schedules_from_result(demand=demand, session=session)
     try:
-        from output.day import render_multi_day_pdf_bytes
+        from output.day import render_multi_day_pdf_body_bytes
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
 
-    pdf_bytes = render_multi_day_pdf_bytes(schedules)
+    pdf_bytes = render_multi_day_pdf_body_bytes(schedules)
     file_model = storage_service.upload_demand_pdf(
         session=session,
         tenant_id=member.tenant_id,
@@ -624,7 +625,7 @@ def report_schedule_pdf(
         if not all_schedules:
             raise HTTPException(status_code=400, detail="Nenhuma escala no período selecionado")
         try:
-            from output.day import render_multi_day_pdf_bytes
+            from reportlab.lib.pagesizes import A4, landscape
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         filters_parts = parse_filters_from_frontend(filters)
@@ -642,8 +643,11 @@ def report_schedule_pdf(
                 "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
-        pdf_bytes = render_multi_day_pdf_bytes(
-            all_schedules, report_title="Relatório de escalas", filters=filters_parts
+        pdf_bytes = build_report_with_schedule_body(
+            report_title="Relatório de escalas",
+            filters=filters_parts,
+            schedules=all_schedules,
+            pagesize=landscape(A4),
         )
         return Response(
             content=pdf_bytes,

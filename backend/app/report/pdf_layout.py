@@ -265,10 +265,12 @@ def build_report_pdf(
     filters: list[tuple[str, str]] | None = None,
     headers: list[str] | None = None,
     rows: list[list[str]] | None = None,
+    pagesize=None,
 ) -> bytes:
     """
     Gera PDF com layout padrão: cabeçalho Turna, título do relatório,
     seção de filtros (quando existir) e opcionalmente uma tabela (headers + rows).
+    pagesize: tamanho da página (ex.: A4, landscape(A4)); None = A4.
     """
     _ensure_reportlab()
     from reportlab.lib.pagesizes import A4
@@ -276,10 +278,11 @@ def build_report_pdf(
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import cm
 
+    size = pagesize if pagesize is not None else A4
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
-        pagesize=A4,
+        pagesize=size,
         rightMargin=1 * cm,
         leftMargin=1 * cm,
         topMargin=1.5 * cm,
@@ -303,12 +306,97 @@ def build_report_pdf(
     return buf.getvalue()
 
 
-def build_report_cover_only(report_title: str, filters: list[tuple[str, str]] | None = None) -> bytes:
+def build_report_cover_only(
+    report_title: str,
+    filters: list[tuple[str, str]] | None = None,
+    pagesize=None,
+) -> bytes:
     """
     Gera apenas a página de capa (Turna + título + filtros), sem tabela.
     Usado para relatórios multi-página (demandas, escala) que já têm conteúdo gerado por outro módulo.
+    pagesize: tamanho da página (ex.: landscape(A4) para escalas/demandas); None = A4.
     """
-    return build_report_pdf(report_title=report_title, filters=filters, headers=None, rows=None)
+    return build_report_pdf(
+        report_title=report_title, filters=filters, headers=None, rows=None, pagesize=pagesize
+    )
+
+
+def _schedule_doc_template(buf, pagesize, rightMargin, leftMargin, topMargin, bottomMargin):
+    """
+    Cria SimpleDocTemplate com Frame sem padding lateral (leftPadding/rightPadding = 0)
+    para o canvas (DayGridFlowable) ocupar a mesma largura da faixa de filtros e do cabeçalho.
+    """
+
+    from reportlab.platypus import SimpleDocTemplate
+
+    class _NoPaddingDocTemplate(SimpleDocTemplate):
+        def addPageTemplates(self, pageTemplates):
+            super().addPageTemplates(pageTemplates)
+            for pt in self.pageTemplates:
+                for frame in pt.frames:
+                    frame.leftPadding = 0
+                    frame.rightPadding = 0
+                    if hasattr(frame, "_geom"):
+                        frame._geom()
+
+    return _NoPaddingDocTemplate(
+        buf,
+        pagesize=pagesize,
+        rightMargin=rightMargin,
+        leftMargin=leftMargin,
+        topMargin=topMargin,
+        bottomMargin=bottomMargin,
+    )
+
+
+def build_report_with_schedule_body(
+    report_title: str,
+    filters: list[tuple[str, str]] | None = None,
+    schedules: list | None = None,
+    pagesize=None,
+) -> bytes:
+    """
+    Gera PDF com cabeçalho Platypus (Turna, título, filtros) e corpo com grades de dias (Flowables Canvas).
+    Uma única história Platypus: o corpo começa na mesma página após os filtros; cada grade usa o espaço
+    disponível (primeira página) ou página inteira (seguintes). pagesize deve ser landscape(A4) para escalas/demandas.
+    """
+    if not schedules:
+        return build_report_cover_only(report_title=report_title, filters=filters, pagesize=pagesize)
+
+    _ensure_reportlab()
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+
+    from output.day import DayGridFlowable
+
+    size = pagesize if pagesize is not None else A4
+    buf = io.BytesIO()
+    doc = _schedule_doc_template(
+        buf,
+        pagesize=size,
+        rightMargin=1 * cm,
+        leftMargin=1 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
+    )
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.extend(_build_header_elements(doc, styles))
+    elements.append(Spacer(1, 4))
+    elements.extend(_build_title_elements(report_title, styles, doc))
+
+    normalized_filters = _normalize_filters(filters)
+    if normalized_filters:
+        elements.extend(_build_filters_elements(normalized_filters, doc, styles))
+
+    for schedule in schedules:
+        elements.append(DayGridFlowable(schedule))
+
+    doc.build(elements)
+    return buf.getvalue()
 
 
 def format_filters_text(parts: list[tuple[str, str]]) -> str:

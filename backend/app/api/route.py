@@ -44,6 +44,7 @@ from app.report.pdf_list import (
 )
 from app.report.pdf_demand import build_demand_day_schedules
 from app.report.pdf_layout import (
+    build_report_with_schedule_body,
     parse_filters_from_frontend,
     query_params_to_filter_parts,
 )
@@ -3056,7 +3057,7 @@ def report_demand_pdf(
         )
         if not schedules:
             raise HTTPException(status_code=400, detail="Nenhuma demanda no período selecionado")
-        from output.day import render_multi_day_pdf_bytes
+        from reportlab.lib.pagesizes import A4, landscape
         filters_parts = parse_filters_from_frontend(filters)
         if not filters_parts:
             params = {"start_at": start_at, "end_at": end_at, "hospital_id": hospital_id, "procedure": procedure}
@@ -3066,8 +3067,11 @@ def report_demand_pdf(
                 "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
             }
             filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
-        pdf_bytes = render_multi_day_pdf_bytes(
-            schedules, report_title="Relatório de demandas", filters=filters_parts
+        pdf_bytes = build_report_with_schedule_body(
+            report_title="Relatório de demandas",
+            filters=filters_parts,
+            schedules=schedules,
+            pagesize=landscape(A4),
         )
         return Response(
             content=pdf_bytes,
