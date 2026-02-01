@@ -258,6 +258,27 @@ def _truncate_to_width(pdfmetrics, text: str, font_name: str, font_size: float, 
     return text[0] if text else ""
 
 
+def _font_size_to_fit(
+    pdfmetrics, text: str, font_name: str, max_width: float,
+    initial_size: float = 7.5, min_size: float = 1.0, step: float = 0.25,
+) -> tuple[float, str]:
+    """
+    Reduz tamanho da fonte até o texto caber em max_width.
+    Retorna (font_size, text). Se não couber nem em min_size, trunca.
+    """
+    if not text or max_width <= 0:
+        return (initial_size, "")
+    margin = 2  # folga para evitar corte por arredondamento
+    usable = max(5, max_width - margin)
+    font_size = initial_size
+    while font_size >= min_size:
+        if pdfmetrics.stringWidth(text, font_name, font_size) <= usable:
+            return (font_size, text)
+        font_size -= step
+    truncated = _truncate_to_width(pdfmetrics, text, font_name, min_size, max_width)
+    return (min_size, truncated)
+
+
 def _wrap_text(pdfmetrics, text: str, font_name: str, font_size: float, max_width: float) -> list[str]:
     words = text.split()
     if not words:
@@ -412,7 +433,7 @@ def _render_pdf_to_canvas(
 ) -> None:
     margin = 18
     header_h = 42
-    row_h = 22
+    row_h = 36
     name_col_w = 210
 
     grid_x0 = margin + name_col_w
@@ -457,7 +478,7 @@ def _render_pdf_to_canvas(
         c.setFont("Helvetica", 8)
         c.setFillColor(colors.black)
         start_hour = day_start // 60
-        end_hour = int(math.ceil(day_end / 60))
+        end_hour = min(23, int(math.ceil(day_end / 60)))
         for h in range(start_hour, end_hour + 1):
             m = h * 60
             x = x_at(m)
@@ -495,7 +516,7 @@ def _render_pdf_to_canvas(
             c.setStrokeColor(colors.black)
             c.setLineWidth(0.5)
             c.setDash(2, 2)  # pontilhado
-            c.roundRect(xs, y0 + 2, xe - xs, row_h - 4, _corner_radius, stroke=1, fill=0)
+            c.roundRect(xs, y0 + 1, xe - xs, row_h - 2, _corner_radius, stroke=1, fill=0)
             c.setDash([])  # restaura linha sólida
 
         # Eventos
@@ -513,37 +534,48 @@ def _render_pdf_to_canvas(
                 c.setFillColor(colors.white)
             c.setStrokeColor(colors.black)
             c.setLineWidth(0.25)
-            c.roundRect(xs, y0 + 2, xe - xs, row_h - 4, _corner_radius, stroke=1, fill=1)
+            c.roundRect(xs, y0 + 1, xe - xs, row_h - 2, _corner_radius, stroke=1, fill=1)
 
-            # Linha 1: procedure à esquerda, room à direita (mesma linha)
-            pad_x = 4
-            block_w = max(10, (xe - xs) - 2 * pad_x)
-            half_w = max(5, (block_w - 6) / 2)  # divide espaço, 6pt de folga entre
+            # 4 linhas: procedure (esq), room (dir), start (esq), end (dir)
+            # Padding uniforme em todos os lados (2pt)
+            pad = 2
+            box_left = xs
+            box_right = xe
+            box_bot = y0 + 1
+            box_top = y0 + 1 + (row_h - 2)
+            block_w = max(10, (box_right - box_left) - 2 * pad)
+            content_left = box_left + pad
+            content_right = box_right - pad
+            content_bot = box_bot + pad
+            content_top = box_top - pad
+            line_gap = 8
+            y1 = content_top - 6
+            y2 = y1 - line_gap
+            y3 = y2 - line_gap
+            y4 = content_bot + 2
             c.setFillColor(colors.black)
-            c.setFont("Helvetica", 7.5)  # procedure sem negrito
-            proc_ok = _truncate_to_width(pdfmetrics, ev.title, "Helvetica", 7.5, half_w)
-            if proc_ok:
-                c.drawString(xs + pad_x, y0 + 11, proc_ok)
+
+            proc_size, proc_text = _font_size_to_fit(pdfmetrics, ev.title, "Helvetica", block_w, 7.5, 5.0)
+            if proc_text:
+                c.setFont("Helvetica", proc_size)
+                c.drawString(content_left, y1, proc_text)
+
             if ev.subtitle:
-                room_ok = _truncate_to_width(pdfmetrics, ev.subtitle.strip(), "Helvetica", 7.5, half_w)
-                if room_ok:
-                    c.drawRightString(xe - pad_x, y0 + 11, room_ok)
+                room_size, room_text = _font_size_to_fit(pdfmetrics, ev.subtitle.strip(), "Helvetica", block_w, 7.5, 5.0)
+                if room_text:
+                    c.setFont("Helvetica", room_size)
+                    c.drawRightString(content_right, y2, room_text)
 
-            # Horário: início à esquerda, fim à direita; se não couber ambos, só o inicial
-            # Trunca por largura para não extrapolar a caixa
-            c.setFont("Helvetica", 6.5)
-            c.setFillColor(colors.black)
             start_str = _fmt_minutes(ev.interval.start_min)
             end_str = _fmt_minutes(ev.interval.end_min)
-            w_start = pdfmetrics.stringWidth(start_str, "Helvetica", 6.5)
-            w_end = pdfmetrics.stringWidth(end_str, "Helvetica", 6.5)
-            start_ok = _truncate_to_width(pdfmetrics, start_str, "Helvetica", 6.5, block_w)
-            if start_ok:
-                if w_start + 6 + w_end <= block_w:
-                    c.drawString(xs + pad_x, y0 + 4, start_str)
-                    c.drawRightString(xe - pad_x, y0 + 4, end_str)
-                else:
-                    c.drawString(xs + pad_x, y0 + 4, start_ok)
+            start_size, start_text = _font_size_to_fit(pdfmetrics, start_str, "Helvetica", block_w, 6.5, 5.0)
+            end_size, end_text = _font_size_to_fit(pdfmetrics, end_str, "Helvetica", block_w, 6.5, 5.0)
+            if start_text:
+                c.setFont("Helvetica", start_size)
+                c.drawString(content_left, y3, start_text)
+            if end_text:
+                c.setFont("Helvetica", end_size)
+                c.drawRightString(content_right, y4, end_text)
 
     # Paginação simples: ao mudar de página, próximo cabeçalho usa topo completo
     y = draw_header()
