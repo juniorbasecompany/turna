@@ -181,8 +181,9 @@ def _build_title_elements(report_title: str, styles, doc):
 
 def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
     from reportlab.lib import colors
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import Flowable, Spacer
     from reportlab.lib.styles import ParagraphStyle
+    from reportlab.pdfbase.pdfmetrics import stringWidth
 
     label_style = ParagraphStyle(
         name="FiltersLabel",
@@ -198,37 +199,135 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
         fontSize=10,
         textColor="#111827",
     )
-    # Cada linha em tabela separada: margem fora das bordas entre linhas e entre células
-    label_col_w = doc.width * 0.25
-    margin_between_cells = 6  # margem à direita do título (entre label e value)
-    value_col_w = doc.width - label_col_w - margin_between_cells
-    col_widths = [label_col_w, margin_between_cells, value_col_w]
-    gray_border = colors.HexColor("#9CA3AF")
-    bg_color = colors.HexColor("#E5E7EB")
-    row_style = TableStyle(
-        [
-            ("BACKGROUND", (0, 0), (-1, -1), bg_color),
-            ("BACKGROUND", (1, 0), (1, 0), colors.white),
-            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111827")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING", (1, 0), (1, 0), 0),
-            ("RIGHTPADDING", (1, 0), (1, 0), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]
-    )
-    margin_between_rows = 6  # pontos de margem entre as linhas (fora das bordas)
-    elements: list = []
-    for i, (label, value) in enumerate(filters):
-        if i > 0:
-            elements.append(Spacer(1, margin_between_rows))
-        row_data = [[Paragraph(label, label_style), "", Paragraph(value, value_style)]]
-        table = Table(row_data, colWidths=col_widths)
-        table.setStyle(row_style)
-        elements.append(table)
-    elements.append(Spacer(1, 10))
-    return elements
+    # Cada filtro vira uma caixa; as caixas fluem e quebram de linha automaticamente
+    block_bg = colors.HexColor("#E5E7EB")
+    block_border = colors.HexColor("#D1D5DB")
+    text_color = colors.HexColor("#111827")
+    block_gap_x = 8
+    block_gap_y = 6
+    gap_between_label_value = 8
+    padding_x = 6
+    padding_y = 4
+
+    class FiltersBlockFlowable(Flowable):
+        def __init__(self, filter_list: list[tuple[str, str]]):
+            super().__init__()
+            self.filter_list = filter_list
+            self._layout: list = []
+            self._height = 0
+
+        def _truncate_text(self, text: str, font_name: str, font_size: int, max_width: float) -> str:
+            if max_width <= 0:
+                return ""
+            if stringWidth(text, font_name, font_size) <= max_width:
+                return text
+            ellipsis = "..."
+            ellipsis_width = stringWidth(ellipsis, font_name, font_size)
+            if ellipsis_width > max_width:
+                return ""
+            low, high = 0, len(text)
+            while low < high:
+                mid = (low + high) // 2
+                if stringWidth(text[:mid], font_name, font_size) + ellipsis_width <= max_width:
+                    low = mid + 1
+                else:
+                    high = mid
+            cut = max(0, low - 1)
+            return f"{text[:cut]}{ellipsis}"
+
+        def _build_layout(self, avail_width: float) -> tuple[list, float]:
+            row_list: list = []
+            row_item_list: list = []
+            row_width = 0.0
+            content_height = max(label_style.fontSize, value_style.fontSize)
+            box_height = content_height + (padding_y * 2)
+
+            for label, value in self.filter_list:
+                label_text = str(label).strip()
+                value_text = str(value).strip()
+                label_width = stringWidth(label_text, label_style.fontName, label_style.fontSize)
+                value_width = stringWidth(value_text, value_style.fontName, value_style.fontSize)
+                content_width = label_width + gap_between_label_value + value_width
+                box_width = content_width + (padding_x * 2)
+                gap = gap_between_label_value
+
+                if box_width > avail_width:
+                    available_content_width = max(0, avail_width - (padding_x * 2))
+                    label_width = min(label_width, available_content_width)
+                    label_text = self._truncate_text(
+                        label_text, label_style.fontName, label_style.fontSize, label_width
+                    )
+                    label_width = stringWidth(label_text, label_style.fontName, label_style.fontSize)
+                    remaining_width = max(0, available_content_width - label_width)
+                    gap = min(gap_between_label_value, remaining_width)
+                    value_available = max(0, remaining_width - gap)
+                    value_text = self._truncate_text(
+                        value_text, value_style.fontName, value_style.fontSize, value_available
+                    )
+                    value_width = stringWidth(value_text, value_style.fontName, value_style.fontSize)
+                    content_width = label_width + gap + value_width
+                    box_width = content_width + (padding_x * 2)
+
+                required_width = box_width if row_width == 0 else row_width + block_gap_x + box_width
+                if required_width > avail_width and row_item_list:
+                    row_list.append(row_item_list)
+                    row_item_list = []
+                    row_width = 0.0
+
+                row_item_list.append(
+                    {
+                        "label": label_text,
+                        "value": value_text,
+                        "label_width": label_width,
+                        "value_width": value_width,
+                        "gap": gap,
+                        "box_width": box_width,
+                        "box_height": box_height,
+                    }
+                )
+                row_width = box_width if row_width == 0 else row_width + block_gap_x + box_width
+
+            if row_item_list:
+                row_list.append(row_item_list)
+
+            total_height = (len(row_list) * box_height) + (max(0, len(row_list) - 1) * block_gap_y)
+            return row_list, total_height
+
+        def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
+            self._layout, self._height = self._build_layout(avail_width)
+            return avail_width, self._height
+
+        def draw(self) -> None:
+            if not self._layout:
+                return
+            canvas = self.canv
+            y = self._height
+            for row_item_list in self._layout:
+                row_height = row_item_list[0]["box_height"]
+                y -= row_height
+                x = 0.0
+                for item in row_item_list:
+                    box_width = item["box_width"]
+                    canvas.setFillColor(block_bg)
+                    canvas.setStrokeColor(block_border)
+                    canvas.rect(x, y, box_width, row_height, stroke=1, fill=1)
+
+                    label_y = y + padding_y + (row_height - (padding_y * 2) - label_style.fontSize) / 2
+                    value_y = y + padding_y + (row_height - (padding_y * 2) - value_style.fontSize) / 2
+                    canvas.setFillColor(text_color)
+
+                    canvas.setFont(label_style.fontName, label_style.fontSize)
+                    canvas.drawString(x + padding_x, label_y, item["label"])
+
+                    value_x = x + padding_x + item["label_width"] + item["gap"]
+                    canvas.setFont(value_style.fontName, value_style.fontSize)
+                    canvas.drawString(value_x, value_y, item["value"])
+
+                    x += box_width + block_gap_x
+                y -= block_gap_y
+
+    flowable = FiltersBlockFlowable(filters)
+    return [flowable, Spacer(1, 10)]
 
 
 def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles):
