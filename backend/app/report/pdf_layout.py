@@ -188,14 +188,14 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
     label_style = ParagraphStyle(
         name="FiltersLabel",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
+        fontName="Helvetica",
         fontSize=10,
         textColor="#111827",
     )
     value_style = ParagraphStyle(
         name="FiltersValue",
         parent=styles["Normal"],
-        fontName="Helvetica",
+        fontName="Helvetica-Bold",
         fontSize=10,
         textColor="#111827",
     )
@@ -203,6 +203,7 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
     block_bg = colors.HexColor("#E5E7EB")
     block_border = colors.HexColor("#D1D5DB")
     text_color = colors.HexColor("#111827")
+    value_color = colors.HexColor("#2563EB")
     block_gap_x = 8
     block_gap_y = 6
     gap_between_label_value = 8
@@ -315,11 +316,11 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
                     label_y = y + padding_y + (row_height - (padding_y * 2) - label_style.fontSize) / 2
                     value_y = y + padding_y + (row_height - (padding_y * 2) - value_style.fontSize) / 2
                     canvas.setFillColor(text_color)
-
                     canvas.setFont(label_style.fontName, label_style.fontSize)
                     canvas.drawString(x + padding_x, label_y, item["label"])
 
                     value_x = x + padding_x + item["label_width"] + item["gap"]
+                    canvas.setFillColor(value_color)
                     canvas.setFont(value_style.fontName, value_style.fontSize)
                     canvas.drawString(value_x, value_y, item["value"])
 

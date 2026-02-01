@@ -512,8 +512,14 @@ def _render_pdf_to_canvas(
 
         # Título do dia e marcas de hora em branco
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(margin_x, y_top - 16, schedule.title)
+        title_font_size = 10
+        c.setFont("Helvetica-Bold", title_font_size)
+        title_pad_x = 8
+        max_title_width = page_w - (2 * margin_x) - (2 * title_pad_x)
+        title_text = _truncate_to_width(
+            pdfmetrics, schedule.title, "Helvetica-Bold", title_font_size, max_title_width
+        )
+        c.drawString(margin_x + title_pad_x, y_top - 16, title_text)
 
         # Linha base do cabeçalho da grade
         c.setStrokeColor(colors.lightgrey)
@@ -551,7 +557,12 @@ def _render_pdf_to_canvas(
         # Nome (sem numeração; alinhado à esquerda)
         c.setFillColor(colors.black)
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(margin_x + 2, y0 + event_v_pad + 6, row.name)
+        name_pad_x = 6
+        max_name_width = name_col_w - (2 * name_pad_x)
+        name_text = _truncate_to_width(
+            pdfmetrics, row.name, "Helvetica-Bold", 9, max_name_width
+        )
+        c.drawString(margin_x + name_pad_x, y0 + event_v_pad + 6, name_text)
 
         # Férias (quadro vazio com borda pontilhada)
         _corner_radius = 3
@@ -560,10 +571,9 @@ def _render_pdf_to_canvas(
             xe = x_at(vac.interval.end_min)
             if xe <= xs:
                 continue
-            c.setFillColor(colors.white)
-            c.setStrokeColor(colors.lightgrey)
+            c.setStrokeColor(colors.black)
             c.setLineWidth(0.25)
-            c.setDash(0, 2)  # pontilhado
+            c.setDash(1, 1)  # pontilhado
             c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=1, fill=0)
             c.setDash([])  # restaura linha sólida
 
@@ -580,12 +590,15 @@ def _render_pdf_to_canvas(
             if has_color:
                 r, g, b = ev.color_rgb
                 c.setFillColorRGB(r, g, b)
-                c.setStrokeColor(colors.white)
-                c.setLineWidth(0)
-                c.roundRect(xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius, stroke=0, fill=1)
-                c.setFillColor(colors.white)
                 y_band_bot = (y0 + event_v_pad + event_box_h) - _procedure_bar_h
-                c.rect(xs, y0 + event_v_pad, xe - xs, event_box_h - _procedure_bar_h, stroke=0, fill=1)
+                c.saveState()
+                clip_path = c.beginPath()
+                clip_path.roundRect(
+                    xs, y0 + event_v_pad, xe - xs, event_box_h, _corner_radius
+                )
+                c.clipPath(clip_path, stroke=0, fill=0)
+                c.rect(xs, y_band_bot, xe - xs, _procedure_bar_h, stroke=0, fill=1)
+                c.restoreState()
             # Contorno do event (cinza mais escuro); fundo transparente no restante
             c.setFillColor(colors.white)
             c.setStrokeColor(colors.black)
