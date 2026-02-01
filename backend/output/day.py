@@ -245,6 +245,19 @@ def _load_schedule(path: Path) -> DaySchedule:
     )
 
 
+def _truncate_to_width(pdfmetrics, text: str, font_name: str, font_size: float, max_width: float) -> str:
+    """Trunca texto para caber em max_width (em pontos), removendo caracteres do fim."""
+    if not text or max_width <= 0:
+        return ""
+    if pdfmetrics.stringWidth(text, font_name, font_size) <= max_width:
+        return text
+    for i in range(len(text) - 1, 0, -1):
+        candidate = text[:i]
+        if pdfmetrics.stringWidth(candidate, font_name, font_size) <= max_width:
+            return candidate
+    return text[0] if text else ""
+
+
 def _wrap_text(pdfmetrics, text: str, font_name: str, font_size: float, max_width: float) -> list[str]:
     words = text.split()
     if not words:
@@ -260,9 +273,9 @@ def _wrap_text(pdfmetrics, text: str, font_name: str, font_size: float, max_widt
                 lines.append(" ".join(cur))
                 cur = [w]
             else:
-                # palavra muito longa: corta bruto
-                lines.append(w)
-                cur = []
+                # palavra muito longa: trunca por largura e não adiciona resto
+                lines.append(_truncate_to_width(pdfmetrics, w, font_name, font_size, max_width))
+                cur = []  # evita re-adicionar no fim do loop
     if cur:
         lines.append(" ".join(cur))
     return lines
@@ -453,7 +466,7 @@ def _render_pdf_to_canvas(
             c.setLineWidth(1 if major else 0.5)
             c.line(x, y_grid_top, x, margin)
             if major and (day_start <= m <= day_end):
-                c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}:00")
+                c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}")
 
         return y_grid_top
 
@@ -471,19 +484,19 @@ def _render_pdf_to_canvas(
         c.setFont("Helvetica-Bold", 9)
         c.drawString(margin + 28, y0 + 6, row.name)
 
-        # Férias (barra "cheia" no estilo agenda)
+        # Férias (quadro vazio com borda pontilhada)
+        _corner_radius = 3
         for vac in row.vacations:
             xs = x_at(vac.interval.start_min)
             xe = x_at(vac.interval.end_min)
             if xe <= xs:
                 continue
-            c.setFillColorRGB(0.55, 0.14, 0.10)  # marrom/avermelhado
-            c.setStrokeColorRGB(0.45, 0.10, 0.08)
-            c.setLineWidth(1)
-            c.rect(xs, y0 + 2, xe - xs, row_h - 4, stroke=1, fill=1)
             c.setFillColor(colors.white)
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(xs + 6, y0 + 6, vac.label)
+            c.setStrokeColor(colors.black)
+            c.setLineWidth(0.5)
+            c.setDash(2, 2)  # pontilhado
+            c.roundRect(xs, y0 + 2, xe - xs, row_h - 4, _corner_radius, stroke=1, fill=0)
+            c.setDash([])  # restaura linha sólida
 
         # Eventos
         for ev in row.events:
@@ -500,30 +513,37 @@ def _render_pdf_to_canvas(
                 c.setFillColor(colors.white)
             c.setStrokeColor(colors.black)
             c.setLineWidth(0.25)
-            c.rect(xs, y0 + 2, xe - xs, row_h - 4, stroke=1, fill=1)
+            c.roundRect(xs, y0 + 2, xe - xs, row_h - 4, _corner_radius, stroke=1, fill=1)
 
-            # Texto dentro (2 linhas): sempre preto
+            # Linha 1: procedure à esquerda, room à direita (mesma linha)
             pad_x = 4
-            max_w = max(10, (xe - xs) - 2 * pad_x)
+            block_w = max(10, (xe - xs) - 2 * pad_x)
+            half_w = max(5, (block_w - 6) / 2)  # divide espaço, 6pt de folga entre
             c.setFillColor(colors.black)
-            c.setFont("Helvetica-Bold", 7.5)
-            lines = _wrap_text(pdfmetrics, ev.title, "Helvetica-Bold", 7.5, max_w)
-            if lines:
-                c.drawString(xs + pad_x, y0 + 11, lines[0][:120])
+            c.setFont("Helvetica", 7.5)  # procedure sem negrito
+            proc_ok = _truncate_to_width(pdfmetrics, ev.title, "Helvetica", 7.5, half_w)
+            if proc_ok:
+                c.drawString(xs + pad_x, y0 + 11, proc_ok)
             if ev.subtitle:
-                c.setFont("Helvetica", 7)
-                sub_lines = _wrap_text(pdfmetrics, ev.subtitle, "Helvetica", 7, max_w)
-                if sub_lines:
-                    c.drawString(xs + pad_x, y0 + 4, sub_lines[0][:140])
+                room_ok = _truncate_to_width(pdfmetrics, ev.subtitle.strip(), "Helvetica", 7.5, half_w)
+                if room_ok:
+                    c.drawRightString(xe - pad_x, y0 + 11, room_ok)
 
-            # Horário (canto direito)
+            # Horário: início à esquerda, fim à direita; se não couber ambos, só o inicial
+            # Trunca por largura para não extrapolar a caixa
             c.setFont("Helvetica", 6.5)
             c.setFillColor(colors.black)
-            c.drawRightString(
-                xe - 3,
-                y0 + 4,
-                f"{_fmt_minutes(ev.interval.start_min)}-{_fmt_minutes(ev.interval.end_min)}",
-            )
+            start_str = _fmt_minutes(ev.interval.start_min)
+            end_str = _fmt_minutes(ev.interval.end_min)
+            w_start = pdfmetrics.stringWidth(start_str, "Helvetica", 6.5)
+            w_end = pdfmetrics.stringWidth(end_str, "Helvetica", 6.5)
+            start_ok = _truncate_to_width(pdfmetrics, start_str, "Helvetica", 6.5, block_w)
+            if start_ok:
+                if w_start + 6 + w_end <= block_w:
+                    c.drawString(xs + pad_x, y0 + 4, start_str)
+                    c.drawRightString(xe - pad_x, y0 + 4, end_str)
+                else:
+                    c.drawString(xs + pad_x, y0 + 4, start_ok)
 
     # Paginação simples: ao mudar de página, próximo cabeçalho usa topo completo
     y = draw_header()

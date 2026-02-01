@@ -82,6 +82,7 @@ def demands_to_day_schedules(
         Event,
         Interval,
         Row,
+        Vacation,
         _hex_to_rgb,
     )
 
@@ -94,6 +95,41 @@ def demands_to_day_schedules(
             except (ValueError, TypeError):
                 pass
         return None
+
+    def _vacation_intervals_for_day(
+        vacation_iso: list,
+        day_date: date,
+        tz: ZoneInfo,
+    ) -> list:
+        """
+        Converte member.vacation (pares ISO) em list de Vacation para o dia.
+        Mesmo dia → bloco horário; vários dias → dia inteiro se day_date estiver no intervalo.
+        """
+        result = []
+        for pair in vacation_iso or []:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                continue
+            try:
+                start_dt = datetime.fromisoformat(str(pair[0]).replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(str(pair[1]).replace("Z", "+00:00"))
+                start_local = start_dt.astimezone(tz)
+                end_local = end_dt.astimezone(tz)
+                if start_local.date() == end_local.date():
+                    if start_local.date() != day_date:
+                        continue
+                    start_min = int(start_local.hour * 60 + start_local.minute + start_local.second / 60)
+                    end_min = int(end_local.hour * 60 + end_local.minute + end_local.second / 60)
+                else:
+                    if not (start_local.date() <= day_date < end_local.date()):
+                        continue
+                    start_min = 0
+                    end_min = 24 * 60
+                if end_min <= start_min:
+                    continue
+                result.append(Vacation(interval=Interval(start_min, end_min), label="FÉRIAS"))
+            except (ValueError, TypeError, AttributeError):
+                continue
+        return result
 
     def _color_rgb_for_hospital_row(
         hid: int,
@@ -120,20 +156,18 @@ def demands_to_day_schedules(
             mid = getattr(d, "member_id", None)
             by_day_member[(day_key, mid)].append(d)
 
-        member_ids = {mid for (_, mid) in by_day_member if mid}
-        member_dict: dict[int, str] = {}
-        member_sequence: dict[int, int] = {}
-        if member_ids:
-            for m in session.exec(select(Member).where(Member.id.in_(member_ids))).all():
-                member_dict[m.id] = (m.name or "").strip() or f"Member {m.id}"
-                member_sequence[m.id] = getattr(m, "sequence", 0) or 0
-
         # Ordem rotacionada (como turna/solver): carregar todos members com sequence > 0
         pros_by_sequence: list[int] = []
+        member_dict: dict[int, str] = {}
+        member_sequence: dict[int, int] = {}
+        member_vacation: dict[int, list] = {}
         for m in session.exec(
             select(Member).where(Member.tenant_id == tenant_id, Member.sequence > 0).order_by(Member.sequence)
         ).all():
             pros_by_sequence.append(m.id)
+            member_dict[m.id] = (m.name or "").strip() or f"Member {m.id}"
+            member_sequence[m.id] = getattr(m, "sequence", 0) or 0
+            member_vacation[m.id] = getattr(m, "vacation", None) or []
         base_shift = 0
 
         hospital_ids_member = {d.hospital_id for d in demands if getattr(d, "hospital_id", None)}
@@ -150,17 +184,11 @@ def demands_to_day_schedules(
             day_start_dt = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0, tzinfo=tz)
             rows = []
             # Ordenar pela rotação do turna: dia N → start_idx = (base_shift + N) % n_pros
+            # Incluir todos da rotação (alocação ou vacation) para mostrar quadrinhos de férias
             start_idx = (base_shift + day_index) % n_pros if n_pros else 0
             rotated_order = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
-            mid_to_rotated_pos = {mid: i for i, mid in enumerate(rotated_order)}
-            members_this_day = sorted(
-                {mid for (day, mid) in by_day_member if day == day_str},
-                key=lambda x: (
-                    x is None,
-                    mid_to_rotated_pos.get(x, 999) if x is not None else 999,
-                    member_dict.get(x, f"Member {x}") if x is not None else "Sem alocação",
-                ),
-            )
+            with_alloc = {mid for (day, mid) in by_day_member if day == day_str and mid is not None}
+            members_this_day = [mid for mid in rotated_order if mid in with_alloc or mid in member_dict]
             for mid in members_this_day:
                 demands_row = by_day_member.get((day_str, mid), [])
                 events = []
@@ -186,7 +214,8 @@ def demands_to_day_schedules(
                     )
                 events.sort(key=lambda e: (e.interval.start_min, e.interval.end_min))
                 name = "Sem alocação" if mid is None else member_dict.get(mid, f"Member {mid}")
-                rows.append(Row(name=name, events=events, vacations=[]))
+                vacs = _vacation_intervals_for_day(member_vacation.get(mid, []), day_date, tz) if mid else []
+                rows.append(Row(name=name, events=events, vacations=vacs))
             if not rows:
                 continue
             try:
