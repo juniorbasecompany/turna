@@ -14,7 +14,7 @@ class AuditLog(BaseModel, table=True):
     # tenant_id pode ser NULL para eventos globais; para switch-tenant usamos o tenant "de origem".
     tenant_id: int | None = Field(default=None, foreign_key="tenant.id", index=True)
 
-    actor_account_id: int = Field(foreign_key="account.id", index=True)
+    account_id: int = Field(foreign_key="account.id", index=True)
     member_id: int | None = Field(default=None, foreign_key="member.id", index=True)
 
     event_type: str = Field(index=True)

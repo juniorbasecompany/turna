@@ -488,7 +488,7 @@ def delete_account(
             session,
             AuditLog(
                 tenant_id=member.tenant_id,
-                actor_account_id=member.account_id,
+                account_id=member.account_id,
                 member_id=account_member.id,
                 event_type="member_status_changed",
                 data={
@@ -932,7 +932,7 @@ def invite_to_tenant(
                 session,
                 AuditLog(
                     tenant_id=tenant.id,
-                    actor_account_id=admin_member.account_id,
+                    account_id=admin_member.account_id,
                     member_id=member_existing.id,
                     event_type="member_invited",
                     data={
@@ -974,7 +974,7 @@ def invite_to_tenant(
         session,
         AuditLog(
             tenant_id=tenant.id,
-            actor_account_id=admin_member.account_id,
+            account_id=admin_member.account_id,
             member_id=member_new.id,
             event_type="member_invited",
             data={
@@ -1154,7 +1154,7 @@ def remove_member(
         session,
         AuditLog(
             tenant_id=tenant_id,
-            actor_account_id=admin_member.account_id,
+            account_id=admin_member.account_id,
             member_id=member_to_remove.id,
             event_type="member_status_changed",
             data={
@@ -3444,7 +3444,7 @@ def create_member(
             session,
             AuditLog(
                 tenant_id=member.tenant_id,
-                actor_account_id=member.account_id,
+                account_id=member.account_id,
                 member_id=member_obj.id,
                 event_type="member_invited",
                 data={
@@ -3729,7 +3729,7 @@ def update_member(
                 session,
                 AuditLog(
                     tenant_id=member.tenant_id,
-                    actor_account_id=member.account_id,
+                    account_id=member.account_id,
                     member_id=member_obj.id,
                     event_type="member_status_changed",
                     data={
@@ -3831,7 +3831,7 @@ def delete_member(
             session,
             AuditLog(
                 tenant_id=member.tenant_id,
-                actor_account_id=member.account_id,
+                account_id=member.account_id,
                 member_id=member_obj.id,
                 event_type="member_status_changed",
                 data={
@@ -3907,7 +3907,7 @@ def send_member_invite_email(
                     session,
                     AuditLog(
                         tenant_id=member.tenant_id,
-                        actor_account_id=member.account_id,
+                        account_id=member.account_id,
                         member_id=member_obj.id,
                         event_type="member_status_changed",
                         data={

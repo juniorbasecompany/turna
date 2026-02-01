@@ -1018,6 +1018,7 @@ def delete_schedule(
     demand.published_at = None
     demand.pdf_file_id = None
     demand.job_id = None
+    demand.member_id = None
     demand.updated_at = utc_now()
     session.add(demand)
     session.commit()

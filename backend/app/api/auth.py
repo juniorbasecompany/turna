@@ -581,7 +581,7 @@ def accept_invite(
         session,
         AuditLog(
             tenant_id=member.tenant_id,
-            actor_account_id=account.id,
+            account_id=account.id,
             member_id=member.id,
             event_type="member_status_changed",
             data={
@@ -620,7 +620,7 @@ def reject_invite(
         session,
         AuditLog(
             tenant_id=member.tenant_id,
-            actor_account_id=account.id,
+            account_id=account.id,
             member_id=member.id,
             event_type="member_status_changed",
             data={
@@ -827,7 +827,7 @@ def switch_tenant_old(
         session,
         AuditLog(
             tenant_id=current_member.tenant_id,
-            actor_account_id=account.id,
+            account_id=account.id,
             member_id=current_member.id,
             event_type="tenant_switched",
             data={
