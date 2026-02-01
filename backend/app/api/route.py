@@ -2759,7 +2759,6 @@ class DemandCreate(PydanticBaseModel):
     priority: str | None = None  # "Urgente" | "Emergência" | None
     is_pediatric: bool = False
     notes: str | None = None
-    source: dict | None = None
 
     @field_validator("procedure")
     @classmethod
@@ -2807,7 +2806,6 @@ class DemandUpdate(PydanticBaseModel):
     priority: str | None = None
     is_pediatric: bool | None = None
     notes: str | None = None
-    source: dict | None = None
 
     @field_validator("procedure")
     @classmethod
@@ -2850,7 +2848,6 @@ class DemandResponse(PydanticBaseModel):
     priority: str | None
     is_pediatric: bool
     notes: str | None
-    source: dict | None
     created_at: datetime
     updated_at: datetime
 
@@ -2915,7 +2912,6 @@ def create_demand(
             priority=body.priority,
             is_pediatric=body.is_pediatric,
             notes=body.notes,
-            source=body.source,
         )
 
         session.add(demand)
@@ -3180,8 +3176,6 @@ def update_demand(
             demand.is_pediatric = body.is_pediatric
         if body.notes is not None:
             demand.notes = body.notes
-        if body.source is not None:
-            demand.source = body.source
         demand.updated_at = utc_now()
 
         session.add(demand)

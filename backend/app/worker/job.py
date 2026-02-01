@@ -219,7 +219,6 @@ def _extract_individual_allocations(
             "start": float,          # hora início
             "end": float,            # hora fim
             "is_pediatric": bool,
-            "source": dict           # dados originais da demanda
         }
     """
     allocations = []
@@ -301,7 +300,6 @@ def _extract_individual_allocations(
                     "start": float(demand.get("start", 0)),
                     "end": float(demand.get("end", 0)),
                     "is_pediatric": bool(demand.get("is_pediatric", False)),
-                    "source": demand.get("source", {}),
                     "demand_id": demand.get("demand_id"),  # ID do registro Demand
                     "hospital_id": demand.get("hospital_id"),  # hospital_id da demanda (para referência)
                 }
@@ -359,7 +357,6 @@ def _demands_from_extract_result(result_data: dict, *, period_start_at, period_e
                 "start": float(start_h),
                 "end": float(end_h),
                 "is_pediatric": bool(d.get("is_pediatric") or False),
-                "source": d.get("source"),
             }
         )
 
@@ -476,7 +473,6 @@ def _demands_from_database(
                 "start": float(start_h),
                 "end": float(end_h),
                 "is_pediatric": bool(d.is_pediatric),
-                "source": d.source,  # Preservar source original
                 "demand_id": d.id,  # ID do registro Demand
                 "hospital_id": d.hospital_id,  # hospital_id da demanda (para referência)
             }

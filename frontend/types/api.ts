@@ -274,7 +274,6 @@ export interface DemandResponse {
     priority: string | null
     is_pediatric: boolean
     notes: string | null
-    source: Record<string, unknown> | null
     created_at: string
     updated_at: string
 }
@@ -297,7 +296,6 @@ export interface DemandCreateRequest {
     priority?: string | null
     is_pediatric?: boolean
     notes?: string | null
-    source?: Record<string, unknown> | null
 }
 
 export interface DemandUpdateRequest {
@@ -313,7 +311,6 @@ export interface DemandUpdateRequest {
     priority?: string | null
     is_pediatric?: boolean
     notes?: string | null
-    source?: Record<string, unknown> | null
 }
 
 

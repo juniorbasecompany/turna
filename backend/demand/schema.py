@@ -172,19 +172,11 @@ def parse_skills(x: Any) -> List[str]:
     return []
 
 def extract_id(d: dict) -> Optional[str]:
-    """Extrai ID da demanda, tentando campos explícitos primeiro, depois source/raw."""
-    # Preferir campos explícitos
+    """Extrai ID da demanda a partir dos campos explícitos (id, ID, case_id, caseId)."""
     for k in ID_FIELDS:
         v = d.get(k)
         if isinstance(v, str) and v.strip():
             return v.strip()
-    # Tentar do source/raw
-    src = d.get("source") if isinstance(d.get("source"), dict) else {}
-    raw = src.get("raw")
-    if isinstance(raw, str):
-        m = ID_RE.search(raw)
-        if m:
-            return m.group(0)
     return None
 
 def normalize_str(x: Any) -> Optional[str]:
@@ -249,7 +241,6 @@ def validate_and_normalize_result(obj: dict) -> dict:
             "priority": priority,
             "members": as_list(d.get("members")),
             "notes": notes,
-            "source": d.get("source") if isinstance(d.get("source"), dict) else {},
         }
 
         # Regras mínimas: precisa ter procedure + start/end (ou início/fim "dd/mm hh:mm")

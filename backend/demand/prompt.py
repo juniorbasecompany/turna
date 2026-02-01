@@ -30,6 +30,5 @@ Regras:
   - complexity (string ou null)  # se existir como complexidade do caso (Baixa/Média/Alta)
   - members (lista; se não houver, [])
   - notes (string ou null)
-  - source (objeto livre; inclua page e qualquer raw útil)
 - Não invente dados que não estejam no documento.
 """

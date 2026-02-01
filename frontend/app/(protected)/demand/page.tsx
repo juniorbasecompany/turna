@@ -41,7 +41,6 @@ type DemandFormData = {
     priority: string | null
     is_pediatric: boolean
     notes: string
-    source: Record<string, unknown> | null
 }
 
 export default function DemandPage() {
@@ -112,7 +111,6 @@ export default function DemandPage() {
         priority: null,
         is_pediatric: false,
         notes: '',
-        source: null,
     }
 
     // Mapeamentos
@@ -130,7 +128,6 @@ export default function DemandPage() {
             priority: demand.priority,
             is_pediatric: demand.is_pediatric,
             notes: demand.notes || '',
-            source: demand.source,
         }
     }
 
@@ -151,7 +148,6 @@ export default function DemandPage() {
             priority: formData.priority || null,
             is_pediatric: formData.is_pediatric,
             notes: formData.notes.trim() || null,
-            source: formData.source,
         }
     }
 
@@ -172,7 +168,6 @@ export default function DemandPage() {
             priority: formData.priority || null,
             is_pediatric: formData.is_pediatric,
             notes: formData.notes.trim() || null,
-            source: formData.source,
         }
     }
 

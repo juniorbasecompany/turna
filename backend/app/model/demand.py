@@ -45,7 +45,6 @@ class Demand(BaseModel, table=True):
     priority: Optional[str] = Field(default=None, nullable=True)  # "Urgente" | "Emergência" | None
     is_pediatric: bool = Field(default=False, nullable=False, index=True)
     notes: Optional[str] = Field(default=None, nullable=True)
-    source: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
     # Campos de escala (estado da escala na própria Demand)
     schedule_status: Optional[ScheduleStatus] = Field(

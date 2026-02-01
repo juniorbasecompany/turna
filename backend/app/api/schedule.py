@@ -280,7 +280,6 @@ def _reconstruct_per_day_from_fragments(fragments: list[Demand]) -> list[dict]:
             "start": result_data.get("start"),
             "end": result_data.get("end"),
             "is_pediatric": result_data.get("is_pediatric", False),
-            "source": result_data.get("source", {}),
             "hospital_id": fragment.hospital_id,
         }
         by_day[day_num]["assigned_demands_by_pro"][member_id].append(demand_data)
