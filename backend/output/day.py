@@ -373,9 +373,8 @@ def render_pdf_bytes(schedule: DaySchedule) -> bytes:
     return buf.getvalue()
 
 
-# Cor e espessura da barra do cabeçalho (linha SOBRE o título/filtro)
+# Cor da barra ao lado de "Turna"
 _REPORT_BAR_BLUE = "#2563EB"
-_REPORT_BAR_TITLE_PT = 8   # espessura da linha sobre o título do relatório
 
 
 def _draw_report_header_on_canvas(
@@ -389,23 +388,29 @@ def _draw_report_header_on_canvas(
 ) -> float:
     """
     Desenha cabeçalho do relatório (Turna + título + filtros) no topo da página em landscape.
-    Barra azul como linha SOBRE o texto (overline), não sublinhada.
+    Barra azul só à esquerda de "Turna"; título e filtros sem barra.
     """
     y = page_h - margin
     bar_blue = colors.HexColor(_REPORT_BAR_BLUE)
-    bar_w = page_w - 2 * margin
-    # Turna: só o texto, sem barra sobre
-    c.setFillColor(colors.HexColor("#111827"))
+    # Turna: barra azul da borda esquerda até "Turna" (texto alinhado à direita)
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(margin, y - 14, "Turna")
+    turna_width = c.stringWidth("Turna", "Helvetica-Bold", 16)
+    gap = 6
+    bar_x_end = page_w - margin - turna_width - gap
+    bar_y = y - 10
+    c.setStrokeColor(bar_blue)
+    c.setLineWidth(2)
+    c.line(margin, bar_y, bar_x_end, bar_y)
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(0.25)
+    c.setFillColor(colors.HexColor("#111827"))
+    c.drawRightString(page_w - margin, y - 14, "Turna")
     y -= 18
-    # Título do relatório: linha azul sobre o texto (overline)
-    c.setFillColor(bar_blue)
-    c.rect(margin, y - _REPORT_BAR_TITLE_PT, bar_w, _REPORT_BAR_TITLE_PT, fill=1, stroke=0)
+    # Título do relatório: só o texto, sem barra azul
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(margin, y - _REPORT_BAR_TITLE_PT - 14, report_title)
-    y -= _REPORT_BAR_TITLE_PT + 18
+    c.drawString(margin, y - 14, report_title)
+    y -= 18
     # Filtros (compacto)
     if filters:
         c.setFont("Helvetica-Bold", 9)
@@ -506,24 +511,29 @@ def _render_pdf_to_canvas(
 
     def draw_header() -> float:
         y_top = current_top_y[0]
-        c.setFillColor(colors.black)
+        y_grid_top = y_top - header_h
+        bar_blue = colors.HexColor(_REPORT_BAR_BLUE)
+
+        # Faixa azul do cabeçalho (mesmo padrão do cabeçalho da tabela nos relatórios)
+        c.setFillColor(bar_blue)
+        c.rect(margin, y_grid_top, page_w - 2 * margin, header_h, fill=1, stroke=0)
+
+        # Título do dia e marcas de hora em branco
+        c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 14)
         c.drawString(margin, y_top - 16, schedule.title)
 
         # Linha base do cabeçalho da grade
-        y_grid_top = y_top - header_h
         c.setStrokeColor(colors.lightgrey)
         c.setLineWidth(0.25)
         c.line(margin, y_grid_top, page_w - margin, y_grid_top)
 
         # Coluna nomes (separador)
-        c.setStrokeColor(colors.lightgrey)
-        c.setLineWidth(0.25)
         c.line(grid_x0, y_grid_top, grid_x0, margin)
 
         # Marcas de hora; linhas verticais pontilhadas
         c.setFont("Helvetica", 8)
-        c.setFillColor(colors.black)
+        c.setFillColor(colors.white)
         start_hour = day_start // 60
         end_hour = min(23, int(math.ceil(day_end / 60)))
         for h in range(start_hour, end_hour + 1):

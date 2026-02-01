@@ -101,9 +101,7 @@ def _ensure_reportlab():
 
 
 REPORT_HEADER_TITLE = "Turna"
-# Cor e espessuras das barras do cabeçalho (linha SOBRE o texto, estilo overline)
 REPORT_BAR_BLUE = "#2563EB"
-REPORT_BAR_TITLE_CM = 0.12   # espessura da linha sobre o título / filtro (cm)
 
 
 def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
@@ -121,23 +119,34 @@ def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str,
 
 
 def _build_header_elements(doc, styles):
+    from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import ParagraphStyle
+    from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    # Turna: só o texto, sem barra sobre
+    # Turna: barra azul da margem esquerda até "Turna"; "Turna" alinhado à direita da página
+    header_font = "Helvetica-Bold"
+    header_font_size = 18
     header_style = ParagraphStyle(
         name="ReportHeader",
         parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=18,
+        fontName=header_font,
+        fontSize=header_font_size,
         textColor="#111827",
     )
+    # Largura da coluna "Turna" = largura do texto + pequeno espaço; depende da fonte e do texto
+    turna_text_w = stringWidth(REPORT_HEADER_TITLE, header_font, header_font_size)
+    turna_col_w = turna_text_w + 8  # 8pt de folga
+    bar_col_w = doc.width - turna_col_w  # barra ocupa o resto até "Turna"
     header_table = Table(
-        [[Paragraph(REPORT_HEADER_TITLE, header_style)]],
-        colWidths=[doc.width],
+        [["", Paragraph(REPORT_HEADER_TITLE, header_style)]],
+        colWidths=[bar_col_w, turna_col_w],
     )
     header_table.setStyle(
         TableStyle([
+            ("LINEBELOW", (0, 0), (0, 0), 2, colors.HexColor(REPORT_BAR_BLUE)),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("RIGHTPADDING", (1, 0), (1, 0), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ])
@@ -146,12 +155,10 @@ def _build_header_elements(doc, styles):
 
 
 def _build_title_elements(report_title: str, styles, doc):
-    from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.units import cm
 
-    # Título do relatório: linha azul SOBRE o texto (overline)
+    # Título do relatório: só o texto, sem barra azul
     title_style = ParagraphStyle(
         name="ReportTitle",
         parent=styles["Normal"],
@@ -159,20 +166,15 @@ def _build_title_elements(report_title: str, styles, doc):
         fontSize=14,
         textColor="#111827",
     )
-    bar_h = REPORT_BAR_TITLE_CM * cm  # barra sobre o título/filtro (mais espessa)
     title_table = Table(
-        [[""], [Paragraph(report_title, title_style)]],
+        [[Paragraph(report_title, title_style)]],
         colWidths=[doc.width],
-        rowHeights=[bar_h, None],
     )
     title_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BAR_BLUE)),
-                ("TOPPADDING", (0, 1), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
-            ]
-        )
+        TableStyle([
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ])
     )
     return [title_table, Spacer(1, 6)]
 
