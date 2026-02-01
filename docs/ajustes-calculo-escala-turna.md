@@ -4,6 +4,8 @@
 
 Este documento lista as modificações objetivas necessárias no processo de cálculo da escala (job `generate_schedule_job`) para obter o mesmo resultado que o `turna.py`.
 
+> **Status:** Implementado em fev/2025.
+
 ---
 
 ## 1. Vacation (férias/folgas) — Prioridade alta
@@ -43,19 +45,14 @@ Tratar corretamente a vacation baseada em **datas** (member) no solver:
 
 ---
 
-## 2. Suporte a vacation em horas no Member (opcional)
+## 2. Suporte a vacation em horas no Member
 
-### Contexto
+### Implementado (fev/2025)
 
-Em turna, vacation é sempre em **horas**, por exemplo: `[[7, 12]]`, `[[0, 24]]`. Hoje o member aceita apenas intervalos em ISO datetime.
+O member armazena vacation em ISO datetime. O `_parse_vacation_for_solver` agora diferencia:
 
-### Ajuste necessário (se quiser armazenar férias em horas)
-
-- Definir um formato para vacation em horas no member (ex.: pares numéricos ou estrutura específica).
-- No `_load_pros_from_member_table`, detectar o formato:
-  - Se for ISO datetime → converter para `vacation_days` (e `vacation = []`).
-  - Se for par numérico em `[0, 24]` → tratar como `vacation` em horas (e `vacation_days = []`).
-- Garantir que o solver use `vacation` em horas quando existir, e `vacation_days` quando houver datas.
+- **Mesmo dia civil** (início e fim no mesmo dia, no timezone do tenant): converte para bloco horário `(hora_inicio, hora_fim)` → `vacation`. Ex.: Joaquim 13h–17h.
+- **Vários dias** (início e fim em dias distintos): converte para `(dia_inicio, dia_fim)` → `vacation_days`. Ex.: Ricardo dia inteiro.
 
 ---
 

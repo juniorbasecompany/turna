@@ -9,6 +9,22 @@ from .allocate import greedy_allocate
 logger = logging.getLogger(__name__)
 
 
+def _is_on_vacation_day(pro: dict, day_num: int) -> bool:
+    """
+    Verifica se o profissional está de férias no dia day_num.
+
+    vacation_days: lista de (dia_inicio, dia_fim) — dias do período em que está off.
+    Se ausente ou vazio, retorna False (compatível com turna/profissionais.json).
+    """
+    vacation_days = pro.get("vacation_days") or []
+    if not vacation_days:
+        return False
+    for ds, de in vacation_days:
+        if ds <= day_num <= de:
+            return True
+    return False
+
+
 def solve_greedy(
     *,
     demands: list[dict],
@@ -39,7 +55,14 @@ def solve_greedy(
         logger.debug(f"[SOLVE_GREEDY] Dia {day_num}: {len(demand_list_day)} demandas")
 
         start_idx = (base_shift + day) % n_pros
-        pros_for_day = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
+        pros_rotated = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
+
+        # Excluir profissionais em férias neste dia (vacation_days = intervalos de dias)
+        # turna usa vacation em horas; quando vacation_days ausente, trata como []
+        pros_for_day = [
+            p for p in pros_rotated
+            if not _is_on_vacation_day(p, day_num)
+        ]
 
         allocate_start_time = time.time()
         assigned_by_demand, assigned_demands_by_pro, _used_count = greedy_allocate(demand_list_day, pros_for_day)

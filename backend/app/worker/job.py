@@ -123,34 +123,57 @@ def _safe_error_message(e: Exception, max_len: int = 500) -> str:
 def _parse_vacation_for_solver(
     vacation_iso: list[list[str]],
     period_start_date,
-) -> list[tuple[int, int]]:
+    tenant_tz: ZoneInfo,
+) -> tuple[list[tuple[float, float]], list[tuple[int, int]]]:
     """
-    Converte vacation de ISO datetime strings para dias inteiros relativos ao período.
+    Converte vacation de ISO datetime strings para o formato do solver.
+
+    Se o par [início, fim] cai no mesmo dia civil (timezone do tenant): bloco horário
+    (hora_inicio, hora_fim) -> vacation.
+
+    Se abrange vários dias: dias inteiros (dia_inicio, dia_fim) -> vacation_days.
 
     Args:
-        vacation_iso: Lista de pares [início, fim] em ISO datetime (ex.: "2025-01-01T00:00:00Z")
+        vacation_iso: Lista de pares [início, fim] em ISO datetime
         period_start_date: Data de início do período da escala (date)
+        tenant_tz: Timezone do tenant para converter horários
 
     Returns:
-        Lista de tuplas (dia_início, dia_fim) com dias inteiros (1 = primeiro dia do período)
+        (vacation, vacation_days): blocos em horas e intervalos em dias
     """
-    from datetime import datetime, date
+    from datetime import datetime
 
-    result: list[tuple[int, int]] = []
+    vacation: list[tuple[float, float]] = []
+    vacation_days: list[tuple[int, int]] = []
+    seen_hours: set[tuple[float, float]] = set()
+
     for pair in vacation_iso or []:
         if not isinstance(pair, (list, tuple)) or len(pair) != 2:
             continue
         try:
             start_dt = datetime.fromisoformat(str(pair[0]).replace("Z", "+00:00"))
             end_dt = datetime.fromisoformat(str(pair[1]).replace("Z", "+00:00"))
-            start_day = (start_dt.date() - period_start_date).days + 1
-            end_day = (end_dt.date() - period_start_date).days + 1
-            # Incluir apenas se houver interseção com o período (dia >= 1)
-            if end_day >= 1:
-                result.append((max(1, start_day), end_day))
+            start_local = start_dt.astimezone(tenant_tz)
+            end_local = end_dt.astimezone(tenant_tz)
+
+            if start_local.date() == end_local.date():
+                # Mesmo dia: bloco horário (compatível com turna/profissionais.json)
+                h_start = start_local.hour + start_local.minute / 60.0 + start_local.second / 3600.0
+                h_end = end_local.hour + end_local.minute / 60.0 + end_local.second / 3600.0
+                key = (round(h_start, 2), round(h_end, 2))
+                if key not in seen_hours:
+                    seen_hours.add(key)
+                    vacation.append((h_start, h_end))
+            else:
+                # Vários dias: dias inteiros
+                start_day = (start_local.date() - period_start_date).days + 1
+                # end exclusivo: último dia = end.date() - 1 dia se end for meia-noite
+                end_day = (end_local.date() - period_start_date).days
+                if end_day >= 1:
+                    vacation_days.append((max(1, start_day), end_day))
         except (ValueError, TypeError, AttributeError):
             continue
-    return result
+    return (vacation, vacation_days)
 
 
 def _load_pros_from_member_table(
@@ -167,7 +190,8 @@ def _load_pros_from_member_table(
     - name: nome (string)
     - sequence: ordem de prioridade (int)
     - can_peds: se pode atender pediatria (bool)
-    - vacation: lista de tuplas [dia_inicio, dia_fim]
+    - vacation: lista de tuplas (hora_inicio, hora_fim) — blocos horários; vazio para member (usa vacation_days)
+    - vacation_days: lista de tuplas (dia_inicio, dia_fim) — dias do período em férias
 
     Args:
         session: Sessão do banco
@@ -187,23 +211,30 @@ def _load_pros_from_member_table(
         )
     ).all()
 
+    tenant = session.get(Tenant, tenant_id)
+    tenant_tz = ZoneInfo(tenant.timezone) if tenant and tenant.timezone else ZoneInfo("UTC")
+
     pros: list[dict] = []
     for m in rows:
         pro_id = str(m.id)
         name = (m.name or pro_id).strip()
 
-        # Converter vacation de ISO para dias inteiros relativos ao período
+        # Converter vacation: mesmo dia -> blocos horários; vários dias -> vacation_days
         if period_start_date is not None:
-            vacation = _parse_vacation_for_solver(m.vacation, period_start_date)
+            vacation_hours, vacation_days = _parse_vacation_for_solver(
+                m.vacation, period_start_date, tenant_tz
+            )
         else:
-            vacation = []
+            vacation_hours = []
+            vacation_days = []
 
         pros.append({
             "id": pro_id,
             "name": name,
-            "sequence": m.sequence,       # coluna direta
-            "can_peds": m.can_peds,       # coluna direta
-            "vacation": vacation,          # coluna direta (convertida)
+            "sequence": m.sequence,
+            "can_peds": m.can_peds,
+            "vacation": vacation_hours,
+            "vacation_days": vacation_days,
             "member_db_id": m.id,
         })
 

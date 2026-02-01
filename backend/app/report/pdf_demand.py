@@ -122,9 +122,19 @@ def demands_to_day_schedules(
 
         member_ids = {mid for (_, mid) in by_day_member if mid}
         member_dict: dict[int, str] = {}
+        member_sequence: dict[int, int] = {}
         if member_ids:
             for m in session.exec(select(Member).where(Member.id.in_(member_ids))).all():
                 member_dict[m.id] = (m.name or "").strip() or f"Member {m.id}"
+                member_sequence[m.id] = getattr(m, "sequence", 0) or 0
+
+        # Ordem rotacionada (como turna/solver): carregar todos members com sequence > 0
+        pros_by_sequence: list[int] = []
+        for m in session.exec(
+            select(Member).where(Member.tenant_id == tenant_id, Member.sequence > 0).order_by(Member.sequence)
+        ).all():
+            pros_by_sequence.append(m.id)
+        base_shift = 0
 
         hospital_ids_member = {d.hospital_id for d in demands if getattr(d, "hospital_id", None)}
         hospital_color_by_id: dict[int, Optional[str]] = {}
@@ -134,14 +144,22 @@ def demands_to_day_schedules(
 
         schedules = []
         days_sorted = sorted({day for (day, _) in by_day_member})
-        for day_str in days_sorted:
+        n_pros = len(pros_by_sequence)
+        for day_index, day_str in enumerate(days_sorted):
             day_date = date.fromisoformat(day_str)
             day_start_dt = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0, tzinfo=tz)
             rows = []
-            # Ordenar: sem alocação por último; depois por nome do member
+            # Ordenar pela rotação do turna: dia N → start_idx = (base_shift + N) % n_pros
+            start_idx = (base_shift + day_index) % n_pros if n_pros else 0
+            rotated_order = pros_by_sequence[start_idx:] + pros_by_sequence[:start_idx]
+            mid_to_rotated_pos = {mid: i for i, mid in enumerate(rotated_order)}
             members_this_day = sorted(
                 {mid for (day, mid) in by_day_member if day == day_str},
-                key=lambda x: (x is None, member_dict.get(x, f"Member {x}") if x is not None else "Sem alocação"),
+                key=lambda x: (
+                    x is None,
+                    mid_to_rotated_pos.get(x, 999) if x is not None else 999,
+                    member_dict.get(x, f"Member {x}") if x is not None else "Sem alocação",
+                ),
             )
             for mid in members_this_day:
                 demands_row = by_day_member.get((day_str, mid), [])
