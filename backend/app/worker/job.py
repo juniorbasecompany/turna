@@ -120,31 +120,47 @@ def _safe_error_message(e: Exception, max_len: int = 500) -> str:
     return msg[:max_len]
 
 
-def _validate_pro_attribute(attribute: dict) -> bool:
+def _parse_vacation_for_solver(
+    vacation_iso: list[list[str]],
+    period_start_date,
+) -> list[tuple[int, int]]:
     """
-    Valida se o attribute do member tem estrutura mínima para uso como profissional na escala.
-    Exige: sequence (numérico), can_peds (bool), vacation (lista).
+    Converte vacation de ISO datetime strings para dias inteiros relativos ao período.
+
+    Args:
+        vacation_iso: Lista de pares [início, fim] em ISO datetime (ex.: "2025-01-01T00:00:00Z")
+        period_start_date: Data de início do período da escala (date)
+
+    Returns:
+        Lista de tuplas (dia_início, dia_fim) com dias inteiros (1 = primeiro dia do período)
     """
-    if not attribute or not isinstance(attribute, dict):
-        return False
-    seq = attribute.get("sequence")
-    if seq is None or not isinstance(seq, (int, float)):
-        return False
-    can_peds = attribute.get("can_peds")
-    if not isinstance(can_peds, bool):
-        return False
-    vac = attribute.get("vacation")
-    if not isinstance(vac, list):
-        return False
-    for v in vac:
-        if not isinstance(v, (list, tuple)) or len(v) != 2:
-            return False
-    return True
+    from datetime import datetime, date
+
+    result: list[tuple[int, int]] = []
+    for pair in vacation_iso or []:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            continue
+        try:
+            start_dt = datetime.fromisoformat(str(pair[0]).replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(str(pair[1]).replace("Z", "+00:00"))
+            start_day = (start_dt.date() - period_start_date).days + 1
+            end_day = (end_dt.date() - period_start_date).days + 1
+            # Incluir apenas se houver interseção com o período (dia >= 1)
+            if end_day >= 1:
+                result.append((max(1, start_day), end_day))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return result
 
 
-def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]:
+def _load_pros_from_member_table(
+    session: Session,
+    tenant_id: int,
+    period_start_date=None,
+) -> list[dict]:
     """
     Carrega profissionais da tabela member para o tenant.
+    Usa diretamente as colunas can_peds, sequence, vacation do model Member.
 
     Retorna lista no formato esperado pelo solver:
     - id: identificador = str(member.id) para lookup e gravação de demand.member_id
@@ -153,7 +169,13 @@ def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]
     - can_peds: se pode atender pediatria (bool)
     - vacation: lista de tuplas [dia_inicio, dia_fim]
 
-    Filtra por tenant_id, status ACTIVE e attribute válido.
+    Args:
+        session: Sessão do banco
+        tenant_id: ID do tenant
+        period_start_date: Data de início do período (para converter vacation para dias relativos).
+                           Se None, vacation será lista vazia.
+
+    Filtra por tenant_id, status ACTIVE e sequence > 0 (apenas membros com ordem de prioridade).
     """
     logger.info(f"[LOAD_PROFESSIONALS] Carregando profissionais do tenant_id={tenant_id}")
     rows = session.exec(
@@ -161,37 +183,32 @@ def _load_pros_from_member_table(session: Session, tenant_id: int) -> list[dict]
         .where(
             Member.tenant_id == tenant_id,
             Member.status == MemberStatus.ACTIVE,
+            Member.sequence > 0,
         )
     ).all()
 
     pros: list[dict] = []
-    skipped = 0
     for m in rows:
-        attr = m.attribute or {}
-        if not _validate_pro_attribute(attr):
-            skipped += 1
-            logger.warning(
-                f"[LOAD_PROFESSIONALS] Member id={m.id} name={m.name!r} ignorado: attribute inválido"
-            )
-            continue
-        # id = PK do member (string) para o solver; garante lookup member_db_id e gravação em demand.member_id
         pro_id = str(m.id)
         name = (m.name or pro_id).strip()
-        vacation_raw = attr.get("vacation", [])
-        vacation = [tuple(int(x) for x in v) for v in vacation_raw]
+
+        # Converter vacation de ISO para dias inteiros relativos ao período
+        if period_start_date is not None:
+            vacation = _parse_vacation_for_solver(m.vacation, period_start_date)
+        else:
+            vacation = []
+
         pros.append({
             "id": pro_id,
             "name": name,
-            "sequence": int(attr.get("sequence", 0)),
-            "can_peds": bool(attr.get("can_peds", False)),
-            "vacation": vacation,
-            "member_db_id": m.id,  # PK member para gravar em demand.member_id ao calcular escala
+            "sequence": m.sequence,       # coluna direta
+            "can_peds": m.can_peds,       # coluna direta
+            "vacation": vacation,          # coluna direta (convertida)
+            "member_db_id": m.id,
         })
 
     pros.sort(key=lambda p: p["sequence"])
-    logger.info(
-        f"[LOAD_PROFESSIONALS] {len(pros)} profissionais carregados, {skipped} ignorados"
-    )
+    logger.info(f"[LOAD_PROFESSIONALS] {len(pros)} profissionais carregados")
     return pros
 
 
@@ -522,51 +539,56 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
             if allocation_mode != "greedy":
                 raise RuntimeError("allocation_mode não suportado no MVP (apenas greedy)")
 
-            # Profissionais: no modo from_demands sempre carregar da tabela member (para ter member_db_id e gravar demand.member_id)
-            # No modo from_extract usa payload se enviado, senão carrega da tabela
-            if mode == "from_demands":
-                pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id)
-            else:
-                pros_by_sequence = input_data.get("pros_by_sequence")
-                if pros_by_sequence is None:
-                    pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id)
-            if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
-                raise RuntimeError("Nenhum profissional encontrado para o tenant")
-
             schedule_name = None
             schedule_period_start_at = None
             schedule_period_end_at = None
             schedule_version_number = 1
             extract_job_id = None
 
+            # Obter período (necessário antes de carregar profissionais para converter vacation)
+            from datetime import datetime
+            period_start_at = input_data.get("period_start_at")
+            period_end_at = input_data.get("period_end_at")
+
+            if not period_start_at or not period_end_at:
+                raise RuntimeError("period_start_at e period_end_at são obrigatórios")
+
+            if isinstance(period_start_at, str):
+                period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
+            if isinstance(period_end_at, str):
+                period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
+
+            schedule_period_start_at = period_start_at
+            schedule_period_end_at = period_end_at
+
+            # Obter timezone do tenant para converter datas
+            tenant = session.get(Tenant, job.tenant_id)
+            if not tenant:
+                raise RuntimeError(f"Tenant não encontrado (id={job.tenant_id})")
+            tenant_tz = ZoneInfo(tenant.timezone)
+            period_start_date = period_start_at.astimezone(tenant_tz).date()
+
+            logger.debug(f"[GENERATE_SCHEDULE] period_start_at: {period_start_at}, period_start_date: {period_start_date}")
+
+            # Profissionais: no modo from_demands sempre carregar da tabela member (para ter member_db_id e gravar demand.member_id)
+            # No modo from_extract usa payload se enviado, senão carrega da tabela
+            if mode == "from_demands":
+                pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id, period_start_date)
+            else:
+                pros_by_sequence = input_data.get("pros_by_sequence")
+                if pros_by_sequence is None:
+                    pros_by_sequence = _load_pros_from_member_table(session, job.tenant_id, period_start_date)
+            if not isinstance(pros_by_sequence, list) or not pros_by_sequence:
+                raise RuntimeError("Nenhum profissional encontrado para o tenant")
+
             # Carregar demandas conforme o modo
             if mode == "from_demands":
                 logger.info(f"[GENERATE_SCHEDULE] Modo 'from_demands' - lendo demandas do banco (sem registro mestre)")
-                from datetime import datetime
 
                 # Obter dados do input_data (não há registro mestre no modo from_demands)
                 # O worker atualiza cada Demand com o resultado da sua alocação.
                 schedule_name = input_data.get("name") or f"Escala Job {job_id}"
                 schedule_version_number = int(input_data.get("version_number") or 1)
-
-                period_start_at = input_data.get("period_start_at")
-                period_end_at = input_data.get("period_end_at")
-                logger.debug(f"[GENERATE_SCHEDULE] period_start_at do input_data: {period_start_at} (tipo: {type(period_start_at)})")
-                logger.debug(f"[GENERATE_SCHEDULE] period_end_at do input_data: {period_end_at} (tipo: {type(period_end_at)})")
-
-                if not period_start_at or not period_end_at:
-                    raise RuntimeError("period_start_at e period_end_at são obrigatórios no modo 'from_demands'")
-
-                if isinstance(period_start_at, str):
-                    period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
-                    logger.debug(f"[GENERATE_SCHEDULE] period_start_at convertido de string: {period_start_at}")
-
-                if isinstance(period_end_at, str):
-                    period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
-                    logger.debug(f"[GENERATE_SCHEDULE] period_end_at convertido de string: {period_end_at}")
-
-                schedule_period_start_at = period_start_at
-                schedule_period_end_at = period_end_at
 
                 # Obter filtro de hospital (opcional)
                 filter_hospital_id = input_data.get("filter_hospital_id")
@@ -584,18 +606,7 @@ async def generate_schedule_job(ctx: dict[str, Any], job_id: int) -> dict[str, A
                 elapsed_seconds = (utc_now() - job_start_time).total_seconds()
                 logger.info(f"[GENERATE_SCHEDULE] Encontradas {len(demand_list)} demandas em {days} dias. Tempo decorrido: {elapsed_seconds:.2f}s")
             else:
-                # Modo from_extract: ler de job de extração (período em input_data)
-                from datetime import datetime
-                period_start_at = input_data.get("period_start_at")
-                period_end_at = input_data.get("period_end_at")
-                if not period_start_at or not period_end_at:
-                    raise RuntimeError("period_start_at e period_end_at são obrigatórios no modo 'from_extract' (em input_data)")
-                if isinstance(period_start_at, str):
-                    period_start_at = datetime.fromisoformat(period_start_at.replace("Z", "+00:00"))
-                if isinstance(period_end_at, str):
-                    period_end_at = datetime.fromisoformat(period_end_at.replace("Z", "+00:00"))
-                schedule_period_start_at = period_start_at
-                schedule_period_end_at = period_end_at
+                # Modo from_extract: ler de job de extração (período já parseado acima)
                 schedule_name = input_data.get("name") or f"Escala Job {job_id}"
                 schedule_version_number = int(input_data.get("version_number") or 1)
 
