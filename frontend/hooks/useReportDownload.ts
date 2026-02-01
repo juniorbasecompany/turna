@@ -51,8 +51,22 @@ export function useReportDownload(
             const url = `${apiPath}${queryString}`
             const response = await fetch(url, { credentials: 'include' })
             if (!response.ok) {
-                const data = await response.json().catch(() => ({}))
-                const message = (data as { detail?: string }).detail ?? 'Erro ao gerar relatório'
+                const text = await response.text()
+                let message = 'Erro ao gerar relatório'
+                try {
+                    const data = JSON.parse(text) as { detail?: string | unknown; error?: { message?: string } }
+                    const d = data.detail ?? data.error?.message
+                    if (typeof d === 'string') message = d
+                    else if (Array.isArray(d) && d.length > 0) message = (d[0] as { msg?: string })?.msg ?? String(d[0])
+                    else if (d != null) message = String(d)
+                } catch {
+                    if (text.length > 0) message = text.slice(0, 500)
+                }
+                if (message === 'Erro ao gerar relatório') {
+                    message = text.length > 0 ? text.slice(0, 500) : `${message} (${response.status} ${response.statusText})`
+                } else {
+                    message = `Erro ao gerar relatório - ${message}`
+                }
                 throw new Error(message)
             }
             const blob = await response.blob()

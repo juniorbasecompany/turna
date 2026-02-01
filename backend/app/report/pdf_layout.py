@@ -101,6 +101,9 @@ def _ensure_reportlab():
 
 
 REPORT_HEADER_TITLE = "Turna"
+# Cor e espessuras das barras do cabeçalho (linha SOBRE o texto, estilo overline)
+REPORT_BAR_BLUE = "#2563EB"
+REPORT_BAR_TITLE_CM = 0.12   # espessura da linha sobre o título / filtro (cm)
 
 
 def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
@@ -118,49 +121,60 @@ def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str,
 
 
 def _build_header_elements(doc, styles):
-    from reportlab.lib import colors
-    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import ParagraphStyle
 
+    # Turna: só o texto, sem barra sobre
     header_style = ParagraphStyle(
         name="ReportHeader",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
         fontSize=18,
-        textColor=colors.whitesmoke,
+        textColor="#111827",
     )
     header_table = Table(
         [[Paragraph(REPORT_HEADER_TITLE, header_style)]],
         colWidths=[doc.width],
     )
     header_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#111827")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 14),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ]
-        )
+        TableStyle([
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ])
     )
-    return [header_table]
+    return [header_table, Spacer(1, 10)]
 
 
-def _build_title_elements(report_title: str, styles):
-    from reportlab.platypus import Paragraph, Spacer
+def _build_title_elements(report_title: str, styles, doc):
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
 
+    # Título do relatório: linha azul SOBRE o texto (overline)
     title_style = ParagraphStyle(
         name="ReportTitle",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
         fontSize=14,
         textColor="#111827",
-        spaceBefore=8,
-        spaceAfter=6,
     )
-    return [Paragraph(report_title, title_style), Spacer(1, 6)]
+    bar_h = REPORT_BAR_TITLE_CM * cm  # barra sobre o título/filtro (mais espessa)
+    title_table = Table(
+        [[""], [Paragraph(report_title, title_style)]],
+        colWidths=[doc.width],
+        rowHeights=[bar_h, None],
+    )
+    title_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BAR_BLUE)),
+                ("TOPPADDING", (0, 1), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+            ]
+        )
+    )
+    return [title_table, Spacer(1, 6)]
 
 
 def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
@@ -187,7 +201,7 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F4F6")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E5E7EB")),
                 ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111827")),
                 ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E5E7EB")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -222,12 +236,14 @@ def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles
     data = [[Paragraph(h, header_style) for h in headers]]
     for row in rows:
         data.append([Paragraph(str(cell), cell_style) for cell in row])
-    table = Table(data, colWidths=[None] * len(headers))
+    # Largura total = doc.width para a linha do cabeçalho ficar colada às bordas
+    col_width = doc.width / len(headers)
+    table = Table(data, colWidths=[col_width] * len(headers))
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BAR_BLUE)),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor("#111827")),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
@@ -262,8 +278,8 @@ def build_report_pdf(
     doc = SimpleDocTemplate(
         buf,
         pagesize=A4,
-        rightMargin=1.5 * cm,
-        leftMargin=1.5 * cm,
+        rightMargin=1 * cm,
+        leftMargin=1 * cm,
         topMargin=1.5 * cm,
         bottomMargin=1.5 * cm,
     )
@@ -271,8 +287,8 @@ def build_report_pdf(
     elements = []
 
     elements.extend(_build_header_elements(doc, styles))
-    elements.append(Spacer(1, 10))
-    elements.extend(_build_title_elements(report_title, styles))
+    elements.append(Spacer(1, 4))
+    elements.extend(_build_title_elements(report_title, styles, doc))
 
     normalized_filters = _normalize_filters(filters)
     if normalized_filters:

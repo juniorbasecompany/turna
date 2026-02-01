@@ -709,7 +709,7 @@ def report_tenant_pdf(
         )
     except Exception as e:
         logger.error(f"Erro ao gerar relatório de clínicas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/tenant/me", response_model=TenantResponse, tags=["Tenant"])
@@ -2076,7 +2076,7 @@ def report_file_pdf(
         raise
     except Exception as e:
         logger.error(f"Erro ao gerar relatório de arquivos: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/file/{file_id}", response_model=FileDownloadResponse, tags=["File"])
@@ -2583,7 +2583,7 @@ def report_hospital_pdf(
         )
     except Exception as e:
         logger.error(f"Erro ao gerar relatório de hospitais: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/hospital/{hospital_id}", response_model=HospitalResponse, tags=["Hospital"])
@@ -3078,7 +3078,7 @@ def report_demand_pdf(
         raise
     except Exception as e:
         logger.error(f"Erro ao gerar relatório de demandas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/demand/{demand_id}", response_model=DemandResponse, tags=["Demand"])
@@ -3591,7 +3591,7 @@ def report_member_pdf(
         )
     except Exception as e:
         logger.error(f"Erro ao gerar relatório de associados: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF") from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/member/{member_id}", response_model=MemberResponse, tags=["Member"])

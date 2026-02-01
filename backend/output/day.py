@@ -373,6 +373,11 @@ def render_pdf_bytes(schedule: DaySchedule) -> bytes:
     return buf.getvalue()
 
 
+# Cor e espessura da barra do cabeçalho (linha SOBRE o título/filtro)
+_REPORT_BAR_BLUE = "#2563EB"
+_REPORT_BAR_TITLE_PT = 8   # espessura da linha sobre o título do relatório
+
+
 def _draw_report_header_on_canvas(
     c,
     page_w: float,
@@ -384,33 +389,35 @@ def _draw_report_header_on_canvas(
 ) -> float:
     """
     Desenha cabeçalho do relatório (Turna + título + filtros) no topo da página em landscape.
-    Retorna o y (coordenada ReportLab, origem embaixo) onde o conteúdo (grade) pode começar.
+    Barra azul como linha SOBRE o texto (overline), não sublinhada.
     """
     y = page_h - margin
-    # Barra Turna
-    bar_h = 28
+    bar_blue = colors.HexColor(_REPORT_BAR_BLUE)
+    bar_w = page_w - 2 * margin
+    # Turna: só o texto, sem barra sobre
     c.setFillColor(colors.HexColor("#111827"))
-    c.rect(0, y - bar_h, page_w, bar_h, fill=1, stroke=0)
-    c.setFillColor(colors.whitesmoke)
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(margin, y - bar_h + 8, "Turna")
-    y -= bar_h + 10
-    # Título do relatório
+    c.drawString(margin, y - 14, "Turna")
+    y -= 18
+    # Título do relatório: linha azul sobre o texto (overline)
+    c.setFillColor(bar_blue)
+    c.rect(margin, y - _REPORT_BAR_TITLE_PT, bar_w, _REPORT_BAR_TITLE_PT, fill=1, stroke=0)
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(margin, y - 14, report_title)
-    y -= 20
+    c.drawString(margin, y - _REPORT_BAR_TITLE_PT - 14, report_title)
+    y -= _REPORT_BAR_TITLE_PT + 18
     # Filtros (compacto)
     if filters:
         c.setFont("Helvetica-Bold", 9)
         c.setFillColor(colors.HexColor("#374151"))
-        for label, value in filters[:8]:  # limite para caber na primeira página
+        for label, value in filters[:8]:
             line = f"{label}: {value}"
             if len(line) > 100:
                 line = line[:97] + "..."
             c.drawString(margin, y - 12, line)
             y -= 14
         y -= 6
+    y -= 8
     return y
 
 

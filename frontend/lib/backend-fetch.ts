@@ -169,12 +169,15 @@ export async function backendFetchPdf(
     })
     if (!response.ok) {
         const text = await response.text()
-        let detail = 'Erro ao gerar relatório'
+        let detail: string = 'Erro ao gerar relatório'
         try {
-            const data = JSON.parse(text)
-            detail = (data as { detail?: string }).detail ?? detail
+            const data = JSON.parse(text) as { detail?: string | unknown; error?: { message?: string } }
+            const d = data.detail ?? data.error?.message
+            if (typeof d === 'string') detail = d
+            else if (Array.isArray(d) && d.length > 0) detail = (d[0] as { msg?: string })?.msg ?? String(d[0])
+            else if (d != null) detail = String(d)
         } catch {
-            // ignore
+            if (text.length > 0) detail = text.slice(0, 500)
         }
         return NextResponse.json({ detail }, { status: response.status })
     }

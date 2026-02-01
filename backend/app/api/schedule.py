@@ -606,52 +606,54 @@ def report_schedule_pdf(
         if not hospital or hospital.tenant_id != member.tenant_id:
             raise HTTPException(status_code=400, detail="hospital_id inválido ou não pertence ao tenant")
 
-    status_values, _ = _resolve_schedule_status_filters(status, status_list)
-
-    # Mesmo critério do painel (schedule_status); dia e quadrinhos vêm de demand.start_time/end_time
-    query, _ = _schedule_list_queries(
-        session,
-        member.tenant_id,
-        status_values=status_values,
-        filter_start_time=filter_start_time,
-        filter_end_time=filter_end_time,
-        name=name,
-        hospital_id=hospital_id,
-    )
-    demands = session.exec(query.order_by(Demand.start_time)).all()
-    all_schedules = demands_to_day_schedules(
-        demands, session, member.tenant_id, title_prefix="Escalas", group_by="member"
-    )
-    if not all_schedules:
-        raise HTTPException(status_code=400, detail="Nenhuma escala no período selecionado")
-
     try:
-        from output.day import render_multi_day_pdf_bytes
+        status_values, _ = _resolve_schedule_status_filters(status, status_list)
+        query, _ = _schedule_list_queries(
+            session,
+            member.tenant_id,
+            status_values=status_values,
+            filter_start_time=filter_start_time,
+            filter_end_time=filter_end_time,
+            name=name,
+            hospital_id=hospital_id,
+        )
+        demands = session.exec(query.order_by(Demand.start_time)).all()
+        all_schedules = demands_to_day_schedules(
+            demands, session, member.tenant_id, title_prefix="Escalas", group_by="member"
+        )
+        if not all_schedules:
+            raise HTTPException(status_code=400, detail="Nenhuma escala no período selecionado")
+        try:
+            from output.day import render_multi_day_pdf_bytes
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        filters_parts = parse_filters_from_frontend(filters)
+        if not filters_parts:
+            params = {
+                "filter_start_time": filter_start_time,
+                "filter_end_time": filter_end_time,
+                "name": name,
+                "status": status,
+                "status_list": status_list,
+                "hospital_id": hospital_id,
+            }
+            formatters = {
+                "filter_start_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+                "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+            }
+            filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
+        pdf_bytes = render_multi_day_pdf_bytes(
+            all_schedules, report_title="Relatório de escalas", filters=filters_parts
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="relatorio-escalas.pdf"'},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
-    filters_parts = parse_filters_from_frontend(filters)
-    if not filters_parts:
-        params = {
-            "filter_start_time": filter_start_time,
-            "filter_end_time": filter_end_time,
-            "name": name,
-            "status": status,
-            "status_list": status_list,
-            "hospital_id": hospital_id,
-        }
-        formatters = {
-            "filter_start_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-            "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-        }
-        filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
-    pdf_bytes = render_multi_day_pdf_bytes(
-        all_schedules, report_title="Relatório de escalas", filters=filters_parts
-    )
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="relatorio-escalas.pdf"'},
-    )
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/list", response_model=ScheduleListResponse, tags=["Schedule"])
