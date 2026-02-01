@@ -10,12 +10,12 @@ interface FilterPanelProps {
 
 /**
  * Componente wrapper para painéis de filtros.
- * 
+ *
  * Encapsula a estrutura padrão de filtros:
  * - Container branco com borda azul à esquerda (indica busca/filtro)
  * - Espaçamento consistente
  * - Suporte a validação de filtros
- * 
+ *
  * @example
  * ```tsx
  * <FilterPanel validationErrors={dateError}>

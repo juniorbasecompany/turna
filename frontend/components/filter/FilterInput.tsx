@@ -23,7 +23,7 @@ interface FilterInputProps {
 /**
  * Componente de input para filtros.
  * Padroniza aparência e comportamento de campos de texto em filtros.
- * 
+ *
  * @example
  * ```tsx
  * <FilterInput

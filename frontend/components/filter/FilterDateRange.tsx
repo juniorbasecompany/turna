@@ -32,10 +32,10 @@ interface FilterDateRangeProps {
 /**
  * Componente de intervalo de datas para filtros.
  * Encapsula dois TenantDateTimePicker com labels padronizados.
- * 
+ *
  * Nota: A validação de intervalo (início <= fim) deve ser feita
  * pelo componente pai via useEffect, como já é feito nos painéis.
- * 
+ *
  * @example
  * ```tsx
  * <FormFieldGrid cols={1} smCols={2} gap={4}>

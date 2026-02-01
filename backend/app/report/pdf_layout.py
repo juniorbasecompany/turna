@@ -198,22 +198,37 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
         fontSize=10,
         textColor="#111827",
     )
-    data = [[Paragraph(label, label_style), Paragraph(value, value_style)] for label, value in filters]
-    table = Table(data, colWidths=[doc.width * 0.25, doc.width * 0.75])
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E5E7EB")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111827")),
-                ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E5E7EB")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
+    # Cada linha em tabela separada: margem fora das bordas entre linhas e entre células
+    label_col_w = doc.width * 0.25
+    margin_between_cells = 6  # margem à direita do título (entre label e value)
+    value_col_w = doc.width - label_col_w - margin_between_cells
+    col_widths = [label_col_w, margin_between_cells, value_col_w]
+    gray_border = colors.HexColor("#9CA3AF")
+    bg_color = colors.HexColor("#E5E7EB")
+    row_style = TableStyle(
+        [
+            ("BACKGROUND", (0, 0), (-1, -1), bg_color),
+            ("BACKGROUND", (1, 0), (1, 0), colors.white),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111827")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (1, 0), (1, 0), 0),
+            ("RIGHTPADDING", (1, 0), (1, 0), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]
     )
-    return [table, Spacer(1, 10)]
+    margin_between_rows = 6  # pontos de margem entre as linhas (fora das bordas)
+    elements: list = []
+    for i, (label, value) in enumerate(filters):
+        if i > 0:
+            elements.append(Spacer(1, margin_between_rows))
+        row_data = [[Paragraph(label, label_style), "", Paragraph(value, value_style)]]
+        table = Table(row_data, colWidths=col_widths)
+        table.setStyle(row_style)
+        elements.append(table)
+    elements.append(Spacer(1, 10))
+    return elements
 
 
 def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles):
@@ -364,84 +379,6 @@ def get_report_cover_total_height(
 
     # Somar topMargin, porque o conteúdo começa abaixo da margem superior.
     return float(total_h + doc.topMargin)
-
-
-def _schedule_doc_template(buf, pagesize, rightMargin, leftMargin, topMargin, bottomMargin):
-    """
-    Cria SimpleDocTemplate com Frame sem padding lateral (leftPadding/rightPadding = 0)
-    para o canvas (DayGridFlowable) ocupar a mesma largura da faixa de filtros e do cabeçalho.
-    """
-
-    from reportlab.platypus import SimpleDocTemplate
-
-    class _NoPaddingDocTemplate(SimpleDocTemplate):
-        def addPageTemplates(self, pageTemplates):
-            super().addPageTemplates(pageTemplates)
-            for pt in self.pageTemplates:
-                for frame in pt.frames:
-                    frame.leftPadding = 0
-                    frame.rightPadding = 0
-                    if hasattr(frame, "_geom"):
-                        frame._geom()
-
-    return _NoPaddingDocTemplate(
-        buf,
-        pagesize=pagesize,
-        rightMargin=rightMargin,
-        leftMargin=leftMargin,
-        topMargin=topMargin,
-        bottomMargin=bottomMargin,
-    )
-
-
-def build_report_with_schedule_body(
-    report_title: str,
-    filters: list[tuple[str, str]] | None = None,
-    schedules: list | None = None,
-    pagesize=None,
-) -> bytes:
-    """
-    Gera PDF com cabeçalho Platypus (Turna, título, filtros) e corpo com grades de dias (Flowables Canvas).
-    Uma única história Platypus: o corpo começa na mesma página após os filtros; cada grade usa o espaço
-    disponível (primeira página) ou página inteira (seguintes). pagesize deve ser landscape(A4) para escalas/demandas.
-    """
-    if not schedules:
-        return build_report_cover_only(report_title=report_title, filters=filters, pagesize=pagesize)
-
-    _ensure_reportlab()
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.units import cm
-
-    from output.day import DayGridFlowable
-
-    size = pagesize if pagesize is not None else A4
-    buf = io.BytesIO()
-    doc = _schedule_doc_template(
-        buf,
-        pagesize=size,
-        rightMargin=1 * cm,
-        leftMargin=1 * cm,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
-    )
-    styles = getSampleStyleSheet()
-    elements = []
-
-    elements.extend(_build_header_elements(doc, styles))
-    elements.append(Spacer(1, 4))
-    elements.extend(_build_title_elements(report_title, styles, doc))
-
-    normalized_filters = _normalize_filters(filters)
-    if normalized_filters:
-        elements.extend(_build_filters_elements(normalized_filters, doc, styles))
-
-    for schedule in schedules:
-        elements.append(DayGridFlowable(schedule))
-
-    doc.build(elements)
-    return buf.getvalue()
 
 
 def format_filters_text(parts: list[tuple[str, str]]) -> str:

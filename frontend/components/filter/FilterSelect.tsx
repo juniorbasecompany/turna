@@ -35,7 +35,7 @@ interface FilterSelectProps<T extends string | number = string | number> {
 /**
  * Componente de select para filtros.
  * Padroniza aparência e comportamento de dropdowns em filtros.
- * 
+ *
  * @example
  * ```tsx
  * <FilterSelect
@@ -46,7 +46,7 @@ interface FilterSelectProps<T extends string | number = string | number> {
  *   emptyLabel="Todos os hospitais"
  * />
  * ```
- * 
+ *
  * @example Com loading e efeito flash
  * ```tsx
  * <FilterSelect

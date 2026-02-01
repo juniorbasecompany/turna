@@ -50,11 +50,11 @@ export function FilterButtons<T = string>({
     }, [sortedOptions, selectedValues])
 
     // Componente interno para checkbox customizado
-    const CustomCheckbox = ({ 
-        checked, 
-        color, 
-        onClick 
-    }: { 
+    const CustomCheckbox = ({
+        checked,
+        color,
+        onClick
+    }: {
         checked: boolean
         color?: string
         onClick?: (e: React.MouseEvent) => void
@@ -74,7 +74,7 @@ export function FilterButtons<T = string>({
         }
 
         return (
-            <div 
+            <div
                 className="relative w-4 h-4 flex items-center justify-center cursor-pointer"
                 onClick={handleClick}
             >
@@ -125,8 +125,8 @@ export function FilterButtons<T = string>({
                     onClick={onToggleAll}
                     className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors bg-white border-gray-300 hover:bg-gray-50 cursor-pointer"
                 >
-                    <CustomCheckbox 
-                        checked={allSelected} 
+                    <CustomCheckbox
+                        checked={allSelected}
                         onClick={(e) => {
                             e.stopPropagation()
                             onToggleAll()
@@ -148,8 +148,8 @@ export function FilterButtons<T = string>({
                             onClick={() => onToggle(option.value)}
                             className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors bg-white border-gray-300 hover:bg-gray-50 cursor-pointer"
                         >
-                            <CustomCheckbox 
-                                checked={isSelected} 
+                            <CustomCheckbox
+                                checked={isSelected}
                                 color={option.color}
                                 onClick={(e) => {
                                     e.stopPropagation()
