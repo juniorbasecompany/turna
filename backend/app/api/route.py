@@ -705,7 +705,9 @@ def report_tenant_pdf(
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"name": name}, TENANT_REPORT_PARAM_LABELS
         )
-        pdf_bytes = render_tenant_list_pdf(rows, filters=filters_parts)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
+        pdf_bytes = render_tenant_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -2070,7 +2072,9 @@ def report_file_pdf(
             "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
         }
         filters_parts = query_params_to_filter_parts(params, FILE_REPORT_PARAM_LABELS, formatters=formatters)
-        pdf_bytes = render_file_list_pdf(rows, filters=filters_parts)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
+        pdf_bytes = render_file_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -2579,7 +2583,9 @@ def report_hospital_pdf(
         rows = [(h.name,) for h in hospitals]
         params = {"name": name}
         filters_parts = query_params_to_filter_parts(params, HOSPITAL_REPORT_PARAM_LABELS)
-        pdf_bytes = render_hospital_list_pdf(rows, filters=filters_parts)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
+        pdf_bytes = render_hospital_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -3076,10 +3082,13 @@ def report_demand_pdf(
                 "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
             }
             filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
         cover_bytes = build_report_cover_only(
             report_title="Relatório de demandas",
             filters=filters_parts,
             pagesize=landscape(A4),
+            header_title=tenant_name,
         )
         _, page_h = landscape(A4)
         try:
@@ -3087,6 +3096,7 @@ def report_demand_pdf(
                 report_title="Relatório de demandas",
                 filters=filters_parts,
                 pagesize=landscape(A4),
+                header_title=tenant_name,
             )
         except Exception:
             cover_total_height = COVER_HEIGHT_PT
@@ -3614,7 +3624,9 @@ def report_member_pdf(
             {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
             MEMBER_REPORT_PARAM_LABELS,
         )
-        pdf_bytes = render_member_list_pdf(rows, filters=filters_parts)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
+        pdf_bytes = render_member_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

@@ -118,11 +118,13 @@ def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str,
     return normalized
 
 
-def _build_header_elements(doc, styles):
+def _build_header_elements(doc, styles, header_title: str | None = None):
     from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    header_text = header_title or REPORT_HEADER_TITLE
 
     # Turna: barra azul da margem esquerda até "Turna"; "Turna" alinhado à direita da página
     header_font = "Helvetica-Bold"
@@ -135,11 +137,11 @@ def _build_header_elements(doc, styles):
         textColor="#111827",
     )
     # Largura da coluna "Turna" = largura do texto + pequeno espaço; depende da fonte e do texto
-    turna_text_w = stringWidth(REPORT_HEADER_TITLE, header_font, header_font_size)
+    turna_text_w = stringWidth(header_text, header_font, header_font_size)
     turna_col_w = turna_text_w + 8  # 8pt de folga
     bar_col_w = doc.width - turna_col_w  # barra ocupa o resto até "Turna"
     header_table = Table(
-        [["", Paragraph(REPORT_HEADER_TITLE, header_style)]],
+        [["", Paragraph(header_text, header_style)]],
         colWidths=[bar_col_w, turna_col_w],
     )
     header_table.setStyle(
@@ -216,6 +218,7 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
             self.filter_list = filter_list
             self._layout: list = []
             self._height = 0
+            self._avail_width = 0
 
         def _truncate_text(self, text: str, font_name: str, font_size: int, max_width: float) -> str:
             if max_width <= 0:
@@ -296,6 +299,7 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
 
         def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
             self._layout, self._height = self._build_layout(avail_width)
+            self._avail_width = avail_width
             return avail_width, self._height
 
         def draw(self) -> None:
@@ -306,7 +310,12 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
             for row_item_list in self._layout:
                 row_height = row_item_list[0]["box_height"]
                 y -= row_height
-                x = 0.0
+                row_total_width = 0.0
+                for idx, item in enumerate(row_item_list):
+                    if idx > 0:
+                        row_total_width += block_gap_x
+                    row_total_width += item["box_width"]
+                x = max(0.0, self._avail_width - row_total_width)
                 for item in row_item_list:
                     box_width = item["box_width"]
                     canvas.setFillColor(block_bg)
@@ -381,6 +390,7 @@ def build_report_pdf(
     headers: list[str] | None = None,
     rows: list[list[str]] | None = None,
     pagesize=None,
+    header_title: str | None = None,
 ) -> bytes:
     """
     Gera PDF com layout padrão: cabeçalho Turna, título do relatório,
@@ -406,7 +416,7 @@ def build_report_pdf(
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.extend(_build_header_elements(doc, styles))
+    elements.extend(_build_header_elements(doc, styles, header_title=header_title))
     elements.append(Spacer(1, 4))
     elements.extend(_build_title_elements(report_title, styles, doc))
 
@@ -425,6 +435,7 @@ def build_report_cover_only(
     report_title: str,
     filters: list[tuple[str, str]] | None = None,
     pagesize=None,
+    header_title: str | None = None,
 ) -> bytes:
     """
     Gera apenas a página de capa (Turna + título + filtros), sem tabela.
@@ -432,7 +443,12 @@ def build_report_cover_only(
     pagesize: tamanho da página (ex.: landscape(A4) para escalas/demandas); None = A4.
     """
     return build_report_pdf(
-        report_title=report_title, filters=filters, headers=None, rows=None, pagesize=pagesize
+        report_title=report_title,
+        filters=filters,
+        headers=None,
+        rows=None,
+        pagesize=pagesize,
+        header_title=header_title,
     )
 
 
@@ -440,6 +456,7 @@ def get_report_cover_total_height(
     report_title: str,
     filters: list[tuple[str, str]] | None = None,
     pagesize=None,
+    header_title: str | None = None,
 ) -> float:
     """
     Calcula a altura total da capa (topMargin + conteúdo) em pontos.
@@ -464,7 +481,7 @@ def get_report_cover_total_height(
     styles = getSampleStyleSheet()
     elements: list = []
 
-    elements.extend(_build_header_elements(doc, styles))
+    elements.extend(_build_header_elements(doc, styles, header_title=header_title))
     elements.append(Spacer(1, 4))
     elements.extend(_build_title_elements(report_title, styles, doc))
 

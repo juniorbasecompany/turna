@@ -10,7 +10,11 @@ from __future__ import annotations
 from app.report.pdf_layout import build_report_pdf
 
 
-def render_tenant_list_pdf(rows: list[tuple[str, str]], filters: list[tuple[str, str]] | None = None) -> bytes:
+def render_tenant_list_pdf(
+    rows: list[tuple[str, str]],
+    filters: list[tuple[str, str]] | None = None,
+    header_title: str | None = None,
+) -> bytes:
     """Gera PDF com lista de clínicas: nome e slug."""
     headers = ["Nome", "Slug"]
     data = [[str(r[0]), str(r[1])] for r in rows]
@@ -19,12 +23,14 @@ def render_tenant_list_pdf(rows: list[tuple[str, str]], filters: list[tuple[str,
         filters=filters,
         headers=headers,
         rows=data,
+        header_title=header_title,
     )
 
 
 def render_member_list_pdf(
     rows: list[tuple[str, str, str, str, str, str]],
     filters: list[tuple[str, str]] | None = None,
+    header_title: str | None = None,
 ) -> bytes:
     """Gera PDF com lista de associados: nome, email, situação, pode pediatria, ordem, férias."""
     headers = ["Nome", "E-mail", "Situação", "Pode pediatria?", "Ordem", "Férias"]
@@ -34,10 +40,15 @@ def render_member_list_pdf(
         filters=filters,
         headers=headers,
         rows=data,
+        header_title=header_title,
     )
 
 
-def render_hospital_list_pdf(rows: list[tuple[str]], filters: list[tuple[str, str]] | None = None) -> bytes:
+def render_hospital_list_pdf(
+    rows: list[tuple[str]],
+    filters: list[tuple[str, str]] | None = None,
+    header_title: str | None = None,
+) -> bytes:
     """Gera PDF com lista de hospitais: nome."""
     headers = ["Nome"]
     data = [[str(r[0])] for r in rows]
@@ -46,10 +57,15 @@ def render_hospital_list_pdf(rows: list[tuple[str]], filters: list[tuple[str, st
         filters=filters,
         headers=headers,
         rows=data,
+        header_title=header_title,
     )
 
 
-def render_file_list_pdf(rows: list[tuple[str, str, str]], filters: list[tuple[str, str]] | None = None) -> bytes:
+def render_file_list_pdf(
+    rows: list[tuple[str, str, str]],
+    filters: list[tuple[str, str]] | None = None,
+    header_title: str | None = None,
+) -> bytes:
     """Gera PDF com lista de arquivos: nome do hospital, nome do arquivo, data de cadastro."""
     headers = ["Hospital", "Arquivo", "Data de cadastro"]
     data = [[str(r[0]), str(r[1]), str(r[2])] for r in rows]
@@ -58,4 +74,5 @@ def render_file_list_pdf(rows: list[tuple[str, str, str]], filters: list[tuple[s
         filters=filters,
         headers=headers,
         rows=data,
+        header_title=header_title,
     )

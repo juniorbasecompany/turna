@@ -473,7 +473,10 @@ def _render_pdf_to_canvas(
     margin_x = 1 * cm
     margin_top = 1.5 * cm
     margin_bottom = 1.5 * cm
-    header_h = 42
+    title_font_size = 10
+    hour_font_size = 8
+    header_v_pad = 4
+    header_h = max(title_font_size, hour_font_size) + (header_v_pad * 2)
     # Altura do event fixa; espaço acima/abaixo do event = event_v_pad
     event_box_h = 34
     event_v_pad = 4
@@ -512,14 +515,20 @@ def _render_pdf_to_canvas(
 
         # Título do dia e marcas de hora em branco
         c.setFillColor(colors.white)
-        title_font_size = 10
         c.setFont("Helvetica-Bold", title_font_size)
         title_pad_x = 8
-        max_title_width = page_w - (2 * margin_x) - (2 * title_pad_x)
+        raw_title = (schedule.title or "").strip()
+        if " - " in raw_title:
+            date_text = raw_title.split(" - ", 1)[1].strip()
+        else:
+            date_text = raw_title
+        max_title_width = name_col_w - (2 * title_pad_x)
         title_text = _truncate_to_width(
-            pdfmetrics, schedule.title, "Helvetica-Bold", title_font_size, max_title_width
+            pdfmetrics, date_text, "Helvetica-Bold", title_font_size, max_title_width
         )
-        c.drawString(margin_x + title_pad_x, y_top - 16, title_text)
+        title_x = margin_x + title_pad_x
+        baseline_y = y_grid_top + (header_h - hour_font_size) / 2
+        c.drawString(title_x, baseline_y, title_text)
 
         # Linha base do cabeçalho da grade
         c.setStrokeColor(colors.lightgrey)
@@ -530,7 +539,7 @@ def _render_pdf_to_canvas(
         c.line(grid_x0, y_grid_top, grid_x0, margin_bottom)
 
         # Marcas de hora; linhas verticais pontilhadas
-        c.setFont("Helvetica", 8)
+        c.setFont("Helvetica", hour_font_size)
         c.setFillColor(colors.white)
         start_hour = day_start // 60
         end_hour = min(23, int(math.ceil(day_end / 60)))
@@ -542,7 +551,7 @@ def _render_pdf_to_canvas(
             c.setLineWidth(0.25)
             c.line(x, y_grid_top, x, margin_bottom)
             if major and (day_start <= m <= day_end):
-                c.drawString(x + 2, y_top - header_h + 4, f"{h:02d}")
+                c.drawString(x + 2, baseline_y, f"{h:02d}")
         c.setDash([])
 
         return y_grid_top

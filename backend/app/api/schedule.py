@@ -652,10 +652,13 @@ def report_schedule_pdf(
                 "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
+        tenant = session.get(Tenant, member.tenant_id)
+        tenant_name = tenant.name if tenant else None
         cover_bytes = build_report_cover_only(
             report_title="Relatório de escalas",
             filters=filters_parts,
             pagesize=landscape(A4),
+            header_title=tenant_name,
         )
         _, page_h = landscape(A4)
         try:
@@ -663,6 +666,7 @@ def report_schedule_pdf(
                 report_title="Relatório de escalas",
                 filters=filters_parts,
                 pagesize=landscape(A4),
+                header_title=tenant_name,
             )
         except Exception:
             cover_total_height = COVER_HEIGHT_PT
