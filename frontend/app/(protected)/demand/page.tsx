@@ -136,7 +136,7 @@ export default function DemandPage() {
         const endIso = formData.end_time?.toISOString()
 
         return {
-            hospital_id: formData.hospital_id,
+            hospital_id: formData.hospital_id!,
             job_id: formData.job_id,
             room: formData.room.trim() || null,
             start_time: startIso!,
@@ -173,6 +173,10 @@ export default function DemandPage() {
 
     // Validação
     const validateFormData = (formData: DemandFormData): string | null => {
+        if (formData.hospital_id === null) {
+            return 'Hospital é obrigatório'
+        }
+
         if (!formData.procedure.trim()) {
             return 'Procedimento é obrigatório'
         }
@@ -334,6 +338,7 @@ export default function DemandPage() {
                             onChange={(value) => setFormData({ ...formData, hospital_id: value })}
                             options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
                             id="hospital_id"
+                            required
                             disabled={submitting}
                             loading={loadingHospitals}
                         />

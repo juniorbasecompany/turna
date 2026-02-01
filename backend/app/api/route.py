@@ -2746,7 +2746,7 @@ def delete_hospital(
 # ============================================================================
 
 class DemandCreate(PydanticBaseModel):
-    hospital_id: int | None = None
+    hospital_id: int
     job_id: int | None = None
     member_id: int | None = None
     room: str | None = None
@@ -2835,7 +2835,7 @@ class DemandUpdate(PydanticBaseModel):
 class DemandResponse(PydanticBaseModel):
     id: int
     tenant_id: int
-    hospital_id: int | None
+    hospital_id: int
     job_id: int | None
     member_id: int | None
     room: str | None
@@ -2868,18 +2868,17 @@ def create_demand(
 ):
     """
     Cria uma nova demanda.
-    Valida que hospital_id e job_id (se fornecidos) pertencem ao tenant atual.
+    Valida que hospital_id (obrigatório) e job_id (se fornecido) pertencem ao tenant atual.
     """
     try:
         logger.info(f"Criando demanda: procedure={body.procedure}, tenant_id={member.tenant_id}")
 
-        # Validar hospital_id se fornecido
-        if body.hospital_id is not None:
-            hospital = session.get(Hospital, body.hospital_id)
-            if not hospital:
-                raise HTTPException(status_code=404, detail="Hospital não encontrado")
-            if hospital.tenant_id != member.tenant_id:
-                raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
+        # Validar hospital_id (obrigatório)
+        hospital = session.get(Hospital, body.hospital_id)
+        if not hospital:
+            raise HTTPException(status_code=404, detail="Hospital não encontrado")
+        if hospital.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=403, detail="Hospital não pertence ao tenant atual")
 
         # Validar job_id se fornecido
         if body.job_id is not None:
@@ -3115,7 +3114,9 @@ def update_demand(
             logger.warning(f"Acesso negado: demand.tenant_id={demand.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
 
-        # Validar hospital_id se fornecido
+        # Validar hospital_id se fornecido (não permite null - campo obrigatório)
+        if "hospital_id" in body.model_dump(exclude_unset=True) and body.hospital_id is None:
+            raise HTTPException(status_code=400, detail="hospital_id não pode ser removido (obrigatório)")
         if body.hospital_id is not None:
             hospital = session.get(Hospital, body.hospital_id)
             if not hospital:

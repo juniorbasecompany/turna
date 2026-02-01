@@ -262,7 +262,7 @@ export interface HospitalUpdateRequest {
 export interface DemandResponse {
     id: number
     tenant_id: number
-    hospital_id: number | null
+    hospital_id: number
     job_id: number | null
     room: string | null
     start_time: string
@@ -284,7 +284,7 @@ export interface DemandListResponse {
 }
 
 export interface DemandCreateRequest {
-    hospital_id?: number | null
+    hospital_id: number
     job_id?: number | null
     room?: string | null
     start_time: string
