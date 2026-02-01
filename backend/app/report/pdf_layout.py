@@ -340,7 +340,13 @@ def _build_filters_elements(filters: list[tuple[str, str]], doc, styles):
     return [flowable, Spacer(1, 10)]
 
 
-def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles):
+def _build_table_elements(
+    headers: list[str],
+    rows: list[list[str]],
+    doc,
+    styles,
+    col_widths: list[float] | None = None,
+):
     from reportlab.lib import colors
     from reportlab.platypus import Table, TableStyle, Paragraph
     from reportlab.lib.styles import ParagraphStyle
@@ -362,9 +368,13 @@ def _build_table_elements(headers: list[str], rows: list[list[str]], doc, styles
     data = [[Paragraph(h, header_style) for h in headers]]
     for row in rows:
         data.append([Paragraph(str(cell), cell_style) for cell in row])
-    # Largura total = doc.width para a linha do cabeçalho ficar colada às bordas
-    col_width = doc.width / len(headers)
-    table = Table(data, colWidths=[col_width] * len(headers))
+    # Largura total = doc.width; col_widths opcional (frações 0-1 que somam 1)
+    n = len(headers)
+    if col_widths is not None and len(col_widths) == n:
+        widths = [doc.width * w for w in col_widths]
+    else:
+        widths = [doc.width / n] * n
+    table = Table(data, colWidths=widths)
     table.setStyle(
         TableStyle(
             [
@@ -391,6 +401,7 @@ def build_report_pdf(
     rows: list[list[str]] | None = None,
     pagesize=None,
     header_title: str | None = None,
+    col_widths: list[float] | None = None,
 ) -> bytes:
     """
     Gera PDF com layout padrão: cabeçalho Turna, título do relatório,
@@ -425,7 +436,7 @@ def build_report_pdf(
         elements.extend(_build_filters_elements(normalized_filters, doc, styles))
 
     if headers and rows is not None:
-        elements.extend(_build_table_elements(headers, rows, doc, styles))
+        elements.extend(_build_table_elements(headers, rows, doc, styles, col_widths=col_widths))
 
     doc.build(elements)
     return buf.getvalue()

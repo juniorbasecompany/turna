@@ -697,7 +697,7 @@ def report_tenant_pdf(
     name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
     filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
 ):
-    """Relatório PDF: lista de clínicas (nome e slug). Mesmo canal de dados da listagem, sem paginação."""
+    """Relatório PDF: lista de clínicas (nome e rótulo). Mesmo canal de dados da listagem, sem paginação."""
     try:
         query, _ = _tenant_list_queries(session, name=name)
         tenants = session.exec(query).all()
@@ -3618,8 +3618,7 @@ def report_member_pdf(
             email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
             can_peds_str = "Sim" if member_obj.can_peds else "Não"
             sequence_str = str(member_obj.sequence)
-            vacation_str = _format_member_vacation(member_obj.vacation)
-            rows.append((name, email, member_obj.status.value, can_peds_str, sequence_str, vacation_str))
+            rows.append((sequence_str, name, email, member_obj.status.value, can_peds_str))
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
             MEMBER_REPORT_PARAM_LABELS,

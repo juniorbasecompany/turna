@@ -15,8 +15,8 @@ def render_tenant_list_pdf(
     filters: list[tuple[str, str]] | None = None,
     header_title: str | None = None,
 ) -> bytes:
-    """Gera PDF com lista de clínicas: nome e slug."""
-    headers = ["Nome", "Slug"]
+    """Gera PDF com lista de clínicas: nome e rótulo."""
+    headers = ["Nome", "Rótulo"]
     data = [[str(r[0]), str(r[1])] for r in rows]
     return build_report_pdf(
         report_title="Relatório de clínicas",
@@ -28,19 +28,21 @@ def render_tenant_list_pdf(
 
 
 def render_member_list_pdf(
-    rows: list[tuple[str, str, str, str, str, str]],
+    rows: list[tuple[str, str, str, str, str]],
     filters: list[tuple[str, str]] | None = None,
     header_title: str | None = None,
 ) -> bytes:
-    """Gera PDF com lista de associados: nome, email, situação, pode pediatria, ordem, férias."""
-    headers = ["Nome", "E-mail", "Situação", "Pode pediatria?", "Ordem", "Férias"]
-    data = [[str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5])] for r in rows]
+    """Gera PDF com lista de associados: ordem, nome, email, situação, pode pediatria."""
+    headers = ["", "Nome", "E-mail", "Situação", "Pode pediatria?"]
+    data = [[str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4])] for r in rows]
+    col_widths = [0.08, 0.22, 0.40, 0.15, 0.15]  # ordem, nome, email (mais espaço), situação, pediatria
     return build_report_pdf(
         report_title="Relatório de associados",
         filters=filters,
         headers=headers,
         rows=data,
         header_title=header_title,
+        col_widths=col_widths,
     )
 
 

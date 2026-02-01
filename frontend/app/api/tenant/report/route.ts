@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server'
 /**
  * GET /api/tenant/report
  *
- * Relatório PDF: lista de clínicas (nome e slug).
+ * Relatório PDF: lista de clínicas (nome e rótulo).
  */
 export async function GET(request: NextRequest) {
     const auth = requireToken(request)

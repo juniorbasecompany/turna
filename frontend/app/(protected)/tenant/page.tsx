@@ -120,7 +120,7 @@ export default function TenantPage() {
                 return 'Nome é obrigatório'
             }
             if (!formData.slug.trim()) {
-                return 'Slug é obrigatório'
+                return 'Rótulo é obrigatório'
             }
             return null
         },
@@ -158,7 +158,7 @@ export default function TenantPage() {
                             disabled={submitting}
                         />
                         <FormInput
-                            label="Slug"
+                            label="Rótulo"
                             value={formData.slug}
                             onChange={(value) => setFormData({ ...formData, slug: value.toLowerCase().replace(/\s+/g, '-') })}
                             id="slug"
