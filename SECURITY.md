@@ -1,330 +1,106 @@
 # Padrões de Segurança e Validação Multi-Tenant
 
-Este documento descreve os padrões de segurança implementados no sistema, com foco em isolamento multi-tenant e validação de acesso. O código da API e dos endpoints referenciados está em `backend/` (ver `README.md` e `STACK.md`).
+Este documento descreve os padrões de segurança **implementados** no sistema: isolamento multi-tenant e validação de acesso. O código da API está em `backend/` (ver `README.md` e `STACK.md`).
 
-## Princípios Fundamentais
+## Princípios
 
-### 1. Isolamento Multi-Tenant
-- **Nunca confiar em dados do cliente**: `tenant_id` nunca vem do body, querystring ou path parameters (exceto endpoints específicos de admin)
-- **Sempre validar via JWT**: `tenant_id` é extraído do token JWT via `get_current_member()`
-- **Filtrar todas as queries**: Todas as queries ao banco devem filtrar por `tenant_id` do member
+### Isolamento multi-tenant
+- **Nunca confiar em dados do cliente**: `tenant_id` não vem do body, querystring ou path (exceto endpoints específicos de admin).
+- **Sempre validar via JWT**: `tenant_id` é extraído do token via `get_current_member()`.
+- **Filtrar todas as queries**: Todas as queries ao banco filtram por `tenant_id` do member.
 
-### 2. Validação de Acesso
-- **Dependency `get_current_member()`**: Valida que o usuário tem member ACTIVE no tenant do JWT
-- **Verificação explícita**: Ao acessar recursos específicos, sempre verificar `resource.tenant_id == member.tenant_id`
-- **HTTP 403 para acesso negado**: Retornar `403 Forbidden` quando tenant_id não corresponde
+### Validação de acesso
+- **Dependency `get_current_member()`**: Valida que o usuário tem member ACTIVE no tenant do JWT.
+- **Verificação explícita**: Ao acessar recurso específico, verificar `resource.tenant_id == member.tenant_id`.
+- **HTTP 403**: Retornar `403 Forbidden` quando `tenant_id` não corresponde.
 
-## Padrões de Implementação
+## Padrões de implementação
 
-### Endpoints que Acessam Recursos do Tenant
+### Endpoints que acessam recursos
+- Buscar recurso; se não existir → 404.
+- Validar `resource.tenant_id == member.tenant_id`; se não → 403.
+- Retornar recurso.
 
-Todos os endpoints que acessam recursos (Job, File, Demand, etc.) devem seguir este padrão:
+### Endpoints de listagem
+- Sempre filtrar por `tenant_id` do member (ex.: `Resource.tenant_id == member.tenant_id`).
 
-```python
-@router.get("/resource/{resource_id}")
-def get_resource(
-    resource_id: int,
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    # 1. Buscar recurso
-    resource = session.get(Resource, resource_id)
-    if not resource:
-        raise HTTPException(status_code=404, detail="Recurso não encontrado")
+### Endpoints de criação
+- Usar `member.tenant_id`; nunca aceitar `tenant_id` do body.
 
-    # 2. Validar tenant_id
-    if resource.tenant_id != member.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+### Endpoints de atualização
+- Validar `tenant_id` antes de atualizar; nunca permitir alterar `tenant_id`.
 
-    # 3. Retornar recurso
-    return resource
-```
+## Dependencies de segurança
 
-### Endpoints de Listagem
+- **`get_current_member()`**: Valida JWT, busca member ACTIVE para (account_id, tenant_id). Usar em todos os endpoints que acessam recursos do tenant. Retorna member ou levanta 401/403.
+- **`get_current_account()`**: Valida JWT, busca Account. Usar quando não for necessário validar tenant (ex.: `POST /tenant`).
+- **`require_role(role: str)`**: Dependency que valida role do member. Usar em endpoints que exigem role específica (ex.: admin).
 
-Endpoints que listam recursos devem sempre filtrar por `tenant_id`:
+## Endpoints por recurso
 
-```python
-@router.get("/resource/list")
-def list_resources(
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    # Query sempre filtra por tenant_id
-    query = select(Resource).where(Resource.tenant_id == member.tenant_id)
-    items = session.exec(query).all()
-    return items
-```
+### Autenticação (`/auth/*`)
+- Não validam tenant_id: criam/validam Account, gerenciam members, emitem JWT.
+- Convites: `POST /tenant/{tenant_id}/invite` cria member PENDING com `account_id=NULL` e `email`.
+- Aceite/login: vinculam Account ao member pelo email; sincronizam `member.email` se vazio.
+- Criação/edição de member: `POST /member` e `PUT /member/{id}` usam `email` e `name` públicos.
+- Privacidade: `Account.email` e `Account.name` não são expostos em endpoints de tenant; apenas `member.email` e `member.name`.
+- Endpoints de Account (`/account/*`): admin-only; expõem dados privados; usar com cuidado.
 
-### Endpoints de Criação
+### Públicos
+- `GET /health`: sem autenticação.
+- `POST /auth/google`: sem autenticação (cria autenticação).
 
-Endpoints que criam recursos devem usar `member.tenant_id` (nunca aceitar do body):
+### Admin (role ADMIN)
+- Tenant: POST/GET/PUT/DELETE `/tenant`, `POST /tenant/{tenant_id}/invite`.
+- Member: POST/GET/PUT/DELETE `/member`, `POST /member/{member_id}/invite`.
+- Account: POST/GET/PUT/DELETE `/account`.
+- Hospital: POST/PUT/DELETE `/hospital`.
+- Job: `POST /job/{job_id}/requeue` (admin no tenant).
 
-```python
-@router.post("/resource")
-def create_resource(
-    body: ResourceCreate,
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    # Usar tenant_id do member, nunca do body
-    resource = Resource(
-        tenant_id=member.tenant_id,  # ✅ Correto
-        # ... outros campos do body
-    )
-    session.add(resource)
-    session.commit()
-    return resource
-```
+### Recursos do tenant (requerem member ativo)
+- **Hospital**: `GET /hospital/list`, `GET /hospital/{id}` (leitura para todos).
+- **File**: POST/GET/DELETE `/file/upload`, `/file/list`, `/file/{id}`, `/file/{id}/download`, `/file/{id}/thumbnail`.
+- **Demand**: POST/GET/PUT/DELETE `/demand`, `POST /demand/{id}/publish`, `GET /demand/{id}/pdf`. Geração em lote: endpoint cria Job; worker atualiza Demand(s).
+- **Escala (alias sobre Demand, id = demand_id)**: `GET /schedule/list`, `POST /schedule`, `GET /schedule/{id}`, `POST /schedule/{id}/publish`, `GET /schedule/{id}/pdf`, `DELETE /schedule/{id}`.
+- **Job**: POST/GET `/job/ping`, `/job/extract`, `/job/list`, `/job/{id}`, `/job/{id}/stream`, POST/DELETE `/job/{id}/cancel`, `/job/{id}`.
 
-### Endpoints de Atualização
-
-Endpoints que atualizam recursos devem validar `tenant_id` e não permitir alteração:
-
-```python
-@router.put("/resource/{resource_id}")
-def update_resource(
-    resource_id: int,
-    body: ResourceUpdate,
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    resource = session.get(Resource, resource_id)
-    if not resource:
-        raise HTTPException(status_code=404, detail="Recurso não encontrado")
-
-    # Validar tenant_id
-    if resource.tenant_id != member.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-
-    # Atualizar campos (NUNCA permitir alterar tenant_id)
-    resource.name = body.name  # ✅ Campos permitidos
-    # resource.tenant_id = body.tenant_id  # ❌ NUNCA fazer isso
-
-    session.add(resource)
-    session.commit()
-    return resource
-```
-
-## Dependencies de Segurança
-
-### `get_current_member()`
-- **O que faz**: Valida JWT, busca member ACTIVE para (account_id, tenant_id)
-- **Quando usar**: Em todos os endpoints que acessam recursos do tenant
-- **Retorna**: Objeto `member` ou levanta `HTTPException 401/403`
-
-### `get_current_account()`
-- **O que faz**: Valida JWT, busca Account por account_id
-- **Quando usar**: Quando precisa apenas do Account (sem validação de tenant)
-- **Exemplo**: `POST /tenant` (criação de tenant)
-
-### `require_role(role: str)`
-- **O que faz**: Factory que retorna dependency que valida role do member
-- **Quando usar**: Endpoints que requerem role específica (ex: admin)
-- **Exemplo**: `POST /tenant/{tenant_id}/invite` (requer admin)
-
-## Endpoints Especiais
-
-### Endpoints de Autenticação
-Endpoints em `/auth/*` não validam tenant_id porque:
-- Criam/validam Account list (sem tenant_id)
-- Gerenciam members (que já têm tenant_id)
-- Emitem JWT com tenant_id
-- **Convites**: `POST /tenant/{tenant_id}/invite` cria member PENDING com `account_id=NULL` e `email` preenchido (não cria Account)
-- **Aceite**: `POST /auth/invites/{member_id}/accept` vincula Account ao member pelo email e sincroniza `member.email` se vazio ✅
-- **Login**: `POST /auth/google` busca e vincula automaticamente members PENDING pelo email e sincroniza `member.email` se vazio ✅
-- **Criação de member**: `POST /member` permite criar member com `email` e `name` públicos, sem `account_id` obrigatório ✅
-- **Edição de member**: `PUT /member/{id}` permite editar `member.email` e `member.name` livremente (campos públicos) ✅
-- **Privacidade**: `Account.email` e `Account.name` não são expostos em endpoints de tenant; apenas `member.email` e `member.name` são retornados ✅
-- **Endpoints de Account**: Endpoints de Account (`/account/*`) são admin-only e expõem dados privados. Devem ser usados com cuidado e apenas por administradores do sistema.
-
-### Endpoints Públicos
-- `GET /health`: Não requer autenticação
-- `POST /auth/google`: Não requer autenticação (cria autenticação)
-
-### Endpoints Admin
-Alguns endpoints requerem role ADMIN:
-
-**Tenant**:
-- `POST /tenant`: Requer admin (criação de tenant)
-- `GET /tenant/list`: Requer admin
-- `PUT /tenant/{tenant_id}`: Requer admin
-- `DELETE /tenant/{tenant_id}`: Requer admin
-- `POST /tenant/{tenant_id}/invite`: Requer admin no tenant
-
-**Member**:
-- `POST /member`: Requer admin
-- `GET /member/list`: Requer admin
-- `GET /member/{member_id}`: Requer admin
-- `PUT /member/{member_id}`: Requer admin
-- `DELETE /member/{member_id}`: Requer admin
-- `POST /member/{member_id}/invite`: Requer admin
-
-**Account**:
-- `POST /account`: Requer admin
-- `GET /account/list`: Requer admin
-- `PUT /account/{account_id}`: Requer admin
-- `DELETE /account/{account_id}`: Requer admin
-
-**Hospital**:
-- `POST /hospital`: Requer admin
-- `PUT /hospital/{hospital_id}`: Requer admin
-- `DELETE /hospital/{hospital_id}`: Requer admin
-
-**Job**:
-- `POST /job/{job_id}/requeue`: Requer admin no tenant
-
-### Endpoints de Recursos do Tenant (requerem membro ativo)
-Endpoints que acessam recursos do tenant (validam `get_current_member()`):
-
-**Hospital** (leitura disponível para todos os membros):
-- `GET /hospital/list`: Lista hospitais do tenant
-- `GET /hospital/{hospital_id}`: Detalhes do hospital
-
-**File**:
-- `POST /file/upload`: Upload de arquivo (requer `hospital_id`)
-- `GET /file/list`: Lista arquivos do tenant
-- `GET /file/{file_id}`: Detalhes do arquivo
-- `GET /file/{file_id}/download`: Download do arquivo
-- `GET /file/{file_id}/thumbnail`: Thumbnail do arquivo
-- `DELETE /file/{file_id}`: Exclui arquivo
-
-**Demand** (demanda + estado da escala; não há tabela Schedule):
-- `POST /demand`: Cria demanda
-- `GET /demand/list`: Lista demandas do tenant (filtros ex.: schedule_status para “escalas”)
-- `GET /demand/{demand_id}`: Detalhes da demanda (inclui campos de escala quando existirem)
-- `PUT /demand/{demand_id}`: Atualiza demanda
-- `DELETE /demand/{demand_id}`: Exclui demanda
-- `POST /demand/{demand_id}/publish`: Publica escala da demanda e gera PDF
-- `GET /demand/{demand_id}/pdf`: Download do PDF da escala
-- Geração em lote: endpoint de geração cria Job; worker atualiza Demand(s) com resultado
-
-**Escala (alias sobre Demand)** — rotas `/schedule/*` mantidas para compatibilidade; id no path = demand_id:
-- `GET /schedule/list`: Lista demandas com filtro de escala (schedule_status, período)
-- `POST /schedule`: Atualiza Demand com estado de escala (DRAFT)
-- `GET /schedule/{id}`: Detalhe da Demand (id = demand_id)
-- `POST /schedule/{id}/publish`: Publicar escala da demanda
-- `GET /schedule/{id}/pdf`: PDF da escala da demanda
-- `DELETE /schedule/{id}`: Resetar estado de escala na Demand (apenas DRAFT)
-
-**Job**:
-- `POST /job/ping`: Cria job PING (teste)
-- `POST /job/extract`: Cria job EXTRACT_DEMAND
-- `GET /job/list`: Lista jobs do tenant
-- `GET /job/{job_id}`: Detalhes do job
-- `GET /job/{job_id}/stream`: Stream de logs (SSE)
-- `POST /job/{job_id}/cancel`: Cancela job
-- `DELETE /job/{job_id}`: Exclui job
-
-## Checklist de Validação
-
-Ao implementar um novo endpoint, verificar:
+## Checklist ao implementar novo endpoint
 
 - [ ] Endpoint usa `get_current_member()` se acessa recursos do tenant?
 - [ ] Queries filtram por `tenant_id` do member?
-- [ ] Endpoints de criação usam `member.tenant_id` (não aceitam do body)?
-- [ ] Endpoints de atualização validam `tenant_id` e não permitem alteração?
-- [ ] Endpoints de leitura validam `tenant_id` antes de retornar?
-- [ ] Retorna HTTP 403 quando `tenant_id` não corresponde?
-- [ ] Retorna HTTP 404 quando recurso não existe (antes de validar tenant)?
+- [ ] Criação usa `member.tenant_id` (não aceita do body)?
+- [ ] Atualização valida `tenant_id` e não permite alteração?
+- [ ] Leitura valida `tenant_id` antes de retornar?
+- [ ] Retorna 403 quando `tenant_id` não corresponde?
+- [ ] Retorna 404 quando recurso não existe (antes de validar tenant)?
 
-## Exemplos de Implementação Correta
+## Exemplos
 
-### ✅ Correto: GET /job/{job_id}
-```python
-@router.get("/job/{job_id}")
-def get_job(
-    job_id: int,
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    job = session.get(Job, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job.tenant_id != member.tenant_id:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    return job
-```
+### Correto: GET /job/{job_id}
+Buscar job; se não existir → 404; se `job.tenant_id != member.tenant_id` → 403; retornar job.
 
-### ✅ Correto: GET /job/list
-```python
-@router.get("/job/list")
-def list_jobs(
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    query = select(Job).where(Job.tenant_id == member.tenant_id)
-    items = session.exec(query).all()
-    return items
-```
+### Correto: GET /job/list
+`select(Job).where(Job.tenant_id == member.tenant_id)`.
 
-### ✅ Correto: POST /job/ping
-```python
-@router.post("/job/ping")
-def create_ping_job(
-    member: member = Depends(get_current_member),
-    session: Session = Depends(get_session),
-):
-    job = Job(
-        tenant_id=member.tenant_id,  # ✅ Do member, não do body
-        job_type=JobType.PING,
-        status=JobStatus.PENDING,
-    )
-    session.add(job)
-    session.commit()
-    return job
-```
+### Correto: POST /job/ping
+Criar Job com `tenant_id=member.tenant_id` (nunca do body).
 
-### ❌ Incorreto: Aceitar tenant_id do body
-```python
-@router.post("/job/ping")
-def create_ping_job(
-    body: JobCreate,  # ❌ body contém tenant_id
-    session: Session = Depends(get_session),
-):
-    job = Job(
-        tenant_id=body.tenant_id,  # ❌ NUNCA fazer isso
-        # ...
-    )
-```
-
-### ❌ Incorreto: Não validar tenant_id
-```python
-@router.get("/job/{job_id}")
-def get_job(
-    job_id: int,
-    session: Session = Depends(get_session),
-):
-    job = session.get(Job, job_id)
-    return job  # ❌ Não valida tenant_id
-```
+### Incorreto
+- Aceitar `tenant_id` do body em criação.
+- Não validar `tenant_id` antes de retornar recurso.
 
 ## Auditoria
 
-Eventos de segurança são registrados na tabela `audit_log`:
-- `member_invited`: Convite criado
-- `member_status_changed`: Status de member alterado
-- `tenant_switched`: Usuário trocou de tenant
+Eventos registrados em `audit_log`: `member_invited`, `member_status_changed`, `tenant_switched`.
 
-## Status Codes Padrão
+## Status codes
 
-- **200 OK**: Operação bem-sucedida
-- **201 Created**: Recurso criado
-- **400 Bad Request**: Dados inválidos
-- **401 Unauthorized**: Token ausente/inválido
-- **403 Forbidden**: Acesso negado (tenant_id não corresponde ou sem permissão)
-- **404 Not Found**: Recurso não encontrado
-- **409 Conflict**: Conflito (ex: member duplicado)
-- **500 Internal Server Error**: Erro interno do servidor
+- 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 500 Internal Server Error.
 
-## Notas Importantes
+## Notas
 
-1. **Middleware não valida DB**: O middleware apenas extrai `tenant_id` do JWT para `request.state`. A validação real acontece em `get_current_member()` que consulta o banco.
-
-2. **JWT contém apenas dados mínimos**: O token JWT contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Dados como email, name, role são obtidos do banco via endpoints (`/me`, `get_current_member()`). Isso mantém o token menor e mais seguro.
-
-3. **member é a fonte da verdade**: Role e status vêm do member, não do Account. Um Account pode ter múltiplos members (um por tenant).
-
-4. **Convites pendentes**: `member.account_id` pode ser `NULL` para convites pendentes. O campo `email` identifica o convite até o usuário aceitar. Account é criado quando o usuário faz login/registro via Google OAuth pela primeira vez (sem precisar de convite). Ao aceitar um convite, o Account é vinculado ao member pelo email (se o Account já existir) ou criado se ainda não existir.
-
-5. **Soft-delete em members**: members não são deletados, apenas marcados como REMOVED. Isso mantém histórico e permite auditoria.
+1. **Middleware**: Apenas extrai `tenant_id` do JWT para `request.state`. Validação real em `get_current_member()` (consulta ao banco).
+2. **JWT**: Contém apenas `sub`, `tenant_id`, `iat`, `exp`, `iss`. Email, name e role vêm do banco via endpoints.
+3. **Member é a fonte da verdade**: Role e status vêm do member; um Account pode ter múltiplos members.
+4. **Convites pendentes**: `member.account_id` pode ser NULL; `email` identifica o convite. Account é criado no primeiro login ou ao aceitar convite.
+5. **Soft-delete em members**: members são marcados como REMOVED; não são deletados fisicamente (histórico e auditoria).
