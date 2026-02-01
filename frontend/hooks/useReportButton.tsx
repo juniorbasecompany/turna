@@ -7,7 +7,7 @@ import {
     type ReportParams,
 } from './useReportDownload'
 
-export interface UseReportLeftButtonOptions {
+export interface UseReportButtonOptions {
     /** Caminho da API do relatório (ex: '/api/tenant/report') */
     apiPath: string
     /** Parâmetros de filtro para o relatório */
@@ -24,12 +24,12 @@ export interface UseReportLeftButtonOptions {
  *
  * O painel só precisa passar a config (endpoint, params, filters, visible).
  */
-export function useReportLeftButton({
+export function useReportButton({
     apiPath,
     params,
     reportFilters,
     visible = true,
-}: UseReportLeftButtonOptions): { leftButtons: ActionBarButton[]; reportError: string | null } {
+}: UseReportButtonOptions): { leftButtons: ActionBarButton[]; reportError: string | null } {
     const { downloadReport, reportLoading, reportError } = useReportDownload(
         apiPath,
         params,

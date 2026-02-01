@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { toggleSelection } from '@/lib/entityUtils'
 
-interface UseEntitySelectionReturn {
+interface UseItemSelectionReturn {
     selectedItems: Set<number>
     setSelectedItems: React.Dispatch<React.SetStateAction<Set<number>>>
     toggleSelection: (id: number) => void
@@ -27,7 +27,7 @@ interface UseEntitySelectionReturn {
     getSelectedIdsForAction: () => number[] | null
 }
 
-export function useEntitySelection(): UseEntitySelectionReturn {
+export function useItemSelection(): UseItemSelectionReturn {
     const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set())
     const [selectAllMode, setSelectAllMode] = useState(false)
 

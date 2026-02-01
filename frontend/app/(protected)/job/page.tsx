@@ -11,7 +11,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { protectedFetch } from '@/lib/api'
@@ -606,7 +606,7 @@ export default function JobPage() {
     // Comportamento: mostra "Excluir" se houver jobs excluíveis (COMPLETED/FAILED)
     // Mostra "Interromper" se houver jobs interrompíveis (PENDING/RUNNING)
     // Regra de negócio: PENDING/RUNNING só podem ser interrompidos, COMPLETED/FAILED só podem ser excluídos
-    const actionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarRightButtons({
         isEditing: false,
         selectedCount: hasDeletableJobs ? selectedJobsCount : 0, // Botão "Excluir" só aparece se houver excluíveis
         hasChanges: false,

@@ -13,10 +13,10 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
@@ -1328,14 +1328,14 @@ export default function FilesPage() {
 
     // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
 
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/file/report',
         params: additionalListParams ?? undefined,
         reportFilters,
     })
 
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
-    const actionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarRightButtons({
         isEditing: false, // Não usado quando showEditArea é fornecido
         selectedCount: selectedFilesCount,
         hasChanges: hasChanges(),

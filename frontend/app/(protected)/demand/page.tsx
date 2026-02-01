@@ -13,9 +13,9 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
@@ -309,14 +309,14 @@ export default function DemandPage() {
         setFormData({ ...formData, skills: skillsArray })
     }
 
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/demand/report',
         params: additionalListParams ?? undefined,
         reportFilters,
     })
 
     // Botões do ActionBar customizados (para usar handleCancelCustom)
-    const actionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarRightButtons({
         isEditing,
         selectedCount: selectedDemandsCount,
         hasChanges: hasChanges(),

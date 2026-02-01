@@ -14,10 +14,10 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
@@ -497,7 +497,7 @@ export default function SchedulePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- resetar página ao mudar filtros
     }, [additionalListParams])
 
-    const actionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarRightButtons({
         isEditing,
         selectedCount: selectedSchedulesCount,
         hasChanges: hasChanges(),
@@ -508,7 +508,7 @@ export default function SchedulePage() {
         onSave: handleSave,
     })
 
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/schedule/report',
         params: additionalListParams ?? undefined,
         reportFilters: reportFiltersForSchedule.length ? reportFiltersForSchedule : undefined,

@@ -13,10 +13,10 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
-import { useActionBarButtons } from '@/hooks/useActionBarButtons'
+import { useActionBarRightButtons } from '@/hooks/useActionBarRightButtons'
 import { useEntityFilters } from '@/hooks/useEntityFilters'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
@@ -300,7 +300,7 @@ export default function MemberPage() {
         { value: 'admin', label: 'Administrador', color: 'text-purple-600' },
     ]
 
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/member/report',
         params: additionalListParams ?? undefined,
         reportFilters,
@@ -308,7 +308,7 @@ export default function MemberPage() {
 
     // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
     // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
-    const actionBarButtonsWithInvite = useActionBarButtons({
+    const actionBarButtonsWithInvite = useActionBarRightButtons({
         isEditing,
         selectedCount: selectedMembersCount,
         hasChanges: hasChanges() || sendInvite,

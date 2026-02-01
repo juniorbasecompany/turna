@@ -14,7 +14,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     HospitalCreateRequest,
@@ -46,7 +46,7 @@ export default function HospitalPage() {
     }, [filterName])
 
     const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/hospital/report',
         params: listAndReportParams,
         reportFilters,

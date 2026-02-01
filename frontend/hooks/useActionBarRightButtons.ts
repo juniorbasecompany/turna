@@ -15,7 +15,7 @@ interface CustomAction {
     loading?: boolean
 }
 
-interface UseActionBarButtonsOptions {
+interface UseActionBarRightButtonsOptions {
     isEditing: boolean
     selectedCount: number
     hasChanges: boolean
@@ -39,7 +39,7 @@ interface UseActionBarButtonsOptions {
 }
 
 /**
- * Hook para gerar botões padronizados do ActionBar.
+ * Hook para gerar botões padronizados do ActionBar (lado direito).
  *
  * Ordem padronizada dos botões (sempre nesta ordem):
  * 1. Cancelar (secondary) - aparece quando há edição OU seleção
@@ -52,7 +52,7 @@ interface UseActionBarButtonsOptions {
  * @example
  * ```tsx
  * // Uso básico (Hospital, Tenant, Member, Demand)
- * const actionBarButtons = useActionBarButtons({
+ * const actionBarButtons = useActionBarRightButtons({
  *   isEditing,
  *   selectedCount: selectedItems.size,
  *   hasChanges: hasChanges(),
@@ -64,7 +64,7 @@ interface UseActionBarButtonsOptions {
  * })
  *
  * // Uso com extensões (File)
- * const actionBarButtons = useActionBarButtons({
+ * const actionBarButtons = useActionBarRightButtons({
  *   isEditing: showEditArea, // ou usar showEditArea diretamente
  *   selectedCount: selectedFiles.size,
  *   hasChanges: hasChanges(),
@@ -88,7 +88,7 @@ interface UseActionBarButtonsOptions {
  * ```
  */
 
-export function useActionBarButtons(options: UseActionBarButtonsOptions): ActionButton[] {
+export function useActionBarRightButtons(options: UseActionBarRightButtonsOptions): ActionButton[] {
     const {
         isEditing,
         selectedCount,
@@ -110,10 +110,10 @@ export function useActionBarButtons(options: UseActionBarButtonsOptions): Action
 
     // Usar showEditArea se fornecido, caso contrário usar isEditing
     const editing = showEditArea !== undefined ? showEditArea : isEditing
-    
+
     // Contar todas as seleções (principal + adicional)
     const totalSelectedCount = selectedCount + additionalSelectedCount
-    
+
     // Verificar estados adicionais para desabilitar botões
     const additionalDisabled = Object.values(additionalStates).some((state) => state === true)
 

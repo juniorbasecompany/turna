@@ -1,10 +1,10 @@
 import { protectedFetch } from '@/lib/api'
 import { getActionBarErrorProps } from '@/lib/entityUtils'
 import { useCallback, useState } from 'react'
-import { useActionBarButtons } from './useActionBarButtons'
+import { useActionBarRightButtons } from './useActionBarRightButtons'
 import { useEntityForm } from './useEntityForm'
 import { useEntityList } from './useEntityList'
-import { useEntitySelection } from './useEntitySelection'
+import { useItemSelection } from './useItemSelection'
 import { usePagination } from './usePagination'
 
 interface UseEntityPageOptions<TFormData, TEntity extends { id: number }, TCreateRequest, TUpdateRequest> {
@@ -94,7 +94,7 @@ interface UseEntityPageReturn<TFormData, TEntity extends { id: number }> {
     loadItems: () => Promise<void>
 
     // ActionBar
-    actionBarButtons: ReturnType<typeof useActionBarButtons>
+    actionBarButtons: ReturnType<typeof useActionBarRightButtons>
     actionBarErrorProps: ReturnType<typeof getActionBarErrorProps>
 }
 
@@ -130,7 +130,7 @@ export function useEntityPage<
     const { pagination: paginationState, total, setTotal, onFirst, onPrevious, onNext, onLast } = pagination
 
     // Seleção
-    const selection = useEntitySelection()
+    const selection = useItemSelection()
 
     // Formulário
     const form = useEntityForm<TFormData, TEntity>({
@@ -328,7 +328,7 @@ export function useEntityPage<
     }, [form, selection, setError])
 
     // Botões do ActionBar
-    const actionBarButtons = useActionBarButtons({
+    const actionBarButtons = useActionBarRightButtons({
         isEditing: form.isEditing,
         selectedCount: selection.selectedCount,
         hasChanges: form.hasChanges(),

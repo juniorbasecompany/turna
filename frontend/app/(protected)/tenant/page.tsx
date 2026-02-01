@@ -12,7 +12,7 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
-import { useReportLeftButton } from '@/hooks/useReportLeftButton'
+import { useReportButton } from '@/hooks/useReportButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import {
     TenantCreateRequest,
@@ -134,7 +134,7 @@ export default function TenantPage() {
         additionalListParams: listAndReportParams,
     })
 
-    const { leftButtons: reportLeftButtons, reportError } = useReportLeftButton({
+    const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/tenant/report',
         params: listAndReportParams,
         reportFilters,
