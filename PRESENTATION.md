@@ -6,7 +6,7 @@ Sistema inteligente para geração automática de escalas cirúrgicas otimizadas
 
 ### Implementado (MVP web admin ~90%)
 - **Autenticação**: Login OAuth Google, JWT, multi-tenant
-- **Gestão**: Clínicas, associados (membros), hospitais com prompt customizável
+- **Gestão**: Clínicas, associados (member), hospitais com prompt customizável
 - **Arquivos**: Upload de PDF/imagens, visualização, thumbnails
 - **Extração IA**: Extração de demandas cirúrgicas via OpenAI
 - **Demandas**: CRUD completo de demandas cirúrgicas

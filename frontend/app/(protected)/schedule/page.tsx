@@ -153,7 +153,7 @@ export default function SchedulePage() {
         )
     }
 
-    const FILTER_NAME_LABEL = 'Nome'
+    const FILTER_NAME_LABEL = 'Associado'
     const FILTER_START_LABEL = 'Desde'
     const FILTER_END_LABEL = 'Até'
     const FILTER_STATUS_LABEL = 'Situação'

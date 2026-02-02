@@ -77,7 +77,7 @@ def _resolve_schedule_status_filters(
 SCHEDULE_REPORT_PARAM_LABELS = {
     "filter_start_time": "Desde",
     "filter_end_time": "Até",
-    "name": "Nome",
+    "name": "Associado",
     "status": "Status",
     "status_list": "Status",
     "hospital_id": "Hospital",
@@ -97,6 +97,7 @@ def _schedule_list_queries(
     Query e count_query para listagem/relatório de escalas (mesmo canal de dados).
     schedule_status considerado igual no painel (card) e no relatório (quadro); dia vem de demand.start_time.
     Filtros: demand.start_time >= filter_start_time, demand.end_time <= filter_end_time.
+    name: filtra por member.name (contém), via demand.member_id.
     """
     query = (
         select(Demand)
@@ -120,8 +121,9 @@ def _schedule_list_queries(
         count_query = count_query.where(Demand.end_time <= filter_end_time)
     if name and name.strip():
         term = f"%{name.strip()}%"
-        query = query.where(Demand.schedule_name.ilike(term))
-        count_query = count_query.where(Demand.schedule_name.ilike(term))
+        member_subq = select(Member.id).where(Member.tenant_id == tenant_id, Member.name.ilike(term))
+        query = query.where(Demand.member_id.in_(member_subq))
+        count_query = count_query.where(Demand.member_id.in_(member_subq))
     if hospital_id is not None:
         query = query.where(Demand.hospital_id == hospital_id)
         count_query = count_query.where(Demand.hospital_id == hospital_id)
@@ -592,7 +594,7 @@ def report_schedule_pdf(
     filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
-    name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome do associado (contém)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
     member: Member = Depends(get_current_member),
@@ -697,7 +699,7 @@ def list_schedules(
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     filter_start_time: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
     filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
-    name: Optional[str] = Query(None, description="Filtrar por nome da escala (contém)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome do associado (contém)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),

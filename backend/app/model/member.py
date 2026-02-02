@@ -77,10 +77,10 @@ class Member(BaseModel, table=True):
         sa_column=Column(JSON, nullable=False),
     )
 
-    # Indica se o membro pode atender pediatria
+    # Indica se o associado pode atender pediatria
     can_peds: bool = Field(default=False)
 
-    # Ordem/sequência do membro (ex.: para exibição ou prioridade)
+    # Ordem/sequência do associado (ex.: para exibição ou prioridade)
     sequence: int = Field(default=0)
 
     # Períodos de férias: lista de pares [início, fim] em ISO datetime

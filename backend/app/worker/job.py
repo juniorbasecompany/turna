@@ -199,7 +199,7 @@ def _load_pros_from_member_table(
         period_start_date: Data de início do período (para converter vacation para dias relativos).
                            Se None, vacation será lista vazia.
 
-    Filtra por tenant_id, status ACTIVE e sequence > 0 (apenas membros com ordem de prioridade).
+    Filtra por tenant_id, status ACTIVE e sequence > 0 (apenas associados com ordem de prioridade).
     """
     logger.info(f"[LOAD_PROFESSIONALS] Carregando profissionais do tenant_id={tenant_id}")
     rows = session.exec(

@@ -118,12 +118,12 @@ def send_member_invite(
     app_url: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """
-    Envia email de convite para um membro se juntar à clínica usando Resend.
+    Envia email de convite para um associado se juntar à clínica usando Resend.
     Faz fallback para modo "log" quando RESEND_API_KEY não está configurado.
 
     Args:
         to_email: Email do destinatário
-        member_name: Nome do membro
+        member_name: Nome do associado
         tenant_name: Nome da clínica/tenant
         app_url: URL do aplicativo (opcional, pega de env var se não fornecido)
 
@@ -133,7 +133,7 @@ def send_member_invite(
         - error_message: Mensagem de erro específica se falhou, string vazia se sucesso
     """
     logger.info(
-        f"Iniciando envio de email de convite para {to_email} (membro: {member_name}, clínica: {tenant_name})"
+        f"Iniciando envio de email de convite para {to_email} (associado: {member_name}, clínica: {tenant_name})"
     )
     try:
         app_url = app_url or os.getenv("APP_URL", "http://localhost:3000")

@@ -31,7 +31,7 @@ turna/
 - **Demandas**: CRUD completo de demandas cirúrgicas
 - **Escalas**: Geração automática com solver Greedy, publicação em PDF
 - **Jobs**: Sistema de jobs assíncronos (Arq/Redis) para processamento pesado
-- **Membros**: Gestão de usuários com convites por email (Resend)
+- **Associados**: Gestão de usuários com convites por email (Resend)
 - **Clínicas**: Multi-tenant com isolamento de dados
 
 ## Execução Rápida
@@ -105,7 +105,7 @@ docker compose restart worker
 ## Status do Projeto
 
 **MVP Web Admin**: ~90% implementado
-- ✅ Autenticação, multi-tenant, hospitais, arquivos, demandas, escalas, jobs, membros
+- ✅ Autenticação, multi-tenant, hospitais, arquivos, demandas, escalas, jobs, associados
 - 🔄 Página de listagem de escalas no frontend (em progresso)
 - 📋 App mobile React Native (futuro)
 - 📋 Solver CP-SAT otimizado (futuro)

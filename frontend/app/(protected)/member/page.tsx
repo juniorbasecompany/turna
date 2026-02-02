@@ -556,14 +556,14 @@ export default function MemberPage() {
 
             <CardPanel
                 title="Associados"
-                description="Gerencie os membros associados da clínica"
+                description="Gerencie os associados da clínica"
                 totalCount={filteredMembers.length}
                 selectedCount={selectedMembersCount}
                 loading={loading}
                 error={undefined}
                 createCard={
                     <CreateCard
-                        label="Convidar novo membro"
+                        label="Convidar novo associado"
                         subtitle="Clique para adicionar"
                         onClick={handleCreateClick}
                     />
