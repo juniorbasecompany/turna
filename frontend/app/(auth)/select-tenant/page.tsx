@@ -274,7 +274,7 @@ export default function SelectTenantPage() {
                     tenantToUse = {
                         tenant_id: invite.tenant_id,
                         name: invite.name,
-                        slug: invite.slug,
+                        label: invite.label,
                         role: invite.role,
                     }
                 }

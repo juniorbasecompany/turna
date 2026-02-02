@@ -68,6 +68,9 @@ class Member(BaseModel, table=True):
     # Preenchido automaticamente do account.name na primeira vez, mas pode ser editado por admin
     name: str | None = Field(default=None, nullable=True)
 
+    # Rótulo opcional; sem duplicação dentro do tenant quando preenchido
+    label: str | None = Field(default=None, nullable=True, index=True)
+
     # Atributos customizados (JSON)
     attribute: dict = Field(
         default_factory=dict,

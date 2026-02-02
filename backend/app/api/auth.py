@@ -40,7 +40,7 @@ class GoogleTokenRequest(BaseModel):
 class TenantOption(BaseModel):
     tenant_id: int
     name: str
-    slug: str
+    label: str | None = None  # Rótulo opcional
     role: str
 
 
@@ -48,7 +48,7 @@ class InviteOption(BaseModel):
     member_id: int
     tenant_id: int
     name: str
-    slug: str
+    label: str | None = None  # Rótulo opcional
     role: str
     status: str
 
@@ -101,11 +101,11 @@ def _get_or_create_default_tenant(session: Session) -> Tenant:
     # Por enquanto, cria um tenant padrão se não existir
     # Em produção, isso deve ser configurado ou a conta deve escolher durante registro
     default_tenant = session.exec(
-        select(Tenant).where(Tenant.slug == "default")
+        select(Tenant).where(Tenant.label == "default")
     ).first()
 
     if not default_tenant:
-        default_tenant = Tenant(name="Default Tenant", slug="default")
+        default_tenant = Tenant(name="Default Tenant", label="default")
         session.add(default_tenant)
         session.commit()
         session.refresh(default_tenant)
@@ -135,7 +135,7 @@ def _list_active_tenants_for_account(session: Session, *, account_id: int) -> li
             TenantOption(
                 tenant_id=tenant.id,
                 name=tenant.name,
-                slug=tenant.slug,
+                label=tenant.label,
                 role=member.role.value,
             )
         )
@@ -169,7 +169,7 @@ def _list_pending_invites_for_account(session: Session, *, account_id: int, emai
                 member_id=member.id,
                 tenant_id=tenant.id,
                 name=tenant.name,
-                slug=tenant.slug,
+                label=tenant.label,
                 role=member.role.value,
                 status=member.status.value,
             )
@@ -761,26 +761,10 @@ def auth_google_create_tenant(
             detail="Account já possui tenants ACTIVE. Use o endpoint de seleção de tenant."
         )
 
-    # Criar tenant com dados default
-    timestamp = int(utc_now().timestamp() * 1000)
-    slug = f"clinica-{timestamp}"
-
-    # Verificar se slug já existe (muito improvável, mas por segurança)
-    existing = session.exec(select(Tenant).where(Tenant.slug == slug)).first()
-    if existing:
-        # Tentar com sufixo aleatório
-        import random
-        slug = f"clinica-{timestamp}-{random.randint(1000, 9999)}"
-        existing = session.exec(select(Tenant).where(Tenant.slug == slug)).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao gerar slug único para o tenant"
-            )
-
+    # Criar tenant com dados default (label opcional, não precisa gerar)
     tenant = Tenant(
         name="Clínica",
-        slug=slug,
+        label=None,  # Rótulo opcional; pode ser preenchido depois
         timezone="America/Sao_Paulo",
         locale="pt-BR",
         currency="BRL",

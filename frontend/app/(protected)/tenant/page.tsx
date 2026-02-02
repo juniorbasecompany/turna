@@ -23,7 +23,7 @@ import { useMemo, useState } from 'react'
 
 type TenantFormData = {
     name: string
-    slug: string
+    label: string  // Rótulo opcional
     timezone: string
     locale: string
     currency: string
@@ -48,7 +48,7 @@ export default function TenantPage() {
 
     const initialFormData: TenantFormData = {
         name: '',
-        slug: '',
+        label: '',  // Rótulo opcional
         timezone: 'America/Sao_Paulo',
         locale: 'pt-BR',
         currency: 'BRL',
@@ -88,7 +88,7 @@ export default function TenantPage() {
         isEmptyCheck: (data) => {
             return (
                 data.name.trim() === '' &&
-                data.slug.trim() === '' &&
+                data.label.trim() === '' &&
                 data.timezone === 'America/Sao_Paulo' &&
                 data.locale === 'pt-BR' &&
                 data.currency === 'BRL'
@@ -96,21 +96,21 @@ export default function TenantPage() {
         },
         mapEntityToFormData: (tenant) => ({
             name: tenant.name,
-            slug: tenant.slug,
+            label: tenant.label || '',  // label pode ser null
             timezone: tenant.timezone,
             locale: tenant.locale,
             currency: tenant.currency,
         }),
         mapFormDataToCreateRequest: (formData) => ({
             name: formData.name.trim(),
-            slug: formData.slug.trim(),
+            label: formData.label.trim() || null,  // Enviar null se vazio
             timezone: formData.timezone,
             locale: formData.locale,
             currency: formData.currency,
         }),
         mapFormDataToUpdateRequest: (formData) => ({
             name: formData.name.trim(),
-            slug: formData.slug.trim(),
+            label: formData.label.trim() || null,  // Enviar null se vazio
             timezone: formData.timezone,
             locale: formData.locale,
             currency: formData.currency,
@@ -119,9 +119,7 @@ export default function TenantPage() {
             if (!formData.name.trim()) {
                 return 'Nome é obrigatório'
             }
-            if (!formData.slug.trim()) {
-                return 'Rótulo é obrigatório'
-            }
+            // Rótulo é opcional
             return null
         },
         onSaveSuccess: () => {
@@ -159,12 +157,11 @@ export default function TenantPage() {
                         />
                         <FormInput
                             label="Rótulo"
-                            value={formData.slug}
-                            onChange={(value) => setFormData({ ...formData, slug: value.toLowerCase().replace(/\s+/g, '-') })}
-                            id="slug"
-                            required
+                            value={formData.label}
+                            onChange={(value) => setFormData({ ...formData, label: value })}
+                            id="label"
                             disabled={submitting}
-                            helperText="Identificador único da clínica (usado na URL). Será convertido automaticamente para minúsculas e hífens."
+                            helperText="Rótulo opcional para identificar a clínica."
                         />
                     </FormFieldGrid>
                     <FormFieldGrid>
@@ -282,7 +279,7 @@ export default function TenantPage() {
                                         >
                                             {tenant.name}
                                         </h3>
-                                        <p className="text-xs text-gray-600 mt-1">{tenant.slug}</p>
+                                        {tenant.label && <p className="text-xs text-gray-600 mt-1">{tenant.label}</p>}
                                     </div>
                                 </div>
                             </div>

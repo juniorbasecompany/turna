@@ -517,7 +517,7 @@ def delete_account(
 
 class TenantCreate(PydanticBaseModel):
     name: str
-    slug: str
+    label: str | None = None
     timezone: str = "America/Sao_Paulo"
     locale: str = "pt-BR"
     currency: str = "BRL"
@@ -542,7 +542,7 @@ class TenantCreate(PydanticBaseModel):
 class TenantResponse(PydanticBaseModel):
     id: int
     name: str
-    slug: str
+    label: str | None = None
     timezone: str
     locale: str
     currency: str
@@ -555,7 +555,7 @@ class TenantResponse(PydanticBaseModel):
 
 class TenantUpdate(PydanticBaseModel):
     name: str | None = None
-    slug: str | None = None
+    label: str | None = None
     timezone: str | None = None
     locale: str | None = None
     currency: str | None = None
@@ -571,13 +571,23 @@ class TenantUpdate(PydanticBaseModel):
             raise ValueError("timezone inválido (esperado IANA, ex: America/Sao_Paulo)") from e
         return v
 
-    @field_validator("locale", "currency", "name", "slug")
+    @field_validator("locale", "currency", "name")
     @classmethod
     def validate_string_not_empty(cls, v: str | None) -> str | None:
         if v is None:
             return None
         if not v or not v.strip():
             raise ValueError("campo não pode estar vazio")
+        return v.strip()
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        # String vazia = remover label; string não vazia = normalizar
+        if v.strip() == "":
+            return ""
         return v.strip()
 
 
@@ -599,14 +609,15 @@ def create_tenant(
     session: Session = Depends(get_session),
 ):
     """Cria um novo tenant e cria Member ADMIN para o criador."""
-    # Verifica se já existe um tenant com o mesmo slug
-    existing = session.exec(select(Tenant).where(Tenant.slug == tenant_data.slug)).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Tenant com este slug já existe")
+    # Verifica se já existe um tenant com o mesmo label (apenas se label informado)
+    if tenant_data.label:
+        existing = session.exec(select(Tenant).where(Tenant.label == tenant_data.label)).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Tenant com este rótulo já existe")
 
     tenant = Tenant(
         name=tenant_data.name,
-        slug=tenant_data.slug,
+        label=tenant_data.label,
         timezone=tenant_data.timezone,
         locale=tenant_data.locale,
         currency=tenant_data.currency,
@@ -668,7 +679,7 @@ def list_tenants(
             response_items.append(TenantResponse(
                 id=t.id,
                 name=t.name,
-                slug=t.slug,
+                label=t.label,
                 timezone=t.timezone,
                 locale=t.locale,
                 currency=t.currency,
@@ -701,7 +712,7 @@ def report_tenant_pdf(
     try:
         query, _ = _tenant_list_queries(session, name=name)
         tenants = session.exec(query).all()
-        rows = [(t.name, t.slug) for t in tenants]
+        rows = [(t.name, t.label or "") for t in tenants]
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"name": name}, TENANT_REPORT_PARAM_LABELS
         )
@@ -750,26 +761,27 @@ def update_tenant(
             logger.warning(f"Tenant não encontrado: id={tenant_id}")
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        # Verificar se slug está sendo alterado e se já existe outro com o mesmo slug
-        if body.slug is not None and body.slug != tenant.slug:
+        # Verificar se label está sendo alterado e se já existe outro com o mesmo label
+        if body.label is not None and body.label != "" and body.label != tenant.label:
             existing = session.exec(
                 select(Tenant).where(
-                    Tenant.slug == body.slug,
+                    Tenant.label == body.label,
                     Tenant.id != tenant_id,
                 )
             ).first()
             if existing:
-                logger.warning(f"Tenant com slug '{body.slug}' já existe (id={existing.id})")
+                logger.warning(f"Tenant com rótulo '{body.label}' já existe (id={existing.id})")
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Tenant com slug '{body.slug}' já existe",
+                    detail=f"Tenant com rótulo '{body.label}' já existe",
                 )
 
         # Atualizar campos
         if body.name is not None:
             tenant.name = body.name
-        if body.slug is not None:
-            tenant.slug = body.slug
+        if body.label is not None:
+            # String vazia = remover label; string não vazia = atualizar
+            tenant.label = body.label if body.label else None
         if body.timezone is not None:
             tenant.timezone = body.timezone
         if body.locale is not None:
@@ -785,7 +797,7 @@ def update_tenant(
         return TenantResponse(
             id=tenant.id,
             name=tenant.name,
-            slug=tenant.slug,
+            label=tenant.label,
             timezone=tenant.timezone,
             locale=tenant.locale,
             currency=tenant.currency,
@@ -1999,7 +2011,7 @@ def list_files(
         can_delete = item.id not in file_ids_with_completed_job
         job_status = file_id_to_latest_job_status.get(item.id)
         hospital = hospital_dict.get(item.hospital_id)
-        hospital_name = hospital.name if hospital else f"Hospital {item.hospital_id}"
+        hospital_name = (hospital.label or hospital.name) if hospital else f"Hospital {item.hospital_id}"
         hospital_color = hospital.color if hospital else None
         # Criar FileResponse manualmente incluindo can_delete, job_status, hospital_id, hospital_name e hospital_color
         file_response = FileResponse(
@@ -2061,15 +2073,15 @@ def report_file_pdf(
                 hospital_dict[h.id] = h
         rows = []
         for f in files:
-            hospital_name = hospital_dict.get(f.hospital_id)
-            name = hospital_name.name if hospital_name else f"Hospital {f.hospital_id}"
+            hospital_obj = hospital_dict.get(f.hospital_id)
+            name = (hospital_obj.label or hospital_obj.name) if hospital_obj else f"Hospital {f.hospital_id}"
             created = f.created_at.strftime("%d/%m/%Y %H:%M") if f.created_at else "-"
             rows.append((name, f.filename, created))
         params = {"start_at": start_at, "end_at": end_at, "hospital_id": hospital_id}
         formatters = {
             "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
             "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-            "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
+            "hospital_id": lambda v: ((h := session.get(Hospital, v)) and (h.label or h.name)) if v else str(v),
         }
         filters_parts = query_params_to_filter_parts(params, FILE_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
@@ -2336,6 +2348,7 @@ async def schedule_generate(
 
 class HospitalCreate(PydanticBaseModel):
     name: str
+    label: str | None = None  # Rótulo opcional; sem duplicação dentro do tenant
     prompt: str | None = None
     color: str | None = None
 
@@ -2344,6 +2357,13 @@ class HospitalCreate(PydanticBaseModel):
     def validate_name_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("Campo não pode estar vazio")
+        return v.strip()
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, v: str | None) -> str | None:
+        if v is None or v.strip() == "":
+            return None
         return v.strip()
 
     @field_validator("prompt")
@@ -2377,6 +2397,7 @@ class HospitalCreate(PydanticBaseModel):
 
 class HospitalUpdate(PydanticBaseModel):
     name: str | None = None
+    label: str | None = None  # Rótulo opcional; string vazia = remover
     prompt: str | None = None
     color: str | None = None
 
@@ -2386,6 +2407,16 @@ class HospitalUpdate(PydanticBaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("Campo nome não pode estar vazio")
         return v.strip() if v else None
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        # String vazia = remover label; string não vazia = normalizar
+        if v.strip() == "":
+            return ""
+        return v.strip()
 
     @field_validator("prompt")
     @classmethod
@@ -2420,6 +2451,7 @@ class HospitalResponse(PydanticBaseModel):
     id: int
     tenant_id: int
     name: str
+    label: str | None = None  # Rótulo opcional
     prompt: str | None
     color: str | None
     created_at: datetime
@@ -2461,9 +2493,25 @@ def create_hospital(
                 detail=f"Hospital com nome '{body.name}' já existe neste tenant",
             )
 
+        # Validar unicidade de label no tenant (se informado)
+        if body.label:
+            existing_label = session.exec(
+                select(Hospital).where(
+                    Hospital.tenant_id == member.tenant_id,
+                    Hospital.label == body.label,
+                )
+            ).first()
+            if existing_label:
+                logger.warning(f"Hospital com rótulo '{body.label}' já existe no tenant {member.tenant_id}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Hospital com rótulo '{body.label}' já existe neste tenant",
+                )
+
         hospital = Hospital(
             tenant_id=member.tenant_id,
             name=body.name,
+            label=body.label,
             prompt=body.prompt,
             color=body.color,
         )
@@ -2580,7 +2628,7 @@ def report_hospital_pdf(
     try:
         query, _ = _hospital_list_queries(session, member.tenant_id, name=name)
         hospitals = session.exec(query).all()
-        rows = [(h.name,) for h in hospitals]
+        rows = [(h.name, h.label or "") for h in hospitals]
         params = {"name": name}
         filters_parts = query_params_to_filter_parts(params, HOSPITAL_REPORT_PARAM_LABELS)
         tenant = session.get(Tenant, member.tenant_id)
@@ -2666,10 +2714,30 @@ def update_hospital(
                     detail=f"Hospital com nome '{body.name}' já existe neste tenant",
                 )
 
+        # Verificar se novo label já existe (se estiver alterando e não vazio)
+        if body.label is not None and body.label != "" and body.label != hospital.label:
+            existing_label = session.exec(
+                select(Hospital).where(
+                    Hospital.tenant_id == member.tenant_id,
+                    Hospital.label == body.label,
+                    Hospital.id != hospital_id,
+                )
+            ).first()
+            if existing_label:
+                logger.warning(f"Hospital com rótulo '{body.label}' já existe no tenant")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Hospital com rótulo '{body.label}' já existe neste tenant",
+                )
+
         # Atualizar campos
         if body.name is not None:
             hospital.name = body.name
             logger.info(f"Nome atualizado para: {hospital.name}")
+        if body.label is not None:
+            # String vazia = remover label; string não vazia = atualizar
+            hospital.label = body.label if body.label else None
+            logger.info(f"Rótulo atualizado para: {hospital.label}")
         if body.prompt is not None:
             hospital.prompt = body.prompt
             logger.info(f"Prompt atualizado: {body.prompt}")
@@ -3079,7 +3147,7 @@ def report_demand_pdf(
             formatters = {
                 "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
                 "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-                "hospital_id": lambda v: (session.get(Hospital, v).name if v and session.get(Hospital, v) else str(v)),
+                "hospital_id": lambda v: ((h := session.get(Hospital, v)) and (h.label or h.name)) if v else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
@@ -3302,6 +3370,7 @@ class MemberCreate(PydanticBaseModel):
     """Schema para criar member."""
     email: Optional[str] = None  # Email público (obrigatório se account_id não for fornecido)
     name: Optional[str] = None  # Nome público na clínica
+    label: Optional[str] = None  # Rótulo opcional; sem duplicação dentro do tenant
     role: str
     status: str = "ACTIVE"
     account_id: Optional[int] = None  # Opcional (não usado no painel)
@@ -3348,6 +3417,7 @@ class MemberUpdate(PydanticBaseModel):
     role: Optional[str] = None
     status: Optional[str] = None
     name: Optional[str] = None  # Nome público na clínica (member.name)
+    label: Optional[str] = None  # Rótulo opcional; string vazia = remover
     email: Optional[str] = None  # Email público na clínica (member.email)
     attribute: Optional[dict] = None  # Atributos customizados (JSON)
     can_peds: Optional[bool] = None
@@ -3381,6 +3451,7 @@ class MemberResponse(PydanticBaseModel):
     account_email: Optional[str] = None  # Privado, apenas para compatibilidade/auditoria
     member_email: Optional[str] = None  # Email público na clínica (pode ser editado)
     member_name: Optional[str] = None  # Nome público na clínica (pode ser editado)
+    member_label: Optional[str] = None  # Rótulo opcional
     role: str
     status: str
     attribute: dict  # Atributos customizados (JSON)
@@ -3456,12 +3527,29 @@ def create_member(
                     detail="Já existe um member pendente para este email neste tenant",
                 )
 
+        # Validar unicidade de label no tenant (se informado)
+        label_value = body.label.strip() if body.label and body.label.strip() else None
+        if label_value:
+            existing_label = session.exec(
+                select(Member).where(
+                    Member.tenant_id == member.tenant_id,
+                    Member.label == label_value,
+                )
+            ).first()
+            if existing_label:
+                logger.warning(f"Member com rótulo '{label_value}' já existe no tenant {member.tenant_id}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Já existe um member com rótulo '{label_value}' neste tenant",
+                )
+
         # Criar member
         member_obj = Member(
             tenant_id=member.tenant_id,
             account_id=account_id,
             email=email_lower,
             name=body.name,
+            label=label_value,
             role=MemberRole[body.role.upper()],
             status=MemberStatus[body.status.upper()],
             attribute=body.attribute if body.attribute is not None else {},
@@ -3509,6 +3597,7 @@ def create_member(
             account_email=account_email,
             member_email=member_obj.email,
             member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            member_label=member_obj.label,  # Rótulo opcional
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,
@@ -3570,6 +3659,7 @@ def list_members(
                     account_email=account_email,
                     member_email=member_obj.email,  # Email público na clínica
                     member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+                    member_label=member_obj.label,  # Rótulo opcional
                     role=member_obj.role.value,
                     status=member_obj.status.value,
                     attribute=member_obj.attribute,
@@ -3614,11 +3704,12 @@ def report_member_pdf(
         results = session.exec(query).all()
         rows = []
         for member_obj, account in results:
+            label = (member_obj.label or "").strip()
             name = (member_obj.name or "").strip() or "(sem nome)"
             email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
             can_peds_str = "Sim" if member_obj.can_peds else "Não"
             sequence_str = str(member_obj.sequence)
-            rows.append((sequence_str, name, email, member_obj.status.value, can_peds_str))
+            rows.append((sequence_str, label, name, email, member_obj.status.value, can_peds_str))
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
             MEMBER_REPORT_PARAM_LABELS,
@@ -3672,6 +3763,7 @@ def get_member(
             account_email=account_email,
             member_email=member_obj.email,  # Email público na clínica
             member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            member_label=member_obj.label,  # Rótulo opcional
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,
@@ -3747,6 +3839,23 @@ def update_member(
         if body.name is not None:
             # Permitir editar member.name (não account.name)
             member_obj.name = body.name
+        if body.label is not None:
+            # Validar unicidade de label no tenant (se não vazio)
+            label_value = body.label.strip() if body.label.strip() else None
+            if label_value and label_value != member_obj.label:
+                existing_label = session.exec(
+                    select(Member).where(
+                        Member.tenant_id == member.tenant_id,
+                        Member.label == label_value,
+                        Member.id != member_id,
+                    )
+                ).first()
+                if existing_label:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Já existe um member com rótulo '{label_value}' neste tenant",
+                    )
+            member_obj.label = label_value
         if body.email is not None:
             # Permitir editar member.email (campo público, independente de account.email)
             member_obj.email = body.email.lower() if body.email else None
@@ -3799,6 +3908,7 @@ def update_member(
             account_email=account_email,
             member_email=member_obj.email,  # Email público na clínica
             member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
+            member_label=member_obj.label,  # Rótulo opcional
             role=member_obj.role.value,
             status=member_obj.status.value,
             attribute=member_obj.attribute,

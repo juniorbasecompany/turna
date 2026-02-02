@@ -41,6 +41,7 @@ type MemberFormData = {
     role: string
     status: string
     name: string
+    label: string  // Rótulo opcional
     email: string
     attribute: unknown  // JSON como objeto para edição
     can_peds: boolean
@@ -77,6 +78,7 @@ export default function MemberPage() {
         role: 'account',
         status: 'PENDING',
         name: '',
+        label: '',  // Rótulo opcional
         email: '',
         attribute: {},
         can_peds: false,
@@ -90,6 +92,7 @@ export default function MemberPage() {
             role: member.role,
             status: member.status,
             name: member.member_name || '',
+            label: member.member_label || '',  // Rótulo opcional
             email: member.member_email || '',
             attribute: member.attribute || {},
             can_peds: member.can_peds ?? false,
@@ -107,6 +110,7 @@ export default function MemberPage() {
         return {
             email: formData.email.trim() || null,
             name: formData.name.trim() || null,
+            label: formData.label.trim() || null,  // Rótulo opcional
             role: formData.role,
             status: formData.status,
             attribute: attributeValue || null,
@@ -129,6 +133,7 @@ export default function MemberPage() {
             role: formData.role,
             status: formData.status,
             name: formData.name.trim() || null,
+            label: formData.label.trim() || null,  // Rótulo opcional
             email: formData.email.trim() || null,
             attribute: attributeValue,
             can_peds: formData.can_peds,
@@ -166,6 +171,7 @@ export default function MemberPage() {
     // isEmptyCheck
     const isEmptyCheck = (formData: MemberFormData): boolean => {
         return (
+            formData.label.trim() === '' &&
             formData.email.trim() === '' &&
             formData.name.trim() === ''
         )
@@ -382,16 +388,29 @@ export default function MemberPage() {
                             </label>
                         </div>
                     </div>
-                    <FormField label="Nome">
-                        <input
-                            id="name"
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            disabled={submitting}
-                        />
-                    </FormField>
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Nome">
+                            <input
+                                id="name"
+                                type="text"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                            />
+                        </FormField>
+                        <FormField label="Rótulo">
+                            <input
+                                id="label"
+                                type="text"
+                                value={formData.label}
+                                onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                disabled={submitting}
+                                placeholder="Identificador opcional"
+                            />
+                        </FormField>
+                    </FormFieldGrid>
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
                         <FormField label="Função" required>
                             <select

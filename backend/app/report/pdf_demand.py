@@ -166,7 +166,7 @@ def demands_to_day_schedules(
             select(Member).where(Member.tenant_id == tenant_id, Member.sequence > 0).order_by(Member.sequence)
         ).all():
             pros_by_sequence.append(m.id)
-            member_dict[m.id] = (m.name or "").strip() or f"Member {m.id}"
+            member_dict[m.id] = (m.label or m.name or "").strip() or f"Member {m.id}"
             member_sequence[m.id] = getattr(m, "sequence", 0) or 0
             member_vacation[m.id] = getattr(m, "vacation", None) or []
         base_shift = 0
@@ -249,7 +249,7 @@ def demands_to_day_schedules(
     hospital_color_by_id = {}
     if hospital_ids:
         for h in session.exec(select(Hospital).where(Hospital.id.in_(hospital_ids))).all():
-            hospital_dict[h.id] = h.name or f"Hospital {h.id}"
+            hospital_dict[h.id] = h.label or h.name or f"Hospital {h.id}"
             hospital_color_by_id[h.id] = h.color if getattr(h, "color", None) else None
 
     schedules = []

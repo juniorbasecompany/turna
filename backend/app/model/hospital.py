@@ -11,6 +11,8 @@ class Hospital(BaseModel, table=True):
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True, nullable=False)
     name: str = Field(nullable=False)
+    # Rótulo opcional; sem duplicação dentro do tenant quando preenchido
+    label: str | None = Field(default=None, nullable=True, index=True)
     prompt: str | None = Field(default=None, nullable=True)
     color: str | None = Field(default=None, nullable=True)
 

@@ -217,7 +217,7 @@ def _load_pros_from_member_table(
     pros: list[dict] = []
     for m in rows:
         pro_id = str(m.id)
-        name = (m.name or pro_id).strip()
+        name = (m.label or m.name or pro_id).strip()
 
         # Converter vacation: mesmo dia -> blocos horários; vários dias -> vacation_days
         if period_start_date is not None:

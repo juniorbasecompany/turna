@@ -12,7 +12,7 @@ export interface AuthResponse {
 export interface TenantOption {
     tenant_id: number
     name: string
-    slug: string
+    label: string | null  // Rótulo opcional
     role: string
 }
 
@@ -20,7 +20,7 @@ export interface InviteOption {
     member_id: number
     tenant_id: number
     name: string
-    slug: string
+    label: string | null  // Rótulo opcional
     role: string
     status: string
 }
@@ -67,7 +67,7 @@ export interface AccountListResponse {
 export interface TenantResponse {
     id: number
     name: string
-    slug: string
+    label: string | null  // Rótulo opcional
     timezone: string
     locale: string
     currency: string
@@ -82,7 +82,7 @@ export interface TenantListResponse {
 
 export interface TenantCreateRequest {
     name: string
-    slug: string
+    label?: string | null  // Rótulo opcional
     timezone?: string
     locale?: string
     currency?: string
@@ -90,7 +90,7 @@ export interface TenantCreateRequest {
 
 export interface TenantUpdateRequest {
     name?: string
-    slug?: string
+    label?: string | null  // Rótulo opcional
     timezone?: string
     locale?: string
     currency?: string
@@ -226,7 +226,7 @@ export interface GoogleSelectTenantRequest {
 
 export interface TenantCreateRequest {
     name: string
-    slug: string
+    label?: string | null  // Rótulo opcional
     timezone?: string
     locale?: string
     currency?: string
@@ -236,6 +236,7 @@ export interface HospitalResponse {
     id: number
     tenant_id: number
     name: string
+    label: string | null  // Rótulo opcional
     prompt: string | null
     color: string | null
     created_at: string
@@ -249,12 +250,14 @@ export interface HospitalListResponse {
 
 export interface HospitalCreateRequest {
     name: string
+    label?: string | null  // Rótulo opcional
     prompt?: string | null
     color?: string | null
 }
 
 export interface HospitalUpdateRequest {
     name?: string
+    label?: string | null  // Rótulo opcional
     prompt?: string
     color?: string | null
 }
@@ -321,6 +324,7 @@ export interface MemberResponse {
     account_email: string | null  // Privado, apenas para compatibilidade/auditoria
     member_email: string | null  // Email público na clínica (pode ser editado)
     member_name: string | null  // Nome público na clínica (pode ser editado)
+    member_label: string | null  // Rótulo opcional
     role: string
     status: string
     attribute: Record<string, unknown>
@@ -340,6 +344,7 @@ export interface MemberUpdateRequest {
     role?: string | null
     status?: string | null
     name?: string | null
+    label?: string | null  // Rótulo opcional
     email?: string | null  // Email público editável
     attribute?: Record<string, unknown> | null
     can_peds?: boolean | null
@@ -350,6 +355,7 @@ export interface MemberUpdateRequest {
 export interface MemberCreateRequest {
     email?: string | null  // Email público (obrigatório se account_id não for fornecido)
     name?: string | null  // Nome público
+    label?: string | null  // Rótulo opcional
     role: string
     status: string
     account_id?: number | null  // Opcional (não usado no painel)

@@ -28,14 +28,14 @@ def render_tenant_list_pdf(
 
 
 def render_member_list_pdf(
-    rows: list[tuple[str, str, str, str, str]],
+    rows: list[tuple[str, str, str, str, str, str]],
     filters: list[tuple[str, str]] | None = None,
     header_title: str | None = None,
 ) -> bytes:
-    """Gera PDF com lista de associados: ordem, nome, email, situação, pode pediatria."""
-    headers = ["", "Nome", "E-mail", "Situação", "Pode pediatria?"]
-    data = [[str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4])] for r in rows]
-    col_widths = [0.08, 0.22, 0.40, 0.15, 0.15]  # ordem, nome, email (mais espaço), situação, pediatria
+    """Gera PDF com lista de associados: ordem, rótulo, nome, email, situação, pode pediatria."""
+    headers = ["", "Rótulo", "Nome", "E-mail", "Situação", "Pode pediatria?"]
+    data = [[str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5])] for r in rows]
+    col_widths = [0.06, 0.12, 0.20, 0.32, 0.15, 0.15]  # ordem, rótulo, nome, email, situação, pediatria
     return build_report_pdf(
         report_title="Relatório de associados",
         filters=filters,
@@ -47,13 +47,13 @@ def render_member_list_pdf(
 
 
 def render_hospital_list_pdf(
-    rows: list[tuple[str]],
+    rows: list[tuple[str, str]],
     filters: list[tuple[str, str]] | None = None,
     header_title: str | None = None,
 ) -> bytes:
-    """Gera PDF com lista de hospitais: nome."""
-    headers = ["Nome"]
-    data = [[str(r[0])] for r in rows]
+    """Gera PDF com lista de hospitais: nome e rótulo."""
+    headers = ["Nome", "Rótulo"]
+    data = [[str(r[0]), str(r[1])] for r in rows]
     return build_report_pdf(
         report_title="Relatório de hospitais",
         filters=filters,

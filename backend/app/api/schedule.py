@@ -208,7 +208,7 @@ def _build_schedule_response(demand: Demand, session: Session) -> ScheduleRespon
         tenant_id=demand.tenant_id,
         demand_id=demand.id,
         hospital_id=demand.hospital_id,
-        hospital_name=hospital.name,
+        hospital_name=hospital.label or hospital.name,
         hospital_color=hospital.color,
         name=demand.schedule_name,
         period_start_at=demand.start_time,
@@ -896,7 +896,7 @@ async def generate_schedule_from_demands(
     # Gerar nome automático se não informado
     schedule_name = body.name
     if not schedule_name:
-        hospital_name = hospital.name if hospital else "Geral"
+        hospital_name = (hospital.label or hospital.name) if hospital else "Geral"
         start_local = body.period_start_at.astimezone(tenant_tz)
         end_local = body.period_end_at.astimezone(tenant_tz)
         schedule_name = f"{hospital_name} - {start_local.strftime('%d/%m/%Y')} a {end_local.strftime('%d/%m/%Y')}"

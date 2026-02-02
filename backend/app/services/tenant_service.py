@@ -13,12 +13,12 @@ def create_tenant(
     session: Session,
     *,
     name: str,
-    slug: str,
+    label: str | None = None,
     timezone: str = "America/Sao_Paulo",
     locale: str = "pt-BR",
     currency: str = "BRL",
 ) -> Tenant:
-    tenant = Tenant(name=name, slug=slug, timezone=timezone, locale=locale, currency=currency)
+    tenant = Tenant(name=name, label=label, timezone=timezone, locale=locale, currency=currency)
     session.add(tenant)
     session.commit()
     session.refresh(tenant)

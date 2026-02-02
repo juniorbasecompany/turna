@@ -8,7 +8,7 @@ class Tenant(BaseModel, table=True):
     __tablename__ = "tenant"
 
     name: str = Field(index=True)
-    slug: str = Field(unique=True, index=True)
+    label: str | None = Field(default=None, nullable=True, index=True)
     timezone: str = Field(default="America/Sao_Paulo")
     locale: str = Field(default="pt-BR")
     currency: str = Field(default="BRL")

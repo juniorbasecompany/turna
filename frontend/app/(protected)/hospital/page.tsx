@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react'
 
 type HospitalFormData = {
     name: string
+    label: string  // Rótulo opcional
     prompt: string
     color: string | null
 }
@@ -45,7 +46,7 @@ export default function HospitalPage() {
         return [{ label: FILTER_NAME_LABEL, value: filterName.trim() }]
     }, [filterName])
 
-    const initialFormData: HospitalFormData = { name: '', prompt: '', color: null }
+    const initialFormData: HospitalFormData = { name: '', label: '', prompt: '', color: null }
     const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/hospital/report',
         params: listAndReportParams,
@@ -84,20 +85,23 @@ export default function HospitalPage() {
         entityName: 'hospital',
         initialFormData,
         isEmptyCheck: (data) => {
-            return data.name.trim() === '' && (data.prompt || '').trim() === '' && data.color === null
+            return data.name.trim() === '' && data.label.trim() === '' && (data.prompt || '').trim() === '' && data.color === null
         },
         mapEntityToFormData: (hospital) => ({
             name: hospital.name,
+            label: hospital.label || '',  // Rótulo opcional
             prompt: hospital.prompt || '',
             color: hospital.color || null,
         }),
         mapFormDataToCreateRequest: (formData) => ({
             name: formData.name.trim(),
+            label: formData.label.trim() || null,  // Rótulo opcional
             prompt: formData.prompt ? formData.prompt.trim() || undefined : undefined,
             color: formData.color || undefined,
         }),
         mapFormDataToUpdateRequest: (formData) => ({
             name: formData.name.trim(),
+            label: formData.label.trim() || null,  // Rótulo opcional
             prompt: formData.prompt ? formData.prompt.trim() : undefined,
             color: formData.color || null,
         }),
@@ -117,7 +121,7 @@ export default function HospitalPage() {
             {/* Área de edição */}
             <EditForm title="Hospital" isEditing={isEditing}>
                 <div className="space-y-4">
-                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                    <FormFieldGrid cols={1} smCols={3} gap={4}>
                         <FormInput
                             label="Nome"
                             value={formData.name}
@@ -125,6 +129,14 @@ export default function HospitalPage() {
                             id="name"
                             required
                             disabled={submitting}
+                        />
+                        <FormInput
+                            label="Rótulo"
+                            value={formData.label}
+                            onChange={(value) => setFormData({ ...formData, label: value })}
+                            id="label"
+                            disabled={submitting}
+                            helperText="Identificador opcional"
                         />
                         <FormField label="Cor">
                             <ColorPicker
