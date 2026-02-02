@@ -219,7 +219,9 @@ def demands_to_day_schedules(
                         )
                     )
                 events.sort(key=lambda e: (e.interval.start_min, e.interval.end_min))
-                name = "Sem alocação" if mid is None else member_dict.get(mid, f"Member {mid}")
+                member_name = "Sem alocação" if mid is None else member_dict.get(mid, f"Member {mid}")
+                date_prefix = day_date.strftime("%d/%m")
+                name = f"{date_prefix} - {member_name}"
                 vacs = _vacation_intervals_for_day(member_vacation.get(mid, []), day_date, tz) if mid else []
                 rows.append(Row(name=name, events=events, vacations=vacs))
             if not rows:

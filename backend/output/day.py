@@ -513,22 +513,9 @@ def _render_pdf_to_canvas(
         c.setFillColor(bar_blue)
         c.rect(margin_x, y_grid_top, page_w - 2 * margin_x, header_h, fill=1, stroke=0)
 
-        # Título do dia e marcas de hora em branco
+        # Marcas de hora em branco (sem data à esquerda)
         c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", title_font_size)
-        title_pad_x = 8
-        raw_title = (schedule.title or "").strip()
-        if " - " in raw_title:
-            date_text = raw_title.split(" - ", 1)[1].strip()
-        else:
-            date_text = raw_title
-        max_title_width = name_col_w - (2 * title_pad_x)
-        title_text = _truncate_to_width(
-            pdfmetrics, date_text, "Helvetica-Bold", title_font_size, max_title_width
-        )
-        title_x = margin_x + title_pad_x
         baseline_y = y_grid_top + (header_h - hour_font_size) / 2
-        c.drawString(title_x, baseline_y, title_text)
 
         # Linha base do cabeçalho da grade
         c.setStrokeColor(colors.lightgrey)
