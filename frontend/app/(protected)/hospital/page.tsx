@@ -101,7 +101,7 @@ export default function HospitalPage() {
         }),
         mapFormDataToUpdateRequest: (formData) => ({
             name: formData.name.trim(),
-            label: formData.label.trim() || null,  // Rótulo opcional
+            label: formData.label.trim() || '',  // Enviar '' para limpar no banco; null seria ignorado
             prompt: formData.prompt ? formData.prompt.trim() : undefined,
             color: formData.color || null,
         }),

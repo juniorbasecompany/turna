@@ -133,7 +133,7 @@ export default function MemberPage() {
             role: formData.role,
             status: formData.status,
             name: formData.name.trim() || null,
-            label: formData.label.trim() || null,  // Rótulo opcional
+            label: formData.label.trim() || '',  // Enviar '' para limpar no banco; null seria ignorado
             email: formData.email.trim() || null,
             attribute: attributeValue,
             can_peds: formData.can_peds,

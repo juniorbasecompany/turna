@@ -110,7 +110,7 @@ export default function TenantPage() {
         }),
         mapFormDataToUpdateRequest: (formData) => ({
             name: formData.name.trim(),
-            label: formData.label.trim() || null,  // Enviar null se vazio
+            label: formData.label.trim() || '',  // Enviar '' para limpar no banco; null seria ignorado
             timezone: formData.timezone,
             locale: formData.locale,
             currency: formData.currency,
