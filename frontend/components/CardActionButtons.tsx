@@ -66,7 +66,10 @@ export function CardActionButtons({
             {/* 2. Ícone para editar (oculto se showEdit for false) */}
             {showEdit && (
                 <button
-                    onClick={onEdit}
+                    onClick={() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                        onEdit()
+                    }}
                     className="shrink-0 px-3 py-1.5 rounded-md transition-all duration-200 cursor-pointer text-blue-600"
                     title={editTitle || 'Editar'}
                 >
