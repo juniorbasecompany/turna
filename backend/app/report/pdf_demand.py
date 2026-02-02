@@ -157,18 +157,23 @@ def demands_to_day_schedules(
             mid = getattr(d, "member_id", None)
             by_day_member[(day_key, mid)].append(d)
 
-        # Ordem rotacionada (como turna/solver): carregar todos members com sequence > 0
+        # Membros obtidos a partir das demandas filtradas (sem filtrar por sequence)
+        member_ids_from_demands = {mid for (_, mid) in by_day_member if mid is not None}
         pros_by_sequence: list[int] = []
         member_dict: dict[int, str] = {}
         member_sequence: dict[int, int] = {}
         member_vacation: dict[int, list] = {}
-        for m in session.exec(
-            select(Member).where(Member.tenant_id == tenant_id, Member.sequence > 0).order_by(Member.sequence)
-        ).all():
-            pros_by_sequence.append(m.id)
-            member_dict[m.id] = (m.label or m.name or "").strip() or f"Member {m.id}"
-            member_sequence[m.id] = getattr(m, "sequence", 0) or 0
-            member_vacation[m.id] = getattr(m, "vacation", None) or []
+        if member_ids_from_demands:
+            member_query = (
+                select(Member)
+                .where(Member.tenant_id == tenant_id, Member.id.in_(member_ids_from_demands))
+                .order_by(Member.sequence, Member.name.asc().nulls_last())
+            )
+            for m in session.exec(member_query).all():
+                pros_by_sequence.append(m.id)
+                member_dict[m.id] = (m.label or m.name or "").strip() or f"Member {m.id}"
+                member_sequence[m.id] = getattr(m, "sequence", 0) or 0
+                member_vacation[m.id] = getattr(m, "vacation", None) or []
         base_shift = 0
 
         hospital_ids_member = {d.hospital_id for d in demands if getattr(d, "hospital_id", None)}
