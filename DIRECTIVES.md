@@ -80,7 +80,7 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 ## Fluxo de autenticação e seleção de clínica
 
 - **Navegação**: ACTIVE == 1 e PENDING == 0 → dashboard; ACTIVE == 0 e PENDING == 0 → criação automática de clínica e dashboard; caso contrário → tela de seleção.
-- **Criação automática de clínica**: quando o usuário não tem tenant, o sistema cria Tenant (name "Clínica", slug gerado, timezone America/Sao_Paulo, locale pt-BR, currency BRL) e member ADMIN ACTIVE. Endpoint: `POST /auth/google/create-tenant`.
+- **Criação automática de clínica**: quando o usuário não tem tenant, o sistema cria Tenant (name "Clínica", timezone America/Sao_Paulo, locale pt-BR, currency BRL) e member ADMIN ACTIVE. Endpoint: `POST /auth/google/create-tenant`.
 - **Tela de seleção** (`/select-tenant`): lista clínicas ACTIVE e convites PENDING; botão "Criar clínica" apenas se ACTIVE == 0.
 - Endpoints de auth: `POST /auth/google`, `POST /auth/google/register`, `POST /auth/google/select-tenant`, `POST /auth/google/create-tenant`, `POST /auth/switch-tenant`, `GET /auth/tenant/list`, `GET /auth/invites`, `POST /auth/invites/{id}/accept`, `POST /auth/invites/{id}/reject`, `POST /auth/dev/token` (dev).
 
