@@ -382,7 +382,8 @@ def render_multi_day_pdf_body_bytes(
 ) -> bytes:
     """
     Renderiza apenas o corpo (grades de dias) no PDF, sem cabeçalho (Turna, título, filtros).
-    Uma página landscape por dia; quebra de página dentro do mesmo dia quando não cabe.
+    Dias em sequência: primeiro dia, logo abaixo o segundo, etc. Quebra de página só quando
+    não cabe mais (mesmo dia ou início do próximo).
     Usado junto com capa Platypus (build_report_cover_only + merge_pdf_cover_with_body_first_page).
     first_page_content_top_y: se informado, reserva o topo da primeira página para a capa
     (corpo começa logo abaixo na mesma página).
@@ -400,10 +401,10 @@ def render_multi_day_pdf_body_bytes(
     buf = io.BytesIO()
     c = Canvas(buf, pagesize=(page_w, page_h))
 
+    current_y: float | None = None
     for i, schedule in enumerate(schedules):
-        # Só a primeira página do corpo usa content_top_y (espaço reservado para a capa).
         content_top_y = first_page_content_top_y if i == 0 else None
-        _render_pdf_to_canvas(
+        current_y = _render_pdf_to_canvas(
             c,
             schedule,
             page_w=page_w,
@@ -411,9 +412,8 @@ def render_multi_day_pdf_body_bytes(
             colors=colors,
             pdfmetrics=pdfmetrics,
             content_top_y=content_top_y,
+            start_y=current_y,
         )
-        if i != len(schedules) - 1:
-            c.showPage()
 
     c.save()
     return buf.getvalue()
@@ -467,7 +467,12 @@ def _render_pdf_to_canvas(
     colors,
     pdfmetrics,
     content_top_y: float | None = None,
-) -> None:
+    start_y: float | None = None,
+) -> float:
+    """
+    Desenha um dia (grade) no canvas. Retorna o y após a última linha (para o próximo dia continuar abaixo).
+    start_y: quando informado (dia seguinte), desenha a partir dessa altura; se não couber o cabeçalho, faz showPage() e usa o topo da nova página.
+    """
     from reportlab.lib.units import cm
 
     margin_x = 1 * cm
@@ -493,11 +498,19 @@ def _render_pdf_to_canvas(
     day_end = schedule.day_end_min
     day_span = max(1, day_end - day_start)
 
-    # Topo da área de desenho: abaixo do header do relatório (1ª página) ou topo da página.
-    # Após showPage() (continuação do mesmo dia), usar topo completo da nova página.
-    current_top_y: list[float] = [
-        content_top_y if content_top_y is not None else page_h - margin_top
-    ]
+    # Topo da área de desenho: start_y (continuação do dia anterior), capa (1ª página) ou topo da página.
+    initial_top: float
+    new_page_at_start = False  # True se fizemos showPage() no início (nova página → desenhar cabeçalho)
+    if start_y is not None:
+        if start_y - header_h < margin_bottom + 6:
+            c.showPage()
+            initial_top = page_h - margin_top
+            new_page_at_start = True
+        else:
+            initial_top = start_y
+    else:
+        initial_top = content_top_y if content_top_y is not None else page_h - margin_top
+    current_top_y: list[float] = [initial_top]
 
     def x_at(minute: int) -> float:
         minute = max(day_start, min(day_end, minute))
@@ -642,8 +655,12 @@ def _render_pdf_to_canvas(
                 c.setFont("Helvetica", end_size)
                 c.drawRightString(content_right, y4, end_text)
 
-    # Paginação simples: ao mudar de página, próximo cabeçalho usa topo completo
-    y = draw_header()
+    # Cabeçalho com horas: só no início do primeiro dia e no início de cada nova página (após showPage).
+    # Se continuamos na mesma página (start_y e não fizemos showPage()), não desenhar cabeçalho.
+    if start_y is None or new_page_at_start:
+        y = draw_header()
+    else:
+        y = initial_top
     idx = 1
     for row in schedule.rows:
         if y - row_h < margin_bottom + 6:
@@ -653,6 +670,7 @@ def _render_pdf_to_canvas(
         draw_row(y, idx, row)
         y -= row_h
         idx += 1
+    return y
 
 
 def _write_example(path: Path) -> None:
