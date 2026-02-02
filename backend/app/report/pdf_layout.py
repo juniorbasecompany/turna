@@ -101,7 +101,10 @@ def _ensure_reportlab():
 
 
 REPORT_HEADER_TITLE = "Turna"
-REPORT_BAR_BLUE = "#2563EB"
+# Traço à esquerda do nome do tenant (barra azul no cabeçalho)
+REPORT_HEADER_BAR_BLUE = "#2563EB"
+# Cor do cabeçalho das tabelas (fundo cinza, letra branca negrito)
+REPORT_HEADER_GRAY = "#AAAAAA"
 
 
 def _normalize_filters(filters: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
@@ -146,7 +149,7 @@ def _build_header_elements(doc, styles, header_title: str | None = None):
     )
     header_table.setStyle(
         TableStyle([
-            ("LINEBELOW", (0, 0), (0, 0), 2, colors.HexColor(REPORT_BAR_BLUE)),
+            ("LINEBELOW", (0, 0), (0, 0), 2, colors.HexColor(REPORT_HEADER_BAR_BLUE)),
             ("ALIGN", (1, 0), (1, 0), "RIGHT"),
             ("RIGHTPADDING", (1, 0), (1, 0), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -378,7 +381,7 @@ def _build_table_elements(
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BAR_BLUE)),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_HEADER_GRAY)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor("#111827")),

@@ -50,6 +50,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# Cor do cabeçalho (mesma em todos os relatórios: fundo cinza, letra branca negrito)
+try:
+    from app.report.pdf_layout import REPORT_HEADER_GRAY
+except ImportError:
+    REPORT_HEADER_GRAY = "#4B5563"  # fallback quando executado standalone (py -m output.day)
+
 
 def _require_reportlab():
     try:
@@ -373,9 +379,6 @@ def render_pdf_bytes(schedule: DaySchedule) -> bytes:
     return buf.getvalue()
 
 
-# Cor da barra do cabeçalho da grade (título do dia + horários)
-_REPORT_BAR_BLUE = "#2563EB"
-
 def render_multi_day_pdf_body_bytes(
     schedules: list[DaySchedule],
     first_page_content_top_y: float | None = None,
@@ -520,13 +523,13 @@ def _render_pdf_to_canvas(
     def draw_header() -> float:
         y_top = current_top_y[0]
         y_grid_top = y_top - header_h
-        bar_blue = colors.HexColor(_REPORT_BAR_BLUE)
+        header_bg = colors.HexColor(REPORT_HEADER_GRAY)
 
-        # Faixa azul do cabeçalho (mesmo padrão do cabeçalho da tabela nos relatórios)
-        c.setFillColor(bar_blue)
+        # Faixa cinza do cabeçalho; letra branca negrito
+        c.setFillColor(header_bg)
         c.rect(margin_x, y_grid_top, page_w - 2 * margin_x, header_h, fill=1, stroke=0)
 
-        # Marcas de hora em branco (sem data à esquerda)
+        # Marcas de hora em branco negrito
         c.setFillColor(colors.white)
         baseline_y = y_grid_top + (header_h - hour_font_size) / 2
 
@@ -538,8 +541,8 @@ def _render_pdf_to_canvas(
         # Coluna nomes (separador)
         c.line(grid_x0, y_grid_top, grid_x0, margin_bottom)
 
-        # Marcas de hora; linhas verticais pontilhadas
-        c.setFont("Helvetica", hour_font_size)
+        # Marcas de hora; linhas verticais pontilhadas; texto branco negrito
+        c.setFont("Helvetica-Bold", hour_font_size)
         c.setFillColor(colors.white)
         start_hour = day_start // 60
         end_hour = min(23, int(math.ceil(day_end / 60)))
