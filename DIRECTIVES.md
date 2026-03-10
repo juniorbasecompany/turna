@@ -38,11 +38,13 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 ## Modelos e multi-tenant
 
 ### Account
+
 - Pessoa física (login Google), email único global, sem `tenant_id`.
 - `Account.name` é privado: apenas o próprio usuário vê; vem do Google OAuth.
 - Criação: no primeiro login/registro via Google OAuth ou ao aceitar convite.
 
 ### Member
+
 - Vínculo Account↔Tenant com role e status. Um Account pode ter múltiplos members.
 - Convites pendentes: `account_id` pode ser NULL; o campo `email` identifica o convite.
 - `member.email`: público na clínica; pode ser editado pelo admin. Sincroniza uma vez com `account.email` se vazio ao aceitar/rejeitar convite.
@@ -50,12 +52,14 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 - Painel de member: não exibe dados do Account; cria/edita member com `email` e `name` públicos.
 
 ### Tenant e acesso
+
 - Role e status vêm do member, não do Account.
 - Todas as queries devem filtrar por `tenant_id` do JWT (via `get_current_member()`).
 - Usar `get_current_member()` para validar acesso ao tenant, não `get_current_account()` diretamente.
 - JWT contém apenas `sub` (account_id), `tenant_id`, `iat`, `exp`, `iss`. Email, name e role vêm do banco via endpoints.
 
 ### Demand com estado de escala
+
 - Uma única tabela Demand: demanda cirúrgica e estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at, etc.).
 - Demandas só extraídas têm campos de escala opcionais nulos ou default.
 - O worker atualiza cada Demand com o resultado da alocação (schedule_status, schedule_result_data, generated_at, job_id).
@@ -64,6 +68,7 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 - Profissionais para escala: carregados de `member` do tenant (`member.attribute`); members ACTIVE; attribute com sequence, can_peds, vacation. Ordenação por sequence.
 
 ### Separação Account (privado) vs Member (público)
+
 - **Account**: dados de autenticação; não expor nem permitir edição por admins do tenant.
 - **Member**: dados da clínica; visíveis e editáveis pelo admin.
 - `GET /me`: retorna account_name (privado) e member_name (público).
@@ -95,7 +100,7 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 - Não usar `api.get()` nem hooks de autenticação para dados de página.
 - Estrutura: try externo, `protectedFetch()`, catch com set de erro para exibição no ActionBar. Nunca redirecionar para `/login` em erro de API (evitar logout indevido em F5).
 - Erros 401: mensagem padronizada "Sessão expirada. Por favor, faça login novamente."; erros exibidos no ActionBar.
-- Rotas `/login` e `/select-tenant` não redirecionam em 401; rotas `/api/*` idem; demais rotas (exceto `/`) são tratadas como protegidas e não redirecionam. Redirecionar para `/login` somente em 401 real (cookie inválido).
+- Rotas `/login` e `/select-tenant` não redirecionam em 401; rotas `/api/`* idem; demais rotas (exceto `/`) são tratadas como protegidas e não redirecionam. Redirecionar para `/login` somente em 401 real (cookie inválido).
 - Ao recarregar a página: sempre tentar carregar dados; em falha, mostrar mensagem de erro; não redirecionar para `/login` exceto em 401 real.
 
 ## Execução (dev)
@@ -123,3 +128,4 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 ## Consulta à web
 
 - Priorizar fontes atuais e verificáveis; se não houver, sinalizar que a informação pode não ser confiável.
+
