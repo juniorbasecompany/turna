@@ -6,6 +6,7 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterPanel, FilterSelect } from '@/components/filter'
+import { FormCheckbox } from '@/components/FormCheckbox'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { JsonEditor } from '@/components/JsonEditor'
@@ -577,6 +578,7 @@ export default function FilesPage() {
     const processingRef = useRef(false)
     const processedFilesRef = useRef<Set<string>>(new Set())
     const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
+    const [readContentOnUpload, setReadContentOnUpload] = useState(true)
     const [reading, setReading] = useState(false)
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [uploading, setUploading] = useState(false)
@@ -985,6 +987,24 @@ export default function FilesPage() {
                 body: formData,
             })
 
+            if (readContentOnUpload) {
+                try {
+                    await protectedFetch<JobExtractResponse>('/api/job/extract', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ file_id: uploadData.file_id }),
+                    })
+                } catch (err) {
+                    setBottomBarMessage(
+                        err instanceof Error
+                            ? `Arquivo enviado, mas não foi possível iniciar a leitura: ${err.message}`
+                            : 'Arquivo enviado, mas não foi possível iniciar a leitura'
+                    )
+                }
+            }
+
             // Remover arquivo pendente após upload bem-sucedido
             setPendingFiles((prev) => {
                 const newPending = [...prev]
@@ -1004,7 +1024,7 @@ export default function FilesPage() {
                 return newPending
             })
         }
-    }, [filterHospitalId])
+    }, [filterHospitalId, readContentOnUpload])
 
     // Função para adicionar arquivos à lista (usada tanto pelo input quanto pelo drag&drop)
     const addFilesToList = useCallback((files: File[]) => {
@@ -1498,6 +1518,7 @@ export default function FilesPage() {
                             label="Adicionar um ou mais arquivos"
                             subtitle="Clique ou arraste e solte"
                             onClick={handleUploadCardClick}
+                            clickScope="inner"
                             isDragging={isDragging}
                             showFlash={uploadCardFlash}
                             flashMessage="Selecione o hospital"
@@ -1505,6 +1526,15 @@ export default function FilesPage() {
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
+                            bottomContent={
+                                <FormCheckbox
+                                    id="read_content_on_upload"
+                                    label="Ler o conteúdo"
+                                    checked={readContentOnUpload}
+                                    onChange={setReadContentOnUpload}
+                                    disabled={uploading}
+                                />
+                            }
                             customIcon={
                                 <svg
                                     className="w-full h-full"

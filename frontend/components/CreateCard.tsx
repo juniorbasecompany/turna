@@ -29,6 +29,10 @@ interface CreateCardProps {
     onDrop?: (e: React.DragEvent) => void
     /** Classes CSS customizadas para o container interno */
     innerContainerClassName?: string
+    /** Define onde o clique deve ser capturado */
+    clickScope?: 'card' | 'inner'
+    /** Conteúdo extra exibido fora do pontilhado */
+    bottomContent?: ReactNode
 }
 
 /**
@@ -80,6 +84,8 @@ export function CreateCard({
     onDragLeave,
     onDrop,
     innerContainerClassName,
+    clickScope = 'card',
+    bottomContent,
 }: CreateCardProps) {
     // Determinar classes CSS baseadas no estado
     const getBorderClasses = () => {
@@ -117,17 +123,23 @@ export function CreateCard({
         </svg>
     )
 
+    const isCardClickable = !disabled && clickScope === 'card'
+    const isInnerClickable = !disabled && clickScope === 'inner'
+
     return (
         <div
-            onClick={disabled ? undefined : onClick}
+            onClick={isCardClickable ? onClick : undefined}
             onDragEnter={onDragEnter}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
-            className={`${getCardContainerClasses(false)} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${onDragEnter ? 'overflow-hidden' : ''}`}
+            className={`${getCardContainerClasses(false)} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${isCardClickable ? 'cursor-pointer' : ''} ${onDragEnter ? 'overflow-hidden' : ''}`}
         >
             <div className="mb-3">
-                <div className={`h-40 sm:h-48 rounded-lg flex flex-col border-2 border-dashed ${getBorderClasses()} ${innerContainerClassName || ''}`}>
+                <div
+                    onClick={isInnerClickable ? onClick : undefined}
+                    className={`h-40 sm:h-48 rounded-lg flex flex-col border-2 border-dashed ${getBorderClasses()} ${isInnerClickable ? 'cursor-pointer' : ''} ${innerContainerClassName || ''}`}
+                >
                     {/* Conteúdo principal */}
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4 min-h-0">
                         <div className={`w-12 h-12 sm:w-16 sm:h-16 mb-2 shrink-0 ${getIconColor()}`}>
@@ -147,6 +159,11 @@ export function CreateCard({
             {subtitle && !isDragging && (
                 <div className="flex items-center justify-center py-2">
                     <span className="text-xs text-slate-400">{subtitle}</span>
+                </div>
+            )}
+            {bottomContent && !isDragging && (
+                <div className="flex items-center justify-center px-2 pb-1">
+                    {bottomContent}
                 </div>
             )}
         </div>
