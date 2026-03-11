@@ -7,7 +7,7 @@ import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
 import type { FilterOption } from '@/components/filter'
-import { FilterButtons, FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
+import { FilterButtons, FilterDateRange, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormInput, FormSelect } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -24,6 +24,8 @@ import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from 
 import {
     HospitalListResponse,
     HospitalResponse,
+    MemberListResponse,
+    MemberResponse,
     ScheduleCreateRequest,
     ScheduleGenerateFromDemandsRequest,
     ScheduleGenerateFromDemandsResponse,
@@ -52,9 +54,12 @@ export default function SchedulePage() {
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
 
+    // Estados auxiliares - Associados (para filtro)
+    const [memberList, setMemberList] = useState<MemberResponse[]>([])
+    const [loadingMembers, setLoadingMembers] = useState(true)
+    const [filterMemberId, setFilterMemberId] = useState<number | null>(null)
 
     // Estados auxiliares
-    const [filterName, setFilterName] = useState('')
     const [generating, setGenerating] = useState(false)
     const [filterStartFlash, setFilterStartFlash] = useState(false)
     const [filterEndFlash, setFilterEndFlash] = useState(false)
@@ -68,8 +73,12 @@ export default function SchedulePage() {
     })
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
-    // "Desde" inicia com a data/hora atual, "Até" inicia vazio
-    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
+    // "Desde" inicia no dia atual às 00:00, "Até" inicia vazio
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return today
+    })
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Configuração inicial
@@ -153,7 +162,7 @@ export default function SchedulePage() {
         )
     }
 
-    const FILTER_NAME_LABEL = 'Associado'
+    const FILTER_MEMBER_LABEL = 'Associado'
     const FILTER_START_LABEL = 'Desde'
     const FILTER_END_LABEL = 'Até'
     const FILTER_STATUS_LABEL = 'Situação'
@@ -165,10 +174,10 @@ export default function SchedulePage() {
             filter_end_time: filterEndDate ? filterEndDate.toISOString() : null,
             ...statusFilters.toListParam('status_list'),
         }
-        if (filterName.trim()) params.name = filterName.trim()
+        if (filterMemberId != null) params.member_id = filterMemberId
         if (filterHospitalId != null) params.hospital_id = filterHospitalId
         return params
-    }, [filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, statusFilters.toListParam, filterName, filterHospitalId, settings])
+    }, [filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, statusFilters.toListParam, filterMemberId, filterHospitalId, settings])
 
     // reportFilters: definido depois de getStatusLabel (usado no useMemo)
     const reportFiltersForSchedule = useMemo((): { label: string; value: string }[] => {
@@ -181,8 +190,14 @@ export default function SchedulePage() {
             }
         }
         const list: { label: string; value: string }[] = []
-        if (filterName.trim()) {
-            list.push({ label: FILTER_NAME_LABEL, value: filterName.trim() })
+        if (filterMemberId != null) {
+            const member = memberList.find((item) => item.id === filterMemberId)
+            if (member) {
+                list.push({
+                    label: FILTER_MEMBER_LABEL,
+                    value: member.member_label || member.member_name || member.member_email || `Associado ${member.id}`,
+                })
+            }
         }
         if (filterStartDate) {
             list.push({
@@ -209,7 +224,7 @@ export default function SchedulePage() {
             }
         }
         return list
-    }, [filterName, filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, filterHospitalId, hospitals])
+    }, [filterMemberId, memberList, filterStartDate, filterEndDate, statusFilters.selectedValues, statusFilters.isFilterActive, filterHospitalId, hospitals])
 
     // useEntityPage
     const {
@@ -268,6 +283,21 @@ export default function SchedulePage() {
             }
         }
         loadHospitals()
+    }, [])
+
+    // Carregar associados para o filtro
+    useEffect(() => {
+        const loadMembers = async () => {
+            try {
+                const response = await protectedFetch<MemberListResponse>('/api/member/list?limit=100')
+                setMemberList(response.items || [])
+            } catch (err) {
+                console.error('Erro ao carregar associados:', err)
+            } finally {
+                setLoadingMembers(false)
+            }
+        }
+        loadMembers()
     }, [])
 
 
@@ -654,10 +684,15 @@ export default function SchedulePage() {
                                     options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
                                     disabled={loadingHospitals}
                                 />
-                                <FilterInput
-                                    label={FILTER_NAME_LABEL}
-                                    value={filterName}
-                                    onChange={setFilterName}
+                                <FilterSelect
+                                    label={FILTER_MEMBER_LABEL}
+                                    value={filterMemberId}
+                                    onChange={setFilterMemberId}
+                                    options={memberList.map((member) => ({
+                                        value: member.id,
+                                        label: member.member_label || member.member_name || member.member_email || `Associado ${member.id}`,
+                                    }))}
+                                    disabled={loadingMembers}
                                 />
                             </FormFieldGrid>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>

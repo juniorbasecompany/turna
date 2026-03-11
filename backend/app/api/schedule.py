@@ -77,7 +77,7 @@ def _resolve_schedule_status_filters(
 SCHEDULE_REPORT_PARAM_LABELS = {
     "filter_start_time": "Desde",
     "filter_end_time": "Até",
-    "name": "Associado",
+    "member_id": "Associado",
     "status": "Status",
     "status_list": "Status",
     "hospital_id": "Hospital",
@@ -90,14 +90,14 @@ def _schedule_list_queries(
     status_values: list[ScheduleStatus] | None,
     filter_start_time: Optional[datetime],
     filter_end_time: Optional[datetime],
-    name: Optional[str],
+    member_id: Optional[int],
     hospital_id: Optional[int] = None,
 ):
     """
     Query e count_query para listagem/relatório de escalas (mesmo canal de dados).
     schedule_status considerado igual no painel (card) e no relatório (quadro); dia vem de demand.start_time.
     Filtros: demand.start_time >= filter_start_time, demand.end_time <= filter_end_time.
-    name: filtra por member.name (contém), via demand.member_id.
+    member_id: filtra por demand.member_id.
     """
     query = (
         select(Demand)
@@ -119,11 +119,9 @@ def _schedule_list_queries(
     if filter_end_time is not None:
         query = query.where(Demand.end_time <= filter_end_time)
         count_query = count_query.where(Demand.end_time <= filter_end_time)
-    if name and name.strip():
-        term = f"%{name.strip()}%"
-        member_subq = select(Member.id).where(Member.tenant_id == tenant_id, Member.name.ilike(term))
-        query = query.where(Demand.member_id.in_(member_subq))
-        count_query = count_query.where(Demand.member_id.in_(member_subq))
+    if member_id is not None:
+        query = query.where(Demand.member_id == member_id)
+        count_query = count_query.where(Demand.member_id == member_id)
     if hospital_id is not None:
         query = query.where(Demand.hospital_id == hospital_id)
         count_query = count_query.where(Demand.hospital_id == hospital_id)
@@ -594,7 +592,7 @@ def report_schedule_pdf(
     filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
     status: Optional[str] = Query(None, description="Filtrar por status (DRAFT, PUBLISHED, ARCHIVED)"),
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
-    name: Optional[str] = Query(None, description="Filtrar por nome do associado (contém)"),
+    member_id: Optional[int] = Query(None, description="Filtrar por associado (demand.member_id)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     filters: Optional[str] = Query(None, description="JSON: lista {label, value} do painel para o cabeçalho do PDF"),
     member: Member = Depends(get_current_member),
@@ -611,6 +609,10 @@ def report_schedule_pdf(
         hospital = session.get(Hospital, hospital_id)
         if not hospital or hospital.tenant_id != member.tenant_id:
             raise HTTPException(status_code=400, detail="hospital_id inválido ou não pertence ao tenant")
+    if member_id is not None:
+        filter_member = session.get(Member, member_id)
+        if not filter_member or filter_member.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=400, detail="member_id inválido ou não pertence ao tenant")
 
     try:
         status_values, _ = _resolve_schedule_status_filters(status, status_list)
@@ -620,7 +622,7 @@ def report_schedule_pdf(
             status_values=status_values,
             filter_start_time=filter_start_time,
             filter_end_time=filter_end_time,
-            name=name,
+            member_id=member_id,
             hospital_id=hospital_id,
         )
         demands = session.exec(query.order_by(Demand.start_time)).all()
@@ -644,7 +646,7 @@ def report_schedule_pdf(
             params = {
                 "filter_start_time": filter_start_time,
                 "filter_end_time": filter_end_time,
-                "name": name,
+                "member_id": member_id,
                 "status": status,
                 "status_list": status_list,
                 "hospital_id": hospital_id,
@@ -652,6 +654,7 @@ def report_schedule_pdf(
             formatters = {
                 "filter_start_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
                 "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
+                "member_id": lambda v: ((m := session.get(Member, v)) and (m.label or m.name or m.email)) if v else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
@@ -699,7 +702,7 @@ def list_schedules(
     status_list: Optional[str] = Query(None, description="Filtrar por lista de status (separado por vírgula)"),
     filter_start_time: Optional[datetime] = Query(None, description="Filtrar demandas com start_time >= (timestamptz ISO 8601)"),
     filter_end_time: Optional[datetime] = Query(None, description="Filtrar demandas com end_time <= (timestamptz ISO 8601)"),
-    name: Optional[str] = Query(None, description="Filtrar por nome do associado (contém)"),
+    member_id: Optional[int] = Query(None, description="Filtrar por associado (demand.member_id)"),
     hospital_id: Optional[int] = Query(None, description="Filtrar por hospital (demand.hospital_id)"),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
@@ -721,6 +724,10 @@ def list_schedules(
         hospital = session.get(Hospital, hospital_id)
         if not hospital or hospital.tenant_id != member.tenant_id:
             raise HTTPException(status_code=400, detail="hospital_id inválido ou não pertence ao tenant")
+    if member_id is not None:
+        filter_member = session.get(Member, member_id)
+        if not filter_member or filter_member.tenant_id != member.tenant_id:
+            raise HTTPException(status_code=400, detail="member_id inválido ou não pertence ao tenant")
 
     query, count_query = _schedule_list_queries(
         session,
@@ -728,7 +735,7 @@ def list_schedules(
         status_values=status_values,
         filter_start_time=filter_start_time,
         filter_end_time=filter_end_time,
-        name=name,
+        member_id=member_id,
         hospital_id=hospital_id,
     )
     total = session.exec(count_query).one()

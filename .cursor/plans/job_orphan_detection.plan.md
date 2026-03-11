@@ -25,6 +25,7 @@ isProject: true
 ## Contexto
 
 Atualmente, o sistema possui:
+
 - Cron `reconcile_pending_orphans` que trata apenas jobs **PENDING** com `started_at IS NULL`
 - Não há detecção de jobs **RUNNING** que ficaram órfãos (worker morreu durante execução)
 
@@ -44,6 +45,8 @@ sequenceDiagram
     C->>DB: SELECT jobs RUNNING com heartbeat antigo
     C->>DB: UPDATE status = FAILED, error = orphan
 ```
+
+
 
 ## Mudanças Necessárias
 
@@ -71,6 +74,7 @@ Arquivo: [backend/app/worker/job.py](backend/app/worker/job.py)
 - Parar thread ao finalizar job (COMPLETED/FAILED)
 
 Funções a modificar:
+
 - `generate_schedule_job` - job mais demorado, crítico
 - `extract_demand_job` - pode demorar com arquivos grandes
 - `generate_thumbnail_job` - rápido, opcional
@@ -104,17 +108,20 @@ for job in running_orphans:
 ### 5. Documentação
 
 Arquivos a atualizar:
+
 - [CHECKLIST.md](CHECKLIST.md) - Adicionar seção sobre jobs órfãos
 - [STACK.md](STACK.md) - Documentar heartbeat no worker
 - [DIRECTIVES.md](DIRECTIVES.md) - Regras de tratamento de jobs órfãos
 
 ## Configurações
 
-| Parâmetro | Valor | Descrição |
-|-----------|-------|-----------|
-| Intervalo heartbeat | 30s | Worker atualiza `last_heartbeat_at` |
-| Threshold órfão | 2 min | Tempo sem heartbeat para considerar órfão |
-| Cron reconciler | 5 em 5 min | Já existente, será expandido |
+
+| Parâmetro           | Valor      | Descrição                                 |
+| ------------------- | ---------- | ----------------------------------------- |
+| Intervalo heartbeat | 30s        | Worker atualiza `last_heartbeat_at`       |
+| Threshold órfão     | 2 min      | Tempo sem heartbeat para considerar órfão |
+| Cron reconciler     | 5 em 5 min | Já existente, será expandido              |
+
 
 ## Considerações
 
@@ -122,3 +129,4 @@ Arquivos a atualizar:
 - **Thread safety**: Heartbeat em thread separada para não bloquear processamento
 - **Performance**: Índice parcial otimiza query do reconciler
 - **Não usar novo status**: Manter `FAILED` com mensagem específica (evita migration de enum)
+

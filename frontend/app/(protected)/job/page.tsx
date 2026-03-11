@@ -44,8 +44,12 @@ export default function JobPage() {
     })
 
     // Filtros de período de início (started_at)
-    // "Desde" inicia vazio, "Até" inicia vazio
-    const [filterStartDate, setFilterStartDate] = useState<Date | null>(null)
+    // "Desde" inicia no dia atual às 00:00, "Até" inicia vazio
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return today
+    })
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     // Configuração inicial (vazio, pois jobs não são editáveis)

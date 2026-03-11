@@ -6,7 +6,7 @@ import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
 import { EntityCard } from '@/components/EntityCard'
-import { FilterDateRange, FilterInput, FilterPanel, FilterSelect } from '@/components/filter'
+import { FilterDateRange, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormInput, FormSelect, FormTextarea } from '@/components/form'
 import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -21,6 +21,7 @@ import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses 
 import { formatDateTime } from '@/lib/tenantFormat'
 import {
     DemandCreateRequest,
+    DemandProcedureListResponse,
     DemandResponse,
     DemandUpdateRequest,
     HospitalListResponse,
@@ -50,10 +51,16 @@ export default function DemandPage() {
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
-    const [filterProcedure, setFilterProcedure] = useState('')
+    const [procedureList, setProcedureList] = useState<string[]>([])
+    const [loadingProcedures, setLoadingProcedures] = useState(true)
+    const [filterProcedure, setFilterProcedure] = useState<string | null>(null)
     const [skillsInput, setSkillsInput] = useState('')
 
-    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => new Date())
+    const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return today
+    })
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
     const FILTER_HOSPITAL_LABEL = 'Hospital'
@@ -66,7 +73,7 @@ export default function DemandPage() {
         if (filterStartDate) params.start_at = filterStartDate.toISOString()
         if (filterEndDate) params.end_at = filterEndDate.toISOString()
         if (filterHospitalId !== null) params.hospital_id = filterHospitalId
-        if (filterProcedure.trim()) params.procedure = filterProcedure.trim()
+        if (filterProcedure) params.procedure = filterProcedure
         return Object.keys(params).length ? params : undefined
     }, [filterStartDate, filterEndDate, filterHospitalId, filterProcedure])
 
@@ -79,8 +86,8 @@ export default function DemandPage() {
                 value: hospital?.name ?? String(filterHospitalId),
             })
         }
-        if (filterProcedure.trim()) {
-            list.push({ label: FILTER_PROCEDURE_LABEL, value: filterProcedure.trim() })
+        if (filterProcedure) {
+            list.push({ label: FILTER_PROCEDURE_LABEL, value: filterProcedure })
         }
         if (filterStartDate) {
             list.push({
@@ -258,8 +265,23 @@ export default function DemandPage() {
         }
     }
 
+    const loadProcedures = async () => {
+        try {
+            setLoadingProcedures(true)
+            const data = await protectedFetch<DemandProcedureListResponse>('/api/demand/procedure/list')
+            setProcedureList(data.procedure_list || [])
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Erro ao carregar procedimentos'
+            setError(message)
+            console.error('Erro ao carregar procedimentos:', err)
+        } finally {
+            setLoadingProcedures(false)
+        }
+    }
+
     useEffect(() => {
         loadHospitals()
+        loadProcedures()
     }, [])
 
     useEffect(() => {
@@ -477,10 +499,12 @@ export default function DemandPage() {
                                     options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
                                     disabled={loadingHospitals}
                                 />
-                                <FilterInput
+                                <FilterSelect
                                     label={FILTER_PROCEDURE_LABEL}
                                     value={filterProcedure}
                                     onChange={setFilterProcedure}
+                                    options={procedureList.map((procedure) => ({ value: procedure, label: procedure }))}
+                                    disabled={loadingProcedures}
                                 />
                             </FormFieldGrid>
                             <FormFieldGrid cols={1} smCols={2} gap={4}>

@@ -2960,6 +2960,10 @@ class DemandListResponse(PydanticBaseModel):
     total: int
 
 
+class DemandProcedureListResponse(PydanticBaseModel):
+    procedure_list: list[str]
+
+
 @router.post("/demand", response_model=DemandResponse, status_code=201, tags=["Demand"])
 def create_demand(
     body: DemandCreate,
@@ -3097,6 +3101,43 @@ def list_demands(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao listar demandas: {str(e)}",
+        ) from e
+
+
+@router.get("/demand/procedure/list", response_model=DemandProcedureListResponse, tags=["Demand"])
+def list_demand_procedures(
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    """
+    Lista procedimentos distintos das demandas do tenant atual.
+    """
+    try:
+        logger.info(f"Listando procedimentos de demandas para tenant_id={member.tenant_id}")
+
+        procedure_values = session.exec(
+            select(Demand.procedure)
+            .where(Demand.tenant_id == member.tenant_id)
+            .distinct()
+        ).all()
+
+        procedure_list = sorted(
+            {
+                procedure.strip()
+                for procedure in procedure_values
+                if procedure and procedure.strip()
+            },
+            key=str.lower,
+        )
+
+        return DemandProcedureListResponse(procedure_list=procedure_list)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao listar procedimentos de demandas: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar procedimentos de demandas: {str(e)}",
         ) from e
 
 

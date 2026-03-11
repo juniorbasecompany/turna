@@ -583,15 +583,11 @@ export default function FilesPage() {
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
 
     // Filtros de período usando TenantDateTimePicker (Date objects com hora)
-    // Inicializar filterStartDate com primeiro dia da semana atual (segunda-feira) às 00:00, filterEndDate vazio
+    // Inicializar filterStartDate com o dia atual às 00:00, filterEndDate vazio
     const [filterStartDate, setFilterStartDate] = useState<Date | null>(() => {
         const today = new Date()
-        const dayOfWeek = today.getDay() // 0=domingo, 1=segunda, ..., 6=sábado
-        // Calcular quantos dias voltar para chegar na segunda-feira
-        // Se hoje é domingo (0), volta 6 dias; se segunda (1), volta 0; se terça (2), volta 1, etc.
-        const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-        const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysToSubtract, 0, 0, 0, 0)
-        return monday
+        today.setHours(0, 0, 0, 0)
+        return today
     })
 
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)

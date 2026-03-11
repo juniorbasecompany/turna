@@ -47,9 +47,9 @@ def get_demand_list_queries(
         query = query.where(Demand.end_time <= end_at)
         count_query = count_query.where(Demand.end_time <= end_at)
     if procedure and procedure.strip():
-        term = f"%{procedure.strip()}%"
-        query = query.where(Demand.procedure.ilike(term))
-        count_query = count_query.where(Demand.procedure.ilike(term))
+        procedure_value = procedure.strip()
+        query = query.where(Demand.procedure == procedure_value)
+        count_query = count_query.where(Demand.procedure == procedure_value)
     if is_pediatric is not None:
         query = query.where(Demand.is_pediatric == is_pediatric)
         count_query = count_query.where(Demand.is_pediatric == is_pediatric)

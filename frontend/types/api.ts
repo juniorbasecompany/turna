@@ -286,6 +286,10 @@ export interface DemandListResponse {
     total: number
 }
 
+export interface DemandProcedureListResponse {
+    procedure_list: string[]
+}
+
 export interface DemandCreateRequest {
     hospital_id: number
     job_id?: number | null
