@@ -204,24 +204,25 @@ def validate_and_normalize_result(obj: dict) -> dict:
         del meta["timezone"]
     out["meta"] = meta
 
-    # demand list
+    # demand list (resposta da IA pode vir como "demands" ou "demandList")
+    raw_demandList = as_list(obj.get("demandList"))
     demand_list = []
-    for d in as_list(obj.get("demands")):
+    for d in raw_demandList:
         if not isinstance(d, dict):
             continue
 
         notes = normalize_str(d.get("notes"))
-        priority = extract_priority(notes)
+        priority = canon_priority(normalize_str(d.get("priority"))) or extract_priority(notes)
 
-        # skills: preferir campo explícito; fallback heurístico para casos onde IA colocou em "complexity"
-        skills = parse_skills(d.get("skills"))
-        if not skills:
-            skills = parse_skills(d.get("habilidades"))
-        if not skills:
+        # skills: preferir campo explícito; aceitar também skillList (prompt do hospital)
+        skillList = parse_skills(d.get("skillList"))
+        if not skillList:
+            skillList = parse_skills(d.get("habilidades"))
+        if not skillList:
             # heuristic: se "complexity" veio como lista de habilidades (ex: "Geral, Obstétrica")
             cx = normalize_str(d.get("complexity"))
             if cx and ("," in cx or "|" in cx or ";" in cx):
-                skills = parse_skills(cx)
+                skillList = parse_skills(cx)
 
         extracted_id = extract_id(d)
         room = normalize_str(d.get("room"))
@@ -237,9 +238,9 @@ def validate_and_normalize_result(obj: dict) -> dict:
             "procedure": normalize_str(d.get("procedure")),
             "anesthesia_type": normalize_str(d.get("anesthesia_type")),
             "complexity": normalize_str(d.get("complexity")),
-            "skills": skills,
+            "skills": skillList,
             "priority": priority,
-            "members": as_list(d.get("members")),
+            "members": as_list(d.get("professionalList")),
             "notes": notes,
         }
 

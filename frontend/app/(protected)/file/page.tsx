@@ -1503,7 +1503,7 @@ export default function FilesPage() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4 sm:mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(260px,1fr))] gap-4 lg:gap-6 mb-4 sm:mb-6">
                         {/* Card de upload - sempre o primeiro */}
                         <input
                             ref={fileInputRef}

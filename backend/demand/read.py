@@ -264,8 +264,8 @@ def _call_ai_extract_text_only(pdf_path: Path, model: str, pages_text: List[Tupl
         # sem texto útil -> caller deve cair para visão
         raise RuntimeError("PDF sem text layer útil para modo text-only")
 
-    # Usa prompt customizado do hospital se fornecido, senão usa o padrão
-    user_prompt = custom_user_prompt if custom_user_prompt else prompt.USER_PROMPT
+    # Parte 1 (interpretação): fallback para USER_PROMPT se hospital.prompt não informado ou vazio
+    user_prompt = (custom_user_prompt or prompt.USER_PROMPT).strip() or prompt.USER_PROMPT
 
     content = [
         {"type": "input_text", "text": user_prompt},
@@ -311,8 +311,8 @@ def _call_ai_extract_vision(pdf_path: Path, model: str, dpi: int, max_pages: Opt
     images_b64 = _render_file_to_png_b64(pdf_path, dpi=dpi, max_pages=max_pages)
     _progress(f"renderização concluída: {len(images_b64)} imagem(ns)")
 
-    # Usa prompt customizado do hospital se fornecido, senão usa o padrão
-    user_prompt = custom_user_prompt if custom_user_prompt else prompt.USER_PROMPT
+    # Parte 1 (interpretação): fallback para USER_PROMPT se hospital.prompt não informado ou vazio
+    user_prompt = (custom_user_prompt or prompt.USER_PROMPT).strip() or prompt.USER_PROMPT
 
     # Monta input multimodal
     # OBS: API Responses (openai python) aceita input_text + input_image
