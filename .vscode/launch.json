@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload"],
+      "cwd": "${workspaceFolder}/backend",
+      "jinja": true
+    },
+    {
+      "name": "Worker (Arq)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.worker.run",
+      "cwd": "${workspaceFolder}/backend",
+      "jinja": true
+    }
+  ]
+}
