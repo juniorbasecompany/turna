@@ -1,6 +1,7 @@
 'use client'
 
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { getDisplayName } from '@/lib/entityUtils'
 import { InviteOption, TenantListResponse, TenantOption } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
@@ -275,6 +276,7 @@ export default function SelectTenantPage() {
                         tenant_id: invite.tenant_id,
                         name: invite.name,
                         label: invite.label,
+                        display_name: invite.display_name,
                         role: invite.role,
                     }
                 }
@@ -616,7 +618,7 @@ export default function SelectTenantPage() {
                                             className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         >
                                             <div className="font-medium text-gray-900">
-                                                {tenant.name}
+                                                {getDisplayName(tenant)}
                                             </div>
                                             <div className="text-sm text-gray-500">
                                                 {tenant.role}
@@ -640,7 +642,7 @@ export default function SelectTenantPage() {
                                         >
                                             <div className="mb-2">
                                                 <div className="font-medium text-gray-900">
-                                                    {invite.name}
+                                                    {getDisplayName(invite)}
                                                 </div>
                                                 <div className="text-sm text-yellow-700">
                                                     Convite pendente • {invite.role}

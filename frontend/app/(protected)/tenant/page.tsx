@@ -14,6 +14,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { useReportButton } from '@/hooks/useReportButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
+import { getDisplayName } from '@/lib/entityUtils'
 import {
     TenantCreateRequest,
     TenantResponse,
@@ -238,6 +239,7 @@ export default function TenantPage() {
             >
                 {filteredTenants.map((tenant) => {
                     const isSelected = selectedTenants.has(tenant.id)
+                    const tenantDisplayName = getDisplayName(tenant)
                     return (
                         <EntityCard
                             key={tenant.id}
@@ -270,11 +272,10 @@ export default function TenantPage() {
                                         </div>
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
-                                            title={tenant.name}
+                                            title={tenantDisplayName}
                                         >
-                                            {tenant.name}
+                                            {tenantDisplayName}
                                         </h3>
-                                        {tenant.label && <p className="text-xs text-gray-600 mt-1">{tenant.label}</p>}
                                     </div>
                                 </CardPreviewArea>
                             </div>

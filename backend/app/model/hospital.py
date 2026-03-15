@@ -16,6 +16,11 @@ class Hospital(BaseModel, table=True):
     prompt: str | None = Field(default=None, nullable=True)
     color: str | None = Field(default=None, nullable=True)
 
+    @property
+    def display_name(self) -> str:
+        label = (self.label or "").strip()
+        return label or self.name
+
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_hospital_tenant_name"),
     )

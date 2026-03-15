@@ -20,6 +20,7 @@ import { useEntityPage } from '@/hooks/useEntityPage'
 import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTextClasses } from '@/lib/cardStyles'
+import { getDisplayName, getMemberDisplayName } from '@/lib/entityUtils'
 import { formatDateTime, localDateToUtcEndExclusive, localDateToUtcStart } from '@/lib/tenantFormat'
 import {
     HospitalListResponse,
@@ -195,7 +196,7 @@ export default function SchedulePage() {
             if (member) {
                 list.push({
                     label: FILTER_MEMBER_LABEL,
-                    value: member.member_label || member.member_name || member.member_email || `Associado ${member.id}`,
+                    value: getMemberDisplayName(member),
                 })
             }
         }
@@ -220,7 +221,7 @@ export default function SchedulePage() {
         if (filterHospitalId != null) {
             const hospital = hospitals.find((h) => h.id === filterHospitalId)
             if (hospital) {
-                list.push({ label: 'Hospital', value: hospital.name })
+                list.push({ label: 'Hospital', value: getDisplayName(hospital) })
             }
         }
         return list
@@ -681,7 +682,7 @@ export default function SchedulePage() {
                                     label="Hospital"
                                     value={filterHospitalId}
                                     onChange={setFilterHospitalId}
-                                    options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                                    options={hospitals.map((hospital) => ({ value: hospital.id, label: getDisplayName(hospital) }))}
                                     disabled={loadingHospitals}
                                 />
                                 <FilterSelect
@@ -690,7 +691,7 @@ export default function SchedulePage() {
                                     onChange={setFilterMemberId}
                                     options={memberList.map((member) => ({
                                         value: member.id,
-                                        label: member.member_label || member.member_name || member.member_email || `Associado ${member.id}`,
+                                        label: getMemberDisplayName(member),
                                     }))}
                                     disabled={loadingMembers}
                                 />

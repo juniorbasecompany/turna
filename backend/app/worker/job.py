@@ -310,7 +310,7 @@ def _load_pros_from_member_table(
     pros: list[dict] = []
     for m in rows:
         pro_id = str(m.id)
-        name = (m.label or m.name or pro_id).strip()
+        name = m.display_name.strip() or pro_id
 
         # Converter vacation: mesmo dia -> blocos horários; vários dias -> vacation_days
         if period_start_date is not None:
@@ -968,7 +968,7 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
             meta["file_id"] = file_id
             meta["filename"] = filename
             meta["hospital_id"] = hospital.id
-            meta["hospital_name"] = hospital.name
+            meta["hospital_name"] = hospital.display_name
             meta["created_demand_count"] = created_demand_count
 
             job.result_data = result

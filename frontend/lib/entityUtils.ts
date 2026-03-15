@@ -15,6 +15,63 @@ export function toggleSelection<T>(set: Set<T>, item: T): Set<T> {
     return newSet
 }
 
+type NameLike = {
+    name?: string | null
+    label?: string | null
+    display_name?: string | null
+}
+
+type MemberNameLike = {
+    id?: number | null
+    member_name?: string | null
+    member_label?: string | null
+    member_email?: string | null
+    display_name?: string | null
+}
+
+/**
+ * Resolve o nome exibido priorizando display_name/label.
+ */
+export function getDisplayName(entity: NameLike | null | undefined, fallback = ''): string {
+    if (!entity) return fallback
+
+    const displayName = entity.display_name?.trim()
+    if (displayName) return displayName
+
+    const label = entity.label?.trim()
+    if (label) return label
+
+    const name = entity.name?.trim()
+    if (name) return name
+
+    return fallback
+}
+
+/**
+ * Resolve o nome exibido do associado.
+ */
+export function getMemberDisplayName(member: MemberNameLike | null | undefined): string {
+    if (!member) return 'Não disponível'
+
+    const displayName = member.display_name?.trim()
+    if (displayName) return displayName
+
+    const label = member.member_label?.trim()
+    if (label) return label
+
+    const name = member.member_name?.trim()
+    if (name) return name
+
+    const email = member.member_email?.trim()
+    if (email) return email
+
+    if (member.id != null) {
+        return `Associado ${member.id}`
+    }
+
+    return 'Não disponível'
+}
+
 /**
  * Verifica se há mudanças no formulário
  */

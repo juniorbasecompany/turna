@@ -16,6 +16,7 @@ import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
 import { useReportButton } from '@/hooks/useReportButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
+import { getDisplayName } from '@/lib/entityUtils'
 import {
     HospitalCreateRequest,
     HospitalResponse,
@@ -189,6 +190,7 @@ export default function HospitalPage() {
             >
                 {filteredHospitals.map((hospital) => {
                     const isSelected = selectedHospitals.has(hospital.id)
+                    const hospitalDisplayName = getDisplayName(hospital)
                     return (
                         <EntityCard
                             key={hospital.id}
@@ -231,9 +233,9 @@ export default function HospitalPage() {
                                         </div>
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
-                                            title={hospital.name}
+                                            title={hospitalDisplayName}
                                         >
-                                            {hospital.name}
+                                            {hospitalDisplayName}
                                         </h3>
                                     </div>
                                 </CardPreviewArea>

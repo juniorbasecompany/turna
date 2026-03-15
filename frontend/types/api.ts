@@ -13,6 +13,7 @@ export interface TenantOption {
     tenant_id: number
     name: string
     label: string | null  // Rótulo opcional
+    display_name: string
     role: string
 }
 
@@ -21,6 +22,7 @@ export interface InviteOption {
     tenant_id: number
     name: string
     label: string | null  // Rótulo opcional
+    display_name: string
     role: string
     status: string
 }
@@ -52,6 +54,8 @@ export interface MeResponse {
     email: string
     name: string  // Nome privado (account.name)
     member_name: string | null  // Nome público na clínica (member.name)
+    member_label: string | null  // Rótulo opcional do associado
+    display_name: string  // Nome exibido no tenant atual
     role: string
     tenant_id: number
     auth_provider: string
@@ -68,6 +72,7 @@ export interface TenantResponse {
     id: number
     name: string
     label: string | null  // Rótulo opcional
+    display_name: string
     timezone: string
     locale: string
     currency: string
@@ -237,6 +242,7 @@ export interface HospitalResponse {
     tenant_id: number
     name: string
     label: string | null  // Rótulo opcional
+    display_name: string
     prompt: string | null
     color: string | null
     created_at: string
@@ -329,6 +335,7 @@ export interface MemberResponse {
     member_email: string | null  // Email público na clínica (pode ser editado)
     member_name: string | null  // Nome público na clínica (pode ser editado)
     member_label: string | null  // Rótulo opcional
+    display_name: string
     role: string
     status: string
     attribute: Record<string, unknown>

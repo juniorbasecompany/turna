@@ -1,6 +1,8 @@
 'use client'
 
 import { useDrawer } from '@/app/(protected)/layout'
+import { getDisplayName } from '@/lib/entityUtils'
+import { getMemberDisplayName } from '@/lib/entityUtils'
 import { MeResponse, TenantListResponse, TenantOption, TenantResponse } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
@@ -82,8 +84,7 @@ export function Header() {
 
                 if (accountRes.ok) {
                     const accountData = await accountRes.json()
-                    // O endpoint /me retorna name (account.name) e member_name (member.name)
-                    // Usar member_name se disponível, senão usar name
+                    // O endpoint /me retorna display_name do associado atual no tenant
                     const meData = accountData.account || accountData
                     setAccount(meData || null)
                 } else {
@@ -224,7 +225,7 @@ export function Header() {
                 const tenantListCount = (tenantListData.tenants || []).length
                 const invitesCount = (tenantListData.invites || []).length
 
-                const hasMultipleTenants = tenantsCount > 1
+                const hasMultipleTenants = tenantListCount > 1
                 const hasPendingInvites = invitesCount > 0
 
                 // Se há múltiplos tenants OU convites pendentes: apenas redirecionar para seleção (sem logout)
@@ -289,7 +290,7 @@ export function Header() {
                             </svg>
                         </button>
                         {tenant && (
-                            <h1 className="text-xl font-bold text-gray-900 truncate">{tenant.name}</h1>
+                            <h1 className="text-xl font-bold text-gray-900 truncate">{getDisplayName(tenant)}</h1>
                         )}
                     </div>
 
@@ -301,7 +302,7 @@ export function Header() {
                                 className="flex items-center text-sm text-gray-700 hover:text-gray-900"
                             >
                                 <span className="mr-2">
-                                    {account.member_name || account.name}
+                                    {getMemberDisplayName(account)}
                                 </span>
                                 <span className="text-gray-400">▼</span>
                             </button>
@@ -325,10 +326,10 @@ export function Header() {
                                                                 : 'text-gray-700 hover:bg-gray-50'
                                                                 } ${switchingTenant ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                             role="menuitem"
-                                                            title={isCurrentTenant ? 'Clínica atual' : `Trocar para ${t.name}`}
+                                                            title={isCurrentTenant ? 'Clínica atual' : `Trocar para ${getDisplayName(t)}`}
                                                         >
                                                             <div className="flex items-center justify-between">
-                                                                <span>{t.name}</span>
+                                                                <span>{getDisplayName(t)}</span>
                                                                 {isCurrentTenant && (
                                                                     <span className="text-xs text-blue-600">✓</span>
                                                                 )}

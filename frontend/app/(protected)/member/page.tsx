@@ -20,6 +20,7 @@ import { useEntityPage } from '@/hooks/useEntityPage'
 import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardTextClasses } from '@/lib/cardStyles'
+import { getMemberDisplayName } from '@/lib/entityUtils'
 import {
     MemberCreateRequest,
     MemberResponse,
@@ -264,12 +265,12 @@ export default function MemberPage() {
                     'Content-Type': 'application/json',
                 },
             })
-            const successMsg = `E-mail de convite foi enviado para ${member.member_name || member.member_email}`
+            const successMsg = `E-mail de convite foi enviado para ${getMemberDisplayName(member)}`
             setEmailMessage(successMsg)
             setEmailMessageType('success')
         } catch (inviteErr) {
             const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
-            setEmailMessage(`E-mail de convite não foi enviado para ${member.member_name || member.member_email}. ${errorMsg}`)
+            setEmailMessage(`E-mail de convite não foi enviado para ${getMemberDisplayName(member)}. ${errorMsg}`)
             setEmailMessageType('error')
         }
     }
@@ -592,6 +593,7 @@ export default function MemberPage() {
             >
                 {paginatedMembers.map((member) => {
                     const isSelected = selectedMembers.has(member.id)
+                    const memberDisplayName = getMemberDisplayName(member)
                     return (
                         <EntityCard
                             key={member.id}
@@ -639,9 +641,9 @@ export default function MemberPage() {
                                         </div>
                                         <h3
                                             className={`text-sm font-semibold text-center px-2 ${getCardTextClasses(isSelected)}`}
-                                            title={member.member_name || member.member_email || 'Não disponível'}
+                                            title={memberDisplayName}
                                         >
-                                            {member.member_name || member.member_email || 'Não disponível'}
+                                            {memberDisplayName}
                                         </h3>
                                         <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
                                             <span className={`text-xs px-2 py-1 rounded ${getStatusColor(member.status)}`}>

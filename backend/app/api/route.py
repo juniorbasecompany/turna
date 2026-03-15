@@ -144,13 +144,15 @@ def get_me(
     Retorna os dados da conta autenticada.
     Endpoint na raiz conforme checklist.
 
-    Retorna name (privado) e member_name (público na clínica).
+    Retorna name (privado), member_name/member_label e display_name do associado atual.
     """
     return {
         "id": account.id,
         "email": account.email,
         "name": account.name,  # Nome privado do usuário
         "member_name": member.name,  # Nome público na clínica (pode ser NULL)
+        "member_label": member.label,  # Rótulo opcional do associado
+        "display_name": member.display_name,  # Nome exibido no tenant atual
         "role": member.role.value,
         "tenant_id": member.tenant_id,
         "auth_provider": account.auth_provider,
@@ -543,6 +545,7 @@ class TenantResponse(PydanticBaseModel):
     id: int
     name: str
     label: str | None = None
+    display_name: str
     timezone: str
     locale: str
     currency: str
@@ -596,6 +599,24 @@ class TenantListResponse(PydanticBaseModel):
     total: int
 
 
+def _build_tenant_response(tenant: Tenant) -> TenantResponse:
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        label=tenant.label,
+        display_name=tenant.display_name,
+        timezone=tenant.timezone,
+        locale=tenant.locale,
+        currency=tenant.currency,
+        created_at=tenant.created_at,
+        updated_at=tenant.updated_at,
+    )
+
+
+def _get_tenant_header_title(tenant: Tenant | None) -> str | None:
+    return tenant.display_name if tenant else None
+
+
 @router.get("/health", tags=["System"])
 def health():
     """Health check endpoint."""
@@ -639,7 +660,7 @@ def create_tenant(
     create_default_hospital_for_tenant(session, tenant.id)
 
 
-    return tenant
+    return _build_tenant_response(tenant)
 
 
 def _tenant_list_queries(session: Session, name: Optional[str] = None):
@@ -676,16 +697,7 @@ def list_tenants(
 
         response_items = []
         for t in items:
-            response_items.append(TenantResponse(
-                id=t.id,
-                name=t.name,
-                label=t.label,
-                timezone=t.timezone,
-                locale=t.locale,
-                currency=t.currency,
-                created_at=t.created_at,
-                updated_at=t.updated_at,
-            ))
+            response_items.append(_build_tenant_response(t))
 
         return TenantListResponse(
             items=response_items,
@@ -712,12 +724,12 @@ def report_tenant_pdf(
     try:
         query, _ = _tenant_list_queries(session, name=name)
         tenants = session.exec(query).all()
-        rows = [(t.name, t.label or "") for t in tenants]
+        rows = [(t.display_name,) for t in tenants]
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"name": name}, TENANT_REPORT_PARAM_LABELS
         )
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = _get_tenant_header_title(tenant)
         pdf_bytes = render_tenant_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
@@ -740,7 +752,7 @@ def get_current_tenant_info(
     tenant = session.get(Tenant, member.tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant não encontrado")
-    return tenant
+    return _build_tenant_response(tenant)
 
 
 @router.put("/tenant/{tenant_id}", response_model=TenantResponse, tags=["Tenant"])
@@ -794,16 +806,7 @@ def update_tenant(
         session.commit()
         session.refresh(tenant)
 
-        return TenantResponse(
-            id=tenant.id,
-            name=tenant.name,
-            label=tenant.label,
-            timezone=tenant.timezone,
-            locale=tenant.locale,
-            currency=tenant.currency,
-            created_at=tenant.created_at,
-            updated_at=tenant.updated_at,
-        )
+        return _build_tenant_response(tenant)
     except HTTPException:
         raise
     except Exception as e:
@@ -2011,7 +2014,7 @@ def list_files(
         can_delete = item.id not in file_ids_with_completed_job
         job_status = file_id_to_latest_job_status.get(item.id)
         hospital = hospital_dict.get(item.hospital_id)
-        hospital_name = (hospital.label or hospital.name) if hospital else f"Hospital {item.hospital_id}"
+        hospital_name = hospital.display_name if hospital else f"Hospital {item.hospital_id}"
         hospital_color = hospital.color if hospital else None
         # Criar FileResponse manualmente incluindo can_delete, job_status, hospital_id, hospital_name e hospital_color
         file_response = FileResponse(
@@ -2081,11 +2084,11 @@ def report_file_pdf(
         formatters = {
             "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
             "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-            "hospital_id": lambda v: ((h := session.get(Hospital, v)) and (h.label or h.name)) if v else str(v),
+            "hospital_id": lambda v: ((h := session.get(Hospital, v)) and h.display_name) if v else str(v),
         }
         filters_parts = query_params_to_filter_parts(params, FILE_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = _get_tenant_header_title(tenant)
         pdf_bytes = render_file_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
@@ -2452,6 +2455,7 @@ class HospitalResponse(PydanticBaseModel):
     tenant_id: int
     name: str
     label: str | None = None  # Rótulo opcional
+    display_name: str
     prompt: str | None
     color: str | None
     created_at: datetime
@@ -2464,6 +2468,20 @@ class HospitalResponse(PydanticBaseModel):
 class HospitalListResponse(PydanticBaseModel):
     items: list[HospitalResponse]
     total: int
+
+
+def _build_hospital_response(hospital: Hospital) -> HospitalResponse:
+    return HospitalResponse(
+        id=hospital.id,
+        tenant_id=hospital.tenant_id,
+        name=hospital.name,
+        label=hospital.label,
+        display_name=hospital.display_name,
+        prompt=hospital.prompt,
+        color=hospital.color,
+        created_at=hospital.created_at,
+        updated_at=hospital.updated_at,
+    )
 
 
 @router.post("/hospital", response_model=HospitalResponse, status_code=201, tags=["Hospital"])
@@ -2521,7 +2539,7 @@ def create_hospital(
         try:
             session.commit()
             session.refresh(hospital)
-            return hospital
+            return _build_hospital_response(hospital)
         except IntegrityError as e:
             session.rollback()
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2598,8 +2616,7 @@ def list_hospital(
         response_items = []
         for h in items:
             try:
-                validated = HospitalResponse.model_validate(h)
-                response_items.append(validated)
+                response_items.append(_build_hospital_response(h))
             except Exception as e:
                 logger.error(f"Erro ao validar hospital id={h.id}, name={h.name}, prompt={h.prompt}: {e}", exc_info=True)
                 raise
@@ -2628,11 +2645,11 @@ def report_hospital_pdf(
     try:
         query, _ = _hospital_list_queries(session, member.tenant_id, name=name)
         hospitals = session.exec(query).all()
-        rows = [(h.name, h.label or "") for h in hospitals]
+        rows = [(h.display_name,) for h in hospitals]
         params = {"name": name}
         filters_parts = query_params_to_filter_parts(params, HOSPITAL_REPORT_PARAM_LABELS)
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = _get_tenant_header_title(tenant)
         pdf_bytes = render_hospital_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
@@ -2665,7 +2682,7 @@ def get_hospital(
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         logger.info(f"Hospital encontrado: id={hospital.id}, name={hospital.name}, prompt={'presente' if hospital.prompt else 'None'}")
-        return hospital
+        return _build_hospital_response(hospital)
     except HTTPException:
         raise
     except Exception as e:
@@ -2750,7 +2767,7 @@ def update_hospital(
         try:
             session.commit()
             session.refresh(hospital)
-            return hospital
+            return _build_hospital_response(hospital)
         except IntegrityError as e:
             session.rollback()
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -3188,11 +3205,11 @@ def report_demand_pdf(
             formatters = {
                 "start_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
                 "end_at": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-                "hospital_id": lambda v: ((h := session.get(Hospital, v)) and (h.label or h.name)) if v else str(v),
+                "hospital_id": lambda v: ((h := session.get(Hospital, v)) and h.display_name) if v else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, DEMAND_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = _get_tenant_header_title(tenant)
         cover_bytes = build_report_cover_only(
             report_title="Relatório de demandas",
             filters=filters_parts,
@@ -3493,6 +3510,7 @@ class MemberResponse(PydanticBaseModel):
     member_email: Optional[str] = None  # Email público na clínica (pode ser editado)
     member_name: Optional[str] = None  # Nome público na clínica (pode ser editado)
     member_label: Optional[str] = None  # Rótulo opcional
+    display_name: str
     role: str
     status: str
     attribute: dict  # Atributos customizados (JSON)
@@ -3510,6 +3528,28 @@ class MemberListResponse(PydanticBaseModel):
     """Schema de resposta para listagem de members."""
     items: list[MemberResponse]
     total: int
+
+
+def _build_member_response(member_obj: Member, account: Account | None = None) -> MemberResponse:
+    account_email = account.email if account else None
+    return MemberResponse(
+        id=member_obj.id,
+        tenant_id=member_obj.tenant_id,
+        account_id=member_obj.account_id,
+        account_email=account_email,
+        member_email=member_obj.email,
+        member_name=member_obj.name,
+        member_label=member_obj.label,
+        display_name=member_obj.display_name,
+        role=member_obj.role.value,
+        status=member_obj.status.value,
+        attribute=member_obj.attribute,
+        can_peds=member_obj.can_peds,
+        sequence=member_obj.sequence,
+        vacation=member_obj.vacation or [],
+        created_at=member_obj.created_at,
+        updated_at=member_obj.updated_at,
+    )
 
 
 @router.post("/member", response_model=MemberResponse, status_code=201, tags=["Member"])
@@ -3628,26 +3668,7 @@ def create_member(
             ),
         )
 
-        # Buscar account_email para resposta (pode ser None)
-        account_email = account.email if account else None
-
-        return MemberResponse(
-            id=member_obj.id,
-            tenant_id=member_obj.tenant_id,
-            account_id=member_obj.account_id,
-            account_email=account_email,
-            member_email=member_obj.email,
-            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
-            member_label=member_obj.label,  # Rótulo opcional
-            role=member_obj.role.value,
-            status=member_obj.status.value,
-            attribute=member_obj.attribute,
-            can_peds=member_obj.can_peds,
-            sequence=member_obj.sequence,
-            vacation=member_obj.vacation or [],
-            created_at=member_obj.created_at,
-            updated_at=member_obj.updated_at,
-        )
+        return _build_member_response(member_obj, account)
     except HTTPException:
         raise
     except Exception as e:
@@ -3690,27 +3711,7 @@ def list_members(
         # Montar resposta
         items = []
         for member_obj, account in results:
-            # account_email é privado, apenas para compatibilidade/auditoria
-            account_email = account.email if account else None
-            items.append(
-                MemberResponse(
-                    id=member_obj.id,
-                    tenant_id=member_obj.tenant_id,
-                    account_id=member_obj.account_id,
-                    account_email=account_email,
-                    member_email=member_obj.email,  # Email público na clínica
-                    member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
-                    member_label=member_obj.label,  # Rótulo opcional
-                    role=member_obj.role.value,
-                    status=member_obj.status.value,
-                    attribute=member_obj.attribute,
-                    can_peds=member_obj.can_peds,
-                    sequence=member_obj.sequence,
-                    vacation=member_obj.vacation or [],
-                    created_at=member_obj.created_at,
-                    updated_at=member_obj.updated_at,
-                )
-            )
+            items.append(_build_member_response(member_obj, account))
 
         return MemberListResponse(items=items, total=total)
     except Exception as e:
@@ -3745,18 +3746,17 @@ def report_member_pdf(
         results = session.exec(query).all()
         rows = []
         for member_obj, account in results:
-            label = (member_obj.label or "").strip()
-            name = (member_obj.name or "").strip() or "(sem nome)"
+            name = member_obj.display_name
             email = (member_obj.email or (account.email if account else "") or "").strip() or "-"
             can_peds_str = "Sim" if member_obj.can_peds else "Não"
             sequence_str = str(member_obj.sequence)
-            rows.append((sequence_str, label, name, email, member_obj.status.value, can_peds_str))
+            rows.append((sequence_str, name, email, member_obj.status.value, can_peds_str))
         filters_parts = parse_filters_from_frontend(filters) or query_params_to_filter_parts(
             {"status": status, "status_list": status_list, "role": role, "role_list": role_list},
             MEMBER_REPORT_PARAM_LABELS,
         )
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = _get_tenant_header_title(tenant)
         pdf_bytes = render_member_list_pdf(rows, filters=filters_parts, header_title=tenant_name)
         return Response(
             content=pdf_bytes,
@@ -3797,23 +3797,7 @@ def get_member(
             if account:
                 account_email = account.email
 
-        return MemberResponse(
-            id=member_obj.id,
-            tenant_id=member_obj.tenant_id,
-            account_id=member_obj.account_id,
-            account_email=account_email,
-            member_email=member_obj.email,  # Email público na clínica
-            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
-            member_label=member_obj.label,  # Rótulo opcional
-            role=member_obj.role.value,
-            status=member_obj.status.value,
-            attribute=member_obj.attribute,
-            can_peds=member_obj.can_peds,
-            sequence=member_obj.sequence,
-            vacation=member_obj.vacation or [],
-            created_at=member_obj.created_at,
-            updated_at=member_obj.updated_at,
-        )
+        return _build_member_response(member_obj, account)
     except HTTPException:
         raise
     except Exception as e:
@@ -3936,29 +3920,10 @@ def update_member(
 
         # Buscar account (pode ser None se member ainda não foi vinculado)
         account = None
-        account_email = None
         if member_obj.account_id:
             account = session.get(Account, member_obj.account_id)
-            if account:
-                account_email = account.email
 
-        return MemberResponse(
-            id=member_obj.id,
-            tenant_id=member_obj.tenant_id,
-            account_id=member_obj.account_id,
-            account_email=account_email,
-            member_email=member_obj.email,  # Email público na clínica
-            member_name=member_obj.name,  # Nome público na clínica (pode ser NULL)
-            member_label=member_obj.label,  # Rótulo opcional
-            role=member_obj.role.value,
-            status=member_obj.status.value,
-            attribute=member_obj.attribute,
-            can_peds=member_obj.can_peds,
-            sequence=member_obj.sequence,
-            vacation=member_obj.vacation or [],
-            created_at=member_obj.created_at,
-            updated_at=member_obj.updated_at,
-        )
+        return _build_member_response(member_obj, account)
     except HTTPException:
         raise
     except Exception as e:
@@ -4114,13 +4079,13 @@ def send_member_invite_email(
 
         # Enviar email de convite
         try:
-            # Usar member.name se existir, senão usar email
+            # Usar o nome exibido do associado no convite
             from app.services.email_service import send_member_invite
-            member_name = member_obj.name if member_obj.name else account_email
+            member_name = member_obj.display_name
             result = send_member_invite(
                 to_email=account_email,
                 member_name=member_name,
-                tenant_name=tenant.name,
+                tenant_name=tenant.display_name,
             )
 
             # Garantir que o resultado é uma tupla

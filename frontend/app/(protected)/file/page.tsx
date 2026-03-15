@@ -21,7 +21,7 @@ import { useEntityPage } from '@/hooks/useEntityPage'
 import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardSecondaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
-import { getActionBarErrorProps } from '@/lib/entityUtils'
+import { getActionBarErrorProps, getDisplayName } from '@/lib/entityUtils'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface FileResponse {
@@ -41,6 +41,8 @@ interface Hospital {
     id: number
     tenant_id: number
     name: string
+    label: string | null
+    display_name?: string | null
     prompt: string
     created_at: string
     updated_at: string
@@ -651,7 +653,7 @@ export default function FilesPage() {
             const hospital = hospitalList.find((h) => h.id === filterHospitalId)
             list.push({
                 label: FILTER_HOSPITAL_LABEL,
-                value: hospital?.name ?? String(filterHospitalId),
+                value: hospital ? getDisplayName(hospital) : String(filterHospitalId),
             })
         }
         if (filterStartDate) {
@@ -1416,7 +1418,7 @@ export default function FilesPage() {
                             label={FILTER_HOSPITAL_LABEL}
                             value={filterHospitalId}
                             onChange={handleHospitalChange}
-                            options={hospitalList.map((h) => ({ value: h.id, label: h.name }))}
+                            options={hospitalList.map((hospital) => ({ value: hospital.id, label: getDisplayName(hospital) }))}
                             loading={loadingHospitalList}
                             showFlash={hospitalFieldFlash}
                         />

@@ -19,6 +19,7 @@ import { useReportButton } from '@/hooks/useReportButton'
 import { protectedFetch } from '@/lib/api'
 import { getCardInfoTextClasses, getCardTertiaryTextClasses, getCardTextClasses } from '@/lib/cardStyles'
 import { formatDateTime } from '@/lib/tenantFormat'
+import { getDisplayName } from '@/lib/entityUtils'
 import {
     DemandCreateRequest,
     DemandProcedureListResponse,
@@ -83,7 +84,7 @@ export default function DemandPage() {
             const hospital = hospitals.find((h) => h.id === filterHospitalId)
             list.push({
                 label: FILTER_HOSPITAL_LABEL,
-                value: hospital?.name ?? String(filterHospitalId),
+                value: hospital ? getDisplayName(hospital) : String(filterHospitalId),
             })
         }
         if (filterProcedure) {
@@ -358,7 +359,7 @@ export default function DemandPage() {
                             label="Hospital"
                             value={formData.hospital_id}
                             onChange={(value) => setFormData({ ...formData, hospital_id: value })}
-                            options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                            options={hospitals.map((hospital) => ({ value: hospital.id, label: getDisplayName(hospital) }))}
                             id="hospital_id"
                             required
                             disabled={submitting}
@@ -496,7 +497,7 @@ export default function DemandPage() {
                                     label="Hospital"
                                     value={filterHospitalId}
                                     onChange={setFilterHospitalId}
-                                    options={hospitals.map((h) => ({ value: h.id, label: h.name }))}
+                                    options={hospitals.map((hospital) => ({ value: hospital.id, label: getDisplayName(hospital) }))}
                                     disabled={loadingHospitals}
                                 />
                                 <FilterSelect
@@ -569,7 +570,7 @@ export default function DemandPage() {
                                             {demand.procedure}
                                         </h3>
                                         {hospital && (
-                                            <p className="text-xs text-gray-600 mt-1">{hospital.name}</p>
+                                            <p className="text-xs text-gray-600 mt-1">{getDisplayName(hospital)}</p>
                                         )}
                                         <div className="mt-2 flex flex-wrap gap-1 justify-center px-2">
                                             {demand.is_pediatric && (

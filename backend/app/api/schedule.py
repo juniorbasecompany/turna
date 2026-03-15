@@ -208,7 +208,7 @@ def _build_schedule_response(demand: Demand, session: Session) -> ScheduleRespon
         tenant_id=demand.tenant_id,
         demand_id=demand.id,
         hospital_id=demand.hospital_id,
-        hospital_name=hospital.label or hospital.name,
+        hospital_name=hospital.display_name,
         hospital_color=hospital.color,
         name=demand.schedule_name,
         period_start_at=demand.start_time,
@@ -654,11 +654,12 @@ def report_schedule_pdf(
             formatters = {
                 "filter_start_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
                 "filter_end_time": lambda v: v.strftime("%d/%m/%Y %H:%M") if hasattr(v, "strftime") else str(v),
-                "member_id": lambda v: ((m := session.get(Member, v)) and (m.label or m.name or m.email)) if v else str(v),
+                "member_id": lambda v: ((m := session.get(Member, v)) and m.display_name) if v else str(v),
+                "hospital_id": lambda v: ((h := session.get(Hospital, v)) and h.display_name) if v else str(v),
             }
             filters_parts = query_params_to_filter_parts(params, SCHEDULE_REPORT_PARAM_LABELS, formatters=formatters)
         tenant = session.get(Tenant, member.tenant_id)
-        tenant_name = tenant.name if tenant else None
+        tenant_name = tenant.display_name if tenant else None
         cover_bytes = build_report_cover_only(
             report_title="Relatório de escalas",
             filters=filters_parts,
@@ -905,7 +906,7 @@ async def generate_schedule_from_demands(
     # Gerar nome automático se não informado
     schedule_name = body.name
     if not schedule_name:
-        hospital_name = (hospital.label or hospital.name) if hospital else "Geral"
+        hospital_name = hospital.display_name if hospital else "Geral"
         start_local = body.period_start_at.astimezone(tenant_tz)
         end_local = body.period_end_at.astimezone(tenant_tz)
         schedule_name = f"{hospital_name} - {start_local.strftime('%d/%m/%Y')} a {end_local.strftime('%d/%m/%Y')}"

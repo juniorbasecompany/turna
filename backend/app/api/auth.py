@@ -41,6 +41,7 @@ class TenantOption(BaseModel):
     tenant_id: int
     name: str
     label: str | None = None  # Rótulo opcional
+    display_name: str
     role: str
 
 
@@ -49,6 +50,7 @@ class InviteOption(BaseModel):
     tenant_id: int
     name: str
     label: str | None = None  # Rótulo opcional
+    display_name: str
     role: str
     status: str
 
@@ -136,6 +138,7 @@ def _list_active_tenants_for_account(session: Session, *, account_id: int) -> li
                 tenant_id=tenant.id,
                 name=tenant.name,
                 label=tenant.label,
+                display_name=tenant.display_name,
                 role=member.role.value,
             )
         )
@@ -170,6 +173,7 @@ def _list_pending_invites_for_account(session: Session, *, account_id: int, emai
                 tenant_id=tenant.id,
                 name=tenant.name,
                 label=tenant.label,
+                display_name=tenant.display_name,
                 role=member.role.value,
                 status=member.status.value,
             )

@@ -88,3 +88,19 @@ class Member(BaseModel, table=True):
         default_factory=list,
         sa_column=Column(JSON, nullable=False),
     )
+
+    @property
+    def display_name(self) -> str:
+        label = (self.label or "").strip()
+        if label:
+            return label
+
+        name = (self.name or "").strip()
+        if name:
+            return name
+
+        email = (self.email or "").strip()
+        if email:
+            return email
+
+        return f"Associado {self.id}"
