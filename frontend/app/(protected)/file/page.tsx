@@ -2,9 +2,10 @@
 
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
+import { CardGrid } from '@/components/CardGrid'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormCheckbox } from '@/components/FormCheckbox'
 import { FormField } from '@/components/FormField'
@@ -394,10 +395,10 @@ function PendingFileImageThumbnail({ file }: { file: File }) {
 }
 
 /**
- * Componente de thumbnail do arquivo (preview no corpo do card)
+ * Componente de thumbnail do arquivo (preview visual no corpo do card)
  * Exibe thumbnail WebP se disponível, ou fundo branco com extensão do arquivo
  */
-function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => void }) {
+function FileThumbnail({ file }: { file: FileResponse }) {
     // URL do endpoint de thumbnail
     const thumbnailUrl = `/api/file/${file.id}/thumbnail`
     const [imageError, setImageError] = useState(false)
@@ -517,10 +518,9 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
 
     return (
         <div className="relative w-full h-full bg-white rounded-lg overflow-hidden group">
-            <button
-                onClick={onClick}
-                className="w-full h-full flex items-center justify-center cursor-pointer transition-all duration-200 relative"
-                title="Clique para marcar para leitura"
+            <div
+                className="w-full h-full flex items-center justify-center transition-all duration-200 relative"
+                title="Preview do arquivo"
             >
                 {!imageError && imageSrc ? (
                     <img
@@ -544,7 +544,7 @@ function FileThumbnail({ file, onClick }: { file: FileResponse; onClick?: () => 
                         )}
                     </div>
                 )}
-            </button>
+            </div>
             {/* Botão de lupa no canto superior direito */}
             <button
                 onClick={(e) => {
@@ -1503,7 +1503,7 @@ export default function FilesPage() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:[grid-template-columns:repeat(auto-fill,minmax(260px,1fr))] gap-4 lg:gap-6 mb-4 sm:mb-6">
+                    <CardGrid className="mb-4 sm:mb-6">
                         {/* Card de upload - sempre o primeiro */}
                         <input
                             ref={fileInputRef}
@@ -1687,18 +1687,13 @@ export default function FilesPage() {
                                 <EntityCard
                                     key={file.id}
                                     id={file.id}
-                                    isSelected={isSelected}
+                                    selection={{ isSelected, onToggle: () => toggleFileSelection(file.id) }}
                                     className="flex flex-col"
                                     footer={
                                         <CardFooter
-                                            isSelected={isSelected}
                                             date={file.created_at}
                                             settings={settings}
                                             secondaryText={formatFileSize(file.file_size)}
-                                            onToggleSelection={(e) => {
-                                                e.stopPropagation()
-                                                toggleFileSelection(file.id)
-                                            }}
                                             onEdit={() => handleEditClick(file)}
                                             disabled={deleting || reading}
                                             deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
@@ -1706,9 +1701,9 @@ export default function FilesPage() {
                                         />
                                     }
                                 >
-                                    {/* 1. Container padronizado - Topo + Preview */}
+                                    {/* 1. Container padronizado - Topo + Preview (área de preview clicável) */}
                                     <div className="mb-3">
-                                        <div
+                                        <CardPreviewArea
                                             className="h-40 sm:h-48 rounded-lg flex flex-col border border-blue-200 overflow-hidden"
                                             style={{ backgroundColor: hospitalColor || '#f1f5f9' }}
                                         >
@@ -1732,20 +1727,15 @@ export default function FilesPage() {
 
                                             {/* Preview - Thumbnail */}
                                             <div className="flex-1 min-h-0 relative">
-                                                <FileThumbnail
-                                                    file={file}
-                                                    onClick={() => toggleFileSelection(file.id)}
-                                                />
+                                                <FileThumbnail file={file} />
                                             </div>
-                                        </div>
+                                        </CardPreviewArea>
                                     </div>
 
                                     {/* 3. Compartimento para status - ícone e texto */}
                                     <div
-                                        className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4 cursor-pointer"
+                                        className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4"
                                         style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
-                                        onClick={() => toggleFileSelection(file.id)}
-                                        title={isSelected ? 'Desmarcar' : 'Marcar'}
                                     >
                                         {getStatusIcon(file.job_status)}
                                         <span className="text-base font-normal text-gray-900 flex items-center gap-2">
@@ -1756,7 +1746,7 @@ export default function FilesPage() {
                                 </EntityCard>
                             )
                         })}
-                    </div>
+                    </CardGrid>
                 </>
             )}
 

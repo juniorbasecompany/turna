@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterDateRange, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormInput, FormSelect, FormTextarea } from '@/components/form'
 import { FormField } from '@/components/FormField'
@@ -528,16 +528,11 @@ export default function DemandPage() {
                         <EntityCard
                             key={demand.id}
                             id={demand.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleDemandSelection(demand.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={demand.created_at || demand.start_time}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleDemandSelection(demand.id)
-                                    }}
                                     onEdit={() => handleEditClickCustom(demand)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
@@ -545,9 +540,9 @@ export default function DemandPage() {
                                 />
                             }
                         >
-                            {/* Corpo - Procedimento principal (similar ao Tenant) */}
+                            {/* Corpo - Procedimento principal (área de preview clicável) */}
                             <div className="mb-3">
-                                <div
+                                <CardPreviewArea
                                     className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
                                     style={{
                                         backgroundColor: hospital?.color || '#f1f5f9',
@@ -594,7 +589,7 @@ export default function DemandPage() {
                                             )}
                                         </div>
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
 
                             {/* Detalhes adicionais */}

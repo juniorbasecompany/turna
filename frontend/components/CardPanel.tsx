@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { ActionBar } from './ActionBar'
+import { CardGrid } from './CardGrid'
 import { LoadingSpinner } from './LoadingSpinner'
 
 interface CardPanelProps {
@@ -68,9 +69,9 @@ export function CardPanel({
                     </div>
                 ) : totalCount === 0 && createCard ? (
                     // Quando não há itens mas há card de criação, mostrar apenas o card
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <CardGrid>
                         {createCard}
-                    </div>
+                    </CardGrid>
                 ) : totalCount === 0 ? (
                     // Quando não há itens e não há card de criação, mostrar mensagem vazia
                     <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
@@ -79,10 +80,10 @@ export function CardPanel({
                 ) : (
                     <>
                         {/* Grid de cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <CardGrid>
                             {createCard}
                             {children}
-                        </div>
+                        </CardGrid>
                     </>
                 )}
             </div>

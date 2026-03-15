@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import type { FilterOption } from '@/components/filter'
 import { FilterButtons, FilterPanel } from '@/components/filter'
 import { FormField } from '@/components/FormField'
@@ -596,16 +596,11 @@ export default function MemberPage() {
                         <EntityCard
                             key={member.id}
                             id={member.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleMemberSelection(member.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={member.created_at}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleMemberSelection(member.id)
-                                    }}
                                     onEdit={() => handleEditClick(member)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
@@ -613,8 +608,9 @@ export default function MemberPage() {
                                 />
                             }
                         >
+                            {/* Corpo (área de preview clicável) */}
                             <div className="mb-3">
-                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
+                                <CardPreviewArea className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
                                     <div className="flex flex-col items-center justify-center text-blue-600">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
                                             <svg
@@ -656,7 +652,7 @@ export default function MemberPage() {
                                             </span>
                                         </div>
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
                         </EntityCard>
                     )

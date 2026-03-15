@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import type { FilterOption } from '@/components/filter'
 import { FilterButtons, FilterDateRange, FilterPanel, FilterSelect } from '@/components/filter'
 import { FormInput, FormSelect } from '@/components/form'
@@ -724,16 +724,11 @@ export default function SchedulePage() {
                         <EntityCard
                             key={schedule.id}
                             id={schedule.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleScheduleSelection(schedule.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={schedule.created_at || schedule.period_start_at}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleScheduleSelection(schedule.id)
-                                    }}
                                     onEdit={() => handleEditClick(schedule)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
@@ -741,9 +736,9 @@ export default function SchedulePage() {
                                 />
                             }
                         >
-                            {/* Corpo - Nome principal */}
+                            {/* Corpo - Nome principal (área de preview clicável) */}
                             <div className="mb-3">
-                                <div
+                                <CardPreviewArea
                                     className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
                                     style={{ backgroundColor: schedule.hospital_color || '#eff6ff' }}
                                 >
@@ -808,7 +803,7 @@ export default function SchedulePage() {
                                             )}
                                         </div>
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
 
                             {/* Detalhes adicionais */}

@@ -4,7 +4,7 @@ import React from 'react'
 
 interface CardActionButtonsProps {
     isSelected: boolean
-    onToggleSelection: (e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => void
+    onToggleSelection?: (e: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => void
     onEdit: () => void
     disabled?: boolean
     deleteTitle?: string
@@ -14,13 +14,11 @@ interface CardActionButtonsProps {
 }
 
 /**
- * Componente reutilizável para botões de ação em cards (checkbox para exclusão e editar).
+ * Componente reutilizável para ações de cards (checkbox de seleção e editar).
  *
  * Usado em cards de Hospital, Demand, etc.
  *
- * Ordem padronizada:
- * 1. Checkbox para exclusão - à esquerda
- * 2. Editar (ícone de lápis) - à direita
+ * Pode renderizar checkbox, editar, ou ambos, conforme as props showDelete/showEdit.
  *
  * @example
  * ```tsx
@@ -47,8 +45,8 @@ export function CardActionButtons({
 }: CardActionButtonsProps) {
     return (
         <div className="flex items-center gap-1 shrink-0">
-            {/* 1. Checkbox para exclusão */}
-            {showDelete && (
+            {/* Checkbox de seleção */}
+            {showDelete && onToggleSelection && (
                 <label className="flex items-center cursor-pointer shrink-0 px-2 py-1.5">
                     <input
                         type="checkbox"
@@ -63,7 +61,7 @@ export function CardActionButtons({
                     />
                 </label>
             )}
-            {/* 2. Ícone para editar (oculto se showEdit for false) */}
+            {/* Ícone para editar (oculto se showEdit for false) */}
             {showEdit && (
                 <button
                     onClick={() => {

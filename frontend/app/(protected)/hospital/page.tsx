@@ -6,7 +6,7 @@ import { CardPanel } from '@/components/CardPanel'
 import { ColorPicker } from '@/components/ColorPicker'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterInput, FilterPanel } from '@/components/filter'
 import { FormInput, FormTextarea } from '@/components/form'
 import { FormField } from '@/components/FormField'
@@ -193,16 +193,11 @@ export default function HospitalPage() {
                         <EntityCard
                             key={hospital.id}
                             id={hospital.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleHospitalSelection(hospital.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={hospital.created_at}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleHospitalSelection(hospital.id)
-                                    }}
                                     onEdit={() => handleEditClick(hospital)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
@@ -210,9 +205,9 @@ export default function HospitalPage() {
                                 />
                             }
                         >
-                            {/* Corpo - Ícone de hospital e nome */}
+                            {/* Corpo - Ícone de hospital e nome (área de preview clicável) */}
                             <div className="mb-3">
-                                <div
+                                <CardPreviewArea
                                     className="h-40 sm:h-48 rounded-lg flex items-center justify-center border border-blue-200"
                                     style={{
                                         backgroundColor: hospital.color || '#f1f5f9',
@@ -241,7 +236,7 @@ export default function HospitalPage() {
                                             {hospital.name}
                                         </h3>
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
                         </EntityCard>
                     )

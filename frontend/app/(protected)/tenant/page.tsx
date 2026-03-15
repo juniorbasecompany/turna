@@ -5,7 +5,7 @@ import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
 import { CreateCard } from '@/components/CreateCard'
 import { EditForm } from '@/components/EditForm'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterInput, FilterPanel } from '@/components/filter'
 import { FormInput, FormSelect } from '@/components/form'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -242,16 +242,11 @@ export default function TenantPage() {
                         <EntityCard
                             key={tenant.id}
                             id={tenant.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleTenantSelection(tenant.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={tenant.created_at}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleTenantSelection(tenant.id)
-                                    }}
                                     onEdit={() => handleEditClick(tenant)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
@@ -259,9 +254,9 @@ export default function TenantPage() {
                                 />
                             }
                         >
-                            {/* Corpo - Nome e informações */}
+                            {/* Corpo - Nome e informações (área de preview clicável) */}
                             <div className="mb-3">
-                                <div className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
+                                <CardPreviewArea className="h-40 sm:h-48 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200">
                                     <div className="flex flex-col items-center justify-center text-blue-600">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
                                             <svg
@@ -281,7 +276,7 @@ export default function TenantPage() {
                                         </h3>
                                         {tenant.label && <p className="text-xs text-gray-600 mt-1">{tenant.label}</p>}
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
                         </EntityCard>
                     )

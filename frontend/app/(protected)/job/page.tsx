@@ -3,7 +3,7 @@
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
-import { EntityCard } from '@/components/EntityCard'
+import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterDateRange, FilterPanel } from '@/components/filter'
 import type { FilterOption } from '@/components/filter'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
@@ -682,16 +682,11 @@ export default function JobPage() {
                         <EntityCard
                             key={job.id}
                             id={job.id}
-                            isSelected={isSelected}
+                            selection={{ isSelected, onToggle: () => toggleJobSelection(job.id) }}
                             footer={
                                 <CardFooter
-                                    isSelected={isSelected}
                                     date={job.created_at}
                                     settings={settings}
-                                    onToggleSelection={(e) => {
-                                        e.stopPropagation()
-                                        toggleJobSelection(job.id)
-                                    }}
                                     onEdit={() => { }} // Função vazia (não usada)
                                     disabled={false}
                                     deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
@@ -699,9 +694,9 @@ export default function JobPage() {
                                 />
                             }
                         >
-                            {/* Corpo - Tipo, Status, Datas e Erro */}
+                            {/* Corpo - Tipo, Status, Datas e Erro (área de preview clicável) */}
                             <div className="mb-3">
-                                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                <CardPreviewArea className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                                     <div className="flex flex-col items-center justify-center text-gray-500 mb-4">
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 mb-2">
                                             {getStatusIcon(job.status)}
@@ -760,7 +755,7 @@ export default function JobPage() {
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                </CardPreviewArea>
                             </div>
                         </EntityCard>
                     )
