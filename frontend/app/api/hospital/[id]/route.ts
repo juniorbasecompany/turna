@@ -54,3 +54,29 @@ export async function PUT(
 
     return NextResponse.json(result.data)
 }
+
+/**
+ * DELETE /api/hospital/[id]
+ *
+ * Remove um hospital (apenas admin).
+ */
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    const auth = requireToken(request)
+    if (!auth.ok) {
+        return auth.error
+    }
+
+    const result = await backendFetch(`/hospital/${params.id}`, {
+        method: 'DELETE',
+        token: auth.token,
+    })
+
+    if (!result.ok) {
+        return result.error
+    }
+
+    return new NextResponse(null, { status: 204 })
+}

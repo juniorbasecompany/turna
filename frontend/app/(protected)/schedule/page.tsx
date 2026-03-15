@@ -403,7 +403,7 @@ export default function SchedulePage() {
 
                                 // Processar evento baseado no tipo
                                 if (eventType === 'error' || eventType === 'timeout') {
-                                    reject(new Error('Erro ou timeout aguardando job'))
+                                    reject(new Error('Erro ou timeout aguardando tarefa'))
                                     return
                                 }
 
@@ -415,7 +415,7 @@ export default function SchedulePage() {
                                             return
                                         }
                                         if (data.status === 'FAILED') {
-                                            reject(new Error(data.result_data?.error || 'Job falhou'))
+                                            reject(new Error(data.result_data?.error || 'Tarefa falhou'))
                                             return
                                         }
                                     } catch {

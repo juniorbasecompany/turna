@@ -3,10 +3,13 @@
 import { ActionBar, ActionBarSpacer } from '@/components/ActionBar'
 import { CardFooter } from '@/components/CardFooter'
 import { CardPanel } from '@/components/CardPanel'
+import { EditForm } from '@/components/EditForm'
 import { CardPreviewArea, EntityCard } from '@/components/EntityCard'
 import { FilterButtons, FilterDateRange, FilterPanel } from '@/components/filter'
 import type { FilterOption } from '@/components/filter'
+import { FormField } from '@/components/FormField'
 import { FormFieldGrid } from '@/components/FormFieldGrid'
+import { JsonEditor } from '@/components/JsonEditor'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Pagination } from '@/components/Pagination'
 import { TenantDateTimePicker } from '@/components/TenantDateTimePicker'
@@ -20,12 +23,29 @@ import { formatDateTime } from '@/lib/tenantFormat'
 import { JobResponse } from '@/types/api'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-// Tipo vazio para formulário (jobs não são editáveis)
-type JobFormData = Record<string, never>
+type JobFormData = {
+    job_type: string
+    status: string
+    input_data: string
+    result_data: string
+    error_message: string
+}
 
 // Tipos vazios para requests (jobs não são criados/editados via UI)
 type JobCreateRequest = Record<string, never>
 type JobUpdateRequest = Record<string, never>
+
+function formatJsonValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return ''
+    }
+
+    try {
+        return JSON.stringify(value, null, 2)
+    } catch {
+        return String(value)
+    }
+}
 
 export default function JobPage() {
     const { settings } = useTenantSettings()
@@ -52,12 +72,24 @@ export default function JobPage() {
     })
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null)
 
-    // Configuração inicial (vazio, pois jobs não são editáveis)
-    const initialFormData: JobFormData = {}
+    // Configuração inicial da área de detalhes
+    const initialFormData: JobFormData = {
+        job_type: '',
+        status: '',
+        input_data: '',
+        result_data: '',
+        error_message: '',
+    }
 
-    // Mapeamentos (vazios, pois jobs não são editáveis)
+    // Mapeamentos para a visualização do log
     const mapEntityToFormData = (job: JobResponse): JobFormData => {
-        return {}
+        return {
+            job_type: job.job_type,
+            status: job.status,
+            input_data: formatJsonValue(job.input_data),
+            result_data: formatJsonValue(job.result_data),
+            error_message: job.error_message || '',
+        }
     }
 
     const mapFormDataToCreateRequest = (formData: JobFormData): JobCreateRequest => {
@@ -73,9 +105,15 @@ export default function JobPage() {
         return null
     }
 
-    // isEmptyCheck (sempre true, pois não há formulário)
+    // isEmptyCheck (não é usado para criação neste painel)
     const isEmptyCheck = (formData: JobFormData): boolean => {
-        return true
+        return (
+            formData.job_type.trim() === '' &&
+            formData.status.trim() === '' &&
+            formData.input_data.trim() === '' &&
+            formData.result_data.trim() === '' &&
+            formData.error_message.trim() === ''
+        )
     }
 
     const additionalListParams = useMemo(() => {
@@ -110,6 +148,11 @@ export default function JobPage() {
         loading,
         error,
         setError,
+        formData,
+        editingItem: editingJob,
+        isEditing,
+        handleEditClick,
+        handleCancel,
         selectedItems: selectedJobs,
         toggleSelection: toggleJobSelection,
         clearSelection: clearJobSelection,
@@ -123,7 +166,7 @@ export default function JobPage() {
         actionBarErrorProps,
     } = useEntityPage<JobFormData, JobResponse, JobCreateRequest, JobUpdateRequest>({
         endpoint: '/api/job',
-        entityName: 'job',
+        entityName: 'tarefa',
         initialFormData,
         isEmptyCheck,
         mapEntityToFormData,
@@ -325,7 +368,7 @@ export default function JobPage() {
             )
 
             if (jobsToInterrupt.length === 0) {
-                throw new Error('Nenhum job pode ser interrompido')
+                throw new Error('Nenhuma tarefa pode ser interrompida')
             }
 
             // Chamar API para interromper
@@ -343,9 +386,9 @@ export default function JobPage() {
             // Limpar seleção
             clearJobSelection()
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao interromper jobs'
+            const message = err instanceof Error ? err.message : 'Erro ao interromper tarefas'
             setError(message)
-            console.error('Erro ao interromper jobs:', err)
+            console.error('Erro ao interromper tarefas:', err)
         } finally {
             setInterrupting(false)
         }
@@ -401,7 +444,7 @@ export default function JobPage() {
             )
 
             if (jobsToDelete.length === 0) {
-                throw new Error('Nenhum job pode ser excluído')
+                throw new Error('Nenhuma tarefa pode ser excluída')
             }
 
             // Chamar API para excluir
@@ -419,9 +462,9 @@ export default function JobPage() {
             // Limpar seleção
             clearJobSelection()
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Erro ao excluir jobs'
+            const message = err instanceof Error ? err.message : 'Erro ao excluir tarefas'
             setError(message)
-            console.error('Erro ao excluir jobs:', err)
+            console.error('Erro ao excluir tarefas:', err)
         } finally {
             setDeletingJobs(false)
         }
@@ -611,12 +654,12 @@ export default function JobPage() {
     // Mostra "Interromper" se houver jobs interrompíveis (PENDING/RUNNING)
     // Regra de negócio: PENDING/RUNNING só podem ser interrompidos, COMPLETED/FAILED só podem ser excluídos
     const actionBarButtons = useActionBarRightButtons({
-        isEditing: false,
+        isEditing,
         selectedCount: hasDeletableJobs ? selectedJobsCount : 0, // Botão "Excluir" só aparece se houver excluíveis
         hasChanges: false,
         submitting: false,
         deleting: deletingJobs,
-        onCancel: clearJobSelection,
+        onCancel: handleCancel,
         onDelete: handleDeleteJobsSelected, // Handler customizado que exclui apenas COMPLETED/FAILED
         onSave: async () => { },
         // Usar additionalSelectedCount para fazer o botão "Cancelar" aparecer mesmo quando não há excluíveis
@@ -636,14 +679,76 @@ export default function JobPage() {
 
     return (
         <>
+            <EditForm
+                title="Tarefa"
+                editTitle="Detalhes da tarefa"
+                isEditing={isEditing}
+            >
+                <div className="space-y-4">
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Tipo da tarefa">
+                            <input
+                                id="job_type"
+                                type="text"
+                                value={formData.job_type}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700 focus:outline-none"
+                            />
+                        </FormField>
+                        <FormField label="Situação">
+                            <input
+                                id="status"
+                                type="text"
+                                value={formData.status}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700 focus:outline-none"
+                            />
+                        </FormField>
+                    </FormFieldGrid>
+
+                    <FormFieldGrid cols={1} smCols={2} gap={4}>
+                        <FormField label="Dados de entrada">
+                            <JsonEditor
+                                id="input_data"
+                                value={formData.input_data}
+                                on_change={() => { }}
+                                is_disabled
+                                height={260}
+                            />
+                        </FormField>
+
+                        <FormField label="Dados de resultado">
+                            <JsonEditor
+                                id="result_data"
+                                value={formData.result_data}
+                                on_change={() => { }}
+                                is_disabled
+                                height={260}
+                            />
+                        </FormField>
+                    </FormFieldGrid>
+
+                    <FormField label="Mensagem de erro">
+                        <textarea
+                            id="error_message"
+                            value={formData.error_message}
+                            readOnly
+                            rows={editingJob?.error_message ? 8 : 6}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700 focus:outline-none resize-y"
+                            placeholder="Nenhum erro registrado"
+                        />
+                    </FormField>
+                </div>
+            </EditForm>
+
             <CardPanel
-                title="Jobs"
-                description="Visualize os jobs do sistema"
+                title="Tarefas"
+                description="Visualize as tarefas do sistema"
                 totalCount={filteredJobs.length}
                 selectedCount={selectedJobs.size}
                 loading={loading}
-                loadingMessage="Carregando jobs..."
-                emptyMessage="Nenhum job encontrado."
+                loadingMessage="Carregando tarefas..."
+                emptyMessage="Nenhuma tarefa encontrada."
                 error={error}
                 filterContent={
                     <FilterPanel>
@@ -687,10 +792,10 @@ export default function JobPage() {
                                 <CardFooter
                                     date={job.created_at}
                                     settings={settings}
-                                    onEdit={() => { }} // Função vazia (não usada)
+                                    onEdit={() => handleEditClick(job)}
                                     disabled={false}
                                     deleteTitle={isSelected ? 'Desmarcar' : 'Marcar'}
-                                    showEdit={false} // Ocultar botão de editar
+                                    editTitle="Editar tarefa"
                                 />
                             }
                         >
@@ -746,13 +851,6 @@ export default function JobPage() {
                                                         minute: '2-digit',
                                                     })}
                                             </p>
-                                        )}
-                                        {job.error_message && (
-                                            <div className={`mt-2 p-2 rounded bg-red-50 border border-red-200`}>
-                                                <p className={`text-xs font-medium text-red-800`}>
-                                                    <span className="font-semibold">Erro:</span> {job.error_message}
-                                                </p>
-                                            </div>
                                         )}
                                     </div>
                                 </CardPreviewArea>

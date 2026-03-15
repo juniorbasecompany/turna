@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
@@ -74,6 +74,94 @@ def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) ->
     avg_seconds = sum(durations) / len(durations)
     window = timedelta(seconds=avg_seconds * 10)
     return min(window, _MAX_STALE_WINDOW)
+
+
+def _replace_file_demand_from_extract_result(
+    session: Session,
+    *,
+    tenant_id: int,
+    hospital_id: int,
+    file_id: int,
+    job_id: int,
+    result_data: dict[str, Any],
+) -> int:
+    """
+    Substitui as demandas geradas automaticamente para um arquivo pelo conteúdo
+    mais recente do JSON extraído.
+    """
+    demand_item_list = (result_data or {}).get("demands") or []
+    if not isinstance(demand_item_list, list):
+        raise RuntimeError("result_data.demands inválido para persistência")
+
+    current_demand_list = session.exec(
+        select(Demand).where(
+            Demand.tenant_id == tenant_id,
+            Demand.pdf_file_id == file_id,
+        )
+    ).all()
+    for demand_row in current_demand_list:
+        session.delete(demand_row)
+
+    created_demand_count = 0
+    for demand_item in demand_item_list:
+        if not isinstance(demand_item, dict):
+            continue
+
+        procedure = str(demand_item.get("procedure") or "").strip()
+        start_time_raw = str(demand_item.get("start_time") or "").strip()
+        end_time_raw = str(demand_item.get("end_time") or "").strip()
+        if not procedure or not start_time_raw or not end_time_raw:
+            continue
+
+        try:
+            start_time = datetime.fromisoformat(start_time_raw.replace("Z", "+00:00"))
+            end_time = datetime.fromisoformat(end_time_raw.replace("Z", "+00:00"))
+        except ValueError:
+            logger.warning(
+                "[EXTRACT_DEMAND] Demanda ignorada por datetime inválido "
+                f"(file_id={file_id}, procedure={procedure!r})"
+            )
+            continue
+
+        skill_raw_list = demand_item.get("skills")
+        skill_list = None
+        if isinstance(skill_raw_list, list):
+            skill_list = [str(item).strip() for item in skill_raw_list if str(item).strip()]
+
+        room = demand_item.get("room")
+        anesthesia_type = demand_item.get("anesthesia_type")
+        complexity = demand_item.get("complexity")
+        priority = demand_item.get("priority")
+        notes = demand_item.get("notes")
+
+        demand_row = Demand(
+            tenant_id=tenant_id,
+            hospital_id=hospital_id,
+            job_id=job_id,
+            pdf_file_id=file_id,
+            room=str(room).strip() if isinstance(room, str) and room.strip() else None,
+            start_time=start_time,
+            end_time=end_time,
+            procedure=procedure,
+            anesthesia_type=(
+                str(anesthesia_type).strip()
+                if isinstance(anesthesia_type, str) and anesthesia_type.strip()
+                else None
+            ),
+            complexity=(
+                str(complexity).strip()
+                if isinstance(complexity, str) and complexity.strip()
+                else None
+            ),
+            skills=skill_list,
+            priority=str(priority).strip() if isinstance(priority, str) and priority.strip() else None,
+            is_pediatric=bool(demand_item.get("is_pediatric") or False),
+            notes=str(notes).strip() if isinstance(notes, str) and notes.strip() else None,
+        )
+        session.add(demand_row)
+        created_demand_count += 1
+
+    return created_demand_count
 
 
 async def ping_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]:
@@ -858,19 +946,32 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
 
             # Executa extração usando prompt do hospital (retorna dict JSON-serializável)
             result = extract_demand(tmp_path, custom_user_prompt=hospital_prompt)
-            if isinstance(result, dict):
-                meta = result.setdefault("meta", {})
-                meta.pop("pdf_path", None)
-                meta["file_id"] = file_id
-                meta["filename"] = filename
-                meta["hospital_id"] = hospital.id
-                meta["hospital_name"] = hospital.name
+            if not isinstance(result, dict):
+                raise RuntimeError("Resultado da extração inválido")
 
-            job.result_data = result
-            # Verificar se foi cancelado antes de marcar como COMPLETED
+            # Se o job foi cancelado durante a leitura, não persiste alterações
             if _was_cancelled(session, job):
                 logger.warning(f"[EXTRACT_DEMAND] Job {job.id} foi cancelado durante execução")
                 return {"ok": False, "error": "job_cancelled", "job_id": job.id}
+
+            created_demand_count = _replace_file_demand_from_extract_result(
+                session,
+                tenant_id=job.tenant_id,
+                hospital_id=hospital.id,
+                file_id=file_id,
+                job_id=job.id,
+                result_data=result,
+            )
+
+            meta = result.setdefault("meta", {})
+            meta.pop("pdf_path", None)
+            meta["file_id"] = file_id
+            meta["filename"] = filename
+            meta["hospital_id"] = hospital.id
+            meta["hospital_name"] = hospital.name
+            meta["created_demand_count"] = created_demand_count
+
+            job.result_data = result
             job.status = JobStatus.COMPLETED
             now = utc_now()
             job.completed_at = now
@@ -881,6 +982,10 @@ async def extract_demand_job(ctx: dict[str, Any], job_id: int) -> dict[str, Any]
             session.refresh(job)
             return {"ok": True, "job_id": job.id}
         except Exception as e:
+            session.rollback()
+            job = session.get(Job, job_id)
+            if not job:
+                return {"ok": False, "error": _safe_error_message(e), "job_id": job_id}
             job.status = JobStatus.FAILED
             job.error_message = _safe_error_message(e)
             now = utc_now()

@@ -102,14 +102,14 @@ export default function DashboardPage() {
             {/* Segunda linha de cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <div className="text-sm font-medium text-gray-600 mb-2">Total de Jobs</div>
+                    <div className="text-sm font-medium text-gray-600 mb-2">Total de Tarefas</div>
                     <div className="text-3xl font-semibold text-gray-900">
                         {loading ? <LoadingSpinner /> : totals.jobs}
                     </div>
                 </div>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <div className="text-sm font-medium text-gray-600 mb-2">Jobs em Processamento</div>
+                    <div className="text-sm font-medium text-gray-600 mb-2">Tarefas em Processamento</div>
                     <div className="text-3xl font-semibold text-yellow-600">
                         {loading ? <LoadingSpinner /> : totals.jobsRunning}
                     </div>

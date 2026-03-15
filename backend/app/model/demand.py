@@ -52,8 +52,6 @@ class Demand(BaseModel, table=True):
         sa_type=sa.Enum(
             ScheduleStatus,
             name="demand_schedule_status",
-            native_enum=False,
-            values_callable=lambda e: [m.value for m in e],
         ),
         index=True,
         nullable=True,

@@ -18,7 +18,7 @@ export async function GET(
 
     if (!jobId) {
         return new Response(
-            JSON.stringify({ detail: 'ID do job é obrigatório' }),
+            JSON.stringify({ detail: 'ID da tarefa é obrigatório' }),
             { status: 400, headers: { 'Content-Type': 'application/json' } }
         )
     }

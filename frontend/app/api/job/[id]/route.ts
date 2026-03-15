@@ -11,7 +11,7 @@ export async function GET(
     { params }: { params: { id: string } }
 ) {
     if (!params.id) {
-        return errorResponse('ID do job é obrigatório', 400)
+        return errorResponse('ID da tarefa é obrigatório', 400)
     }
 
     const auth = requireToken(request)
@@ -40,7 +40,7 @@ export async function PUT(
     { params }: { params: { id: string } }
 ) {
     if (!params.id) {
-        return errorResponse('ID do job é obrigatório', 400)
+        return errorResponse('ID da tarefa é obrigatório', 400)
     }
 
     const auth = requireToken(request)
@@ -73,7 +73,7 @@ export async function DELETE(
     { params }: { params: { id: string } }
 ) {
     if (!params.id) {
-        return errorResponse('ID do job é obrigatório', 400)
+        return errorResponse('ID da tarefa é obrigatório', 400)
     }
 
     const auth = requireToken(request)

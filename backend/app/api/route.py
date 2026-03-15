@@ -1446,7 +1446,7 @@ def get_job(
 ):
     job = session.get(Job, job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     return job
@@ -1473,7 +1473,7 @@ def update_job(
         job = session.get(Job, job_id)
         if not job:
             logger.warning(f"Job não encontrado: id={job_id}")
-            raise HTTPException(status_code=404, detail="Job não encontrado")
+            raise HTTPException(status_code=404, detail="Tarefa não encontrada")
         if job.tenant_id != member.tenant_id:
             logger.warning(f"Acesso negado: job.tenant_id={job.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
@@ -1534,7 +1534,7 @@ async def stream_job_status(
     # Validar acesso ao job
     job = session.get(Job, job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -1556,7 +1556,7 @@ async def stream_job_status(
                 current_job = fresh_session.get(Job, job_id)
                 if not current_job:
                     # Job foi deletado
-                    yield f"event: error\ndata: {json.dumps({'error': 'Job não encontrado'})}\n\n"
+                    yield f"event: error\ndata: {json.dumps({'error': 'Tarefa não encontrada'})}\n\n"
                     return
 
                 status = current_job.status.value
@@ -1581,7 +1581,7 @@ async def stream_job_status(
                 check_interval = min(check_interval + 1.0, max_interval)
 
         # Timeout - enviar evento de timeout
-        yield f"event: timeout\ndata: {json.dumps({'error': 'Timeout aguardando job'})}\n\n"
+        yield f"event: timeout\ndata: {json.dumps({'error': 'Timeout aguardando tarefa'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -1606,7 +1606,7 @@ def cancel_job(
     """
     job = session.get(Job, job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -1642,7 +1642,7 @@ def delete_job(
     """
     job = session.get(Job, job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -1677,7 +1677,7 @@ async def requeue_job(
     """
     job = session.get(Job, job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     if job.tenant_id != _admin.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -1697,7 +1697,7 @@ async def requeue_job(
         if job.job_type == JobType.PING:
             raise HTTPException(
                 status_code=400,
-                detail="Job transiente (PING) não deve ser reenfileirado; prefira expirar/cancelar.",
+                detail="Tarefa transiente (PING) não deve ser reenfileirada; prefira expirar/cancelar.",
             )
         if job.status == JobStatus.FAILED:
             pass
@@ -2302,13 +2302,13 @@ async def schedule_generate(
 
     extract_job = session.get(Job, body.extract_job_id)
     if not extract_job:
-        raise HTTPException(status_code=404, detail="Job de extração não encontrado")
+        raise HTTPException(status_code=404, detail="Tarefa de extração não encontrada")
     if extract_job.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
     if extract_job.status != JobStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Job de extração deve estar COMPLETED")
+        raise HTTPException(status_code=400, detail="Tarefa de extração deve estar COMPLETED")
     if not extract_job.result_data:
-        raise HTTPException(status_code=400, detail="Job de extração não possui result_data")
+        raise HTTPException(status_code=400, detail="Tarefa de extração não possui result_data")
 
     job = Job(
         tenant_id=member.tenant_id,
@@ -2988,9 +2988,9 @@ def create_demand(
         if body.job_id is not None:
             job = session.get(Job, body.job_id)
             if not job:
-                raise HTTPException(status_code=404, detail="Job não encontrado")
+                raise HTTPException(status_code=404, detail="Tarefa não encontrada")
             if job.tenant_id != member.tenant_id:
-                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+                raise HTTPException(status_code=403, detail="Tarefa não pertence ao tenant atual")
 
         # Validar member_id se fornecido (member atribuído à demanda)
         if body.member_id is not None:
@@ -3064,9 +3064,9 @@ def list_demands(
         if job_id is not None:
             job = session.get(Job, job_id)
             if not job:
-                raise HTTPException(status_code=404, detail="Job não encontrado")
+                raise HTTPException(status_code=404, detail="Tarefa não encontrada")
             if job.tenant_id != member.tenant_id:
-                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+                raise HTTPException(status_code=403, detail="Tarefa não pertence ao tenant atual")
         if start_at is not None and start_at.tzinfo is None:
             raise HTTPException(status_code=400, detail="start_at deve ter timezone explícito (timestamptz)")
         if end_at is not None and end_at.tzinfo is None:
@@ -3300,9 +3300,9 @@ def update_demand(
         if body.job_id is not None:
             job = session.get(Job, body.job_id)
             if not job:
-                raise HTTPException(status_code=404, detail="Job não encontrado")
+                raise HTTPException(status_code=404, detail="Tarefa não encontrada")
             if job.tenant_id != member.tenant_id:
-                raise HTTPException(status_code=403, detail="Job não pertence ao tenant atual")
+                raise HTTPException(status_code=403, detail="Tarefa não pertence ao tenant atual")
 
         # Validar member_id se fornecido (member atribuído à demanda)
         if body.member_id is not None:

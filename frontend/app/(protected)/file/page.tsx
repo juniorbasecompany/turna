@@ -220,15 +220,15 @@ function getJobStatusCardClasses(jobStatus: string | null): { border: string; bg
 function getJobStatusText(jobStatus: string | null): string {
     switch (jobStatus) {
         case 'PENDING':
-            return 'Na fila para ser lido'
+            return 'Na fila para ler demandas'
         case 'RUNNING':
-            return 'Lendo o conteúdo do arquivo'
+            return 'Lendo demandas do arquivo'
         case 'COMPLETED':
-            return 'Conteúdo lido'
+            return 'Demandas lidas'
         case 'FAILED':
-            return 'Não foi possível ler o conteúdo'
+            return 'Não foi possível ler demandas'
         default:
-            return 'Pronto para ser lido'
+            return 'Pronto para ler demandas'
     }
 }
 
@@ -852,7 +852,7 @@ export default function FilesPage() {
     // Salvar edição
     const handleSave = useCallback(async () => {
         if (!editingFile || !editingJobId) {
-            setError('Job não encontrado para este arquivo')
+            setError('Tarefa não encontrada para este arquivo')
             return
         }
 
@@ -946,7 +946,7 @@ export default function FilesPage() {
                     newPending[fileIndex] = {
                         ...newPending[fileIndex],
                         jobStatus: 'FAILED',
-                        error: err instanceof Error ? err.message : 'Erro ao verificar status do job',
+                        error: err instanceof Error ? err.message : 'Erro ao verificar status da tarefa',
                     }
                 }
                 return newPending
@@ -1000,8 +1000,8 @@ export default function FilesPage() {
                 } catch (err) {
                     setBottomBarMessage(
                         err instanceof Error
-                            ? `Arquivo enviado, mas não foi possível iniciar a leitura: ${err.message}`
-                            : 'Arquivo enviado, mas não foi possível iniciar a leitura'
+                            ? `Arquivo enviado, mas não foi possível iniciar a leitura das demandas: ${err.message}`
+                            : 'Arquivo enviado, mas não foi possível iniciar a leitura das demandas'
                     )
                 }
             }
@@ -1304,7 +1304,7 @@ export default function FilesPage() {
             }
 
             if (fileIdsToRead.length === 0) {
-                setError('Nenhum arquivo para ler')
+                setError('Nenhum arquivo para ler demandas')
                 return
             }
 
@@ -1336,7 +1336,7 @@ export default function FilesPage() {
             setError(
                 err instanceof Error
                     ? err.message
-                    : 'Erro ao iniciar leitura dos arquivos. Tente novamente.'
+                    : 'Erro ao iniciar leitura das demandas dos arquivos. Tente novamente.'
             )
         } finally {
             setReading(false)
@@ -1364,7 +1364,7 @@ export default function FilesPage() {
             selectedFilesCount > 0
                 ? [
                     {
-                        label: 'Ler conteúdo',
+                        label: 'Ler demandas',
                         onClick: handleReadSelected,
                         disabled: reading || submitting,
                         loading: reading,
@@ -1440,11 +1440,11 @@ export default function FilesPage() {
                     <FilterButtons
                         title="Situação"
                         options={[
-                            { value: null as JobStatus | null, label: 'Pronto para ser lido', color: 'text-gray-600' },
-                            { value: 'PENDING' as JobStatus, label: 'Na fila para ser lido', color: 'text-yellow-600' },
-                            { value: 'RUNNING' as JobStatus, label: 'Lendo o conteúdo', color: 'text-blue-600' },
-                            { value: 'COMPLETED' as JobStatus, label: 'Conteúdo lido', color: 'text-green-600' },
-                            { value: 'FAILED' as JobStatus, label: 'Não foi possível ler', color: 'text-red-600' },
+                            { value: null as JobStatus | null, label: 'Pronto para ler demandas', color: 'text-gray-600' },
+                            { value: 'PENDING' as JobStatus, label: 'Na fila para ler demandas', color: 'text-yellow-600' },
+                            { value: 'RUNNING' as JobStatus, label: 'Lendo demandas', color: 'text-blue-600' },
+                            { value: 'COMPLETED' as JobStatus, label: 'Demandas lidas', color: 'text-green-600' },
+                            { value: 'FAILED' as JobStatus, label: 'Não foi possível ler demandas', color: 'text-red-600' },
                         ]}
                         selectedValues={statusFilters.selectedValues}
                         onToggle={statusFilters.toggleFilter}
@@ -1530,7 +1530,7 @@ export default function FilesPage() {
                             bottomContent={
                                 <FormCheckbox
                                     id="read_content_on_upload"
-                                    label="Ler o conteúdo"
+                                    label="Ler demandas"
                                     checked={readContentOnUpload}
                                     onChange={setReadContentOnUpload}
                                     disabled={uploading}
