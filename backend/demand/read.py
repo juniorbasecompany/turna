@@ -119,7 +119,8 @@ def _openai_client():
             "OPENAI_API_KEY não encontrada. Coloque no .env (backend/.env ou raiz do repo):\n"
             "OPENAI_API_KEY=sk-...\n"
         )
-    return OpenAI(api_key=api_key)
+    timeout = getattr(config, "DEFAULT_OPENAI_TIMEOUT", 300)
+    return OpenAI(api_key=api_key, timeout=timeout)
 
 # -----------------------------
 # PDF -> imagens (para IA)

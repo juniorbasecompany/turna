@@ -6,7 +6,7 @@ Prompts usados na extração de demandas via IA.
 """
 
 # Versão do prompt (para tracking de mudanças)
-PROMPT_VERSION = "v2.0"
+PROMPT_VERSION = "v2.1"
 
 # Prompt do sistema: papel + estrutura da resposta (igual para todos os hospitais)
 SYSTEM_PROMPT = """Você é um extrator de dados de agenda cirúrgica. Extraia as demandas (linhas de tabela) do documento.

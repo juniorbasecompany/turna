@@ -789,19 +789,20 @@ export default function FilesPage() {
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
 
-    // Buscar JSON do arquivo através do job
+    // Buscar JSON do arquivo através do job (result_data do job de extração COMPLETED)
     const fetchFileJson = useCallback(async (fileId: number): Promise<{ json: string; jobId: number | null }> => {
         try {
-            // Buscar jobs do tipo extract_demand para este arquivo
+            // Buscar apenas jobs COMPLETED para ter result_data preenchido e reduzir payload
             const jobsResponse = await protectedFetch<{ items: JobResponse[]; total: number }>(
-                `/api/job/list?job_type=extract_demand&limit=100`
+                `/api/job/list?job_type=extract_demand&status=COMPLETED&limit=100`
             )
 
-            // Encontrar o job mais recente com status COMPLETED para este arquivo
+            const fileIdNum = Number(fileId)
             const completedJob = jobsResponse.items
                 .filter(job => {
-                    const inputData = job.input_data as { file_id?: number } | null
-                    return inputData?.file_id === fileId && job.status === 'COMPLETED'
+                    const inputData = job.input_data as { file_id?: number | string } | null
+                    const jobFileId = inputData?.file_id != null ? Number(inputData.file_id) : NaN
+                    return jobFileId === fileIdNum && job.status === 'COMPLETED'
                 })
                 .sort((a, b) => {
                     const dateA = new Date(a.completed_at || a.created_at).getTime()
@@ -809,7 +810,7 @@ export default function FilesPage() {
                     return dateB - dateA
                 })[0]
 
-            if (completedJob && completedJob.result_data) {
+            if (completedJob && completedJob.result_data != null && typeof completedJob.result_data === 'object') {
                 return { json: JSON.stringify(completedJob.result_data, null, 2), jobId: completedJob.id }
             }
 

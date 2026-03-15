@@ -204,7 +204,7 @@ def validate_and_normalize_result(obj: dict) -> dict:
         del meta["timezone"]
     out["meta"] = meta
 
-    # demand list (resposta da IA pode vir como "demands" ou "demandList")
+    # demand list: o contrato do prompt usa somente "demandList"
     raw_demandList = as_list(obj.get("demandList"))
     demand_list = []
     for d in raw_demandList:

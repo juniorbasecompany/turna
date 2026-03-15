@@ -25,16 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
+# Jobs RUNNING há mais que isso são marcados FAILED (worker travou/crashou)
+_MAX_RUNNING_AGE = timedelta(minutes=30)
 
 
 def _was_cancelled(session: Session, job: Job) -> bool:
     """
     Verifica se o job foi cancelado (status FAILED) durante a execução.
-    Faz um refresh no banco para obter o status mais recente.
-    Usado para evitar sobrescrever status FAILED com COMPLETED.
+    Consulta apenas o status no banco sem recarregar o objeto em memória.
+    Usado para evitar sobrescrever status FAILED com COMPLETED e sem perder
+    alterações locais ainda não persistidas, como `result_data`.
     """
-    session.refresh(job)
-    return job.status == JobStatus.FAILED
+    current_status = session.exec(
+        select(Job.status).where(Job.id == job.id)
+    ).one()
+    return current_status == JobStatus.FAILED
 
 
 def _stale_window_for(session: Session, *, tenant_id: int, job_type: JobType) -> timedelta:
@@ -1185,15 +1190,16 @@ async def generate_thumbnail_job(ctx: dict[str, Any], job_id: int) -> dict[str, 
 async def reconcile_pending_orphans(ctx: dict[str, Any]) -> dict[str, Any]:
     """
     Auto-fail de jobs órfãos/stale:
-      - apenas `PENDING`
-      - apenas quando `started_at IS NULL` (nunca virou RUNNING)
-      - usa janela dinâmica (10x média últimos 10 COMPLETED do mesmo tipo), com teto 1h
+      - PENDING com started_at IS NULL (nunca virou RUNNING): janela dinâmica (10x média), teto 1h
+      - RUNNING com started_at muito antigo (> _MAX_RUNNING_AGE): worker travou/crashou
     """
     now = utc_now()
-    failed = 0
+    failed_pending = 0
+    failed_running = 0
     scanned = 0
 
     with Session(engine) as session:
+        # 1) PENDING órfãos (nunca iniciaram)
         pending = session.exec(
             select(Job).where(
                 Job.status == JobStatus.PENDING,
@@ -1221,9 +1227,35 @@ async def reconcile_pending_orphans(ctx: dict[str, Any]) -> dict[str, Any]:
             job.completed_at = now
             job.updated_at = now
             session.add(job)
-            failed += 1
+            failed_pending += 1
 
-        if failed:
+        # 2) RUNNING travados (started_at há mais de _MAX_RUNNING_AGE)
+        running_stale = session.exec(
+            select(Job).where(
+                Job.status == JobStatus.RUNNING,
+                Job.started_at.is_not(None),  # type: ignore[attr-defined]
+                Job.started_at < (now - _MAX_RUNNING_AGE),  # type: ignore[attr-defined]
+            )
+        ).all()
+
+        for job in running_stale:
+            scanned += 1
+            job.status = JobStatus.FAILED
+            job.error_message = (
+                "stale RUNNING: job ficou em execução por mais de 30 minutos; "
+                "possível timeout da API (OpenAI) ou worker reiniciado; requeue para tentar novamente"
+            )
+            job.completed_at = now
+            job.updated_at = now
+            session.add(job)
+            failed_running += 1
+
+        if failed_pending or failed_running:
             session.commit()
 
-    return {"ok": True, "scanned": scanned, "failed": failed}
+    return {
+        "ok": True,
+        "scanned": scanned,
+        "failed_pending": failed_pending,
+        "failed_running": failed_running,
+    }
