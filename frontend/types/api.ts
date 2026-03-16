@@ -157,7 +157,7 @@ export interface ScheduleResponse {
     status: string
     version_number: number
     job_id: number | null
-    pdf_file_id: number | null
+    file_id: number | null
     generated_at: string | null
     published_at: string | null
     created_at: string
@@ -172,8 +172,6 @@ export interface ScheduleListResponse {
 export interface SchedulePublishResponse {
     schedule_id: number
     status: string
-    pdf_file_id: number
-    presigned_url: string
 }
 
 export interface ScheduleGenerateRequest {

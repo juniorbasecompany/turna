@@ -7,7 +7,7 @@ from collections import defaultdict
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from app.report.pdf_demand import demands_to_day_schedules
 from app.report.pdf_layout import (
     COVER_HEIGHT_PT,
@@ -28,15 +28,12 @@ from zoneinfo import ZoneInfo
 from app.auth.dependencies import get_current_member
 from app.db.session import get_session
 from app.model.base import utc_now
-from app.model.demand import Demand
-from app.model.file import File
 from app.model.job import Job, JobStatus, JobType
 from app.model.member import Member
 from app.model.hospital import Hospital
 from app.model.demand import Demand, ScheduleStatus
 from app.lib.tenant_format import format_date_for_tenant
 from app.model.tenant import Tenant
-from app.storage.service import StorageService
 from app.worker.worker_settings import WorkerSettings
 
 
@@ -132,8 +129,6 @@ def _schedule_list_queries(
 class SchedulePublishResponse(PydanticBaseModel):
     schedule_id: int
     status: str
-    pdf_file_id: int
-    presigned_url: str
 
 
 class ScheduleResponse(PydanticBaseModel):
@@ -150,7 +145,7 @@ class ScheduleResponse(PydanticBaseModel):
     status: Optional[str] = None  # schedule_status
     version_number: int = 1
     job_id: Optional[int] = None
-    pdf_file_id: Optional[int] = None
+    file_id: Optional[int] = None
     generated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
     created_at: datetime
@@ -216,7 +211,7 @@ def _build_schedule_response(demand: Demand, session: Session) -> ScheduleRespon
         status=demand.schedule_status.value if demand.schedule_status else None,
         version_number=demand.schedule_version_number,
         job_id=demand.job_id,
-        pdf_file_id=demand.pdf_file_id,
+        file_id=demand.file_id,
         generated_at=demand.generated_at,
         published_at=demand.published_at,
         created_at=demand.created_at,
@@ -505,6 +500,22 @@ def _day_schedules_from_result(*, demand: Demand, session: Optional[Session] = N
     return schedules
 
 
+def _render_schedule_pdf_response(*, demand: Demand, session: Session) -> Response:
+    schedules = _day_schedules_from_result(demand=demand, session=session)
+    try:
+        from output.day import render_multi_day_pdf_body_bytes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
+
+    pdf_bytes = render_multi_day_pdf_body_bytes(schedules)
+    filename = f"schedule_{demand.id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
 @router.post("/{schedule_id}/publish", response_model=SchedulePublishResponse, tags=["Schedule"])
 def publish_schedule(
     schedule_id: int,
@@ -518,35 +529,13 @@ def publish_schedule(
     if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    storage_service = StorageService()
-
-    if demand.pdf_file_id is not None and demand.schedule_status == ScheduleStatus.PUBLISHED:
-        file_model = session.get(File, demand.pdf_file_id)
-        if not file_model:
-            raise HTTPException(status_code=500, detail="pdf_file_id aponta para um File inexistente")
-        presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
+    if demand.schedule_status == ScheduleStatus.PUBLISHED:
         return SchedulePublishResponse(
             schedule_id=demand.id,
-            status=str(demand.schedule_status),
-            pdf_file_id=file_model.id,
-            presigned_url=presigned_url,
+            status=demand.schedule_status.value,
         )
 
-    schedules = _day_schedules_from_result(demand=demand, session=session)
-    try:
-        from output.day import render_multi_day_pdf_body_bytes
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Falha ao carregar gerador de PDF: {e}") from e
-
-    pdf_bytes = render_multi_day_pdf_body_bytes(schedules)
-    file_model = storage_service.upload_demand_pdf(
-        session=session,
-        tenant_id=member.tenant_id,
-        demand_id=demand.id,
-        pdf_bytes=pdf_bytes,
-    )
-
-    demand.pdf_file_id = file_model.id
+    _day_schedules_from_result(demand=demand, session=session)
     demand.schedule_status = ScheduleStatus.PUBLISHED
     demand.published_at = utc_now()
     demand.updated_at = utc_now()
@@ -554,12 +543,9 @@ def publish_schedule(
     session.commit()
     session.refresh(demand)
 
-    presigned_url = storage_service.get_file_presigned_url(file_model.s3_key, expiration=3600)
     return SchedulePublishResponse(
         schedule_id=demand.id,
-        status=str(demand.schedule_status),
-        pdf_file_id=file_model.id,
-        presigned_url=presigned_url,
+        status=demand.schedule_status.value,
     )
 
 
@@ -575,15 +561,10 @@ def download_schedule_pdf(
         raise HTTPException(status_code=404, detail="Demanda não encontrada")
     if demand.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
-    if not demand.pdf_file_id:
+    if demand.schedule_status != ScheduleStatus.PUBLISHED:
         raise HTTPException(status_code=404, detail="PDF não encontrado (escala ainda não publicada)")
 
-    file_model = session.get(File, demand.pdf_file_id)
-    if not file_model:
-        raise HTTPException(status_code=500, detail="pdf_file_id aponta para um File inexistente")
-
-    presigned_url = StorageService().get_file_presigned_url(file_model.s3_key, expiration=3600)
-    return RedirectResponse(url=presigned_url, status_code=302)
+    return _render_schedule_pdf_response(demand=demand, session=session)
 
 
 @router.get("/report", tags=["Schedule"])
@@ -1058,7 +1039,6 @@ def delete_schedule(
     demand.schedule_result_data = None
     demand.generated_at = None
     demand.published_at = None
-    demand.pdf_file_id = None
     demand.job_id = None
     demand.member_id = None
     demand.updated_at = utc_now()

@@ -1781,7 +1781,7 @@ class FileResponse(PydanticBaseModel):
     hospital_id: int
     hospital_name: str
     hospital_color: Optional[str] = None  # Cor do hospital em formato hexadecimal (#RRGGBB)
-    can_delete: bool  # True se não possui job EXTRACT_DEMAND COMPLETED
+    can_delete: bool  # True se não está vinculado a nenhuma demanda
     job_status: Optional[str] = None  # Status do job mais recente EXTRACT_DEMAND (PENDING, RUNNING, COMPLETED, FAILED) ou None se não houver job
 
     class Config:
@@ -1963,26 +1963,21 @@ def list_files(
     total = session.exec(count_query).one()
     items = session.exec(query.limit(limit).offset(offset)).all()
 
-    # Buscar todos os jobs EXTRACT_DEMAND COMPLETED do tenant para verificar quais arquivos podem ser deletados
-    completed_jobs_query = select(Job).where(
-        Job.tenant_id == member.tenant_id,
-        Job.job_type == JobType.EXTRACT_DEMAND,
-        Job.status == JobStatus.COMPLETED,
-    )
-    completed_jobs = session.exec(completed_jobs_query).all()
-
-    # Criar set com file_ids que têm job COMPLETED
-    file_ids_with_completed_job = set()
-    for job in completed_jobs:
-        if job.input_data and "file_id" in job.input_data:
-            job_file_id = job.input_data["file_id"]
-            # Converter para int para garantir comparação correta (pode vir como string do JSON)
-            if isinstance(job_file_id, str):
-                try:
-                    job_file_id = int(job_file_id)
-                except (ValueError, TypeError):
-                    continue
-            file_ids_with_completed_job.add(job_file_id)
+    item_id_list = [item.id for item in items]
+    referenced_file_ids = set()
+    if item_id_list:
+        referenced_file_rows = session.exec(
+            select(Demand.file_id).where(
+                Demand.tenant_id == member.tenant_id,
+                Demand.file_id.is_not(None),
+                Demand.file_id.in_(item_id_list),
+            )
+        ).all()
+        referenced_file_ids = {
+            file_id
+            for file_id in referenced_file_rows
+            if isinstance(file_id, int)
+        }
 
     # Buscar todos os jobs EXTRACT_DEMAND do tenant para obter o status mais recente de cada arquivo
     all_jobs_query = select(Job).where(
@@ -2020,7 +2015,7 @@ def list_files(
     # Construir resposta com can_delete, job_status, hospital_id, hospital_name e hospital_color
     file_responses = []
     for item in items:
-        can_delete = item.id not in file_ids_with_completed_job
+        can_delete = item.id not in referenced_file_ids
         job_status = file_id_to_latest_job_status.get(item.id)
         hospital = hospital_dict.get(item.hospital_id)
         hospital_name = hospital.display_name if hospital else f"Hospital {item.hospital_id}"
@@ -2260,6 +2255,18 @@ def delete_file(
     # Validar tenant_id
     if file_model.tenant_id != member.tenant_id:
         raise HTTPException(status_code=403, detail="Acesso negado")
+
+    demand_count = session.exec(
+        select(func.count(Demand.id)).where(
+            Demand.tenant_id == member.tenant_id,
+            Demand.file_id == file_id,
+        )
+    ).one()
+    if demand_count:
+        raise HTTPException(
+            status_code=400,
+            detail="Arquivo vinculado a demandas e não pode ser excluído",
+        )
 
     # Excluir arquivo do S3/MinIO
     storage_service = StorageService()

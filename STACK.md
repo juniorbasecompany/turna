@@ -51,7 +51,7 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF):
 - **Member**: vínculo Account↔Tenant com role e status. Dados públicos na clínica.
 - **Hospital**: hospital por tenant (nome, prompt para extração IA, cor).
 - **File**: metadados de arquivos no S3/MinIO; pertence a um Hospital.
-- **Demand**: demanda cirúrgica (extraída ou manual); inclui estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at). Uma única tabela para demanda e escala; período da geração fica em `job.input_data`.
+- **Demand**: demanda cirúrgica (extraída ou manual); inclui estado da escala (schedule_status, schedule_result_data, file_id, generated_at, published_at). `file_id` referencia o arquivo de origem/upload. Uma única tabela para demanda e escala; período da geração fica em `job.input_data`.
 - **Job**: jobs assíncronos (Arq). Para GENERATE_SCHEDULE, `result_data` guarda apenas mínimo (ex.: allocation_count).
 
 ### Regras de modelo

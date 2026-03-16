@@ -37,6 +37,11 @@ interface FileResponse {
     job_status: string | null
 }
 
+interface FileCardResponse extends FileResponse {
+    job_started_at: string | null
+    job_completed_at: string | null
+}
+
 interface Hospital {
     id: number
     tenant_id: number
@@ -232,6 +237,84 @@ function getJobStatusText(jobStatus: string | null): string {
         default:
             return 'Pronto para ler demandas'
     }
+}
+
+function createFileCardResponse(file: FileResponse): FileCardResponse {
+    return {
+        ...file,
+        job_started_at: null,
+        job_completed_at: null,
+    }
+}
+
+function getJobFileId(job: JobResponse): number | null {
+    const fileIdRaw = job.input_data?.file_id
+
+    if (typeof fileIdRaw === 'string') {
+        const parsed = parseInt(fileIdRaw, 10)
+        return isNaN(parsed) ? null : parsed
+    }
+
+    if (typeof fileIdRaw === 'number') {
+        return fileIdRaw
+    }
+
+    return null
+}
+
+function buildLatestJobMap(jobList: JobResponse[]): Map<number, JobResponse> {
+    const latestJobMap = new Map<number, JobResponse>()
+
+    for (const job of jobList) {
+        const fileId = getJobFileId(job)
+
+        if (fileId !== null && !latestJobMap.has(fileId)) {
+            latestJobMap.set(fileId, job)
+        }
+    }
+
+    return latestJobMap
+}
+
+function mergeFileWithLatestJob(file: FileCardResponse, latestJob?: JobResponse): FileCardResponse {
+    if (!latestJob) {
+        return file
+    }
+
+    return {
+        ...file,
+        job_status: latestJob.status,
+        job_started_at: latestJob.started_at,
+        job_completed_at: latestJob.completed_at,
+    }
+}
+
+function formatJobDuration(startedAt: string | null, completedAt: string | null): string | null {
+    if (!startedAt || !completedAt) {
+        return null
+    }
+
+    const startedTime = new Date(startedAt).getTime()
+    const completedTime = new Date(completedAt).getTime()
+
+    if (Number.isNaN(startedTime) || Number.isNaN(completedTime) || completedTime < startedTime) {
+        return null
+    }
+
+    const totalSeconds = Math.max(1, Math.round((completedTime - startedTime) / 1000))
+    const hour = Math.floor(totalSeconds / 3600)
+    const minute = Math.floor((totalSeconds % 3600) / 60)
+    const second = totalSeconds % 60
+
+    if (hour > 0) {
+        return `${hour} h ${minute} min`
+    }
+
+    if (minute > 0) {
+        return second > 0 ? `${minute} min ${second} s` : `${minute} min`
+    }
+
+    return `${second} s`
 }
 
 /**
@@ -704,11 +787,43 @@ export default function FilesPage() {
     })
 
     // Estado local para arquivos (permite atualização direta via polling)
-    const [localFiles, setLocalFiles] = useState<FileResponse[]>(files)
+    const [localFiles, setLocalFiles] = useState<FileCardResponse[]>(() => files.map(createFileCardResponse))
 
     // Sincronizar localFiles com files quando files mudar (vindo do hook)
     useEffect(() => {
-        setLocalFiles(files)
+        let active = true
+
+        async function syncLocalFileList() {
+            const baseFileList = files.map(createFileCardResponse)
+            setLocalFiles(baseFileList)
+
+            if (files.length === 0) {
+                return
+            }
+
+            try {
+                // Carrega o job mais recente para preencher status e duração no card.
+                const data = await protectedFetch<{ items: JobResponse[] }>('/api/job/list?job_type=EXTRACT_DEMAND&limit=100')
+                if (!active) {
+                    return
+                }
+
+                const latestJobMap = buildLatestJobMap(data.items || [])
+                setLocalFiles(baseFileList.map((file) => mergeFileWithLatestJob(file, latestJobMap.get(file.id))))
+            } catch (err) {
+                if (!active) {
+                    return
+                }
+
+                console.error('Erro ao carregar status dos jobs:', err)
+            }
+        }
+
+        syncLocalFileList()
+
+        return () => {
+            active = false
+        }
     }, [files])
 
     // Flash vermelho no card de upload quando não há hospital selecionado
@@ -790,6 +905,13 @@ export default function FilesPage() {
         paginationHandlers.onFirst() // Resetar paginação ao mudar filtro
         setBottomBarMessage(null) // Limpar mensagem ao selecionar hospital
     }
+
+    const getSingleHospitalId = useCallback((): number | null => {
+        if (hospitalList.length !== 1) {
+            return null
+        }
+        return hospitalList[0].id
+    }, [hospitalList])
 
     // Buscar JSON do arquivo através do job (result_data do job de extração COMPLETED)
     const fetchFileJson = useCallback(async (fileId: number): Promise<{ json: string; jobId: number | null }> => {
@@ -976,8 +1098,10 @@ export default function FilesPage() {
 
         try {
             // 1. Upload do arquivo
+            const uploadHospitalId = filterHospitalId ?? getSingleHospitalId()
+
             // Validar que há hospital selecionado
-            if (!filterHospitalId) {
+            if (!uploadHospitalId) {
                 throw new Error('Selecione o hospital')
             }
 
@@ -985,7 +1109,7 @@ export default function FilesPage() {
             formData.append('file', pendingFile.file)
 
             // Upload usa FormData - protectedFetch suporta FormData via options.body
-            const uploadData = await protectedFetch<FileUploadResponse>(`/api/file/upload?hospital_id=${filterHospitalId}`, {
+            const uploadData = await protectedFetch<FileUploadResponse>(`/api/file/upload?hospital_id=${uploadHospitalId}`, {
                 method: 'POST',
                 body: formData,
             })
@@ -1027,7 +1151,7 @@ export default function FilesPage() {
                 return newPending
             })
         }
-    }, [filterHospitalId, readContentOnUpload])
+    }, [filterHospitalId, getSingleHospitalId, readContentOnUpload])
 
     // Função para adicionar arquivos à lista (usada tanto pelo input quanto pelo drag&drop)
     const addFilesToList = useCallback((files: File[]) => {
@@ -1104,7 +1228,7 @@ export default function FilesPage() {
 
     // Abrir seletor de arquivos ao clicar no card
     const handleUploadCardClick = useCallback(() => {
-        if (!filterHospitalId) {
+        if (!filterHospitalId && !getSingleHospitalId()) {
             setUploadCardFlash(true)
             setHospitalFieldFlash(true)
             // Remover o flash após 1 segundo
@@ -1116,7 +1240,7 @@ export default function FilesPage() {
         }
         setBottomBarMessage(null)
         fileInputRef.current?.click()
-    }, [filterHospitalId])
+    }, [filterHospitalId, getSingleHospitalId])
 
 
     // Remover arquivo pendente
@@ -1213,39 +1337,25 @@ export default function FilesPage() {
                 const allJobs = data.items || []
 
                 // Criar map de file_id -> job_status (usando o job mais recente para cada file_id)
-                const fileIdToJobStatus = new Map<number, string>()
-                for (const job of allJobs) {
-                    if (job.input_data && job.input_data.file_id) {
-                        const fileIdRaw = job.input_data.file_id
-                        let fileId: number | null = null
-                        if (typeof fileIdRaw === 'string') {
-                            const parsed = parseInt(fileIdRaw, 10)
-                            if (!isNaN(parsed)) fileId = parsed
-                        } else if (typeof fileIdRaw === 'number') {
-                            fileId = fileIdRaw
-                        }
-                        if (fileId !== null) {
-                            // Só atualizar se ainda não tiver um status para este file_id
-                            // (jobs estão ordenados por created_at desc, então o primeiro é o mais recente)
-                            if (!fileIdToJobStatus.has(fileId)) {
-                                fileIdToJobStatus.set(fileId, job.status)
-                            }
-                        }
-                    }
-                }
+                const latestJobMap = buildLatestJobMap(allJobs)
 
                 // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
                 setLocalFiles((prevFiles) => {
                     return prevFiles.map((file) => {
-                        const newStatus = fileIdToJobStatus.get(file.id)
-                        // Atualizar se:
-                        // 1. Há um novo status e é diferente do atual
-                        // 2. O arquivo estava em processamento mas agora não tem mais status (raro, mas possível)
-                        if (newStatus && file.job_status !== newStatus) {
-                            return { ...file, job_status: newStatus }
+                        const latestJob = latestJobMap.get(file.id)
+                        if (!latestJob) {
+                            return file
                         }
-                        // Se o arquivo estava em processamento mas não há mais job, manter o status atual
-                        // (não limpar para evitar perder informação)
+
+                        const updatedFile = mergeFileWithLatestJob(file, latestJob)
+                        if (
+                            updatedFile.job_status !== file.job_status ||
+                            updatedFile.job_started_at !== file.job_started_at ||
+                            updatedFile.job_completed_at !== file.job_completed_at
+                        ) {
+                            return updatedFile
+                        }
+
                         return file
                     })
                 })
@@ -1681,6 +1791,7 @@ export default function FilesPage() {
                             const fileTypeInfo = getFileTypeInfo(file.content_type)
                             const isSelected = selectedFiles.has(file.id)
                             const jobStatusClasses = getJobStatusCardClasses(file.job_status)
+                            const readDuration = formatJobDuration(file.job_started_at, file.job_completed_at)
 
                             // Calcular cor do hospital (com fallback para branco se não houver cor)
                             const hospitalColor = file.hospital_color || '#FFFFFF'
@@ -1737,14 +1848,21 @@ export default function FilesPage() {
 
                                     {/* 3. Compartimento para status - ícone e texto */}
                                     <div
-                                        className="mb-3 h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4"
+                                        className="mb-3 min-h-14 flex items-center justify-start rounded-lg py-2 bg-gray-50 px-4 gap-3 border-b-4"
                                         style={{ borderBottomColor: getStatusBackgroundColor(file.job_status) }}
                                     >
                                         {getStatusIcon(file.job_status)}
-                                        <span className="text-base font-normal text-gray-900 flex items-center gap-2">
-                                            {getJobStatusText(file.job_status)}
-                                            {(file.job_status === 'RUNNING' || file.job_status === 'PENDING') && <LoadingSpinner />}
-                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-base font-normal text-gray-900 flex items-center gap-2">
+                                                {getJobStatusText(file.job_status)}
+                                                {(file.job_status === 'RUNNING' || file.job_status === 'PENDING') && <LoadingSpinner />}
+                                            </span>
+                                            {file.job_status === 'COMPLETED' && readDuration && (
+                                                <p className="mt-1 text-xs text-slate-500 truncate" title={`Tempo de leitura: ${readDuration}`}>
+                                                    Tempo de leitura: {readDuration}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </EntityCard>
                             )

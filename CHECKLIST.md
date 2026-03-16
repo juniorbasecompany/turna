@@ -6,9 +6,9 @@ Este checklist resume o que **está implementado** e o que **está pendente ou p
 
 - **Estrutura**: Backend em `backend/` (API FastAPI, worker Arq, Alembic, demand, output, strategy). Frontend em `frontend/`. `docker-compose.yml` na raiz; build context `./backend`, volume `./backend:/app`.
 - **Infraestrutura**: Docker Compose (PostgreSQL 5433, Redis, MinIO). Endpoint `/health`.
-- **Modelos**: Tenant, Account, Member, Job, File, Hospital, Demand. Demand inclui estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at).
+- **Modelos**: Tenant, Account, Member, Job, File, Hospital, Demand. Demand inclui estado da escala (schedule_status, schedule_result_data, file_id, generated_at, published_at).
 - **Autenticação**: OAuth Google, JWT, Member, convites, isolamento multi-tenant.
-- **Storage**: S3/MinIO; upload/download; File com hospital_id; upload de PDF da escala por Demand.
+- **Storage**: S3/MinIO; upload/download; File com hospital_id; `Demand.file_id` referencia o arquivo uploaded de origem.
 - **Jobs**: Arq worker; PING, EXTRACT_DEMAND, GENERATE_SCHEDULE. Worker atualiza Demand com resultado da alocação; `Job.result_data` mínimo para GENERATE_SCHEDULE.
 - **API**: Endpoints de tenant, member, account, hospital, file, demand, job; rotas de escala (`/schedule/*`) operando sobre Demand (id = demand_id). Validação de tenant em todos os endpoints.
 - **Frontend**: Next.js (App Router), login OAuth, seleção de tenant, dashboard, páginas de hospitais, clínicas, associados, arquivos, demandas, jobs. Menu lateral; `protectedFetch()`; CORS configurado. Resend para convites.
@@ -29,7 +29,7 @@ Este checklist resume o que **está implementado** e o que **está pendente ou p
 - Separação Account (privado) vs Member (público); painel de member sem dados do Account; convite por email com Resend.
 
 ### Storage
-- S3/MinIO; StorageService; upload de arquivo (File com hospital_id); upload de PDF da escala (`upload_demand_pdf`). Presigned URL.
+- S3/MinIO; StorageService; upload de arquivo (File com hospital_id). Presigned URL.
 
 ### Jobs (Arq)
 - PING, EXTRACT_DEMAND (OpenAI, resultado em Job.result_data), GENERATE_SCHEDULE (solver greedy; atualiza Demand; result_data mínimo). Endpoints: `/job/ping`, `/job/extract`, `/schedule/generate`, `/schedule/generate-from-demands`. Job.started_at; requeue (admin). Listagem e detalhe de job.

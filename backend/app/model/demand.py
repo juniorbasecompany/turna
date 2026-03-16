@@ -16,7 +16,7 @@ class ScheduleStatus(str, enum.Enum):
 
 
 class Demand(BaseModel, table=True):
-    """Modelo Demand - demandas cirúrgicas extraídas de arquivos. Concentra também o estado da escala (status, result_data, PDF)."""
+    """Modelo Demand - demandas cirúrgicas extraídas de arquivos. Concentra também o estado da escala e o arquivo de origem."""
 
     __tablename__ = "demand"
 
@@ -58,7 +58,7 @@ class Demand(BaseModel, table=True):
     )
     schedule_name: Optional[str] = Field(default=None, nullable=True)
     schedule_version_number: int = Field(default=1, nullable=False)
-    pdf_file_id: Optional[int] = Field(default=None, foreign_key="file.id", index=True, nullable=True)
+    file_id: Optional[int] = Field(default=None, foreign_key="file.id", index=True, nullable=True)
     schedule_result_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     generated_at: Optional[datetime] = Field(
         default=None,

@@ -96,7 +96,7 @@ def _replace_file_demand_from_extract_result(
     current_demand_list = session.exec(
         select(Demand).where(
             Demand.tenant_id == tenant_id,
-            Demand.pdf_file_id == file_id,
+            Demand.file_id == file_id,
         )
     ).all()
     for demand_row in current_demand_list:
@@ -138,7 +138,7 @@ def _replace_file_demand_from_extract_result(
             tenant_id=tenant_id,
             hospital_id=hospital_id,
             job_id=job_id,
-            pdf_file_id=file_id,
+            file_id=file_id,
             room=str(room).strip() if isinstance(room, str) and room.strip() else None,
             start_time=start_time,
             end_time=end_time,

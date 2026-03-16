@@ -273,10 +273,6 @@ export default function SchedulePage() {
             try {
                 const response = await protectedFetch<HospitalListResponse>('/api/hospital/list')
                 setHospitals(response.items || [])
-                // Se houver apenas um hospital, selecioná-lo automaticamente
-                if (response.items?.length === 1) {
-                    setFilterHospitalId(response.items[0].id)
-                }
             } catch (err) {
                 console.error('Erro ao carregar hospitais:', err)
             } finally {

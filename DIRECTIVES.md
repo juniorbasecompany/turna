@@ -60,7 +60,7 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 
 ### Demand com estado de escala
 
-- Uma única tabela Demand: demanda cirúrgica e estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at, etc.).
+- Uma única tabela Demand: demanda cirúrgica e estado da escala (schedule_status, schedule_result_data, file_id, generated_at, published_at, etc.). `file_id` referencia o arquivo de origem/upload.
 - Demandas só extraídas têm campos de escala opcionais nulos ou default.
 - O worker atualiza cada Demand com o resultado da alocação (schedule_status, schedule_result_data, generated_at, job_id).
 - Início e fim da cirurgia são `start_time` e `end_time`. Período da geração fica em `job.input_data` quando necessário.
