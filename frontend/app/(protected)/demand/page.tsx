@@ -48,6 +48,10 @@ type DemandFormData = {
 export default function DemandPage() {
     const { settings } = useTenantSettings()
 
+    const handleOpenOriginFile = (fileId: number) => {
+        window.open(`/api/file/${fileId}/proxy`, '_blank')
+    }
+
     // Estados auxiliares (não gerenciados por useEntityPage)
     const [hospitals, setHospitals] = useState<HospitalResponse[]>([])
     const [loadingHospitals, setLoadingHospitals] = useState(true)
@@ -466,6 +470,18 @@ export default function DemandPage() {
                         rows={3}
                         disabled={submitting}
                     />
+
+                    {typeof editingDemand?.file_id === 'number' && editingDemand.file_name && (
+                        <FormField label="Arquivo de origem">
+                            <button
+                                type="button"
+                                onClick={() => handleOpenOriginFile(editingDemand.file_id)}
+                                className="text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer break-all"
+                            >
+                                {editingDemand.file_name}
+                            </button>
+                        </FormField>
+                    )}
                 </div>
             </EditForm>
 

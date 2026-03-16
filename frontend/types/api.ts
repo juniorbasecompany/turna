@@ -271,6 +271,8 @@ export interface DemandResponse {
     tenant_id: number
     hospital_id: number
     job_id: number | null
+    file_id: number | null
+    file_name: string | null
     room: string | null
     start_time: string
     end_time: string

@@ -2972,6 +2972,8 @@ class DemandResponse(PydanticBaseModel):
     hospital_id: int
     job_id: int | None
     member_id: int | None
+    file_id: int | None = None
+    file_name: str | None = None
     room: str | None
     start_time: datetime
     end_time: datetime
@@ -2992,6 +2994,28 @@ class DemandResponse(PydanticBaseModel):
 class DemandListResponse(PydanticBaseModel):
     items: list[DemandResponse]
     total: int
+
+
+def _get_file_name_map(session: Session, *, file_id_list: list[int]) -> dict[int, str]:
+    """Busca os nomes dos arquivos vinculados em lote para evitar N+1."""
+    if not file_id_list:
+        return {}
+
+    file_row_list = session.exec(
+        select(File.id, File.filename).where(File.id.in_(file_id_list))
+    ).all()
+    return {
+        file_id: file_name
+        for file_id, file_name in file_row_list
+        if isinstance(file_id, int) and isinstance(file_name, str)
+    }
+
+
+def _build_demand_response(demand: Demand, *, file_name: str | None = None) -> DemandResponse:
+    payload = demand.model_dump()
+    payload["file_id"] = demand.file_id
+    payload["file_name"] = file_name
+    return DemandResponse.model_validate(payload)
 
 
 class DemandProcedureListResponse(PydanticBaseModel):
@@ -3055,7 +3079,11 @@ def create_demand(
         session.commit()
         session.refresh(demand)
         logger.info(f"Demanda criada com sucesso: id={demand.id}")
-        return demand
+        file_name = None
+        if isinstance(demand.file_id, int):
+            file_row = session.get(File, demand.file_id)
+            file_name = file_row.filename if file_row else None
+        return _build_demand_response(demand, file_name=file_name)
     except HTTPException:
         raise
     except Exception as e:
@@ -3123,9 +3151,21 @@ def list_demands(
         )
         total = session.exec(count_query).one()
         items = session.exec(query.limit(limit).offset(offset)).all()
+        file_id_list = [
+            item.file_id
+            for item in items
+            if isinstance(item.file_id, int)
+        ]
+        file_name_map = _get_file_name_map(session, file_id_list=file_id_list)
 
         return DemandListResponse(
-            items=[DemandResponse.model_validate(item) for item in items],
+            items=[
+                _build_demand_response(
+                    item,
+                    file_name=file_name_map.get(item.file_id) if isinstance(item.file_id, int) else None,
+                )
+                for item in items
+            ],
             total=total,
         )
     except HTTPException:
@@ -3286,7 +3326,11 @@ def get_demand(
             raise HTTPException(status_code=403, detail="Acesso negado")
 
         logger.info(f"Demanda encontrada: id={demand.id}, procedure={demand.procedure}")
-        return demand
+        file_name = None
+        if isinstance(demand.file_id, int):
+            file_row = session.get(File, demand.file_id)
+            file_name = file_row.filename if file_row else None
+        return _build_demand_response(demand, file_name=file_name)
     except HTTPException:
         raise
     except Exception as e:
@@ -3389,7 +3433,11 @@ def update_demand(
         session.commit()
         session.refresh(demand)
         logger.info(f"Demanda atualizada com sucesso: id={demand.id}")
-        return demand
+        file_name = None
+        if isinstance(demand.file_id, int):
+            file_row = session.get(File, demand.file_id)
+            file_name = file_row.filename if file_row else None
+        return _build_demand_response(demand, file_name=file_name)
     except HTTPException:
         raise
     except Exception as e:
