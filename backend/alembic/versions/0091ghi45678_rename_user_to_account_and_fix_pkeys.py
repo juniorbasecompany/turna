@@ -18,29 +18,47 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _is_offline_mode() -> bool:
+    return bool(getattr(op.get_context(), "as_sql", False))
+
+
+def _scalar_or_default(conn, sql: str, default, params: dict | None = None):
+    if _is_offline_mode():
+        return default
+
+    result = conn.execute(sa.text(sql), params or {})
+    return result.scalar()
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Renomear constraints de chave primária para singular
     # tenant_pkey (pode estar como tenants_pkey ou tenant_pkey)
-    result = conn.execute(sa.text("""
+    tenant_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'tenant'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    tenant_pkey = result.scalar()
+        """,
+        "tenants_pkey",
+    )
     if tenant_pkey and tenant_pkey != 'tenant_pkey':
         op.execute(sa.text(f"ALTER TABLE tenant RENAME CONSTRAINT {tenant_pkey} TO tenant_pkey"))
 
     # users_pkey -> account_pkey (renomear antes de renomear a tabela)
-    result = conn.execute(sa.text("""
+    user_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'user'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    user_pkey = result.scalar()
+        """,
+        "users_pkey",
+    )
     if user_pkey:
         if user_pkey == 'users_pkey':
             # Se ainda está no plural, renomear para account_pkey
@@ -50,59 +68,76 @@ def upgrade() -> None:
             op.execute(sa.text(f'ALTER TABLE "user" RENAME CONSTRAINT {user_pkey} TO account_pkey'))
 
     # jobs_pkey -> job_pkey
-    result = conn.execute(sa.text("""
+    job_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'job'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    job_pkey = result.scalar()
+        """,
+        "jobs_pkey",
+    )
     if job_pkey and job_pkey != 'job_pkey':
         op.execute(sa.text(f"ALTER TABLE job RENAME CONSTRAINT {job_pkey} TO job_pkey"))
 
     # 2. Descobrir e atualizar foreign keys que referenciam user ANTES de renomear a tabela
     # Descobrir nome da constraint FK de job que pode referenciar user (se houver)
     # Por enquanto, vamos focar nas FKs que referenciam user.tenant_id
-    result = conn.execute(sa.text("""
+    fk_user_tenant = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'user'
         AND constraint_type = 'FOREIGN KEY'
         AND constraint_name LIKE '%tenant_id%'
-    """))
-    fk_user_tenant = result.scalar()
+        """,
+        "user_tenant_id_fkey",
+    )
     if fk_user_tenant and fk_user_tenant != 'account_tenant_id_fkey':
         op.drop_constraint(fk_user_tenant, 'user', type_='foreignkey')
         op.create_foreign_key('account_tenant_id_fkey', 'user', 'tenant', ['tenant_id'], ['id'])
 
     # 3. Renomear constraint única de user
-    result = conn.execute(sa.text("""
+    uq_user_email = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'user'
         AND constraint_type = 'UNIQUE'
         AND constraint_name LIKE '%email%'
-    """))
-    uq_user_email = result.scalar()
+        """,
+        "uq_user_email_tenant",
+    )
     if uq_user_email and uq_user_email != 'uq_account_email_tenant':
         op.execute(sa.text(f"ALTER TABLE \"user\" RENAME CONSTRAINT {uq_user_email} TO uq_account_email_tenant"))
 
     # 4. Renomear índices relacionados a user
     # Verificar se os índices existem antes de renomear
-    result = conn.execute(sa.text("""
+    user_email_index_exists = _scalar_or_default(
+        conn,
+        """
         SELECT indexname
         FROM pg_indexes
         WHERE tablename = 'user' AND indexname = 'ix_user_email'
-    """))
-    if result.scalar():
+        """,
+        "ix_user_email",
+    )
+    if user_email_index_exists:
         op.execute(sa.text("ALTER INDEX ix_user_email RENAME TO ix_account_email"))
 
-    result = conn.execute(sa.text("""
+    user_tenant_index_exists = _scalar_or_default(
+        conn,
+        """
         SELECT indexname
         FROM pg_indexes
         WHERE tablename = 'user' AND indexname = 'ix_user_tenant_id'
-    """))
-    if result.scalar():
+        """,
+        "ix_user_tenant_id",
+    )
+    if user_tenant_index_exists:
         op.execute(sa.text("ALTER INDEX ix_user_tenant_id RENAME TO ix_account_tenant_id"))
 
     # 5. Renomear a tabela user para account (user é palavra reservada no PostgreSQL)
@@ -116,20 +151,28 @@ def downgrade() -> None:
     op.rename_table('account', 'user')
 
     # 2. Reverter índices
-    result = conn.execute(sa.text("""
+    account_tenant_index_exists = _scalar_or_default(
+        conn,
+        """
         SELECT indexname
         FROM pg_indexes
         WHERE tablename = 'user' AND indexname = 'ix_account_tenant_id'
-    """))
-    if result.scalar():
+        """,
+        "ix_account_tenant_id",
+    )
+    if account_tenant_index_exists:
         op.execute(sa.text("ALTER INDEX ix_account_tenant_id RENAME TO ix_user_tenant_id"))
 
-    result = conn.execute(sa.text("""
+    account_email_index_exists = _scalar_or_default(
+        conn,
+        """
         SELECT indexname
         FROM pg_indexes
         WHERE tablename = 'user' AND indexname = 'ix_account_email'
-    """))
-    if result.scalar():
+        """,
+        "ix_account_email",
+    )
+    if account_email_index_exists:
         op.execute(sa.text("ALTER INDEX ix_account_email RENAME TO ix_user_email"))
 
     # 3. Reverter constraint única
@@ -148,32 +191,41 @@ def downgrade() -> None:
     op.create_foreign_key('user_tenant_id_fkey', 'user', 'tenant', ['tenant_id'], ['id'])
 
     # 5. Reverter constraints de chave primária
-    result = conn.execute(sa.text("""
+    current_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'user'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    current_pkey = result.scalar()
+        """,
+        "account_pkey",
+    )
     if current_pkey == 'account_pkey':
         op.execute(sa.text('ALTER TABLE "user" RENAME CONSTRAINT account_pkey TO users_pkey'))
 
-    result = conn.execute(sa.text("""
+    current_job_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'job'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    current_job_pkey = result.scalar()
+        """,
+        "job_pkey",
+    )
     if current_job_pkey == 'job_pkey':
         op.execute(sa.text("ALTER TABLE job RENAME CONSTRAINT job_pkey TO jobs_pkey"))
 
-    result = conn.execute(sa.text("""
+    current_tenant_pkey = _scalar_or_default(
+        conn,
+        """
         SELECT constraint_name
         FROM information_schema.table_constraints
         WHERE table_name = 'tenant'
         AND constraint_type = 'PRIMARY KEY'
-    """))
-    current_tenant_pkey = result.scalar()
+        """,
+        "tenant_pkey",
+    )
     if current_tenant_pkey == 'tenant_pkey':
         op.execute(sa.text("ALTER TABLE tenant RENAME CONSTRAINT tenant_pkey TO tenants_pkey"))

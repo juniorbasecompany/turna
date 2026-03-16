@@ -6,7 +6,7 @@ Este checklist resume o que **está implementado** e o que **está pendente ou p
 
 - **Estrutura**: Backend em `backend/` (API FastAPI, worker Arq, Alembic, demand, output, strategy). Frontend em `frontend/`. `docker-compose.yml` na raiz; build context `./backend`, volume `./backend:/app`.
 - **Infraestrutura**: Docker Compose (PostgreSQL 5433, Redis, MinIO). Endpoint `/health`.
-- **Modelos**: Tenant, Account, Member, Job, File, AuditLog, Hospital, Demand. Demand inclui estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at).
+- **Modelos**: Tenant, Account, Member, Job, File, Hospital, Demand. Demand inclui estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at).
 - **Autenticação**: OAuth Google, JWT, Member, convites, isolamento multi-tenant.
 - **Storage**: S3/MinIO; upload/download; File com hospital_id; upload de PDF da escala por Demand.
 - **Jobs**: Arq worker; PING, EXTRACT_DEMAND, GENERATE_SCHEDULE. Worker atualiza Demand com resultado da alocação; `Job.result_data` mínimo para GENERATE_SCHEDULE.
@@ -20,12 +20,12 @@ Este checklist resume o que **está implementado** e o que **está pendente ou p
 
 ### Infra e base
 - Docker Compose sobe sem erros. Dependências instaladas. Alembic configurado; migrações aplicadas.
-- Modelos: Tenant, Account, Member, Job, File, AuditLog, Hospital, Demand. Demand com campos de escala; sem tabela Schedule separada.
+- Modelos: Tenant, Account, Member, Job, File, Hospital, Demand. Demand com campos de escala; sem tabela Schedule separada.
 - DB: session, engine, `get_session()`; migrations para todos os modelos.
 
 ### Autenticação e multi-tenant
 - OAuth Google, JWT (account_id, tenant_id, role do Member). Endpoints: `/auth/google`, `/auth/google/register`, `/auth/google/select-tenant`, `/auth/google/create-tenant`, `/auth/switch-tenant`, `/auth/tenant/list`, `/auth/invites`, accept/reject. `GET /me`.
-- Middleware extrai tenant_id do JWT. Validação real em `get_current_member()`. Convites e member PENDING/ACTIVE; auditoria em audit_log.
+- Middleware extrai tenant_id do JWT. Validação real em `get_current_member()`. Convites e member PENDING/ACTIVE.
 - Separação Account (privado) vs Member (público); painel de member sem dados do Account; convite por email com Resend.
 
 ### Storage

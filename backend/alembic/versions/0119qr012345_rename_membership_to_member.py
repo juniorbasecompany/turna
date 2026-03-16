@@ -20,6 +20,14 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _enum_exists(conn, enum_name: str, *, default: bool) -> bool:
+    if getattr(op.get_context(), "as_sql", False):
+        return default
+
+    result = conn.execute(text(f"SELECT typname FROM pg_type WHERE typname = '{enum_name}'"))
+    return result.fetchone() is not None
+
+
 def upgrade() -> None:
     """
     Renomeia membership para member em todo o banco de dados.
@@ -37,11 +45,8 @@ def upgrade() -> None:
     conn = op.get_bind()
     
     # Verificar membership_role
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'membership_role'"))
-    has_membership_role = result.fetchone() is not None
-    
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'member_role'"))
-    has_member_role = result.fetchone() is not None
+    has_membership_role = _enum_exists(conn, "membership_role", default=True)
+    has_member_role = _enum_exists(conn, "member_role", default=False)
     
     if has_membership_role:
         op.execute("ALTER TYPE membership_role RENAME TO member_role")
@@ -50,11 +55,8 @@ def upgrade() -> None:
         op.execute("CREATE TYPE member_role AS ENUM ('admin', 'account')")
     
     # Verificar membership_status
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'membership_status'"))
-    has_membership_status = result.fetchone() is not None
-    
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'member_status'"))
-    has_member_status = result.fetchone() is not None
+    has_membership_status = _enum_exists(conn, "membership_status", default=True)
+    has_member_status = _enum_exists(conn, "member_status", default=False)
     
     if has_membership_status:
         op.execute("ALTER TYPE membership_status RENAME TO member_status")
@@ -76,13 +78,6 @@ def upgrade() -> None:
     # Renomear constraint única em profile
     op.drop_constraint("uq_profile_tenant_membership_hospital", "profile", type_="unique")
     op.create_unique_constraint("uq_profile_tenant_member_hospital", "profile", ["tenant_id", "member_id", "hospital_id"])
-    
-    # AuditLog
-    op.drop_constraint("audit_log_membership_id_fkey", "audit_log", type_="foreignkey")
-    op.drop_index(op.f("ix_audit_log_membership_id"), table_name="audit_log")
-    op.alter_column("audit_log", "membership_id", new_column_name="member_id")
-    op.create_foreign_key("audit_log_member_id_fkey", "audit_log", "member", ["member_id"], ["id"])
-    op.create_index(op.f("ix_audit_log_member_id"), "audit_log", ["member_id"], unique=False)
     
     # 4. Renomear índices na tabela member (já renomeada)
     # Usar DROP INDEX IF EXISTS para evitar erros se o índice não existir
@@ -123,13 +118,6 @@ def downgrade() -> None:
     op.drop_constraint("uq_profile_tenant_member_hospital", "profile", type_="unique")
     op.create_unique_constraint("uq_profile_tenant_membership_hospital", "profile", ["tenant_id", "membership_id", "hospital_id"])
     
-    # AuditLog
-    op.drop_constraint("audit_log_member_id_fkey", "audit_log", type_="foreignkey")
-    op.drop_index(op.f("ix_audit_log_member_id"), table_name="audit_log")
-    op.alter_column("audit_log", "member_id", new_column_name="membership_id")
-    op.create_foreign_key("audit_log_membership_id_fkey", "audit_log", "member", ["membership_id"], ["id"])
-    op.create_index(op.f("ix_audit_log_membership_id"), "audit_log", ["membership_id"], unique=False)
-    
     # 2. Renomear índices na tabela member antes de renomear a tabela
     # Usar DROP INDEX IF EXISTS para evitar erros se o índice não existir
     op.execute("DROP INDEX IF EXISTS ix_member_tenant_id")
@@ -157,10 +145,8 @@ def downgrade() -> None:
     # 5. Renomear enums de volta (por último, se existirem)
     conn = op.get_bind()
     
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'member_role'"))
-    if result.fetchone() is not None:
+    if _enum_exists(conn, "member_role", default=True):
         op.execute("ALTER TYPE member_role RENAME TO membership_role")
     
-    result = conn.execute(text("SELECT typname FROM pg_type WHERE typname = 'member_status'"))
-    if result.fetchone() is not None:
+    if _enum_exists(conn, "member_status", default=True):
         op.execute("ALTER TYPE member_status RENAME TO membership_status")

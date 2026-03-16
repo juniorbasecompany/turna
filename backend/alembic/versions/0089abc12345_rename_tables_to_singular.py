@@ -18,6 +18,30 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _get_fk_name_or_default(
+    conn,
+    *,
+    table_name: str,
+    default_name: str,
+) -> str | None:
+    if getattr(op.get_context(), "as_sql", False):
+        return default_name
+
+    result = conn.execute(
+        sa.text(
+            """
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_name = :table_name
+              AND constraint_type = 'FOREIGN KEY'
+              AND constraint_name LIKE '%tenant_id%'
+            """
+        ),
+        {"table_name": table_name},
+    )
+    return result.scalar()
+
+
 def upgrade() -> None:
     # Renomear tabelas na ordem correta (primeiro a que outras referenciam)
 
@@ -28,28 +52,21 @@ def upgrade() -> None:
     # 2. Descobrir e atualizar foreign keys que referenciam tenant ANTES de renomear outras tabelas
     conn = op.get_bind()
 
-    # Descobrir nome da constraint FK de users.tenant_id
-    result = conn.execute(sa.text("""
-        SELECT constraint_name
-        FROM information_schema.table_constraints
-        WHERE table_name = 'users'
-        AND constraint_type = 'FOREIGN KEY'
-        AND constraint_name LIKE '%tenant_id%'
-    """))
-    fk_users = result.scalar()
+    # Em modo offline usamos os nomes padrão gerados pela migration inicial.
+    fk_users = _get_fk_name_or_default(
+        conn,
+        table_name='users',
+        default_name='users_tenant_id_fkey',
+    )
     if fk_users:
         op.drop_constraint(fk_users, 'users', type_='foreignkey')
         op.create_foreign_key('user_tenant_id_fkey', 'users', 'tenant', ['tenant_id'], ['id'])
 
-    # Descobrir nome da constraint FK de jobs.tenant_id
-    result = conn.execute(sa.text("""
-        SELECT constraint_name
-        FROM information_schema.table_constraints
-        WHERE table_name = 'jobs'
-        AND constraint_type = 'FOREIGN KEY'
-        AND constraint_name LIKE '%tenant_id%'
-    """))
-    fk_jobs = result.scalar()
+    fk_jobs = _get_fk_name_or_default(
+        conn,
+        table_name='jobs',
+        default_name='jobs_tenant_id_fkey',
+    )
     if fk_jobs:
         op.drop_constraint(fk_jobs, 'jobs', type_='foreignkey')
         op.create_foreign_key('job_tenant_id_fkey', 'jobs', 'tenant', ['tenant_id'], ['id'])

@@ -5,7 +5,6 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 from app.db.session import get_session
 from app.model.member import Member, MemberRole, MemberStatus
-from app.model.audit_log import AuditLog
 from app.model.account import Account
 from app.model.tenant import Tenant
 from app.services.hospital_service import create_default_hospital_for_tenant
@@ -20,17 +19,6 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 ADMIN_EMAILS_RAW = os.getenv("ADMIN_EMAILS", "")
 ADMIN_EMAILS: set[str] = {e.strip().lower() for e in ADMIN_EMAILS_RAW.split(",") if e.strip()}
 ADMIN_HOSTED_DOMAIN = os.getenv("ADMIN_HOSTED_DOMAIN")
-
-
-def _try_write_audit_log(session: Session, audit: AuditLog) -> None:
-    """
-    Auditoria best-effort: não deve quebrar a request se falhar.
-    """
-    try:
-        session.add(audit)
-        session.commit()
-    except Exception:
-        session.rollback()
 
 
 class GoogleTokenRequest(BaseModel):
@@ -573,19 +561,6 @@ def accept_invite(
 
     session.add(member)
     session.commit()
-    _try_write_audit_log(
-        session,
-        AuditLog(
-            tenant_id=member.tenant_id,
-            account_id=account.id,
-            member_id=member.id,
-            event_type="member_status_changed",
-            data={
-                "from_status": prev_status.value,
-                "to_status": member.status.value,
-            },
-        ),
-    )
     return InviteActionResponse(
         member_id=member.id,
         tenant_id=member.tenant_id,
@@ -612,19 +587,6 @@ def reject_invite(
     member.updated_at = utc_now()
     session.add(member)
     session.commit()
-    _try_write_audit_log(
-        session,
-        AuditLog(
-            tenant_id=member.tenant_id,
-            account_id=account.id,
-            member_id=member.id,
-            event_type="member_status_changed",
-            data={
-                "from_status": prev_status.value,
-                "to_status": member.status.value,
-            },
-        ),
-    )
     return InviteActionResponse(
         member_id=member.id,
         tenant_id=member.tenant_id,
@@ -760,19 +722,5 @@ def switch_tenant_old(
     member = _get_active_member(session, account_id=account.id, tenant_id=body.tenant_id)
     if not member:
         raise HTTPException(status_code=403, detail="Acesso negado (member ACTIVE não encontrado)")
-    _try_write_audit_log(
-        session,
-        AuditLog(
-            tenant_id=current_member.tenant_id,
-            account_id=account.id,
-            member_id=current_member.id,
-            event_type="tenant_switched",
-            data={
-                "from_tenant_id": current_member.tenant_id,
-                "to_tenant_id": body.tenant_id,
-                "to_member_id": member.id,
-            },
-        ),
-    )
     token = _issue_token_for_member(account=account, member=member)
     return TokenResponse(access_token=token)

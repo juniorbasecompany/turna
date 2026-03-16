@@ -1,4 +1,4 @@
-"""add audit_log table and harden membership enums
+"""harden membership enums
 
 Revision ID: 0100ef123456
 Revises: 0099cd345678
@@ -20,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _constraint_exists(conn, *, table_name: str, constraint_name: str) -> bool:
+    if getattr(op.get_context(), "as_sql", False):
+        return False
+
     found = conn.execute(
         sa.text(
             """
@@ -35,26 +38,6 @@ def _constraint_exists(conn, *, table_name: str, constraint_name: str) -> bool:
 
 
 def upgrade() -> None:
-    op.create_table(
-        "audit_log",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=True),
-        sa.Column("actor_account_id", sa.Integer(), nullable=False),
-        sa.Column("membership_id", sa.Integer(), nullable=True),
-        sa.Column("event_type", sa.String(), nullable=False),
-        sa.Column("data", sa.JSON(), nullable=True),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        sa.ForeignKeyConstraint(["actor_account_id"], ["account.id"]),
-        sa.ForeignKeyConstraint(["membership_id"], ["membership.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(op.f("ix_audit_log_tenant_id"), "audit_log", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_audit_log_actor_account_id"), "audit_log", ["actor_account_id"], unique=False)
-    op.create_index(op.f("ix_audit_log_membership_id"), "audit_log", ["membership_id"], unique=False)
-    op.create_index(op.f("ix_audit_log_event_type"), "audit_log", ["event_type"], unique=False)
-
     conn = op.get_bind()
 
     # Hardening: garante que role/status não saem do enum (tabela legacy usa String).
@@ -79,16 +62,10 @@ def downgrade() -> None:
     conn = op.get_bind()
 
     ck_status = "ck_membership_status_valid"
-    if _constraint_exists(conn, table_name="membership", constraint_name=ck_status):
+    if getattr(op.get_context(), "as_sql", False) or _constraint_exists(conn, table_name="membership", constraint_name=ck_status):
         op.drop_constraint(ck_status, "membership", type_="check")
 
     ck_role = "ck_membership_role_valid"
-    if _constraint_exists(conn, table_name="membership", constraint_name=ck_role):
+    if getattr(op.get_context(), "as_sql", False) or _constraint_exists(conn, table_name="membership", constraint_name=ck_role):
         op.drop_constraint(ck_role, "membership", type_="check")
-
-    op.drop_index(op.f("ix_audit_log_event_type"), table_name="audit_log")
-    op.drop_index(op.f("ix_audit_log_membership_id"), table_name="audit_log")
-    op.drop_index(op.f("ix_audit_log_actor_account_id"), table_name="audit_log")
-    op.drop_index(op.f("ix_audit_log_tenant_id"), table_name="audit_log")
-    op.drop_table("audit_log")
 

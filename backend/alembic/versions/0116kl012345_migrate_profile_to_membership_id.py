@@ -19,6 +19,14 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _scalar_or_default(conn, sql: str, default):
+    if getattr(op.get_context(), "as_sql", False):
+        return default
+
+    result = conn.execute(sa.text(sql))
+    return result.scalar()
+
+
 def upgrade() -> None:
     """
     Migra Profile de account_id para membership_id.
@@ -53,11 +61,15 @@ def upgrade() -> None:
     """))
     
     # Verificar se há profiles sem membership (devem ser removidos ou tratados)
-    orphan_count = conn.execute(sa.text("""
+    orphan_count = _scalar_or_default(
+        conn,
+        """
         SELECT COUNT(*)
         FROM profile
         WHERE membership_id IS NULL
-    """)).scalar()
+        """,
+        0,
+    )
     
     if int(orphan_count or 0) > 0:
         # Remover profiles órfãos (sem membership ACTIVE correspondente)

@@ -53,7 +53,6 @@ MVP SaaS multi-tenant para clínicas gerarem escalas e relatórios (PDF):
 - **File**: metadados de arquivos no S3/MinIO; pertence a um Hospital.
 - **Demand**: demanda cirúrgica (extraída ou manual); inclui estado da escala (schedule_status, schedule_result_data, pdf_file_id, generated_at, published_at). Uma única tabela para demanda e escala; período da geração fica em `job.input_data`.
 - **Job**: jobs assíncronos (Arq). Para GENERATE_SCHEDULE, `result_data` guarda apenas mínimo (ex.: allocation_count).
-- **AuditLog**: eventos (member_invited, member_status_changed, tenant_switched).
 
 ### Regras de modelo
 - **Demand**: `start_time` e `end_time` são início e fim da cirurgia. Não há `period_start_at`/`period_end_at` na Demand.

@@ -24,7 +24,6 @@ from app.api.auth import router as auth_router
 from app.api.schedule import router as schedule_router
 from app.auth.dependencies import get_current_account, get_current_member, require_role
 from app.model.member import Member, MemberRole, MemberStatus
-from app.model.audit_log import AuditLog
 from app.model.account import Account
 from app.storage.service import StorageService
 from app.model.file import File
@@ -58,17 +57,6 @@ router.include_router(auth_router)
 router.include_router(schedule_router)
 
 _MAX_STALE_WINDOW = timedelta(hours=1)
-
-
-def _try_write_audit_log(session: Session, audit: AuditLog) -> None:
-    """
-    Auditoria best-effort: não deve quebrar a request se falhar.
-    """
-    try:
-        session.add(audit)
-        session.commit()
-    except Exception:
-        session.rollback()
 
 
 def _isoformat_utc(dt: datetime | None) -> str | None:
@@ -482,28 +470,11 @@ def delete_account(
             )
 
         # Remover member (soft-delete: status -> REMOVED)
-        prev_status = account_member.status
         account_member.status = MemberStatus.REMOVED
         account_member.updated_at = utc_now()
         session.add(account_member)
         session.commit()
         session.refresh(account_member)
-
-        # Log de auditoria
-        _try_write_audit_log(
-            session,
-            AuditLog(
-                tenant_id=member.tenant_id,
-                account_id=member.account_id,
-                member_id=account_member.id,
-                event_type="member_status_changed",
-                data={
-                    "target_account_id": account_id,
-                    "from_status": prev_status.value,
-                    "to_status": account_member.status.value,
-                },
-            ),
-        )
 
         return Response(status_code=204)
     except HTTPException:
@@ -796,14 +767,10 @@ def _purge_tenant_related_data(session: Session, *, tenant_id: int) -> None:
     file_list = list(session.exec(select(File).where(File.tenant_id == tenant_id)).all())
     _delete_tenant_storage_file_list(file_list)
 
-    audit_log_list = list(session.exec(select(AuditLog).where(AuditLog.tenant_id == tenant_id)).all())
     demand_list = list(session.exec(select(Demand).where(Demand.tenant_id == tenant_id)).all())
     job_list = list(session.exec(select(Job).where(Job.tenant_id == tenant_id)).all())
     hospital_list = list(session.exec(select(Hospital).where(Hospital.tenant_id == tenant_id)).all())
     member_list = list(session.exec(select(Member).where(Member.tenant_id == tenant_id)).all())
-
-    for audit_log in audit_log_list:
-        session.delete(audit_log)
 
     for demand in demand_list:
         session.delete(demand)
@@ -1029,8 +996,6 @@ def invite_to_tenant(
 
     if member_existing:
         # Não duplica. Se já estiver ACTIVE, apenas devolve.
-        prev_status = member_existing.status
-        prev_role = member_existing.role
         if member_existing.status in {MemberStatus.REJECTED, MemberStatus.REMOVED}:
             member_existing.status = MemberStatus.PENDING
         if member_existing.status == MemberStatus.PENDING:
@@ -1042,25 +1007,6 @@ def invite_to_tenant(
         session.add(member_existing)
         session.commit()
         session.refresh(member_existing)
-
-        if prev_status != member_existing.status or prev_role != member_existing.role:
-            _try_write_audit_log(
-                session,
-                AuditLog(
-                    tenant_id=tenant.id,
-                    account_id=admin_member.account_id,
-                    member_id=member_existing.id,
-                    event_type="member_invited",
-                    data={
-                        "target_account_id": account.id if account else None,
-                        "email": account.email if account else email,
-                        "from_status": prev_status.value,
-                        "to_status": member_existing.status.value,
-                        "from_role": prev_role.value,
-                        "to_role": member_existing.role.value,
-                    },
-                ),
-            )
         return TenantInviteResponse(
             member_id=member_existing.id,
             email=account.email if account else email,
@@ -1086,23 +1032,6 @@ def invite_to_tenant(
             detail="Member duplicado (tenant_id, email) não permitido",
         ) from e
     session.refresh(member_new)
-    _try_write_audit_log(
-        session,
-        AuditLog(
-            tenant_id=tenant.id,
-            account_id=admin_member.account_id,
-            member_id=member_new.id,
-            event_type="member_invited",
-            data={
-                "target_account_id": account.id if account else None,
-                "email": email,
-                "from_status": None,
-                "to_status": member_new.status.value,
-                "from_role": None,
-                "to_role": member_new.role.value,
-            },
-        ),
-    )
     return TenantInviteResponse(
         member_id=member_new.id,
         email=email,
@@ -1260,26 +1189,11 @@ def remove_member(
                 ),
             )
 
-    prev_status = member_to_remove.status
     member_to_remove.status = MemberStatus.REMOVED
     member_to_remove.updated_at = utc_now()
     session.add(member_to_remove)
     session.commit()
     session.refresh(member_to_remove)
-    _try_write_audit_log(
-        session,
-        AuditLog(
-            tenant_id=tenant_id,
-            account_id=admin_member.account_id,
-            member_id=member_to_remove.id,
-            event_type="member_status_changed",
-            data={
-                "from_status": prev_status.value,
-                "to_status": member_to_remove.status.value,
-                "target_account_id": member_to_remove.account_id,
-            },
-        ),
-    )
     return MemberRemoveResponse(member_id=member_to_remove.id, status=member_to_remove.status.value)
 
 
@@ -3744,25 +3658,6 @@ def create_member(
             ) from e
         session.refresh(member_obj)
 
-        # Log de auditoria
-        _try_write_audit_log(
-            session,
-            AuditLog(
-                tenant_id=member.tenant_id,
-                account_id=member.account_id,
-                member_id=member_obj.id,
-                event_type="member_invited",
-                data={
-                    "target_account_id": account_id,
-                    "email": email_lower,
-                    "from_status": None,
-                    "to_status": member_obj.status.value,
-                    "from_role": None,
-                    "to_role": member_obj.role.value,
-                },
-            ),
-        )
-
         return _build_member_response(member_obj, account)
     except HTTPException:
         raise
@@ -3948,10 +3843,6 @@ def update_member(
                         ),
                     )
 
-        # Atualizar campos
-        prev_status = member_obj.status
-        prev_role = member_obj.role
-
         if body.role is not None:
             member_obj.role = MemberRole[body.role.upper()]
         if body.status is not None:
@@ -3993,25 +3884,6 @@ def update_member(
         session.add(member_obj)
         session.commit()
         session.refresh(member_obj)
-
-        # Log de auditoria se houver mudanças
-        if prev_status != member_obj.status or prev_role != member_obj.role:
-            _try_write_audit_log(
-                session,
-                AuditLog(
-                    tenant_id=member.tenant_id,
-                    account_id=member.account_id,
-                    member_id=member_obj.id,
-                    event_type="member_status_changed",
-                    data={
-                        "target_account_id": member_obj.account_id,
-                        "from_status": prev_status.value,
-                        "to_status": member_obj.status.value,
-                        "from_role": prev_role.value,
-                        "to_role": member_obj.role.value,
-                    },
-                ),
-            )
 
         # Buscar account (pode ser None se member ainda não foi vinculado)
         account = None
@@ -4072,28 +3944,11 @@ def delete_member(
                     ),
                 )
 
-        prev_status = member_obj.status
         member_obj.status = MemberStatus.REMOVED
         member_obj.updated_at = utc_now()
         session.add(member_obj)
         session.commit()
         session.refresh(member_obj)
-
-        # Log de auditoria
-        _try_write_audit_log(
-            session,
-            AuditLog(
-                tenant_id=member.tenant_id,
-                account_id=member.account_id,
-                member_id=member_obj.id,
-                event_type="member_status_changed",
-                data={
-                    "target_account_id": member_obj.account_id,
-                    "from_status": prev_status.value,
-                    "to_status": member_obj.status.value,
-                },
-            ),
-        )
 
         return Response(status_code=204)
     except HTTPException:
@@ -4146,31 +4001,12 @@ def send_member_invite_email(
         )
 
         # Atualizar status para PENDING antes de enviar o email
-        prev_status = member_obj.status
         if member_obj.status != MemberStatus.PENDING:
             member_obj.status = MemberStatus.PENDING
             member_obj.updated_at = utc_now()
             session.add(member_obj)
             session.commit()
             session.refresh(member_obj)
-
-            # Log de auditoria se status mudou
-            if prev_status != member_obj.status:
-                _try_write_audit_log(
-                    session,
-                    AuditLog(
-                        tenant_id=member.tenant_id,
-                        account_id=member.account_id,
-                        member_id=member_obj.id,
-                        event_type="member_status_changed",
-                        data={
-                            "target_account_id": member_obj.account_id,
-                            "target_email": account_email,
-                            "from_status": prev_status.value,
-                            "to_status": member_obj.status.value,
-                        },
-                    ),
-                )
 
         # Enviar email de convite
         try:

@@ -20,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _constraint_exists(conn, *, table_name: str, constraint_name: str) -> bool:
+    if getattr(op.get_context(), "as_sql", False):
+        return True
+
     found = conn.execute(
         sa.text(
             """
@@ -50,32 +53,7 @@ def upgrade() -> None:
     op.alter_column("membership", "role", existing_type=sa.String(), server_default="account")
     op.alter_column("account", "role", existing_type=sa.String(), server_default="account")
 
-    # 4) Atualiza audit_log.data (JSON) quando contém role serializada.
-    # Observação: usamos jsonb_set em data::jsonb e voltamos para json.
-    op.execute(
-        sa.text(
-            """
-            UPDATE audit_log
-            SET data = jsonb_set(data::jsonb, '{to_role}', '"account"', true)::json
-            WHERE data IS NOT NULL
-              AND (data::jsonb ? 'to_role')
-              AND (data::jsonb ->> 'to_role') = 'user'
-            """
-        )
-    )
-    op.execute(
-        sa.text(
-            """
-            UPDATE audit_log
-            SET data = jsonb_set(data::jsonb, '{from_role}', '"account"', true)::json
-            WHERE data IS NOT NULL
-              AND (data::jsonb ? 'from_role')
-              AND (data::jsonb ->> 'from_role') = 'user'
-            """
-        )
-    )
-
-    # 5) Recria check constraint alinhado com o novo valor.
+    # 4) Recria check constraint alinhado com o novo valor.
     op.create_check_constraint(
         ck_role,
         "membership",
@@ -95,29 +73,6 @@ def downgrade() -> None:
 
     op.alter_column("membership", "role", existing_type=sa.String(), server_default="user")
     op.alter_column("account", "role", existing_type=sa.String(), server_default="user")
-
-    op.execute(
-        sa.text(
-            """
-            UPDATE audit_log
-            SET data = jsonb_set(data::jsonb, '{to_role}', '"user"', true)::json
-            WHERE data IS NOT NULL
-              AND (data::jsonb ? 'to_role')
-              AND (data::jsonb ->> 'to_role') = 'account'
-            """
-        )
-    )
-    op.execute(
-        sa.text(
-            """
-            UPDATE audit_log
-            SET data = jsonb_set(data::jsonb, '{from_role}', '"user"', true)::json
-            WHERE data IS NOT NULL
-              AND (data::jsonb ? 'from_role')
-              AND (data::jsonb ->> 'from_role') = 'account'
-            """
-        )
-    )
 
     op.create_check_constraint(
         ck_role,

@@ -19,68 +19,76 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _scalar_or_default(conn, sql: str, default):
+    if getattr(op.get_context(), "as_sql", False):
+        return default
+
+    result = conn.execute(sa.text(sql))
+    return result.scalar()
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
     # Remove constraint antiga (email, tenant_id) se existir.
-    result = conn.execute(
-        sa.text(
-            """
-            SELECT constraint_name
-            FROM information_schema.table_constraints
-            WHERE table_name = 'account'
-              AND constraint_type = 'UNIQUE'
-              AND constraint_name = 'uq_account_email_tenant'
-            """
-        )
+    old_constraint_exists = _scalar_or_default(
+        conn,
+        """
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'account'
+          AND constraint_type = 'UNIQUE'
+          AND constraint_name = 'uq_account_email_tenant'
+        """,
+        "uq_account_email_tenant",
     )
-    if result.scalar():
+    if old_constraint_exists:
         op.drop_constraint("uq_account_email_tenant", "account", type_="unique")
 
     # Cria constraint global (email) se ainda não existir.
-    result = conn.execute(
-        sa.text(
-            """
-            SELECT constraint_name
-            FROM information_schema.table_constraints
-            WHERE table_name = 'account'
-              AND constraint_type = 'UNIQUE'
-              AND constraint_name = 'uq_account_email'
-            """
-        )
+    new_constraint_exists = _scalar_or_default(
+        conn,
+        """
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'account'
+          AND constraint_type = 'UNIQUE'
+          AND constraint_name = 'uq_account_email'
+        """,
+        None,
     )
-    if not result.scalar():
+    if not new_constraint_exists:
         op.create_unique_constraint("uq_account_email", "account", ["email"])
 
 
 def downgrade() -> None:
     conn = op.get_bind()
 
-    result = conn.execute(
-        sa.text(
-            """
-            SELECT constraint_name
-            FROM information_schema.table_constraints
-            WHERE table_name = 'account'
-              AND constraint_type = 'UNIQUE'
-              AND constraint_name = 'uq_account_email'
-            """
-        )
+    global_constraint_exists = _scalar_or_default(
+        conn,
+        """
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'account'
+          AND constraint_type = 'UNIQUE'
+          AND constraint_name = 'uq_account_email'
+        """,
+        "uq_account_email",
     )
-    if result.scalar():
+    if global_constraint_exists:
         op.drop_constraint("uq_account_email", "account", type_="unique")
 
-    result = conn.execute(
-        sa.text(
-            """
-            SELECT constraint_name
-            FROM information_schema.table_constraints
-            WHERE table_name = 'account'
-              AND constraint_type = 'UNIQUE'
-              AND constraint_name = 'uq_account_email_tenant'
-            """
-        )
+    tenant_constraint_exists = _scalar_or_default(
+        conn,
+        """
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_name = 'account'
+          AND constraint_type = 'UNIQUE'
+          AND constraint_name = 'uq_account_email_tenant'
+        """,
+        None,
     )
-    if not result.scalar():
+    if not tenant_constraint_exists:
         op.create_unique_constraint("uq_account_email_tenant", "account", ["email", "tenant_id"])
 

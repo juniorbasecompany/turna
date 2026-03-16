@@ -73,7 +73,7 @@ Este documento define **regras e convenções** a seguir no código, revisões e
 - **Member**: dados da clínica; visíveis e editáveis pelo admin.
 - `GET /me`: retorna account_name (privado) e member_name (público).
 - `GET /member/list`: retorna apenas member_name e member_email.
-- Convite por email usa `member.email`. AuditLog registra member.name e member.email.
+- Convite por email usa `member.email`.
 
 **Futuro:** Painel de Account com regras de acesso restritas (apenas o próprio usuário vê seus dados).
 

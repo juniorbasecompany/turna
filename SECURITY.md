@@ -89,10 +89,6 @@ Criar Job com `tenant_id=member.tenant_id` (nunca do body).
 - Aceitar `tenant_id` do body em criação.
 - Não validar `tenant_id` antes de retornar recurso.
 
-## Auditoria
-
-Eventos registrados em `audit_log`: `member_invited`, `member_status_changed`, `tenant_switched`.
-
 ## Status codes
 
 - 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 500 Internal Server Error.
