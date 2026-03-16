@@ -2596,8 +2596,9 @@ def _hospital_list_queries(session: Session, tenant_id: int, name: Optional[str]
     count_query = select(func.count(Hospital.id)).where(Hospital.tenant_id == tenant_id)
     if name and name.strip():
         term = f"%{name.strip()}%"
-        query = query.where(Hospital.name.ilike(term))
-        count_query = count_query.where(Hospital.name.ilike(term))
+        filter_condition = Hospital.name.ilike(term) | Hospital.label.ilike(term)
+        query = query.where(filter_condition)
+        count_query = count_query.where(filter_condition)
     query = query.order_by(Hospital.name)
     return query, count_query
 
@@ -2611,10 +2612,10 @@ def list_hospital(
     session: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=100, description="Número máximo de itens"),
     offset: int = Query(0, ge=0, description="Offset para paginação"),
-    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome ou rótulo (contém)"),
 ):
     """
-    Lista todos os hospitais do tenant atual com paginação e filtro opcional por nome.
+    Lista todos os hospitais do tenant atual com paginação e filtro opcional por nome ou rótulo.
     """
     try:
         query, count_query = _hospital_list_queries(session, member.tenant_id, name=name)
@@ -2655,7 +2656,7 @@ def list_hospital(
 def report_hospital_pdf(
     member: Member = Depends(get_current_member),
     session: Session = Depends(get_session),
-    name: Optional[str] = Query(None, description="Filtrar por nome (contém)"),
+    name: Optional[str] = Query(None, description="Filtrar por nome ou rótulo (contém)"),
 ):
     """Relatório PDF: lista de hospitais (nome). Mesmo canal de dados da listagem, sem paginação."""
     try:
