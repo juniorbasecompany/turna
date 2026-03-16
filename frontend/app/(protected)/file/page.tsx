@@ -681,8 +681,8 @@ export default function FilesPage() {
 
     // Títulos dos filtros: definidos uma vez, usados no painel e no cabeçalho do relatório
     const FILTER_HOSPITAL_LABEL = 'Hospital'
-    const FILTER_START_DATE_LABEL = 'Cadastrados desde'
-    const FILTER_END_DATE_LABEL = 'Cadastrados até'
+    const FILTER_START_DATE_LABEL = 'Desde'
+    const FILTER_END_DATE_LABEL = 'Até'
 
     const [filterHospitalId, setFilterHospitalId] = useState<number | null>(null)
     const [hospitalList, setHospitalList] = useState<Hospital[]>([])
@@ -1533,11 +1533,12 @@ export default function FilesPage() {
                             showFlash={hospitalFieldFlash}
                         />
                         <TenantDateTimePicker
-                            label="Cadastrados desde"
+                            label={FILTER_START_DATE_LABEL}
                             value={filterStartDate}
                             onChange={handleStartDateChange}
                             id="filter_start_date"
                             name="filter_start_date"
+                            periodBoundary="start"
                         />
                         <TenantDateTimePicker
                             label={FILTER_END_DATE_LABEL}
@@ -1545,6 +1546,7 @@ export default function FilesPage() {
                             onChange={handleEndDateChange}
                             id="filter_end_date"
                             name="filter_end_date"
+                            periodBoundary="end"
                         />
                     </FormFieldGrid>
 

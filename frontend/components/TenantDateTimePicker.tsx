@@ -16,6 +16,7 @@ export interface TenantDateTimePickerProps {
     id?: string
     name?: string
     showFlash?: boolean
+    periodBoundary?: 'start' | 'end'
 }
 
 /**
@@ -39,6 +40,7 @@ export function TenantDateTimePicker({
     id,
     name,
     showFlash = false,
+    periodBoundary,
 }: TenantDateTimePickerProps) {
     const { settings } = useTenantSettings()
     const [isOpen, setIsOpen] = useState(false)
@@ -154,45 +156,66 @@ export function TenantDateTimePicker({
         minute: '2-digit',
     }) : ''
 
-    // Selecionar data (temporária, não confirma ainda)
-    // Ao clicar no dia, reseta hora e minutos para zero, e AM
-    const handleDateSelect = (day: number) => {
+    const getDateForSelectedDay = (day: number) => {
         if (!tempDate) {
-            setTempDate(new Date(displayMonth.getFullYear(), displayMonth.getMonth(), day))
-        } else {
-            const newDate = new Date(tempDate)
-            newDate.setFullYear(displayMonth.getFullYear())
-            newDate.setMonth(displayMonth.getMonth())
-            newDate.setDate(day)
-            setTempDate(newDate)
+            return new Date(displayMonth.getFullYear(), displayMonth.getMonth(), day)
         }
-        // Resetar hora, minutos e AM ao selecionar um dia
+
+        const newDate = new Date(tempDate)
+        newDate.setFullYear(displayMonth.getFullYear())
+        newDate.setMonth(displayMonth.getMonth())
+        newDate.setDate(day)
+        return newDate
+    }
+
+    const applyStartOfDayTempTime = () => {
         setTempHour12(0)
         setTempMinuteTens(0)
         setTempMinuteUnits(0)
         setTempAmPm('AM')
     }
 
+    const applyEndOfDayTempTime = () => {
+        setTempHour12(11)
+        setTempMinuteTens(50)
+        setTempMinuteUnits(9)
+        setTempAmPm('PM')
+    }
+
+    // Selecionar data (temporária, não confirma ainda)
+    // Ao clicar no dia, mantém o comportamento padrão de início do dia
+    const handleDateSelect = (day: number) => {
+        setTempDate(getDateForSelectedDay(day))
+        applyStartOfDayTempTime()
+    }
+
     // Confirmar seleção (botão OK)
-    const handleConfirm = () => {
-        if (tempDate) {
-            const finalDate = new Date(tempDate)
+    const handleConfirm = (override?: { date: Date, hour24: number, minute: number }) => {
+        const sourceDate = override?.date || tempDate
 
-            // Converter hora 0-11 + AM/PM para 24h
-            let hour24 = tempHour12
-            if (tempAmPm === 'PM') {
-                if (tempHour12 === 0) {
-                    hour24 = 12
-                } else {
-                    hour24 = tempHour12 + 12
-                }
-            } else {
-                // AM: 0 = 0h, 1-11 = 1h-11h
+        if (sourceDate) {
+            const finalDate = new Date(sourceDate)
+
+            let hour24 = override?.hour24
+            let totalMinutes = override?.minute
+
+            if (hour24 === undefined || totalMinutes === undefined) {
+                // Converter hora 0-11 + AM/PM para 24h
                 hour24 = tempHour12
-            }
+                if (tempAmPm === 'PM') {
+                    if (tempHour12 === 0) {
+                        hour24 = 12
+                    } else {
+                        hour24 = tempHour12 + 12
+                    }
+                } else {
+                    // AM: 0 = 0h, 1-11 = 1h-11h
+                    hour24 = tempHour12
+                }
 
-            // Calcular minutos totais (dezenas + unidades)
-            const totalMinutes = tempMinuteTens + tempMinuteUnits
+                // Calcular minutos totais (dezenas + unidades)
+                totalMinutes = tempMinuteTens + tempMinuteUnits
+            }
 
             finalDate.setHours(hour24)
             finalDate.setMinutes(totalMinutes)
@@ -201,6 +224,25 @@ export function TenantDateTimePicker({
             onChange(finalDate)
             setIsOpen(false)
         }
+    }
+
+    const handleDateDoubleClick = (day: number) => {
+        const selectedDate = getDateForSelectedDay(day)
+        const isEndBoundary = periodBoundary === 'end'
+
+        setTempDate(selectedDate)
+        if (isEndBoundary) {
+            applyEndOfDayTempTime()
+        } else {
+            applyStartOfDayTempTime()
+        }
+
+        // Confirma com a hora final correta sem depender da atualização assíncrona do estado.
+        setTimeout(() => handleConfirm({
+            date: selectedDate,
+            hour24: isEndBoundary ? 23 : 0,
+            minute: isEndBoundary ? 59 : 0,
+        }), 0)
     }
 
     // Limpar seleção
@@ -328,11 +370,7 @@ export function TenantDateTimePicker({
                         displayMonth={displayMonth}
                         onDisplayMonthChange={setDisplayMonth}
                         onDateSelect={handleDateSelect}
-                        onDateDoubleClick={(day) => {
-                            handleDateSelect(day)
-                            // Confirma imediatamente após selecionar o dia
-                            setTimeout(handleConfirm, 0)
-                        }}
+                        onDateDoubleClick={handleDateDoubleClick}
                         onClear={handleCalendarClear}
                         onToday={handleCalendarToday}
                         minDate={minDate}

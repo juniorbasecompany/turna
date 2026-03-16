@@ -602,17 +602,19 @@ export default function SchedulePage() {
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
                         <TenantDateTimePicker
                             id="period_start_at"
-                            label="Data/Hora Início"
+                            label="Desde"
                             value={formData.period_start_at}
                             onChange={(date) => setFormData({ ...formData, period_start_at: date })}
                             disabled={submitting}
+                            periodBoundary="start"
                         />
                         <TenantDateTimePicker
                             id="period_end_at"
-                            label="Data/Hora Fim"
+                            label="Até"
                             value={formData.period_end_at}
                             onChange={(date) => setFormData({ ...formData, period_end_at: date })}
                             disabled={submitting}
+                            periodBoundary="end"
                         />
                     </FormFieldGrid>
 

@@ -75,6 +75,7 @@ export function FilterDateRange({
         id={startId}
         disabled={startDisabled}
         showFlash={startShowFlash}
+        periodBoundary="start"
       />
       <TenantDateTimePicker
         label={endLabel}
@@ -83,6 +84,7 @@ export function FilterDateRange({
         id={endId}
         disabled={endDisabled}
         showFlash={endShowFlash}
+        periodBoundary="end"
       />
     </>
   )

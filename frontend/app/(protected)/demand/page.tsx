@@ -382,17 +382,19 @@ export default function DemandPage() {
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
                         <TenantDateTimePicker
                             id="start_time"
-                            label="Data/Hora Início"
+                            label="Desde"
                             value={formData.start_time}
                             onChange={(date) => setFormData({ ...formData, start_time: date })}
                             disabled={submitting}
+                            periodBoundary="start"
                         />
                         <TenantDateTimePicker
                             id="end_time"
-                            label="Data/Hora Fim"
+                            label="Até"
                             value={formData.end_time}
                             onChange={(date) => setFormData({ ...formData, end_time: date })}
                             disabled={submitting}
+                            periodBoundary="end"
                         />
                     </FormFieldGrid>
 

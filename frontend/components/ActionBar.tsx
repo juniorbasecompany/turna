@@ -158,8 +158,16 @@ export function ActionBar({
             </div>
         ) : null
 
+    // Mantém o botão "Cancelar" ao lado esquerdo para padronizar todos os painéis.
+    const cancelButton = buttons.find((button) => button.label === 'Cancelar')
+    const rightButtons = cancelButton
+        ? buttons.filter((button) => button !== cancelButton)
+        : buttons
+
+    const cancelButtonRendered = cancelButton ? renderButton(cancelButton, -1) : null
+
     const buttonsRendered =
-        buttons?.length ? buttons.map((b, i) => renderButton(b, i)) : null
+        rightButtons?.length ? rightButtons.map((b, i) => renderButton(b, i)) : null
 
     // Determinar qual conteúdo exibir e qual cor usar
     // Prioridade: message > error > leftContent
@@ -184,6 +192,7 @@ export function ActionBar({
             <div className="min-h-20 flex flex-wrap items-center gap-2 sm:gap-4 px-4 sm:px-6 lg:px-8 py-2">
                 {/* leftButtonArea - botões utilitários (ex: Relatório) */}
                 {leftButtonsRendered}
+                {cancelButtonRendered}
                 {/* messageArea - mensagem/erro/leftContent */}
                 <div className={`flex-1 min-w-[200px] text-sm ${textColor}`}>
                     {content ? (

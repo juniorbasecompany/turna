@@ -566,7 +566,7 @@ export default function MemberPage() {
                                     <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <TenantDateTimePicker
                                             id={`vacation_start_${index}`}
-                                            label="Início"
+                                            label="Desde"
                                             value={parseIsoToDate(pair[0])}
                                             onChange={(date) => {
                                                 const newVacation = [...formData.vacation]
@@ -574,10 +574,11 @@ export default function MemberPage() {
                                                 setFormData({ ...formData, vacation: newVacation })
                                             }}
                                             disabled={submitting}
+                                            periodBoundary="start"
                                         />
                                         <TenantDateTimePicker
                                             id={`vacation_end_${index}`}
-                                            label="Fim"
+                                            label="Até"
                                             value={parseIsoToDate(pair[1])}
                                             onChange={(date) => {
                                                 const newVacation = [...formData.vacation]
@@ -585,6 +586,7 @@ export default function MemberPage() {
                                                 setFormData({ ...formData, vacation: newVacation })
                                             }}
                                             disabled={submitting}
+                                            periodBoundary="end"
                                         />
                                     </div>
                                     <button
