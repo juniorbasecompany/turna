@@ -98,26 +98,52 @@ def _determine_role(email: str, hd: Optional[str] = None) -> str:
     return "account"
 
 
-def _get_or_create_default_tenant(session: Session) -> Tenant:
-    """Obtém ou cria um tenant padrão para novas contas."""
-    # Por enquanto, cria um tenant padrão se não existir
-    # Em produção, isso deve ser configurado ou a conta deve escolher durante registro
-    default_tenant = session.exec(
-        select(Tenant).where(Tenant.label == "default")
-    ).first()
+def _link_pending_member_to_account(session: Session, *, account: Account, email: str) -> None:
+    """Vincula convites pendentes do email informado à conta autenticada."""
+    pending_member_list = session.exec(
+        select(Member).where(
+            Member.email == email.lower(),
+            Member.account_id.is_(None),
+            Member.status == MemberStatus.PENDING,
+        )
+    ).all()
 
-    if not default_tenant:
-        default_tenant = Tenant(name="Default Tenant", label="default")
-        session.add(default_tenant)
+    for pending_member in pending_member_list:
+        pending_member.account_id = account.id
+        if (pending_member.name is None or pending_member.name == "") and account.name and account.name != "":
+            pending_member.name = account.name
+        session.add(pending_member)
+
+    if pending_member_list:
         session.commit()
-        session.refresh(default_tenant)
-        # Criar hospital default para o tenant recém-criado
-        create_default_hospital_for_tenant(session, default_tenant.id)
-    else:
-        # Garantir que tenant existente também tenha hospital default
-        create_default_hospital_for_tenant(session, default_tenant.id)
 
-    return default_tenant
+
+def _create_tenant_member_for_account(session: Session, *, account: Account) -> Member:
+    """Cria tenant e hospital default para a conta e retorna o member do criador."""
+    tenant = Tenant(
+        name="Clínica",
+        label=None,
+        timezone="America/Sao_Paulo",
+        locale="pt-BR",
+        currency="BRL",
+    )
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+
+    create_default_hospital_for_tenant(session, tenant.id)
+
+    member = Member(
+        tenant_id=tenant.id,
+        account_id=account.id,
+        role=MemberRole.ADMIN,
+        status=MemberStatus.ACTIVE,
+        name=account.name if account.name else None,
+    )
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    return member
 
 
 def _list_active_tenants_for_account(session: Session, *, account_id: int) -> list[TenantOption]:
@@ -260,27 +286,9 @@ def auth_google(
             session.commit()
             session.refresh(account)
 
-    # Buscar e vincular Members PENDING com account_id NULL pelo email
-    pending_members = session.exec(
-        select(Member).where(
-            Member.email == email.lower(),
-            Member.account_id.is_(None),
-            Member.status == MemberStatus.PENDING,
-        )
-    ).all()
+    _link_pending_member_to_account(session, account=account, email=email)
 
-    for pending_member in pending_members:
-        # Vincular Account ao Member
-        pending_member.account_id = account.id
-        # Preencher member.name se NULL
-        if (pending_member.name is None or pending_member.name == "") and account.name and account.name != "":
-            pending_member.name = account.name
-        session.add(pending_member)
-
-    if pending_members:
-        session.commit()
-
-    tenant_list, invites = get_account_members(session, account_id=account.id)
+    tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
 
     # Se não há tenants ACTIVE nem invites PENDING, exige seleção (permite criar clínica)
     if len(tenant_list) == 0 and len(invites) == 0:
@@ -335,8 +343,6 @@ def auth_google_register(
     if not account:
         # Cria novo account (Account não possui tenant_id; o vínculo é via Member)
         role = _determine_role(email, hd)
-        tenant = _get_or_create_default_tenant(session)
-
         account = Account(
             email=email,
             name=name,
@@ -347,38 +353,19 @@ def auth_google_register(
         session.commit()
         session.refresh(account)
 
-        member = Member(
-            tenant_id=tenant.id,
-            account_id=account.id,
-            role=MemberRole.ADMIN if role == "admin" else MemberRole.ACCOUNT,
-            status=MemberStatus.ACTIVE,
-            name=name,  # Preencher member.name com nome do Google na criação
-        )
-        session.add(member)
-        session.commit()
-        session.refresh(member)
+        _link_pending_member_to_account(session, account=account, email=email)
+        tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
 
+        if len(invites) > 0:
+            return AuthResponse(requires_tenant_selection=True, tenants=tenant_list, invites=invites)
+
+        member = _create_tenant_member_for_account(session, account=account)
         token = _issue_token_for_member(account=account, member=member)
         return AuthResponse(access_token=token)
 
     # Account já existe -> comportamento igual ao login (pode exigir seleção).
     # Também buscar e vincular Members PENDING
-    pending_members = session.exec(
-        select(Member).where(
-            Member.email == email.lower(),
-            Member.account_id.is_(None),
-            Member.status == MemberStatus.PENDING,
-        )
-    ).all()
-
-    for pending_member in pending_members:
-        pending_member.account_id = account.id
-        if (pending_member.name is None or pending_member.name == "") and account.name and account.name != "":
-            pending_member.name = account.name
-        session.add(pending_member)
-
-    if pending_members:
-        session.commit()
+    _link_pending_member_to_account(session, account=account, email=email)
 
     return auth_google(body=body, session=session)
 
@@ -464,7 +451,6 @@ def auth_dev_token(
 
     account = session.exec(select(Account).where(Account.email == email)).first()
     if not account:
-        tenant = _get_or_create_default_tenant(session)
         role = _determine_role(email)
         account = Account(
             email=email,
@@ -476,14 +462,15 @@ def auth_dev_token(
         session.commit()
         session.refresh(account)
 
-        member = Member(
-            tenant_id=tenant.id,
-            account_id=account.id,
-            role=MemberRole.ADMIN if role == "admin" else MemberRole.ACCOUNT,
-            status=MemberStatus.ACTIVE,
-        )
-        session.add(member)
-        session.commit()
+        _link_pending_member_to_account(session, account=account, email=email)
+        tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
+
+        if len(invites) == 0:
+            member = _create_tenant_member_for_account(session, account=account)
+            token = _issue_token_for_member(account=account, member=member)
+            return AuthResponse(access_token=token)
+
+        return AuthResponse(requires_tenant_selection=True, tenants=tenant_list, invites=invites)
 
     # Se tenant_id foi informado, emite token para ele (valida member).
     if body.tenant_id is not None:
@@ -493,11 +480,16 @@ def auth_dev_token(
         token = _issue_token_for_member(account=account, member=member)
         return AuthResponse(access_token=token)
 
+    _link_pending_member_to_account(session, account=account, email=email)
     tenant_list, invites = get_account_members(session, account_id=account.id, email=account.email)
     if not tenant_list:
-        raise HTTPException(status_code=403, detail="Conta sem acesso a nenhum tenant (member ACTIVE ausente)")
-    if len(tenant_list) > 1:
-        return AuthResponse(requires_tenant_selection=True, tenants=tenant_list)
+        if len(invites) > 0:
+            return AuthResponse(requires_tenant_selection=True, tenants=[], invites=invites)
+        member = _create_tenant_member_for_account(session, account=account)
+        token = _issue_token_for_member(account=account, member=member)
+        return AuthResponse(access_token=token)
+    if len(tenant_list) > 1 or len(invites) > 0:
+        return AuthResponse(requires_tenant_selection=True, tenants=tenant_list, invites=invites)
 
     only = tenant_list[0]
     member = _get_active_member(session, account_id=account.id, tenant_id=only.tenant_id)
@@ -741,22 +733,7 @@ def auth_google_create_tenant(
 
     # Verificar se já tem tenants ACTIVE (não deve usar este endpoint se tiver)
     # Também buscar e vincular Members PENDING
-    pending_members = session.exec(
-        select(Member).where(
-            Member.email == email.lower(),
-            Member.account_id.is_(None),
-            Member.status == MemberStatus.PENDING,
-        )
-    ).all()
-
-    for pending_member in pending_members:
-        pending_member.account_id = account.id
-        if (pending_member.name is None or pending_member.name == "") and account.name and account.name != "":
-            pending_member.name = account.name
-        session.add(pending_member)
-
-    if pending_members:
-        session.commit()
+    _link_pending_member_to_account(session, account=account, email=email)
 
     tenant_list, invites = get_account_members(session, account_id=account.id, email=email)
     if len(tenant_list) > 0:
@@ -765,35 +742,7 @@ def auth_google_create_tenant(
             detail="Account já possui tenants ACTIVE. Use o endpoint de seleção de tenant."
         )
 
-    # Criar tenant com dados default (label opcional, não precisa gerar)
-    tenant = Tenant(
-        name="Clínica",
-        label=None,  # Rótulo opcional; pode ser preenchido depois
-        timezone="America/Sao_Paulo",
-        locale="pt-BR",
-        currency="BRL",
-    )
-    session.add(tenant)
-    session.commit()
-    session.refresh(tenant)
-
-    # Criar hospital default para o tenant
-    create_default_hospital_for_tenant(session, tenant.id)
-
-    # Criar member ADMIN/ACTIVE para o criador
-    member = Member(
-        tenant_id=tenant.id,
-        account_id=account.id,
-        role=MemberRole.ADMIN,
-        status=MemberStatus.ACTIVE,
-        name=account.name if account.name else None,  # Preencher member.name com account.name
-    )
-    session.add(member)
-    session.commit()
-    session.refresh(member)
-
-
-    # Emitir token para o novo tenant
+    member = _create_tenant_member_for_account(session, account=account)
     token = _issue_token_for_member(account=account, member=member)
     return TokenResponse(access_token=token)
 

@@ -755,6 +755,72 @@ def get_current_tenant_info(
     return _build_tenant_response(tenant)
 
 
+def _account_has_other_active_tenant(
+    session: Session,
+    *,
+    account_id: int,
+    tenant_id: int,
+) -> bool:
+    other_member = session.exec(
+        select(Member.id).where(
+            Member.account_id == account_id,
+            Member.tenant_id != tenant_id,
+            Member.status == MemberStatus.ACTIVE,
+        )
+    ).first()
+    return other_member is not None
+
+
+def _delete_tenant_storage_file_list(file_list: list[File]) -> None:
+    if not file_list:
+        return
+
+    storage_service = StorageService()
+    for file_model in file_list:
+        try:
+            storage_service.delete_file(file_model.s3_key)
+        except Exception as e:
+            logger.warning(f"Erro ao excluir arquivo do S3 (continuando com exclusão do tenant): {e}")
+
+        thumbnail_key = file_model.s3_key + ".thumbnail.webp"
+        try:
+            s3_client = storage_service.client
+            if s3_client.file_exists(thumbnail_key):
+                storage_service.delete_file(thumbnail_key)
+        except Exception as e:
+            logger.warning(f"Erro ao excluir thumbnail do S3 (continuando com exclusão do tenant): {e}")
+
+
+def _purge_tenant_related_data(session: Session, *, tenant_id: int) -> None:
+    # Remove arquivos do storage antes de apagar os registros do banco.
+    file_list = list(session.exec(select(File).where(File.tenant_id == tenant_id)).all())
+    _delete_tenant_storage_file_list(file_list)
+
+    audit_log_list = list(session.exec(select(AuditLog).where(AuditLog.tenant_id == tenant_id)).all())
+    demand_list = list(session.exec(select(Demand).where(Demand.tenant_id == tenant_id)).all())
+    job_list = list(session.exec(select(Job).where(Job.tenant_id == tenant_id)).all())
+    hospital_list = list(session.exec(select(Hospital).where(Hospital.tenant_id == tenant_id)).all())
+    member_list = list(session.exec(select(Member).where(Member.tenant_id == tenant_id)).all())
+
+    for audit_log in audit_log_list:
+        session.delete(audit_log)
+
+    for demand in demand_list:
+        session.delete(demand)
+
+    for file_model in file_list:
+        session.delete(file_model)
+
+    for job in job_list:
+        session.delete(job)
+
+    for hospital in hospital_list:
+        session.delete(hospital)
+
+    for member_row in member_list:
+        session.delete(member_row)
+
+
 @router.put("/tenant/{tenant_id}", response_model=TenantResponse, tags=["Tenant"])
 def update_tenant(
     tenant_id: int,
@@ -767,6 +833,9 @@ def update_tenant(
     """
     try:
         logger.info(f"Atualizando tenant: id={tenant_id}")
+
+        if member.tenant_id != tenant_id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
 
         tenant = session.get(Tenant, tenant_id)
         if not tenant:
@@ -830,26 +899,52 @@ def delete_tenant(
     try:
         logger.info(f"Removendo tenant: id={tenant_id}")
 
+        if member.tenant_id != tenant_id:
+            raise HTTPException(status_code=403, detail="Acesso negado")
+
         tenant = session.get(Tenant, tenant_id)
         if not tenant:
             logger.warning(f"Tenant não encontrado: id={tenant_id}")
             raise HTTPException(status_code=404, detail="Tenant não encontrado")
 
-        # Verificar se há members ativos para este tenant
-        active_members = session.exec(
-            select(func.count())
-            .select_from(Member)
-            .where(
-                Member.tenant_id == tenant_id,
-                Member.status == MemberStatus.ACTIVE,
-            )
-        ).one()
+        active_member_list = list(
+            session.exec(
+                select(Member).where(
+                    Member.tenant_id == tenant_id,
+                    Member.status == MemberStatus.ACTIVE,
+                )
+            ).all()
+        )
 
-        if int(active_members or 0) > 0:
+        if len(active_member_list) > 1:
             raise HTTPException(
                 status_code=409,
                 detail="Não é permitido remover um tenant que possui members ativos. Remova ou desative os members primeiro.",
             )
+
+        if len(active_member_list) == 1:
+            only_active_member = active_member_list[0]
+
+            if only_active_member.id != member.id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Não é permitido remover um tenant que possui members ativos. Remova ou desative os members primeiro.",
+                )
+
+            if not _account_has_other_active_tenant(
+                session,
+                account_id=member.account_id,
+                tenant_id=tenant_id,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Não é permitido remover a última clínica ativa da sua conta. "
+                        "Antes, entre em outra clínica ou crie uma nova."
+                    ),
+                )
+
+        _purge_tenant_related_data(session, tenant_id=tenant_id)
 
         session.delete(tenant)
         session.commit()

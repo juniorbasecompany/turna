@@ -672,6 +672,11 @@ export default function SelectTenantPage() {
 
                         {tenantList.length === 0 && (
                             <div>
+                                {invites.length > 0 && (
+                                    <p className="mb-2 text-sm text-gray-600">
+                                        Você também pode ignorar os convites e criar sua própria clínica.
+                                    </p>
+                                )}
                                 <button
                                     onClick={handleCreateTenant}
                                     disabled={creating || selecting || processingInvite !== null}

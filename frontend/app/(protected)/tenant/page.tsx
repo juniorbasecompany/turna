@@ -12,15 +12,18 @@ import { FormFieldGrid } from '@/components/FormFieldGrid'
 import { Pagination } from '@/components/Pagination'
 import { useTenantSettings } from '@/contexts/TenantSettingsContext'
 import { useEntityPage } from '@/hooks/useEntityPage'
+import { protectedFetch } from '@/lib/api'
 import { useReportButton } from '@/hooks/useReportButton'
 import { getCardTextClasses } from '@/lib/cardStyles'
 import { getDisplayName } from '@/lib/entityUtils'
 import {
+    InviteOption,
     TenantCreateRequest,
+    TenantOption,
     TenantResponse,
     TenantUpdateRequest,
 } from '@/types/api'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 type TenantFormData = {
     name: string
@@ -33,9 +36,20 @@ type TenantFormData = {
 // Label do filtro: definido uma vez, usado no painel e no cabeçalho do relatório
 const FILTER_NAME_LABEL = 'Nome'
 
+type TenantListPayload = {
+    items: TenantResponse[]
+    total: number
+}
+
+type TenantMembershipPayload = {
+    tenantList: TenantOption[]
+    inviteList: InviteOption[]
+}
+
 export default function TenantPage() {
     const { settings } = useTenantSettings()
     const [filterName, setFilterName] = useState('')
+    const [tenantDeleteBusy, setTenantDeleteBusy] = useState(false)
 
     const listAndReportParams = useMemo(() => {
         if (!filterName.trim()) return undefined
@@ -141,6 +155,133 @@ export default function TenantPage() {
 
     // Listagem já vem filtrada pelo backend quando listAndReportParams tem name
     const filteredTenants = tenantList
+    const isDeletingTenant = deleting || tenantDeleteBusy
+
+    const getSelectedTenantIdList = useCallback(async (): Promise<number[]> => {
+        if (!selectAllTenantsMode) {
+            return Array.from(selectedTenants)
+        }
+
+        const batchSize = 100
+        const tenantIdList: number[] = []
+        let offset = 0
+        let hasMore = true
+
+        while (hasMore) {
+            const params = new URLSearchParams()
+            params.set('limit', String(batchSize))
+            params.set('offset', String(offset))
+
+            if (listAndReportParams) {
+                Object.entries(listAndReportParams).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined) {
+                        params.set(key, String(value))
+                    }
+                })
+            }
+
+            const response = await protectedFetch<TenantListPayload>(`/api/tenant/list?${params.toString()}`)
+            tenantIdList.push(...response.items.map((tenant) => tenant.id))
+
+            offset += batchSize
+            hasMore = offset < response.total
+        }
+
+        return tenantIdList
+    }, [listAndReportParams, selectAllTenantsMode, selectedTenants])
+
+    const redirectAfterCurrentTenantDelete = useCallback(async () => {
+        const response = await protectedFetch<{ tenants: TenantOption[]; invites: InviteOption[] }>('/api/auth/tenant/list')
+        const membershipData: TenantMembershipPayload = {
+            tenantList: response.tenants || [],
+            inviteList: response.invites || [],
+        }
+
+        if (membershipData.tenantList.length === 1) {
+            const switchResponse = await fetch('/api/auth/switch-tenant', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    tenant_id: membershipData.tenantList[0].tenant_id,
+                }),
+            })
+
+            if (!switchResponse.ok) {
+                const errorData = await switchResponse.json().catch(() => ({ detail: 'Erro ao trocar de clínica' }))
+                throw new Error(errorData.detail || 'Erro ao trocar de clínica')
+            }
+
+            window.location.href = '/dashboard'
+            return
+        }
+
+        window.location.href = '/select-tenant'
+    }, [])
+
+    const handleDeleteSelected = useCallback(async () => {
+        try {
+            const tenantIdList = await getSelectedTenantIdList()
+            if (tenantIdList.length === 0) {
+                setError('Nenhuma clínica para excluir')
+                return
+            }
+
+            const currentTenant = await protectedFetch<TenantResponse>('/api/tenant/me')
+            const isCurrentTenantSelected = tenantIdList.includes(currentTenant.id)
+
+            if (!isCurrentTenantSelected) {
+                await baseHandleDeleteSelected()
+                return
+            }
+
+            if (tenantIdList.length > 1) {
+                setError('Não é permitido excluir a clínica atual junto com outras clínicas. Exclua a clínica atual sozinha.')
+                return
+            }
+
+            setTenantDeleteBusy(true)
+            setError(null)
+
+            await protectedFetch<void>(`/api/tenant/${currentTenant.id}`, {
+                method: 'DELETE',
+            })
+
+            try {
+                await redirectAfterCurrentTenantDelete()
+            } catch {
+                window.location.href = '/select-tenant'
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Erro ao excluir clínica'
+            setError(message)
+            setTenantDeleteBusy(false)
+        }
+    }, [baseHandleDeleteSelected, getSelectedTenantIdList, redirectAfterCurrentTenantDelete, setError])
+
+    const tenantActionBarButtons = useMemo(
+        () =>
+            actionBarButtons.map((button) => {
+                const nextButton = button.variant === 'danger'
+                    ? {
+                        ...button,
+                        onClick: handleDeleteSelected,
+                    }
+                    : { ...button }
+
+                if (tenantDeleteBusy) {
+                    nextButton.disabled = true
+                    if (nextButton.variant === 'danger') {
+                        nextButton.loading = true
+                    }
+                }
+
+                return nextButton
+            }),
+        [actionBarButtons, handleDeleteSelected, tenantDeleteBusy]
+    )
 
     return (
         <>
@@ -250,7 +391,7 @@ export default function TenantPage() {
                                     date={tenant.created_at}
                                     settings={settings}
                                     onEdit={() => handleEditClick(tenant)}
-                                    disabled={deleting}
+                                    disabled={isDeletingTenant}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar clínica"
                                 />
@@ -314,7 +455,7 @@ export default function TenantPage() {
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
                 leftButtons={reportLeftButtons}
-                buttons={actionBarButtons}
+                buttons={tenantActionBarButtons}
             />
         </>
     )
