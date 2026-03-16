@@ -3909,9 +3909,10 @@ def delete_member(
     session: Session = Depends(get_session),
 ):
     """
-    Remove (soft-delete) um member (status -> REMOVED) (apenas admin).
+    Remove um member (apenas admin).
     Valida que o member pertence ao tenant atual.
     Regra de segurança: não permitir remover o último member ACTIVE de um account.
+    Se o member já estiver REMOVED, realiza delete físico.
     """
     try:
         logger.info(f"Removendo member id={member_id} para tenant_id={member.tenant_id}")
@@ -3923,6 +3924,21 @@ def delete_member(
         if member_obj.tenant_id != member.tenant_id:
             logger.warning(f"Acesso negado: member.tenant_id={member_obj.tenant_id}, member.tenant_id={member.tenant_id}")
             raise HTTPException(status_code=403, detail="Acesso negado")
+
+        # Se já foi removido antes, excluir fisicamente o registro.
+        if member_obj.status == MemberStatus.REMOVED:
+            # Limpar referências opcionais antes do delete físico para evitar erro de FK.
+            demand_list = session.exec(
+                select(Demand).where(Demand.member_id == member_obj.id)
+            ).all()
+            for demand in demand_list:
+                demand.member_id = None
+                demand.updated_at = utc_now()
+                session.add(demand)
+
+            session.delete(member_obj)
+            session.commit()
+            return Response(status_code=204)
 
         # Validar regra de segurança
         # Só validar se member tem account_id (members ACTIVE sempre devem ter)

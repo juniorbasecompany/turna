@@ -53,10 +53,9 @@ type MemberFormData = {
 export default function MemberPage() {
     const { settings } = useTenantSettings()
 
-    // Estados auxiliares para funcionalidade de convite
-    const [emailMessage, setEmailMessage] = useState<string | null>(null)
-    const [emailMessageType, setEmailMessageType] = useState<'success' | 'error'>('success')
-    const [sendInvite, setSendInvite] = useState(false)
+    const [inviteMessage, setInviteMessage] = useState<string | null>(null)
+    const [inviteMessageType, setInviteMessageType] = useState<'success' | 'error'>('success')
+    const [inviting, setInviting] = useState(false)
 
     // Títulos dos filtros: definidos uma vez, usados no painel e no cabeçalho do relatório
     const SITUATION_FILTER_LABEL = 'Situação'
@@ -211,6 +210,7 @@ export default function MemberPage() {
         handleCancel,
         selectedItems: selectedMembers,
         toggleSelection: toggleMemberSelection,
+        clearSelection: clearMemberSelection,
         toggleAll: toggleAllMembers,
         selectedCount: selectedMembersCount,
         selectAllMode: selectAllMembersMode,
@@ -233,18 +233,10 @@ export default function MemberPage() {
         validateFormData,
         additionalListParams,
         onOpenCreate: () => {
-            setSendInvite(false)
-            setEmailMessage(null)
-        },
-        onAfterSave: async (savedMember, isCreate) => {
-            // Se o checkbox "Enviar convite" estiver marcado, enviar convite
-            if (sendInvite) {
-                await sendInviteEmail(savedMember)
-            }
+            setInviteMessage(null)
         },
         onSaveSuccess: () => {
-            setSendInvite(false)
-            setEmailMessage(null)
+            setInviteMessage(null)
         },
     })
 
@@ -256,22 +248,126 @@ export default function MemberPage() {
     const filteredMembers = members
     const paginatedMembers = members
 
-    // Função para enviar convite por e-mail
-    const sendInviteEmail = async (member: MemberResponse) => {
-        try {
-            await protectedFetch(`/api/member/${member.id}/invite`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+    const handleMemberCreateClick = () => {
+        setInviteMessage(null)
+        handleCreateClick()
+    }
+
+    const handleMemberEditClick = (member: MemberResponse) => {
+        setInviteMessage(null)
+        handleEditClick(member)
+    }
+
+    const resolveSelectedMemberIdList = async (): Promise<number[]> => {
+        const selectedMemberIdList = getSelectedMemberIdsForAction()
+        if (selectedMemberIdList !== null) {
+            return selectedMemberIdList
+        }
+
+        const memberIdList: number[] = []
+        const batchSize = 100
+        let offset = 0
+        let hasMore = true
+
+        while (hasMore) {
+            const params = new URLSearchParams()
+            params.set('limit', String(batchSize))
+            params.set('offset', String(offset))
+
+            Object.entries(additionalListParams).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    params.set(key, String(value))
+                }
             })
-            const successMsg = `E-mail de convite foi enviado para ${getMemberDisplayName(member)}`
-            setEmailMessage(successMsg)
-            setEmailMessageType('success')
-        } catch (inviteErr) {
-            const errorMsg = inviteErr instanceof Error ? inviteErr.message : 'Erro desconhecido'
-            setEmailMessage(`E-mail de convite não foi enviado para ${getMemberDisplayName(member)}. ${errorMsg}`)
-            setEmailMessageType('error')
+
+            const response = await protectedFetch<{ items: MemberResponse[]; total: number }>(
+                `/api/member/list?${params.toString()}`
+            )
+
+            memberIdList.push(...response.items.map((member) => member.id))
+            offset += batchSize
+            hasMore = offset < response.total
+        }
+
+        return memberIdList
+    }
+
+    const handleInviteSelected = async () => {
+        if (inviting) {
+            return
+        }
+
+        setInviteMessage(null)
+        setError(null)
+        setInviting(true)
+
+        try {
+            const memberIdList = await resolveSelectedMemberIdList()
+
+            if (memberIdList.length === 0) {
+                setInviteMessageType('error')
+                setInviteMessage('Nenhum associado selecionado para enviar convite.')
+                return
+            }
+
+            const inviteBatchSize = 5
+            let successCount = 0
+            let errorCount = 0
+            let firstErrorMessage: string | null = null
+
+            for (let index = 0; index < memberIdList.length; index += inviteBatchSize) {
+                const batchList = memberIdList.slice(index, index + inviteBatchSize)
+                const resultList = await Promise.all(
+                    batchList.map(async (memberId) => {
+                        try {
+                            await protectedFetch(`/api/member/${memberId}/invite`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                            })
+                            return { success: true, message: null }
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : 'Erro desconhecido'
+                            return { success: false, message }
+                        }
+                    })
+                )
+
+                resultList.forEach((result) => {
+                    if (result.success) {
+                        successCount += 1
+                        return
+                    }
+
+                    errorCount += 1
+                    if (!firstErrorMessage) {
+                        firstErrorMessage = result.message
+                    }
+                })
+            }
+
+            await loadItems()
+
+            if (errorCount === 0) {
+                clearMemberSelection()
+                setInviteMessageType('success')
+                setInviteMessage(
+                    successCount === 1
+                        ? 'Convite enviado para 1 associado.'
+                        : `Convite enviado para ${successCount} associados.`
+                )
+                return
+            }
+
+            setInviteMessageType('error')
+            setInviteMessage(
+                successCount > 0
+                    ? `Convite enviado para ${successCount} associados. ${errorCount} falharam.${firstErrorMessage ? ` Primeiro erro: ${firstErrorMessage}` : ''}`
+                    : `Não foi possível enviar os convites selecionados.${firstErrorMessage ? ` ${firstErrorMessage}` : ''}`
+            )
+        } finally {
+            setInviting(false)
         }
     }
 
@@ -345,14 +441,24 @@ export default function MemberPage() {
         reportFilters,
     })
 
-    // Sobrescrever actionBarButtons apenas para incluir sendInvite no hasChanges
-    // (habilita botão Salvar quando checkbox "Enviar convite" está marcado)
     const actionBarButtonsWithInvite = useActionBarRightButtons({
         isEditing,
         selectedCount: selectedMembersCount,
-        hasChanges: hasChanges() || sendInvite,
+        hasChanges: hasChanges(),
         submitting,
         deleting,
+        additionalStates: { inviting },
+        customActions:
+            selectedMembersCount > 0
+                ? [
+                    {
+                        label: 'Enviar convite',
+                        onClick: handleInviteSelected,
+                        disabled: inviting || submitting || deleting,
+                        loading: inviting,
+                    },
+                ]
+                : [],
         onCancel: handleCancel,
         onDelete: handleDeleteSelected,
         onSave: handleSave,
@@ -374,21 +480,6 @@ export default function MemberPage() {
                             disabled={submitting}
                         />
                     </FormField>
-                    <div>
-                        <div className="flex items-center">
-                            <input
-                                type="checkbox"
-                                id="sendInvite"
-                                checked={sendInvite}
-                                onChange={(e) => setSendInvite(e.target.checked)}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                disabled={submitting}
-                            />
-                            <label htmlFor="sendInvite" className="ml-2 block text-sm text-gray-700">
-                                Enviar convite
-                            </label>
-                        </div>
-                    </div>
                     <FormFieldGrid cols={1} smCols={2} gap={4}>
                         <FormField label="Nome">
                             <input
@@ -542,16 +633,6 @@ export default function MemberPage() {
                             height={400}
                         />
                     </FormField>
-                    {emailMessage && (
-                        <div
-                            className={`p-3 rounded-md ${emailMessageType === 'success'
-                                ? 'bg-green-50 text-green-800 border border-green-200'
-                                : 'bg-red-50 text-red-800 border border-red-200'
-                                }`}
-                        >
-                            <p className="text-sm">{emailMessage}</p>
-                        </div>
-                    )}
                 </div>
             </EditForm>
 
@@ -564,9 +645,9 @@ export default function MemberPage() {
                 error={undefined}
                 createCard={
                     <CreateCard
-                        label="Convidar novo associado"
+                        label="Adicionar novo associado"
                         subtitle="Clique para adicionar"
-                        onClick={handleCreateClick}
+                        onClick={handleMemberCreateClick}
                     />
                 }
                 filterContent={
@@ -603,7 +684,7 @@ export default function MemberPage() {
                                 <CardFooter
                                     date={member.created_at}
                                     settings={settings}
-                                    onEdit={() => handleEditClick(member)}
+                                    onEdit={() => handleMemberEditClick(member)}
                                     disabled={deleting}
                                     deleteTitle={isSelected ? 'Desmarcar para exclusão' : 'Marcar para exclusão'}
                                     editTitle="Editar associação"
@@ -686,8 +767,8 @@ export default function MemberPage() {
                     ) : undefined
                 }
                 error={reportError ?? actionBarErrorProps.error}
-                message={actionBarErrorProps.message}
-                messageType={actionBarErrorProps.messageType}
+                message={inviteMessage ?? actionBarErrorProps.message}
+                messageType={inviteMessage ? inviteMessageType : actionBarErrorProps.messageType}
                 leftButtons={reportLeftButtons}
                 buttons={actionBarButtonsWithInvite}
             />
