@@ -1781,6 +1781,7 @@ class FileResponse(PydanticBaseModel):
     hospital_id: int
     hospital_name: str
     hospital_color: Optional[str] = None  # Cor do hospital em formato hexadecimal (#RRGGBB)
+    demand_count: int = 0
     can_delete: bool  # True se não está vinculado a nenhuma demanda
     job_status: Optional[str] = None  # Status do job mais recente EXTRACT_DEMAND (PENDING, RUNNING, COMPLETED, FAILED) ou None se não houver job
 
@@ -1791,6 +1792,29 @@ class FileResponse(PydanticBaseModel):
 class FileListResponse(PydanticBaseModel):
     items: list[FileResponse]
     total: int
+
+
+class FileDemandDeleteRequest(PydanticBaseModel):
+    file_id_list: list[int]
+
+    @field_validator("file_id_list")
+    @classmethod
+    def validate_file_id_list(cls, value: list[int]) -> list[int]:
+        normalized_file_id_list: list[int] = []
+        seen_file_id_set: set[int] = set()
+
+        for file_id in value:
+            if file_id <= 0:
+                raise ValueError("file_id_list deve conter apenas IDs válidos")
+            if file_id in seen_file_id_set:
+                continue
+            seen_file_id_set.add(file_id)
+            normalized_file_id_list.append(file_id)
+
+        if not normalized_file_id_list:
+            raise ValueError("file_id_list é obrigatório")
+
+        return normalized_file_id_list
 
 
 class FileDownloadResponse(PydanticBaseModel):
@@ -1964,19 +1988,20 @@ def list_files(
     items = session.exec(query.limit(limit).offset(offset)).all()
 
     item_id_list = [item.id for item in items]
-    referenced_file_ids = set()
+    file_id_to_demand_count: dict[int, int] = {}
     if item_id_list:
-        referenced_file_rows = session.exec(
-            select(Demand.file_id).where(
+        demand_count_rows = session.exec(
+            select(Demand.file_id, func.count(Demand.id)).where(
                 Demand.tenant_id == member.tenant_id,
                 Demand.file_id.is_not(None),
                 Demand.file_id.in_(item_id_list),
             )
+            .group_by(Demand.file_id)
         ).all()
-        referenced_file_ids = {
-            file_id
-            for file_id in referenced_file_rows
-            if isinstance(file_id, int)
+        file_id_to_demand_count = {
+            file_id: demand_count
+            for file_id, demand_count in demand_count_rows
+            if isinstance(file_id, int) and isinstance(demand_count, int)
         }
 
     # Buscar todos os jobs EXTRACT_DEMAND do tenant para obter o status mais recente de cada arquivo
@@ -2015,7 +2040,8 @@ def list_files(
     # Construir resposta com can_delete, job_status, hospital_id, hospital_name e hospital_color
     file_responses = []
     for item in items:
-        can_delete = item.id not in referenced_file_ids
+        demand_count = file_id_to_demand_count.get(item.id, 0)
+        can_delete = demand_count == 0
         job_status = file_id_to_latest_job_status.get(item.id)
         hospital = hospital_dict.get(item.hospital_id)
         hospital_name = hospital.display_name if hospital else f"Hospital {item.hospital_id}"
@@ -2030,6 +2056,7 @@ def list_files(
             hospital_id=item.hospital_id,
             hospital_name=hospital_name,
             hospital_color=hospital_color,
+            demand_count=demand_count,
             can_delete=can_delete,
             job_status=job_status,
         )
@@ -2236,6 +2263,43 @@ def get_file_thumbnail(
         status_code=404,
         detail=f"Thumbnail não disponível (key={thumbnail_key})",
     )
+
+
+@router.delete("/file/demand", status_code=204, tags=["File"])
+def delete_file_demand(
+    body: FileDemandDeleteRequest,
+    member: Member = Depends(get_current_member),
+    session: Session = Depends(get_session),
+):
+    file_row_list = session.exec(
+        select(File).where(File.id.in_(body.file_id_list))
+    ).all()
+    file_map = {file_row.id: file_row for file_row in file_row_list}
+
+    missing_file_id_list = [file_id for file_id in body.file_id_list if file_id not in file_map]
+    if missing_file_id_list:
+        raise HTTPException(status_code=404, detail="Um ou mais arquivos não foram encontrados")
+
+    unauthorized_file_id_list = [
+        file_id
+        for file_id, file_row in file_map.items()
+        if file_row.tenant_id != member.tenant_id
+    ]
+    if unauthorized_file_id_list:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    demand_row_list = session.exec(
+        select(Demand).where(
+            Demand.tenant_id == member.tenant_id,
+            Demand.file_id.in_(body.file_id_list),
+        )
+    ).all()
+
+    for demand_row in demand_row_list:
+        session.delete(demand_row)
+
+    session.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/file/{file_id}", status_code=204, tags=["File"])

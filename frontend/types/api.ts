@@ -135,6 +135,7 @@ export interface FileResponse {
     content_type: string
     file_size: number
     created_at: string
+    demand_count: number
     can_delete: boolean
     job_status: string | null
 }

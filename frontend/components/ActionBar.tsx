@@ -70,6 +70,14 @@ interface ActionBarProps {
      */
     pagination?: ReactNode
     /**
+     * Conteúdo adicional renderizado na área direita, ao lado dos botões de ação.
+     */
+    rightContent?: ReactNode
+    /**
+     * Quando informado, renderiza o rightContent logo após este botão.
+     */
+    rightContentAfterButtonLabel?: string
+    /**
      * Se false, esconde a barra. Por padrão, a barra sempre aparece
      * (mesmo sem botões ou mensagem). Os botões aparecem/desaparecem
      * conforme o array de buttons.
@@ -105,6 +113,8 @@ export function ActionBar({
     buttons = [],
     selection,
     pagination,
+    rightContent,
+    rightContentAfterButtonLabel,
     show,
 }: ActionBarProps) {
     // Se show for explicitamente false, não renderizar
@@ -166,8 +176,31 @@ export function ActionBar({
 
     const cancelButtonRendered = cancelButton ? renderButton(cancelButton, -1) : null
 
-    const buttonsRendered =
-        rightButtons?.length ? rightButtons.map((b, i) => renderButton(b, i)) : null
+    const rightContentAnchorIndex = rightButtons.findIndex(
+        (button) => button.label === rightContentAfterButtonLabel
+    )
+
+    const buttonListBeforeRightContent =
+        rightContent != null && rightContentAnchorIndex >= 0
+            ? rightButtons.slice(0, rightContentAnchorIndex + 1)
+            : rightButtons
+
+    const buttonListAfterRightContent =
+        rightContent != null && rightContentAnchorIndex >= 0
+            ? rightButtons.slice(rightContentAnchorIndex + 1)
+            : []
+
+    const buttonsBeforeRightContentRendered =
+        buttonListBeforeRightContent.length
+            ? buttonListBeforeRightContent.map((button, index) => renderButton(button, index))
+            : null
+
+    const buttonsAfterRightContentRendered =
+        buttonListAfterRightContent.length
+            ? buttonListAfterRightContent.map((button, index) =>
+                renderButton(button, index + buttonListBeforeRightContent.length)
+            )
+            : null
 
     // Determinar qual conteúdo exibir e qual cor usar
     // Prioridade: message > error > leftContent
@@ -207,7 +240,9 @@ export function ActionBar({
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {pagination}
                     {selection && <SelectionCounter {...selection} />}
-                    {buttonsRendered}
+                    {buttonsBeforeRightContentRendered}
+                    {rightContent}
+                    {buttonsAfterRightContentRendered}
                 </div>
             </div>
         </div>

@@ -33,6 +33,7 @@ interface FileResponse {
     hospital_id: number
     hospital_name: string
     hospital_color: string | null
+    demand_count: number
     can_delete: boolean
     job_status: string | null
 }
@@ -64,6 +65,8 @@ interface FileListResponse {
 }
 
 type JobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+
+const FILE_LIST_BATCH_LIMIT = 100
 
 // Tipos para useEntityPage (simplificados, pois File não tem formulário tradicional)
 type FileFormData = Record<string, never> // Objeto vazio, pois não há formulário tradicional
@@ -664,7 +667,11 @@ export default function FilesPage() {
     const processedFilesRef = useRef<Set<string>>(new Set())
     const [bottomBarMessage, setBottomBarMessage] = useState<string | null>(null)
     const [readContentOnUpload, setReadContentOnUpload] = useState(true)
+    const [deleteDemandBeforeRead, setDeleteDemandBeforeRead] = useState(false)
     const [reading, setReading] = useState(false)
+    const [loadingReadSelection, setLoadingReadSelection] = useState(false)
+    const [selectedDemandCount, setSelectedDemandCount] = useState(0)
+    const [selectedFileIdListForRead, setSelectedFileIdListForRead] = useState<number[]>([])
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [uploading, setUploading] = useState(false)
     const pollingIntervals = useRef<Map<number, NodeJS.Timeout>>(new Map())
@@ -767,11 +774,10 @@ export default function FilesPage() {
         toggleAll: toggleAllFiles,
         selectedCount: selectedFilesCount,
         selectAllMode: selectAllFilesMode,
-        getSelectedIdsForAction: getSelectedFileIdsForAction,
         pagination,
         total,
         paginationHandlers,
-        handleDeleteSelected,
+        handleDeleteSelected: handleDeleteSelectedBase,
         loadItems,
     } = useEntityPage<FileFormData, FileResponse, FileCreateRequest, FileUpdateRequest>({
         endpoint: '/api/file',
@@ -888,6 +894,106 @@ export default function FilesPage() {
     }, [filteredFiles, statusFilters.selectedValues, statusFilters.isFilterActive, pagination.offset, pagination.limit])
 
     const displayTotal = statusFilters.isFilterActive ? filteredFiles.length : total
+
+    const loadFileListForRead = useCallback(async (): Promise<FileResponse[]> => {
+        const fileList: FileResponse[] = []
+        let offset = 0
+
+        while (true) {
+            const params = new URLSearchParams()
+            params.set('limit', String(FILE_LIST_BATCH_LIMIT))
+            params.set('offset', String(offset))
+
+            if (additionalListParams) {
+                Object.entries(additionalListParams).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined) {
+                        params.set(key, String(value))
+                    }
+                })
+            }
+
+            const response = await protectedFetch<FileListResponse>(`/api/file/list?${params.toString()}`)
+            fileList.push(...response.items)
+
+            if (fileList.length >= response.total || response.items.length < FILE_LIST_BATCH_LIMIT) {
+                break
+            }
+
+            offset += FILE_LIST_BATCH_LIMIT
+        }
+
+        return fileList
+    }, [additionalListParams])
+
+    useEffect(() => {
+        let active = true
+
+        async function syncSelectedReadInfo() {
+            if (selectedFilesCount === 0) {
+                setLoadingReadSelection(false)
+                setSelectedDemandCount(0)
+                setSelectedFileIdListForRead([])
+                setDeleteDemandBeforeRead(false)
+                return
+            }
+
+            if (!selectAllFilesMode) {
+                const selectedFileList = localFiles.filter((file) => selectedFiles.has(file.id))
+                const demandCount = selectedFileList.reduce((totalCount, file) => totalCount + file.demand_count, 0)
+
+                if (!active) {
+                    return
+                }
+
+                setLoadingReadSelection(false)
+                setSelectedFileIdListForRead(selectedFileList.map((file) => file.id))
+                setSelectedDemandCount(demandCount)
+                if (demandCount === 0) {
+                    setDeleteDemandBeforeRead(false)
+                }
+                return
+            }
+
+            try {
+                setLoadingReadSelection(true)
+                const fileList = await loadFileListForRead()
+
+                if (!active) {
+                    return
+                }
+
+                const demandCount = fileList.reduce((totalCount, file) => totalCount + file.demand_count, 0)
+                setSelectedFileIdListForRead(fileList.map((file) => file.id))
+                setSelectedDemandCount(demandCount)
+                if (demandCount === 0) {
+                    setDeleteDemandBeforeRead(false)
+                }
+            } catch (err) {
+                if (!active) {
+                    return
+                }
+
+                setSelectedFileIdListForRead([])
+                setSelectedDemandCount(0)
+                setDeleteDemandBeforeRead(false)
+                setError(err instanceof Error ? err.message : 'Erro ao carregar arquivos para leitura')
+            } finally {
+                if (active) {
+                    setLoadingReadSelection(false)
+                }
+            }
+        }
+
+        syncSelectedReadInfo()
+
+        return () => {
+            active = false
+        }
+    }, [selectedFilesCount, selectAllFilesMode, selectedFiles, localFiles, loadFileListForRead, setError])
+
+    useEffect(() => {
+        setDeleteDemandBeforeRead(false)
+    }, [selectedFiles, selectedFilesCount, selectAllFilesMode])
 
     // Handlers para mudança de data no TenantDateTimePicker
     const handleStartDateChange = (date: Date | null) => {
@@ -1328,7 +1434,7 @@ export default function FilesPage() {
             return // Não há jobs em andamento, não precisa fazer polling
         }
 
-        // Função para atualizar status dos arquivos sem recarregar toda a lista
+        // Função para atualizar status dos arquivos e recarregar a lista quando a leitura terminar.
         const updateFileStatuses = async () => {
             try {
                 // Buscar TODOS os jobs EXTRACT_DEMAND recentes (para pegar PENDING, RUNNING, COMPLETED e FAILED)
@@ -1339,26 +1445,41 @@ export default function FilesPage() {
                 // Criar map de file_id -> job_status (usando o job mais recente para cada file_id)
                 const latestJobMap = buildLatestJobMap(allJobs)
 
-                // Atualizar apenas os arquivos que estão sendo rastreados ou têm mudança de status
-                setLocalFiles((prevFiles) => {
-                    return prevFiles.map((file) => {
-                        const latestJob = latestJobMap.get(file.id)
-                        if (!latestJob) {
-                            return file
-                        }
+                let shouldReloadFileList = false
 
-                        const updatedFile = mergeFileWithLatestJob(file, latestJob)
-                        if (
-                            updatedFile.job_status !== file.job_status ||
-                            updatedFile.job_started_at !== file.job_started_at ||
-                            updatedFile.job_completed_at !== file.job_completed_at
-                        ) {
-                            return updatedFile
-                        }
-
+                const nextLocalFiles = localFiles.map((file) => {
+                    const latestJob = latestJobMap.get(file.id)
+                    if (!latestJob) {
                         return file
-                    })
+                    }
+
+                    const updatedFile = mergeFileWithLatestJob(file, latestJob)
+                    const previousStatus = file.job_status
+                    const nextStatus = updatedFile.job_status
+                    const finishedReading =
+                        (previousStatus === 'PENDING' || previousStatus === 'RUNNING') &&
+                        (nextStatus === 'COMPLETED' || nextStatus === 'FAILED')
+
+                    if (finishedReading) {
+                        shouldReloadFileList = true
+                    }
+
+                    if (
+                        updatedFile.job_status !== file.job_status ||
+                        updatedFile.job_started_at !== file.job_started_at ||
+                        updatedFile.job_completed_at !== file.job_completed_at
+                    ) {
+                        return updatedFile
+                    }
+
+                    return file
                 })
+
+                setLocalFiles(nextLocalFiles)
+
+                if (shouldReloadFileList) {
+                    await loadItems()
+                }
             } catch (err) {
                 // Ignorar erros no polling - não queremos interromper a UI
                 console.error('Erro ao atualizar status dos jobs:', err)
@@ -1371,7 +1492,7 @@ export default function FilesPage() {
         return () => {
             clearInterval(interval)
         }
-    }, [localFiles])
+    }, [localFiles, loadItems])
 
     // Limpar polling ao desmontar
     useEffect(() => {
@@ -1383,41 +1504,27 @@ export default function FilesPage() {
 
     // Ler conteúdo dos arquivos selecionados
     const handleReadSelected = async () => {
-        if (selectedFilesCount === 0) return
+        if (selectedFilesCount === 0 || loadingReadSelection) return
 
         setReading(true)
         setError(null)
 
         try {
-            // Obter IDs para ação: null = todos (selectAllMode), array = IDs específicos
-            const idsForAction = getSelectedFileIdsForAction()
-            let fileIdsToRead: number[]
-
-            if (idsForAction === null) {
-                // Modo "todos": buscar todos os IDs que atendem aos filtros atuais
-                const params = new URLSearchParams()
-                params.set('limit', '10000')
-                params.set('offset', '0')
-
-                if (additionalListParams) {
-                    Object.entries(additionalListParams).forEach(([key, value]) => {
-                        if (value !== null && value !== undefined) {
-                            params.set(key, String(value))
-                        }
-                    })
-                }
-
-                const response = await protectedFetch<{ items: FileResponse[]; total: number }>(
-                    `/api/file/list?${params.toString()}`
-                )
-                fileIdsToRead = response.items.map((item) => item.id)
-            } else {
-                fileIdsToRead = idsForAction
-            }
+            const fileIdsToRead = [...selectedFileIdListForRead]
 
             if (fileIdsToRead.length === 0) {
                 setError('Nenhum arquivo para ler demandas')
                 return
+            }
+
+            if (deleteDemandBeforeRead && selectedDemandCount > 0) {
+                await protectedFetch('/api/file/demand', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ file_id_list: fileIdsToRead }),
+                })
             }
 
             // Processar cada arquivo para leitura
@@ -1444,6 +1551,7 @@ export default function FilesPage() {
 
             // Limpar seleção após iniciar leitura
             clearSelection()
+            setDeleteDemandBeforeRead(false)
         } catch (err) {
             setError(
                 err instanceof Error
@@ -1455,13 +1563,53 @@ export default function FilesPage() {
         }
     }
 
-    // handleDeleteSelected já vem do useEntityPage, não precisa reimplementar
+    const handleDeleteSelected = useCallback(async () => {
+        if (deleteDemandBeforeRead && selectedDemandCount > 0) {
+            const fileIdListToDelete = [...selectedFileIdListForRead]
+
+            if (fileIdListToDelete.length === 0) {
+                setError('Nenhum arquivo para excluir')
+                return
+            }
+
+            await protectedFetch('/api/file/demand', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ file_id_list: fileIdListToDelete }),
+            })
+        }
+
+        await handleDeleteSelectedBase()
+        setDeleteDemandBeforeRead(false)
+    }, [
+        deleteDemandBeforeRead,
+        selectedDemandCount,
+        selectedFileIdListForRead,
+        handleDeleteSelectedBase,
+        setError,
+    ])
 
     const { leftButtons: reportLeftButtons, reportError } = useReportButton({
         apiPath: '/api/file/report',
         params: additionalListParams ?? undefined,
         reportFilters,
     })
+
+    const hasSelectedFileWithDemand = useMemo(() => {
+        if (selectedFilesCount === 0) {
+            return false
+        }
+
+        if (!selectAllFilesMode) {
+            return localFiles.some((file) => selectedFiles.has(file.id) && file.demand_count > 0)
+        }
+
+        return selectedDemandCount > 0
+    }, [selectedDemandCount, selectedFilesCount, selectAllFilesMode, selectedFiles, localFiles])
+
+    const readDemandActionLabel = hasSelectedFileWithDemand ? 'Reler demandas' : 'Ler demandas'
 
     // Botões do ActionBar usando hook reutilizável (com extensões para File)
     const actionBarButtons = useActionBarRightButtons({
@@ -1476,9 +1624,9 @@ export default function FilesPage() {
             selectedFilesCount > 0
                 ? [
                     {
-                        label: 'Ler demandas',
+                        label: readDemandActionLabel,
                         onClick: handleReadSelected,
-                        disabled: reading || submitting,
+                        disabled: reading || submitting || loadingReadSelection,
                         loading: reading,
                     },
                 ]
@@ -1494,6 +1642,21 @@ export default function FilesPage() {
         showEditArea, // File usa showEditArea em vez de isEditing
         selectedFilesCount
     )
+
+    const actionBarError = reportError ?? actionBarErrorProps.error
+    const deleteDemandBeforeReadContent =
+        selectedFilesCount === 0 ? undefined : loadingReadSelection ? (
+            <span className="text-sm text-gray-500">Verificando demandas lidas...</span>
+        ) : selectedDemandCount > 0 ? (
+            <FormCheckbox
+                id="delete_demand_before_read"
+                label={`${selectedDemandCount} demandas`}
+                checked={deleteDemandBeforeRead}
+                onChange={setDeleteDemandBeforeRead}
+                disabled={reading || submitting || deleting}
+                title="Marque para excluir também as demandas."
+            />
+        ) : undefined
 
     return (
         <div
@@ -1899,10 +2062,12 @@ export default function FilesPage() {
                         />
                     ) : undefined
                 }
-                error={reportError ?? actionBarErrorProps.error}
+                error={actionBarError}
                 message={actionBarErrorProps.message}
                 messageType={actionBarErrorProps.messageType}
                 leftButtons={reportLeftButtons}
+                rightContent={deleteDemandBeforeReadContent}
+                rightContentAfterButtonLabel="Excluir"
                 buttons={actionBarButtons}
             />
         </div>

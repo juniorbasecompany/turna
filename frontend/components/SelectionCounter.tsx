@@ -56,6 +56,8 @@ export function SelectionCounter({
             type="button"
             onClick={onToggleAll}
             className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
+            title="Clique para considerar todos"
+            aria-label="Clique para considerar todos"
         >
             <span
                 className={`w-4 h-4 flex items-center justify-center rounded border transition-colors ${
